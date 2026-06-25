@@ -77,6 +77,21 @@ export interface PullRequestDetail {
   fetchedAt: number;
 }
 
+export interface InboxBucket {
+  count: number;
+  prs: PullRequest[];
+}
+
+/** All inbox tabs, fetched in a single GraphQL request. */
+export interface InboxData {
+  reviewRequested: InboxBucket;
+  assigned: InboxBucket;
+  created: InboxBucket;
+  involved: InboxBucket;
+}
+
+export type InboxTabKey = keyof InboxData;
+
 /** prKey -> list of filenames marked viewed */
 export type ViewedMap = Record<string, string[]>;
 

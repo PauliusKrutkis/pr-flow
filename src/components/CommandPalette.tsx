@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useKeyboard, useHotkeys } from "../keyboard";
 import { useAppStore } from "../store/appStore";
 import { queryClient, queryKeys } from "../lib/queryClient";
-import { prKey, type PullRequest } from "../types";
+import { prKey, type InboxData, type PullRequest } from "../types";
 import { cn } from "../lib/cn";
 import { Kbd } from "./ui/Kbd";
 
@@ -62,7 +62,25 @@ export function CommandPalette({ baseScope }: { baseScope: string }) {
 
   const prEntries = useMemo<Entry[]>(() => {
     if (!paletteOpen) return [];
-    const prs = queryClient.getQueryData<PullRequest[]>(queryKeys.prs) ?? [];
+    // Flatten unique PRs across all inbox tabs from the query cache.
+    const inbox = queryClient.getQueryData<InboxData>(queryKeys.inbox);
+    const seen = new Set<number>();
+    const prs: PullRequest[] = [];
+    if (inbox) {
+      for (const key of [
+        "reviewRequested",
+        "assigned",
+        "created",
+        "involved",
+      ] as const) {
+        for (const pr of inbox[key].prs) {
+          if (!seen.has(pr.id)) {
+            seen.add(pr.id);
+            prs.push(pr);
+          }
+        }
+      }
+    }
     return prs.map((pr) => ({
       kind: "pr" as const,
       label: pr.title,

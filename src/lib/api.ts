@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   GitHubUser,
-  PullRequest,
+  InboxData,
   PullRequestDetail,
   ReviewComment,
   ViewedMap,
@@ -19,9 +19,9 @@ export const api = {
   clearToken: () => invoke<void>("clear_token"),
   getCurrentUser: () => invoke<GitHubUser>("get_current_user"),
 
-  // ---- pull request list ----
-  listReviewRequested: () => invoke<PullRequest[]>("list_review_requested"),
-  getCachedPrs: () => invoke<PullRequest[]>("get_cached_prs"),
+  // ---- inbox (all tabs in one GraphQL request) ----
+  listInbox: () => invoke<InboxData>("list_inbox"),
+  getCachedInbox: () => invoke<InboxData | null>("get_cached_inbox"),
 
   // ---- pull request detail ----
   getPullRequestDetail: (owner: string, repo: string, number: number) =>

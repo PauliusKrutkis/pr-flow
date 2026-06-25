@@ -92,6 +92,24 @@ pub struct PullRequestDetail {
     pub fetched_at: u64,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct InboxBucket {
+    /// Total matches reported by GitHub (may exceed `prs.len()` due to paging).
+    pub count: u64,
+    pub prs: Vec<PullRequest>,
+}
+
+/// All inbox tabs fetched in a single GraphQL request.
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct InboxData {
+    pub review_requested: InboxBucket,
+    pub assigned: InboxBucket,
+    pub created: InboxBucket,
+    pub involved: InboxBucket,
+}
+
 // ---------------------------------------------------------------------------
 // Small JSON extraction helpers — never panic, always fall back to a default.
 // ---------------------------------------------------------------------------
@@ -137,12 +155,33 @@ fn now_millis() -> u64 {
         .unwrap_or(0)
 }
 
-fn owner_repo_from_repository_url(url: &str) -> (String, String) {
-    // Shape: https://api.github.com/repos/{owner}/{repo}
-    let mut parts = url.rsplit('/');
-    let repo = parts.next().unwrap_or_default().to_string();
-    let owner = parts.next().unwrap_or_default().to_string();
-    (owner, repo)
+/// One GraphQL document fetching all four inbox tabs (and their counts) via
+/// aliased `search` fields — a single request for the whole inbox.
+const INBOX_QUERY: &str = r#"{
+  reviewRequested: search(query: "is:open is:pr review-requested:@me archived:false sort:updated-desc", type: ISSUE, first: 50) { issueCount nodes { ...P } }
+  assigned: search(query: "is:open is:pr assignee:@me archived:false sort:updated-desc", type: ISSUE, first: 50) { issueCount nodes { ...P } }
+  created: search(query: "is:open is:pr author:@me archived:false sort:updated-desc", type: ISSUE, first: 50) { issueCount nodes { ...P } }
+  involved: search(query: "is:open is:pr involves:@me archived:false sort:updated-desc", type: ISSUE, first: 50) { issueCount nodes { ...P } }
+}
+fragment P on PullRequest {
+  databaseId number title url state isDraft createdAt updatedAt
+  author { login avatarUrl }
+  repository { name owner { login } }
+  comments { totalCount }
+}"#;
+
+fn bucket_from(data: &Value, alias: &str) -> InboxBucket {
+    let node = data.get(alias);
+    let count = node
+        .and_then(|b| b.get("issueCount"))
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let prs = node
+        .and_then(|b| b.get("nodes"))
+        .and_then(Value::as_array)
+        .map(|nodes| nodes.iter().filter(|n| !n.is_null()).map(pr_from_graphql).collect())
+        .unwrap_or_default();
+    InboxBucket { count, prs }
 }
 
 fn detail_cache_name(owner: &str, repo: &str, number: u64) -> String {
@@ -153,31 +192,44 @@ fn detail_cache_name(owner: &str, repo: &str, number: u64) -> String {
 // Mappers: GitHub JSON -> our structs
 // ---------------------------------------------------------------------------
 
-/// Maps a `/search/issues` result item (limited fields) into a `PullRequest`.
-fn pr_from_search(v: &Value) -> PullRequest {
-    let repo_url = fstr(v, "repository_url");
-    let (owner, name) = owner_repo_from_repository_url(&repo_url);
+/// Maps a GraphQL `PullRequest` search node into our `PullRequest`. List items
+/// omit the heavy fields (diff stats, head sha, body) — those load with detail.
+fn pr_from_graphql(v: &Value) -> PullRequest {
+    let name = nstr(v, "repository", "name");
+    let owner = v
+        .get("repository")
+        .and_then(|r| r.get("owner"))
+        .and_then(|o| o.get("login"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let state_raw = fstr(v, "state"); // OPEN | CLOSED | MERGED
+    let comments_count = v
+        .get("comments")
+        .and_then(|c| c.get("totalCount"))
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
     PullRequest {
-        id: fu64(v, "id"),
+        id: v.get("databaseId").and_then(Value::as_u64).unwrap_or(0),
         number: fu64(v, "number"),
         title: fstr(v, "title"),
         repo: format!("{owner}/{name}"),
         owner,
         name,
-        author: nstr(v, "user", "login"),
-        author_avatar_url: nstr(v, "user", "avatar_url"),
-        url: fstr(v, "html_url"),
-        state: fstr(v, "state"),
-        draft: fbool(v, "draft"),
-        merged: false,
-        updated_at: fstr(v, "updated_at"),
-        created_at: fstr(v, "created_at"),
-        comments_count: fu64(v, "comments"),
+        author: nstr(v, "author", "login"),
+        author_avatar_url: nstr(v, "author", "avatarUrl"),
+        url: fstr(v, "url"),
+        state: state_raw.to_lowercase(),
+        draft: fbool(v, "isDraft"),
+        merged: state_raw == "MERGED",
+        updated_at: fstr(v, "updatedAt"),
+        created_at: fstr(v, "createdAt"),
+        comments_count,
         head_sha: String::new(),
         additions: 0,
         deletions: 0,
         changed_files: 0,
-        body: fstr(v, "body"),
+        body: String::new(),
     }
 }
 
@@ -377,37 +429,67 @@ pub async fn get_current_user(app: AppHandle) -> Result<GitHubUser, String> {
 // Commands: pull request list
 // ---------------------------------------------------------------------------
 
-#[tauri::command]
-pub async fn list_review_requested(app: AppHandle) -> Result<Vec<PullRequest>, String> {
-    let token = token_or_err(&app).await?;
-    let client = build_client(&token)?;
-    log("GET /search/issues q=\"is:open is:pr review-requested:@me archived:false\"");
+const GRAPHQL_URL: &str = "https://api.github.com/graphql";
+
+async fn graphql(client: &reqwest::Client, query: &str) -> Result<Value, String> {
     let resp = client
-        .get(format!("{API}/search/issues"))
-        .query(&[
-            ("q", "is:open is:pr review-requested:@me archived:false"),
-            ("sort", "updated"),
-            ("order", "desc"),
-            ("per_page", "50"),
-        ])
+        .post(GRAPHQL_URL)
+        .json(&json!({ "query": query }))
         .send()
         .await
         .map_err(net_err)?;
-    let body = read_body(resp).await?;
-    let items = body
-        .get("items")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let prs: Vec<PullRequest> = items.iter().map(pr_from_search).collect();
-    log(&format!("review-requested PRs: {} found", prs.len()));
-    storage::write_json(&app, "prs.json", &prs)?;
-    Ok(prs)
+    let status = resp.status();
+    let text = resp.text().await.map_err(net_err)?;
+    if !status.is_success() {
+        log(&format!("GraphQL HTTP {}: {}", status.as_u16(), text));
+        return Err(format!("GitHub GraphQL error ({}): {text}", status.as_u16()));
+    }
+    let v: Value = serde_json::from_str(&text)
+        .map_err(|e| format!("could not parse GraphQL response: {e}"))?;
+    // GraphQL reports query-level problems in a top-level `errors` array (HTTP 200).
+    if let Some(errors) = v.get("errors").and_then(Value::as_array) {
+        if !errors.is_empty() {
+            let msg = errors
+                .iter()
+                .filter_map(|e| e.get("message").and_then(Value::as_str))
+                .collect::<Vec<_>>()
+                .join("; ");
+            log(&format!("GraphQL errors: {msg}"));
+            return Err(format!("GitHub GraphQL error: {msg}"));
+        }
+    }
+    Ok(v)
 }
 
 #[tauri::command]
-pub async fn get_cached_prs(app: AppHandle) -> Result<Vec<PullRequest>, String> {
-    Ok(storage::read_json::<Vec<PullRequest>>(&app, "prs.json")?.unwrap_or_default())
+pub async fn list_inbox(app: AppHandle) -> Result<InboxData, String> {
+    let token = token_or_err(&app).await?;
+    let client = build_client(&token)?;
+    log("GraphQL inbox: review-requested / assigned / created / involved");
+    let v = graphql(&client, INBOX_QUERY).await?;
+    let data = v
+        .get("data")
+        .ok_or_else(|| "GraphQL response missing `data`".to_string())?;
+    let inbox = InboxData {
+        review_requested: bucket_from(data, "reviewRequested"),
+        assigned: bucket_from(data, "assigned"),
+        created: bucket_from(data, "created"),
+        involved: bucket_from(data, "involved"),
+    };
+    log(&format!(
+        "inbox counts — review:{} assigned:{} created:{} involved:{}",
+        inbox.review_requested.count,
+        inbox.assigned.count,
+        inbox.created.count,
+        inbox.involved.count
+    ));
+    storage::write_json(&app, "inbox.json", &inbox)?;
+    Ok(inbox)
+}
+
+#[tauri::command]
+pub async fn get_cached_inbox(app: AppHandle) -> Result<Option<InboxData>, String> {
+    storage::read_json::<InboxData>(&app, "inbox.json")
 }
 
 // ---------------------------------------------------------------------------

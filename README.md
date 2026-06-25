@@ -40,6 +40,7 @@ Built with **Tauri 2 + React 19 + TypeScript + Tailwind v4**.
 | `Enter`    | Open PR           |
 | `r`        | Refresh list      |
 | `/`        | Focus search      |
+| `1`–`4`    | Switch tab (Review requests · Assigned · Created · Involved) |
 | `⌘K`       | Command palette   |
 | `?`        | Keyboard shortcuts |
 
@@ -82,7 +83,7 @@ the first paint is instant; the live fetch then reconciles in the background.
 
 Key source files:
 
-- `src-tauri/src/github.rs` — GitHub REST client + all Tauri commands
+- `src-tauri/src/github.rs` — GitHub client + commands: a single GraphQL request powers the inbox (all four tabs + counts at once); REST handles PR detail / diffs / comments
 - `src-tauri/src/storage.rs` — JSON file persistence + token storage
 - `src/lib/api.ts` — typed `invoke()` wrappers
 - `src/keyboard/` — the scope-aware keyboard system (the differentiator)
@@ -171,7 +172,8 @@ plain JSON — fine for a local MVP; moving it to the OS keychain is on the road
 
 ## Scope
 
-**In scope (MVP v0.1):** token auth · list review-requested PRs · open a PR · view
+**In scope (MVP v0.1):** token + OAuth auth · inbox tabs (review-requested ·
+assigned · created · involved) · open a PR · view
 changed files · syntax-highlighted diffs · view & add comments (inline, reply,
 PR-level) · mark files viewed · keyboard navigation · local caching · background
 polling.
