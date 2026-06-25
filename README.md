@@ -138,8 +138,9 @@ once):
 3. Create it, copy the **Client ID**, and **Generate a new client secret**.
 4. Put them in **`src-tauri/.env`** (copy the provided `src-tauri/.env.example`):
    ```dotenv
-   PRFLOW_GH_CLIENT_ID=Iv1.xxxxxxxx
-   PRFLOW_GH_CLIENT_SECRET=xxxxxxxxxxxxxxxx
+   # Copy these exactly as shown on the OAuth App page — no prefix.
+   PRFLOW_GH_CLIENT_ID=Ov23xxxxxxxxxxxxxxxx
+   PRFLOW_GH_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxxxxxx
    ```
    Then start the app:
    ```bash
