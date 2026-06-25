@@ -136,18 +136,24 @@ once):
    ```
    (Homepage URL can be anything, e.g. `http://127.0.0.1:8765`.)
 3. Create it, copy the **Client ID**, and **Generate a new client secret**.
-4. Provide them to the app via environment variables, then start it:
+4. Put them in **`src-tauri/.env`** (copy the provided `src-tauri/.env.example`):
+   ```dotenv
+   PRFLOW_GH_CLIENT_ID=Iv1.xxxxxxxx
+   PRFLOW_GH_CLIENT_SECRET=xxxxxxxxxxxxxxxx
+   ```
+   Then start the app:
    ```bash
-   export PRFLOW_GH_CLIENT_ID=Iv1.xxxxxxxx
-   export PRFLOW_GH_CLIENT_SECRET=xxxxxxxxxxxxxxxx
    pnpm tauri dev
    ```
 
-The secret is read from the environment at runtime and is **never committed**.
+`src-tauri/.env` is **gitignored**, so the secret never gets committed; the app
+loads it at startup (real shell environment variables, if set, take precedence).
+You can equally `export` the two vars instead of using `.env` — either works.
+
 (The callback uses a fixed loopback port, `8765`. GitHub OAuth Apps don't support
 PKCE, so the authorization-code flow needs the secret; for a single-user desktop
-tool that's an acceptable trade-off. The button is hidden/disabled until the env
-vars are set.)
+tool that's an acceptable trade-off. The button shows a "needs setup" hint until
+the credentials are present.)
 
 #### Option B — Personal Access Token
 

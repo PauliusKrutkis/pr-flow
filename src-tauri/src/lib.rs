@@ -4,6 +4,10 @@ mod storage;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Load OAuth credentials from a local `.env` (src-tauri/.env) if present.
+    // Real environment variables already set in the shell take precedence.
+    let _ = dotenvy::dotenv();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
