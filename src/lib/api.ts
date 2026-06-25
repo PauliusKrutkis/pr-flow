@@ -1,0 +1,64 @@
+import { invoke } from "@tauri-apps/api/core";
+import type {
+  GitHubUser,
+  PullRequest,
+  PullRequestDetail,
+  ReviewComment,
+  ViewedMap,
+} from "../types";
+
+// Thin, typed wrappers over the Rust Tauri commands. Argument keys are
+// camelCase; Tauri converts them to the snake_case Rust parameters.
+
+export const api = {
+  // ---- auth ----
+  hasToken: () => invoke<boolean>("has_token"),
+  setToken: (token: string) => invoke<GitHubUser>("set_token", { token }),
+  clearToken: () => invoke<void>("clear_token"),
+  getCurrentUser: () => invoke<GitHubUser>("get_current_user"),
+
+  // ---- pull request list ----
+  listReviewRequested: () => invoke<PullRequest[]>("list_review_requested"),
+  getCachedPrs: () => invoke<PullRequest[]>("get_cached_prs"),
+
+  // ---- pull request detail ----
+  getPullRequestDetail: (owner: string, repo: string, number: number) =>
+    invoke<PullRequestDetail>("get_pull_request_detail", { owner, repo, number }),
+  getCachedPullRequestDetail: (owner: string, repo: string, number: number) =>
+    invoke<PullRequestDetail | null>("get_cached_pull_request_detail", {
+      owner,
+      repo,
+      number,
+    }),
+
+  // ---- comments ----
+  createReviewComment: (args: {
+    owner: string;
+    repo: string;
+    number: number;
+    body: string;
+    commitId: string;
+    path: string;
+    line: number;
+    side: string;
+  }) => invoke<ReviewComment>("create_review_comment", args),
+  replyToReviewComment: (args: {
+    owner: string;
+    repo: string;
+    number: number;
+    body: string;
+    inReplyTo: number;
+  }) => invoke<ReviewComment>("reply_to_review_comment", args),
+  createIssueComment: (args: {
+    owner: string;
+    repo: string;
+    number: number;
+    body: string;
+  }) => invoke<void>("create_issue_comment", args),
+
+  // ---- viewed-file state (local only) ----
+  getViewedMap: () => invoke<ViewedMap>("get_viewed_map"),
+  setViewedMap: (map: ViewedMap) => invoke<void>("set_viewed_map", { map }),
+};
+
+export type Api = typeof api;

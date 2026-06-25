@@ -1,0 +1,151 @@
+@import "tailwindcss";
+@import "highlight.js/styles/github-dark.css";
+
+/* PR Flow theme — a focused, GitHub-dark inspired palette.
+   Tailwind v4 reads these CSS variables and generates utilities
+   like `bg-surface`, `text-muted`, `border-line`, etc. */
+@theme {
+  --color-bg: #0d1117;
+  --color-surface: #161b22;
+  --color-surface-2: #1c2128;
+  --color-elevated: #21262d;
+  --color-line: #30363d;
+  --color-line-strong: #444c56;
+  --color-fg: #e6edf3;
+  --color-muted: #7d8590;
+  --color-faint: #545d68;
+  --color-accent: #2f81f7;
+  --color-accent-fg: #ffffff;
+  --color-success: #3fb950;
+  --color-danger: #f85149;
+  --color-warning: #d29922;
+
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Monaco,
+    "Cascadia Code", "Roboto Mono", monospace;
+
+  --radius-card: 0.5rem;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Slim, unobtrusive scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--color-line-strong);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Diff line backgrounds (kept in CSS so highlight.js token colors layer on top) */
+.diff-add {
+  background-color: rgba(63, 185, 80, 0.15);
+}
+.diff-del {
+  background-color: rgba(248, 81, 73, 0.15);
+}
+.diff-add-gutter {
+  background-color: rgba(63, 185, 80, 0.3);
+}
+.diff-del-gutter {
+  background-color: rgba(248, 81, 73, 0.3);
+}
+
+/* highlight.js renders inside our own colored rows; keep its background transparent */
+.hljs {
+  background: transparent !important;
+  padding: 0 !important;
+  color: inherit;
+}
+
+/* Render-friendly markdown defaults */
+.md > *:first-child {
+  margin-top: 0;
+}
+.md > *:last-child {
+  margin-bottom: 0;
+}
+.md p {
+  margin: 0.5em 0;
+}
+.md a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+.md a:hover {
+  text-decoration: underline;
+}
+.md code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--color-elevated);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+.md pre {
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  padding: 0.75em;
+  overflow-x: auto;
+}
+.md pre code {
+  background: transparent;
+  padding: 0;
+}
+.md ul,
+.md ol {
+  padding-left: 1.4em;
+  margin: 0.5em 0;
+}
+.md h1,
+.md h2,
+.md h3 {
+  margin: 0.8em 0 0.4em;
+  line-height: 1.25;
+}
+.md blockquote {
+  border-left: 3px solid var(--color-line-strong);
+  margin: 0.5em 0;
+  padding-left: 0.8em;
+  color: var(--color-muted);
+}
+.md table {
+  border-collapse: collapse;
+}
+.md th,
+.md td {
+  border: 1px solid var(--color-line);
+  padding: 0.3em 0.6em;
+}
