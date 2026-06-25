@@ -169,12 +169,14 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
     }
 
     function onKeyDown(e: KeyboardEvent) {
-      // Never hijack typing — fields manage their own keys (Esc, ⌘↵, …).
-      if (isEditableTarget(e.target)) return;
-
+      const editable = isEditableTarget(e.target);
       const bindings = eligibleBindings();
       const hasMod = e.metaKey || e.ctrlKey;
       const key = normalizeKey(e);
+
+      // While typing in a field, only global modifier-combos (e.g. ⌘K) may
+      // fire; the field handles its own Esc / Enter / arrows / plain typing.
+      if (editable && !hasMod) return;
 
       // Modifier combos and alt bypass the sequence buffer entirely.
       if (hasMod || e.altKey) {
@@ -190,7 +192,9 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
         const combo = parts.join("+");
         // Also accept the combo without an explicit "shift+" (e.g. "mod+k").
         const altCombo = combo.replace("shift+", "");
-        const match = findByKey(bindings, combo) ?? findByKey(bindings, altCombo);
+        let match = findByKey(bindings, combo) ?? findByKey(bindings, altCombo);
+        // From within an editable field, only honor global bindings.
+        if (editable && match && !match.global) match = undefined;
         if (match) {
           e.preventDefault();
           match.run(e);

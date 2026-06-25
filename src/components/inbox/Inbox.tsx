@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
 import { useHotkeys } from "../../keyboard";
 import { useAppStore } from "../../store/appStore";
 import { useInbox } from "../../hooks/useInbox";
@@ -29,16 +30,23 @@ const EMPTY: InboxData = {
   involved: { count: 0, prs: [] },
 };
 
+const keyFor = (pr: PullRequest) =>
+  prKey({ owner: pr.owner, name: pr.name, number: pr.number });
+
 export function Inbox() {
-  const { data, isLoading, isFetching, isError, error, refetch } = useInbox();
+  const { data, isLoading, isError, error, refetch } = useInbox();
 
   const openReview = useAppStore((s) => s.openReview);
   const markSeen = useAppStore((s) => s.markSeen);
   const isUnread = useAppStore((s) => s.isUnread);
+  // Tab + selected PR live in the store so they survive opening/closing a PR.
+  const tab = useAppStore((s) => s.inboxTab);
+  const setTab = useAppStore((s) => s.setInboxTab);
+  const selectedKey = useAppStore((s) => s.inboxSelectedKey);
+  const setSelectedKey = useAppStore((s) => s.setInboxSelectedKey);
 
-  const [tab, setTab] = useState<InboxTabKey>("reviewRequested");
-  const [selectedIndex, setSelectedIndex] = useState(0);
   const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -57,12 +65,13 @@ export function Inbox() {
     );
   }, [prs, search]);
 
-  // Clamp selection when the active list changes (tab switch, filter, refetch).
-  useEffect(() => {
-    setSelectedIndex((i) =>
-      filtered.length === 0 ? 0 : Math.min(Math.max(i, 0), filtered.length - 1),
-    );
-  }, [filtered.length]);
+  // Resolve the selected PR key to a position in the current list (follows the
+  // PR through reorders/filtering; falls back to the top if it's gone).
+  const selectedIndex = useMemo(() => {
+    if (!selectedKey) return 0;
+    const i = filtered.findIndex((pr) => keyFor(pr) === selectedKey);
+    return i < 0 ? 0 : i;
+  }, [filtered, selectedKey]);
 
   // Scroll the selected item into view.
   useEffect(() => {
@@ -72,8 +81,7 @@ export function Inbox() {
     el?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
-  // Once the cursor settles, prefetch the selected PR and its neighbors so
-  // Enter (or moving j/k) opens instantly. Debounced + deduped → rate-safe.
+  // Prefetch the selected PR + neighbors once the cursor settles.
   useEffect(() => {
     const timer = setTimeout(() => {
       for (const offset of [0, 1, -1]) {
@@ -84,26 +92,55 @@ export function Inbox() {
     return () => clearTimeout(timer);
   }, [selectedIndex, filtered]);
 
-  const keyFor = (pr: PullRequest) =>
-    prKey({ owner: pr.owner, name: pr.name, number: pr.number });
+  // Focus the search field whenever it opens.
+  useEffect(() => {
+    if (searchOpen) searchRef.current?.focus();
+  }, [searchOpen]);
 
   const open = (index: number) => {
     const pr = filtered[index];
     if (!pr) return;
+    setSelectedKey(keyFor(pr));
     markSeen(keyFor(pr), pr.updatedAt);
     openReview(pr.owner, pr.name, pr.number);
   };
 
-  const selectTab = (next: InboxTabKey) => {
-    setTab(next);
-    setSelectedIndex(0);
+  const selectTab = (key: InboxTabKey) => {
+    setTab(key);
+    setSelectedKey(null);
   };
 
-  const next = () =>
-    setSelectedIndex((i) =>
-      filtered.length === 0 ? 0 : Math.min(i + 1, filtered.length - 1),
-    );
-  const prev = () => setSelectedIndex((i) => Math.max(i - 1, 0));
+  const moveTo = (index: number) => {
+    const pr = filtered[index];
+    if (pr) setSelectedKey(keyFor(pr));
+  };
+  const next = () => moveTo(Math.min(selectedIndex + 1, filtered.length - 1));
+  const prev = () => moveTo(Math.max(selectedIndex - 1, 0));
+
+  const openSearch = () => {
+    setSearch("");
+    setSearchOpen(true);
+  };
+  const closeSearch = () => {
+    setSearch("");
+    setSearchOpen(false);
+  };
+
+  function onSearchKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      next();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      prev();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      open(selectedIndex);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      closeSearch();
+    }
+  }
 
   useHotkeys("inbox", [
     { keys: ["j", "down"], description: "Next PR", group: "Navigation", run: next },
@@ -122,12 +159,7 @@ export function Inbox() {
         void refetch();
       },
     },
-    {
-      keys: "/",
-      description: "Search",
-      group: "General",
-      run: () => searchRef.current?.focus(),
-    },
+    { keys: "/", description: "Search", group: "General", run: openSearch },
     { keys: "1", description: "Tab: Review requests", group: "Tabs", run: () => selectTab("reviewRequested") },
     { keys: "2", description: "Tab: Assigned", group: "Tabs", run: () => selectTab("assigned") },
     { keys: "3", description: "Tab: Created", group: "Tabs", run: () => selectTab("created") },
@@ -138,32 +170,7 @@ export function Inbox() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="flex shrink-0 items-center justify-between gap-4 border-b border-line bg-surface px-4 py-3">
-        <h1 className="text-sm font-semibold text-fg">Inbox</h1>
-        <div className="flex items-center gap-3">
-          {isFetching && <Spinner />}
-          <input
-            ref={searchRef}
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                setSearch("");
-                e.currentTarget.blur();
-              }
-            }}
-            placeholder="Search PRs…"
-            className={cn(
-              "w-56 rounded-card border border-line bg-bg px-3 py-1.5 text-sm text-fg",
-              "placeholder:text-faint focus:border-accent focus:outline-none",
-            )}
-          />
-        </div>
-      </div>
-
-      {/* Tabs */}
+      {/* Tabs (also serve as the header) */}
       <div className="flex shrink-0 items-center gap-1 border-b border-line bg-surface px-2">
         {TABS.map((t, i) => {
           const active = t.key === tab;
@@ -186,6 +193,24 @@ export function Inbox() {
           );
         })}
       </div>
+
+      {/* Transient search — opened with "/", arrows to move, Enter to open, Esc to close */}
+      {searchOpen && (
+        <div className="shrink-0 border-b border-line bg-surface px-3 py-1.5">
+          <input
+            ref={searchRef}
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={onSearchKeyDown}
+            onBlur={() => {
+              if (!search) setSearchOpen(false);
+            }}
+            placeholder="Search PRs…   ↑↓ move · ↵ open · Esc close"
+            className="w-full rounded-card border border-line bg-bg px-3 py-1.5 text-sm text-fg placeholder:text-faint focus:border-accent focus:outline-none"
+          />
+        </div>
+      )}
 
       {/* List */}
       {isLoading && !data ? (

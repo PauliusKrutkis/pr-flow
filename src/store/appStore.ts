@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
-import type { ViewedMap } from "../types";
+import type { InboxTabKey, ViewedMap } from "../types";
 
 export type Route =
   | { name: "loading" }
@@ -56,11 +56,17 @@ interface AppState {
   helpOpen: boolean;
   viewed: ViewedMap;
   lastSeen: Record<string, string>;
+  // Inbox view state, kept here so it survives navigating into/out of a PR.
+  inboxTab: InboxTabKey;
+  /** prKey of the highlighted PR, so the cursor follows the PR (not an index). */
+  inboxSelectedKey: string | null;
 
   // navigation
   setRoute: (route: Route) => void;
   openReview: (owner: string, repo: string, number: number) => void;
   goInbox: () => void;
+  setInboxTab: (tab: InboxTabKey) => void;
+  setInboxSelectedKey: (key: string | null) => void;
 
   // overlays
   openPalette: () => void;
@@ -86,6 +92,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   helpOpen: false,
   viewed: {},
   lastSeen: loadLastSeen(),
+  inboxTab: "reviewRequested",
+  inboxSelectedKey: null,
 
   setRoute: (route) => set({ route }),
   openReview: (owner, repo, number) => {
@@ -96,6 +104,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     flushPersistViewed();
     set({ route: { name: "inbox" } });
   },
+  setInboxTab: (tab) => set({ inboxTab: tab }),
+  setInboxSelectedKey: (key) => set({ inboxSelectedKey: key }),
 
   openPalette: () => set({ paletteOpen: true }),
   closePalette: () => set({ paletteOpen: false }),

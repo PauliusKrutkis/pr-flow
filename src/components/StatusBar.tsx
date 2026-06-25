@@ -19,10 +19,10 @@ const HINTS: Record<string, Hint[]> = {
   ],
   review: [
     { keys: ["n", "p"], label: "Files" },
-    { keys: ["j", "k"], label: "Scroll" },
+    { keys: ["j", "k"], label: "Line" },
+    { keys: ["c"], label: "Comment" },
     { keys: ["v"], label: "Viewed" },
-    { keys: ["]c", "[c"], label: "Comments" },
-    { keys: ["o"], label: "Open on GitHub" },
+    { keys: ["]c", "[c"], label: "Threads" },
     { keys: ["esc"], label: "Back" },
   ],
 };

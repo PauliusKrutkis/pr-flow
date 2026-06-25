@@ -18,11 +18,7 @@ interface ReviewScreenProps {
 }
 
 export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
-  const { data, isFetching, refetch } = usePullRequestDetail(
-    owner,
-    repo,
-    number,
-  );
+  const { data, refetch } = usePullRequestDetail(owner, repo, number);
   const { addReviewComment, reply, addIssueComment } = useCommentMutations(
     owner,
     repo,
@@ -50,9 +46,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const clampedIndex = Math.min(selectedFileIndex, Math.max(fileCount - 1, 0));
   const selectedFile = files[clampedIndex];
 
-  function scrollBy(dy: number) {
-    scrollRef.current?.scrollBy({ top: dy });
-  }
   function scrollTop() {
     scrollRef.current?.scrollTo({ top: 0 });
   }
@@ -75,10 +68,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     scrollTop();
   }
 
-  function toggleViewedAndAdvance() {
-    if (!selectedFile) return;
-    toggleViewed(keyValue, selectedFile.filename);
-    nextFile();
+  function toggleViewedFile() {
+    if (selectedFile) toggleViewed(keyValue, selectedFile.filename);
   }
 
   function goToComment(delta: number) {
@@ -97,18 +88,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     { keys: ["n"], description: "Next file", group: "Files", run: nextFile },
     { keys: ["p"], description: "Previous file", group: "Files", run: prevFile },
     {
-      keys: ["j", "down"],
-      description: "Scroll down",
-      group: "Navigation",
-      run: () => scrollBy(120),
-    },
-    {
-      keys: ["k", "up"],
-      description: "Scroll up",
-      group: "Navigation",
-      run: () => scrollBy(-120),
-    },
-    {
       keys: "]c",
       description: "Next comment",
       group: "Comments",
@@ -124,7 +103,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       keys: "v",
       description: "Toggle file viewed",
       group: "Files",
-      run: toggleViewedAndAdvance,
+      run: toggleViewedFile,
     },
     {
       keys: "o",
@@ -220,7 +199,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
             <span>
               {viewed[keyValue]?.length ?? 0}/{fileCount} viewed
             </span>
-            {isFetching && <Spinner />}
             <button
               type="button"
               onClick={() => void openUrl(pr.url)}
