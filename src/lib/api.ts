@@ -13,6 +13,8 @@ import type {
 export const api = {
   // ---- auth ----
   hasToken: () => invoke<boolean>("has_token"),
+  isOAuthConfigured: () => invoke<boolean>("is_oauth_configured"),
+  loginWithGithub: () => invoke<GitHubUser>("login_with_github"),
   setToken: (token: string) => invoke<GitHubUser>("set_token", { token }),
   clearToken: () => invoke<void>("clear_token"),
   getCurrentUser: () => invoke<GitHubUser>("get_current_user"),

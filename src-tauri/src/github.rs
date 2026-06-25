@@ -251,7 +251,7 @@ fn net_err(e: reqwest::Error) -> String {
     format!("network error: {e}")
 }
 
-fn build_client(token: &str) -> Result<reqwest::Client, String> {
+pub(crate) fn build_client(token: &str) -> Result<reqwest::Client, String> {
     use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, USER_AGENT};
     let mut headers = HeaderMap::new();
     headers.insert(ACCEPT, HeaderValue::from_static("application/vnd.github+json"));
@@ -324,7 +324,7 @@ async fn get_all_pages(client: &reqwest::Client, url: &str) -> Result<Vec<Value>
     Ok(out)
 }
 
-async fn fetch_user(client: &reqwest::Client) -> Result<GitHubUser, String> {
+pub(crate) async fn fetch_user(client: &reqwest::Client) -> Result<GitHubUser, String> {
     let v = get_json(client, &format!("{API}/user")).await?;
     Ok(GitHubUser {
         login: fstr(&v, "login"),

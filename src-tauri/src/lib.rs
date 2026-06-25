@@ -1,3 +1,4 @@
+mod auth;
 mod github;
 mod storage;
 
@@ -6,6 +7,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
+            auth::login_with_github,
+            auth::is_oauth_configured,
             github::has_token,
             github::set_token,
             github::clear_token,

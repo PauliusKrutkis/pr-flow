@@ -117,13 +117,46 @@ pnpm tauri build
 
 ### Authenticate
 
-On first launch, paste a **GitHub Personal Access Token** with the **`repo`**
-scope. Create one at
-[github.com/settings/tokens/new](https://github.com/settings/tokens/new?scopes=repo&description=PR%20Flow)
-(the in-app link pre-selects the scope).
+You can authenticate two ways:
 
-The token and all cached data are stored locally on your device under the app
-config directory (e.g. on macOS:
+#### Option A — Sign in with GitHub (OAuth, best UX)
+
+Click **Sign in with GitHub**: the browser opens GitHub's authorize page, you log
+in, and the app catches the redirect on a local `http://127.0.0.1` listener and
+captures the token automatically — no copy/paste.
+
+This needs a **one-time OAuth App registration** (only the developer does this
+once):
+
+1. Go to **GitHub → Settings → Developer settings → OAuth Apps → New OAuth App**
+   ([github.com/settings/applications/new](https://github.com/settings/applications/new)).
+2. Set **Authorization callback URL** to exactly:
+   ```
+   http://127.0.0.1:8765/callback
+   ```
+   (Homepage URL can be anything, e.g. `http://127.0.0.1:8765`.)
+3. Create it, copy the **Client ID**, and **Generate a new client secret**.
+4. Provide them to the app via environment variables, then start it:
+   ```bash
+   export PRFLOW_GH_CLIENT_ID=Iv1.xxxxxxxx
+   export PRFLOW_GH_CLIENT_SECRET=xxxxxxxxxxxxxxxx
+   pnpm tauri dev
+   ```
+
+The secret is read from the environment at runtime and is **never committed**.
+(The callback uses a fixed loopback port, `8765`. GitHub OAuth Apps don't support
+PKCE, so the authorization-code flow needs the secret; for a single-user desktop
+tool that's an acceptable trade-off. The button is hidden/disabled until the env
+vars are set.)
+
+#### Option B — Personal Access Token
+
+Paste a **PAT** with the **`repo`** scope. Create one at
+[github.com/settings/tokens/new](https://github.com/settings/tokens/new?scopes=repo&description=PR%20Flow)
+(the in-app link pre-selects the scope). No OAuth App needed.
+
+Either way, the token and all cached data are stored locally under the app config
+directory (e.g. on macOS:
 `~/Library/Application Support/com.pauliuskrutkis.prflow/`). The token is stored in
 plain JSON — fine for a local MVP; moving it to the OS keychain is on the roadmap.
 
