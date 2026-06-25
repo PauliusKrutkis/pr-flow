@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useHotkeys } from "../../keyboard";
 import { useAppStore } from "../../store/appStore";
 import { useInbox } from "../../hooks/useInbox";
+import { prefetchPullRequest } from "../../hooks/usePullRequestDetail";
 import { prKey } from "../../types";
 import type { InboxData, InboxTabKey, PullRequest } from "../../types";
 import { cn } from "../../lib/cn";
@@ -70,6 +71,18 @@ export function Inbox() {
     );
     el?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
+
+  // Once the cursor settles, prefetch the selected PR and its neighbors so
+  // Enter (or moving j/k) opens instantly. Debounced + deduped → rate-safe.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      for (const offset of [0, 1, -1]) {
+        const pr = filtered[selectedIndex + offset];
+        if (pr) prefetchPullRequest(pr.owner, pr.name, pr.number);
+      }
+    }, 180);
+    return () => clearTimeout(timer);
+  }, [selectedIndex, filtered]);
 
   const keyFor = (pr: PullRequest) =>
     prKey({ owner: pr.owner, name: pr.name, number: pr.number });
@@ -208,6 +221,9 @@ export function Inbox() {
                 selected={i === selectedIndex}
                 unread={isUnread(keyFor(pr), pr.updatedAt)}
                 onOpen={() => open(i)}
+                onHover={() =>
+                  prefetchPullRequest(pr.owner, pr.name, pr.number)
+                }
               />
             </div>
           ))}

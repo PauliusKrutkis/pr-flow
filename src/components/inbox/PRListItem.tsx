@@ -8,14 +8,23 @@ interface PRListItemProps {
   selected: boolean;
   unread: boolean;
   onOpen: () => void;
+  /** Called on hover — used to prefetch the PR so opening is instant. */
+  onHover?: () => void;
 }
 
-export function PRListItem({ pr, selected, unread, onOpen }: PRListItemProps) {
+export function PRListItem({
+  pr,
+  selected,
+  unread,
+  onOpen,
+  onHover,
+}: PRListItemProps) {
   return (
     <div
       role="button"
       tabIndex={-1}
       onClick={onOpen}
+      onMouseEnter={onHover}
       className={cn(
         "flex cursor-pointer items-center gap-3 border-l-2 px-4 py-3",
         selected
