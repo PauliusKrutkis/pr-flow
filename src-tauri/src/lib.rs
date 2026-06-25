@@ -24,6 +24,7 @@ pub fn run() {
             github::create_review_comment,
             github::reply_to_review_comment,
             github::create_issue_comment,
+            github::submit_review,
             github::get_viewed_map,
             github::set_viewed_map,
         ])

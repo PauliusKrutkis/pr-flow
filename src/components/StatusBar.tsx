@@ -18,10 +18,12 @@ const HINTS: Record<string, Hint[]> = {
     { keys: ["r"], label: "Refresh" },
   ],
   review: [
-    { keys: ["n", "p"], label: "Files" },
     { keys: ["j", "k"], label: "Line" },
+    { keys: ["space"], label: "Page" },
+    { keys: ["n", "p"], label: "Files" },
     { keys: ["c"], label: "Comment" },
     { keys: ["v"], label: "Viewed" },
+    { keys: ["s"], label: "Submit" },
     { keys: ["]c", "[c"], label: "Threads" },
     { keys: ["esc"], label: "Back" },
   ],
@@ -33,6 +35,7 @@ const KEY_LABEL: Record<string, string> = {
   up: "↑",
   down: "↓",
   mod: "⌘",
+  space: "␣",
 };
 
 function display(key: string): string {

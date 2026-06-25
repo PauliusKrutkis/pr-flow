@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import type { ChangedFile, ReviewComment } from "../../types";
+import type { ChangedFile, PendingComment, ReviewComment } from "../../types";
 import { parsePatch, type DiffRow } from "../../lib/diff";
 import { highlightLine } from "../../lib/highlight";
 import { cn } from "../../lib/cn";
@@ -19,6 +19,14 @@ interface DiffViewerProps {
   }) => Promise<void>;
   onReply: (a: { inReplyTo: number; body: string }) => Promise<void>;
   addPending: boolean;
+  pending: PendingComment[];
+  onAddPending: (c: {
+    path: string;
+    line: number;
+    side: string;
+    body: string;
+  }) => void;
+  onRemovePending: (id: string) => void;
 }
 
 /** A stable key for anchoring comments/boxes to a (side, line) location. */
@@ -98,9 +106,22 @@ export function DiffViewer({
   onAddComment,
   onReply,
   addPending,
+  pending,
+  onAddPending,
+  onRemovePending,
 }: DiffViewerProps) {
   const hunks = useMemo(() => parsePatch(file.patch), [file.patch]);
   const threadsByAnchor = useMemo(() => buildThreads(comments), [comments]);
+  const pendingByAnchor = useMemo(() => {
+    const m = new Map<string, PendingComment[]>();
+    for (const p of pending) {
+      const k = anchorKey(p.side, p.line);
+      const arr = m.get(k) ?? [];
+      arr.push(p);
+      m.set(k, arr);
+    }
+    return m;
+  }, [pending]);
 
   const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
   const [openBoxes, setOpenBoxes] = useState<Set<string>>(() => new Set());
@@ -270,6 +291,7 @@ export function DiffViewer({
             const target = item.target ?? null;
             const key = item.anchor ?? null;
             const threads = key != null ? threadsByAnchor.get(key) : undefined;
+            const pendingHere = key != null ? pendingByAnchor.get(key) : undefined;
             const boxOpen = key != null && openBoxes.has(key);
             const isCursor = item.anchor != null && item.anchor === cursorAnchor;
             const rowBg =
@@ -333,7 +355,9 @@ export function DiffViewer({
                   </div>
                 </div>
 
-                {(threads != null && threads.length > 0) || boxOpen ? (
+                {(threads && threads.length > 0) ||
+                (pendingHere && pendingHere.length > 0) ||
+                boxOpen ? (
                   <div className="js-comment space-y-2 bg-surface px-3 py-2">
                     {threads?.map((thread) => (
                       <CommentThread
@@ -343,13 +367,44 @@ export function DiffViewer({
                         replyPending={addPending}
                       />
                     ))}
+                    {pendingHere?.map((p) => (
+                      <div
+                        key={p.id}
+                        className="rounded-card border border-accent/50 bg-surface-2 p-2 text-xs"
+                      >
+                        <div className="mb-1 flex items-center justify-between">
+                          <span className="font-medium text-accent">
+                            Pending review comment
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => onRemovePending(p.id)}
+                            className="text-muted hover:text-danger"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <div className="whitespace-pre-wrap text-fg">{p.body}</div>
+                      </div>
+                    ))}
                     {boxOpen && target != null && (
                       <AddCommentBox
                         pending={addPending}
                         autoFocus
-                        placeholder="Leave a review comment…"
+                        placeholder="Add a review comment…"
+                        submitLabel="Add to review"
+                        secondaryLabel="Comment now"
                         onCancel={() => closeBox(key!)}
-                        onSubmit={async (body) => {
+                        onSubmit={(body) => {
+                          onAddPending({
+                            path: file.filename,
+                            line: target.line,
+                            side: target.side,
+                            body,
+                          });
+                          closeBox(key!);
+                        }}
+                        onSecondary={async (body) => {
                           await onAddComment({
                             path: file.filename,
                             line: target.line,

@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { queryClient, queryKeys } from "../lib/queryClient";
+import type { ReviewEvent } from "../types";
 
 /**
  * Comment mutations for a PR. Each refetches the PR detail on success so new
@@ -39,5 +40,15 @@ export function useCommentMutations(
     onSuccess: invalidate,
   });
 
-  return { addReviewComment, reply, addIssueComment };
+  const submitReview = useMutation({
+    mutationFn: (args: {
+      event: ReviewEvent;
+      body: string;
+      commitId: string;
+      comments: { path: string; line: number; side: string; body: string }[];
+    }) => api.submitReview({ owner, repo, number, ...args }),
+    onSuccess: invalidate,
+  });
+
+  return { addReviewComment, reply, addIssueComment, submitReview };
 }

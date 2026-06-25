@@ -630,6 +630,54 @@ pub async fn create_issue_comment(
     Ok(())
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewCommentInput {
+    pub path: String,
+    pub line: u64,
+    pub side: String,
+    pub body: String,
+}
+
+/// Submit a pull request review (APPROVE | REQUEST_CHANGES | COMMENT) with an
+/// optional body and a batch of inline comments, in one request.
+#[tauri::command]
+pub async fn submit_review(
+    app: AppHandle,
+    owner: String,
+    repo: String,
+    number: u64,
+    event: String,
+    body: String,
+    commit_id: String,
+    comments: Vec<ReviewCommentInput>,
+) -> Result<(), String> {
+    let token = token_or_err(&app).await?;
+    let client = build_client(&token)?;
+    let comment_payload: Vec<Value> = comments
+        .iter()
+        .map(|c| json!({ "path": c.path, "line": c.line, "side": c.side, "body": c.body }))
+        .collect();
+    let mut payload = json!({
+        "event": event,
+        "body": body,
+        "comments": comment_payload,
+    });
+    if !commit_id.is_empty() {
+        payload["commit_id"] = json!(commit_id);
+    }
+    let resp = client
+        .post(format!(
+            "{API}/repos/{owner}/{repo}/pulls/{number}/reviews"
+        ))
+        .json(&payload)
+        .send()
+        .await
+        .map_err(net_err)?;
+    read_body(resp).await?;
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Commands: viewed-file state (local only)
 // ---------------------------------------------------------------------------

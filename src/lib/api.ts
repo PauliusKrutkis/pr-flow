@@ -4,6 +4,7 @@ import type {
   InboxData,
   PullRequestDetail,
   ReviewComment,
+  ReviewEvent,
   ViewedMap,
 } from "../types";
 
@@ -57,6 +58,15 @@ export const api = {
     number: number;
     body: string;
   }) => invoke<void>("create_issue_comment", args),
+  submitReview: (args: {
+    owner: string;
+    repo: string;
+    number: number;
+    event: ReviewEvent;
+    body: string;
+    commitId: string;
+    comments: { path: string; line: number; side: string; body: string }[];
+  }) => invoke<void>("submit_review", args),
 
   // ---- viewed-file state (local only) ----
   getViewedMap: () => invoke<ViewedMap>("get_viewed_map"),

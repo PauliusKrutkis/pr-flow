@@ -7,6 +7,11 @@ interface AddCommentBoxProps {
   pending: boolean;
   placeholder?: string;
   autoFocus?: boolean;
+  /** Primary button label (⌘↵). Defaults to "Comment". */
+  submitLabel?: string;
+  /** Optional secondary action (e.g. post immediately vs. add to a review). */
+  onSecondary?: (body: string) => Promise<void> | void;
+  secondaryLabel?: string;
 }
 
 export function AddCommentBox({
@@ -15,21 +20,24 @@ export function AddCommentBox({
   pending,
   placeholder,
   autoFocus,
+  submitLabel = "Comment",
+  onSecondary,
+  secondaryLabel,
 }: AddCommentBoxProps) {
   const [text, setText] = useState("");
   const trimmed = text.trim();
   const canSubmit = !pending && trimmed.length > 0;
 
-  async function submit() {
+  async function run(action: (body: string) => Promise<void> | void) {
     if (!canSubmit) return;
-    await onSubmit(trimmed);
+    await action(trimmed);
     setText("");
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
-      void submit();
+      void run(onSubmit);
     } else if (e.key === "Escape") {
       e.preventDefault();
       onCancel();
@@ -61,9 +69,24 @@ export function AddCommentBox({
           >
             Cancel
           </button>
+          {onSecondary && (
+            <button
+              type="button"
+              onClick={() => void run(onSecondary)}
+              disabled={!canSubmit}
+              className={cn(
+                "rounded border border-line px-2.5 py-1 text-xs font-medium",
+                canSubmit
+                  ? "text-fg hover:bg-elevated"
+                  : "cursor-not-allowed text-faint",
+              )}
+            >
+              {secondaryLabel ?? "Secondary"}
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => void submit()}
+            onClick={() => void run(onSubmit)}
             disabled={!canSubmit}
             className={cn(
               "rounded px-2.5 py-1 text-xs font-medium",
@@ -72,7 +95,7 @@ export function AddCommentBox({
                 : "cursor-not-allowed bg-elevated text-faint",
             )}
           >
-            {pending ? "Submitting…" : "Comment"}
+            {pending ? "Submitting…" : submitLabel}
           </button>
         </div>
       </div>

@@ -92,6 +92,17 @@ export interface InboxData {
 
 export type InboxTabKey = keyof InboxData;
 
+export type ReviewEvent = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
+
+/** A draft inline comment, batched locally until the review is submitted. */
+export interface PendingComment {
+  id: string;
+  path: string;
+  line: number;
+  side: string;
+  body: string;
+}
+
 /** prKey -> list of filenames marked viewed */
 export type ViewedMap = Record<string, string[]>;
 
