@@ -251,6 +251,11 @@ fn net_err(e: reqwest::Error) -> String {
     format!("network error: {e}")
 }
 
+/// Lightweight stderr logging — shows up in the `tauri dev` terminal.
+fn log(msg: &str) {
+    eprintln!("[pr-flow] {msg}");
+}
+
 pub(crate) fn build_client(token: &str) -> Result<reqwest::Client, String> {
     use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, USER_AGENT};
     let mut headers = HeaderMap::new();
@@ -287,6 +292,7 @@ async fn read_body(resp: reqwest::Response) -> Result<Value, String> {
                     .map(|s| s.to_string())
             })
             .unwrap_or_else(|| text.clone());
+        log(&format!("GitHub API error {}: {}", status.as_u16(), msg));
         return Err(format!("GitHub API error ({}): {}", status.as_u16(), msg));
     }
     if text.trim().is_empty() {
@@ -375,6 +381,7 @@ pub async fn get_current_user(app: AppHandle) -> Result<GitHubUser, String> {
 pub async fn list_review_requested(app: AppHandle) -> Result<Vec<PullRequest>, String> {
     let token = token_or_err(&app).await?;
     let client = build_client(&token)?;
+    log("GET /search/issues q=\"is:open is:pr review-requested:@me archived:false\"");
     let resp = client
         .get(format!("{API}/search/issues"))
         .query(&[
@@ -393,6 +400,7 @@ pub async fn list_review_requested(app: AppHandle) -> Result<Vec<PullRequest>, S
         .cloned()
         .unwrap_or_default();
     let prs: Vec<PullRequest> = items.iter().map(pr_from_search).collect();
+    log(&format!("review-requested PRs: {} found", prs.len()));
     storage::write_json(&app, "prs.json", &prs)?;
     Ok(prs)
 }
@@ -436,6 +444,11 @@ pub async fn get_pull_request_detail(
         comments,
         fetched_at: now_millis(),
     };
+    log(&format!(
+        "PR {owner}/{repo}#{number}: {} files, {} comments",
+        detail.files.len(),
+        detail.comments.len()
+    ));
     storage::write_json(&app, &detail_cache_name(&owner, &repo, number), &detail)?;
     Ok(detail)
 }

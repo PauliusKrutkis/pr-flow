@@ -11,7 +11,8 @@ import { PRListItem } from "./PRListItem";
 import type { PullRequest } from "../../types";
 
 export function Inbox() {
-  const { data, isLoading, isFetching, refetch } = usePullRequests();
+  const { data, isLoading, isFetching, isError, error, refetch } =
+    usePullRequests();
 
   const openReview = useAppStore((s) => s.openReview);
   const markSeen = useAppStore((s) => s.markSeen);
@@ -140,11 +141,29 @@ export function Inbox() {
         <div className="flex flex-1 items-center justify-center">
           <Spinner label="Loading pull requests…" />
         </div>
+      ) : isError && !data ? (
+        <div className="flex flex-1 items-center justify-center px-6">
+          <div className="max-w-md text-center">
+            <p className="text-sm font-medium text-danger">
+              Couldn't load pull requests
+            </p>
+            <p className="mt-1 break-words text-xs text-muted">
+              {String(error)}
+            </p>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              className="mt-3 rounded-card border border-line px-3 py-1.5 text-sm text-fg hover:bg-elevated"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center">
+        <div className="flex flex-1 items-center justify-center px-6">
           <EmptyState
             title="No review requests"
-            hint="You're all caught up."
+            hint="This lists PRs where your review was requested (review-requested:@me). PRs you opened yourself won't show up here unless someone requests your review."
           />
         </div>
       ) : (
