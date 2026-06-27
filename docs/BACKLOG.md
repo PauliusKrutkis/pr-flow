@@ -1,128 +1,377 @@
 # PR Flow — backlog
 
-> **Planning only. Nothing here is implemented** — this captures requested
-> improvements as a prioritized, actionable backlog (same spirit as the e2e
-> scaffold). Each item notes the intent and a rough implementation approach so
-> it can be picked up directly. Check items off as they ship.
+> **Planning only.** Captures requested improvements as a prioritized, actionable
+> backlog. Check items off as they ship.
 
-Legend: 🟢 small · 🟡 medium · 🔴 large/involved · ❓ open question.
+> **Constraint:** Once the release gate is satisfied, **no new backlog items** may
+> be added before five external developers have used the app for one week.
+
+Legend: 🟢 small · 🟡 medium · 🔴 large/involved · ⏸ post-MVP · ❓ open question.
+
+**Context:** This is a product plan, not a feature wishlist. Superhuman didn't win
+because Gmail links opened in Superhuman — it won because **once you were inside,
+it felt incredible.** Foundational = fast cache, keyboard navigation, pleasant
+review flow. Entry friction is optimizable later.
+
+**Avoid:** optimizing the last 5% of entry (Slack link interception) before
+validating the other 95% (the review experience inside the app).
 
 ---
 
-## 1. Keyboard navigation & code traversal
+## The real problem
 
-- [ ] 🟢 **Accelerate scrolling/cursor when a key is held.** Holding `j`/`k`
-      should speed up rather than step at a fixed rate. Approach: use
-      `KeyboardEvent.repeat` (and/or time-since-first-repeat) to grow the step,
-      or switch to a `requestAnimationFrame` momentum loop while the key is down
-      (keydown starts it, keyup stops it). Today the keyboard layer fires one
-      action per keydown.
-- [ ] 🟡 **More code-traversal shortcuts.** `gg` / `G` jump to top / bottom of
-      the diff; `{` / `}` (or `[h` / `]h`) jump between hunks; `Ctrl-D` / `Ctrl-U`
-      half-page (complementing `Space` / `PageDown`/`PageUp`). Keep them
-      discoverable in the `?` overlay and footer.
-- [ ] 🟢 **`Tab` / `Shift+Tab` to cycle inbox tabs** (in addition to `1`–`4`).
-      Note: must `preventDefault` Tab when not focused in a field so it doesn't
-      move DOM focus.
+Not: *"How do I intercept every GitHub link?"*
 
-## 2. Fuzzy file finder (⌘T / Ctrl-T)
+Yes: *"How do I make opening a PR in PR Flow effortless?"*
 
-- [ ] 🟡 **Spotlight/Raycast-style file finder.** A centered overlay to jump to
-      any changed file in the open PR, **fuzzy-matched** (path + basename).
-      Approach: reuse the command-palette modal shell; add a small fuzzy scorer
-      (e.g. `fuzzysort` or `match-sorter`) ranked by basename then path;
-      arrows/Enter/Esc; show status glyph + `+/-`. Trigger `mod+t`.
-- [ ] 🟢 **Remove the sidebar "Filter files" input** once ⌘T exists (redundant).
-- [ ] ❓ **Unify or separate ⌘K and ⌘T.** Raycast-style: one launcher with
-      modes, vs. distinct ⌘K (commands) / ⌘T (files). Decide before building.
+For v0.1 users (you + ~5 developers), that's already solved:
 
-## 3. Search UI polish (Spotlight feel)
+```
+⌘K → "login" → Enter
+```
 
-- [ ] 🟡 **Make search feel like Raycast/Spotlight/⌘P:** centered modal, fuzzy
-      ranking, result rows with icons/metadata, keyboard-first. Applies to both
-      the inbox search and the ⌘T file finder (likely a shared component). The
-      current inbox `/` bar is functional but not Spotlight-grade.
+Or resume where you left off. **No Slack link handling required.**
+
+---
+
+## v0.1 — ship this, then stop
+
+- [ ] PR list + cached open
+- [ ] Keyboard navigation
+- [ ] **`mod+k` PR search** — primary way to open a PR
+- [ ] Comment + submit review
+- [ ] **Resume where you left off**
+- [ ] Auto-update (before external users)
+- [ ] Inbox zero-state
+
+**Not in v0.1:** browser extension, link interception, Universal Links, webhooks.
+
+---
+
+## Backlog tiers
+
+### 🚀 Category 1 — Core product (foundational)
+
+*"Why would someone use this?"*
+
+| Item | Section |
+| --- | --- |
+| **Resume where you left off** | § flow |
+| Cache-first + **perf budget** | § perf |
+| Keyboard navigation | § shortcuts |
+| **`mod+k` search across PRs** | §6 |
+| **New review notification** | § notify |
+| Code-first layout + Info tab | § layout |
+| Viewed workflow + verdict v1 | §4 |
+| Orient banner | § delta |
+| PR-level comments in Info + badge | §5 |
+| Inbox zero-state | § inbox |
+| Remove manual refresh | §7 |
+| shadcn Phase 1 | §8 |
+
+### 🏗 Category 2 — Product infrastructure
+
+*"Can people realistically adopt it?"*
+
+| Item | Section | When |
+| --- | --- | --- |
+| **Auto-updates** | §11b | Before external users |
+| CI releases + signing | §11b | With auto-update |
+| **`prflow://` scheme** | §11a | Stage 2 (simple extension) |
+
+### ✨ Category 3 — Delighters (prove the pain first)
+
+| Item | Section | When |
+| --- | --- | --- |
+| Simple **"Open in PR Flow"** extension | §11a Stage 2 | After daily-use users |
+| Link **interception** + native messaging | §11a Stage 3 | Only if users ask |
+| Universal Links / wrapper domain | §11a | Unlikely needed if extension suffices |
+| New icon · streaks · celebration · Conversation mode | various | Post-MVP |
+
+---
+
+## Release gate
+
+**Must have before DM'ing five developer friends:**
+
+- [ ] Perf budget met
+- [ ] Keyboard workflow + stable review
+- [ ] **Resume where you left off**
+- [ ] **`mod+k` jump to any PR**
+- [ ] **Auto-updates**
+- [ ] Inbox zero-state
+
+**Can wait until users complain:**
+
+- Browser extension (any kind)
+- Slack / GitHub link interception
+- Universal Links · webhooks · AI · GitLab · Conversation mode · icon
+
+**Ship rule:** If five developers use it for a week and **nobody** says *"I wish
+GitHub links opened this"*, you've saved weeks of integration work.
+
+---
+
+## Perceived performance budget (north star)
+
+| Action | Goal |
+| --- | ---: |
+| Open app | < 300 ms |
+| Resume last PR | < 300 ms |
+| **`mod+k` → open PR** | < 100 ms |
+| Switch PR | < 100 ms |
+| Switch file | < 16 ms |
+| Command palette | Instant |
+
+- [ ] 🟡 Dev overlay: `⚡ Last PR open: 84 ms · Last file switch: 4 ms`
+
+---
+
+## Flow & navigation — resume first
+
+```
+Continue reviewing · Repository X · PR #431 · File 8 / 17
+```
+
+No inbox. Just continue.
+
+- [ ] 🔴 **Resume where you left off** — default app open.
+- [ ] 🟡 Auto-advance to next review-requested PR after submit.
+- [ ] 🟡 **`Esc` → inbox** — exception, not home.
+
+---
+
+## New review notification (stronger than link interception)
+
+Don't wait for Slack links. **The app is where reviews begin.**
+
+When polling finds a new review request:
+
+```
+🔔 New review requested
+
+Fix authentication race condition
+
+Press Enter to open
+```
+
+Users may never need to click a GitHub link. Pairs with existing 60s polling —
+no webhooks required for v1.
+
+- [ ] 🟡 **In-app notification** for new review requests — keyboard-dismissable,
+      Enter to open. Desktop notification optional later.
+- [ ] 🟡 **Badge / inbox highlight** for unseen PRs.
+
+---
+
+## Opening a PR — ranked by stage
+
+### Stage 1 — first users (v0.1) ✅
+
+| Method | Flow |
+| --- | --- |
+| **`mod+k`** | `⌘K → "123" or "login" → Enter` — under a second, no mouse |
+| **Resume** | App opens → continue last PR |
+| **Inbox** | `j`/`k` + Enter |
+
+Coworkers paste GitHub links in Slack? **Fine.** User copies PR number or title
+into `mod+k`. Keyboard-heavy developers may find this *faster* than mouse →
+Slack → browser → app.
+
+### Stage 2 — daily users (after v0.1, if needed)
+
+Simple browser extension — **not interception**. ~10% of interception effort,
+most of the value:
+
+- **"Open in PR Flow"** button on GitHub/GitLab PR pages (content script)
+- Toolbar button + context menu ("Open in PR Flow")
+- Calls **`prflow://pr/owner/repo/123`** — register scheme in Tauri app
+
+No native messaging. No auto-intercept. Easy to build and test.
+
+- [ ] 🟡 **Stage 2 extension** — content script + toolbar + `prflow://` handler.
+- [ ] 🟡 **Self-hosted GitLab** — user-configurable host patterns in extension.
+
+### Stage 3 — proven pain only (⏸)
+
+**Only if users say:** *"I keep clicking GitHub links and it's annoying."*
+
+- Intercept navigation before GitHub loads
+- Native messaging host (bundled with desktop app)
+- Close tab immediately · minimize browser flash
+
+Complex: browser API differences, permissions, Slack in-app browser edge cases.
+**Do not build until Stage 2 feedback demands it.**
+
+- [ ] ⏸ **Stage 3 interception** + native messaging.
+- [ ] ⏸ Universal Links / wrapper domain — only if extension path fails.
+- [ ] ⏸ Userscript — lightweight alternative to full extension.
+
+---
+
+## Orient in 2 seconds
+
+One line when relevant: *"2 files changed."* / *"3 new commits."* — skip when N/A.
+
+- [ ] 🟡 Orient banner on PR open.
+
+---
+
+## Inbox zero-state
+
+- [ ] 🟢 *"Inbox zero — no review requests"* + recent / waiting state.
+
+---
+
+## PR view layout — code-first
+
+**Code** (default) ↔ **Info** (description + PR comments) via **`Tab`**.
+
+- [ ] 🟡 Code-first · Info tab · comment badge.
+- [ ] ⏸ Conversation mode (third Tab).
+
+---
+
+## Shortcut scheme
+
+| Key | Action |
+| --- | --- |
+| **`e`** | Mark viewed + next |
+| **`t`** / **`r`** | Next / prev file |
+| **`↑` / `↓`** | Next / prev line |
+| **`mod+k`** | **Jump to PR** + commands |
+| **`mod+t`** / **`mod+f`** | Files · find in diff |
+| **`Tab`** | Code ↔ Info |
+| **`s`** | Submit review |
+| **`Esc`** | Inbox |
+
+---
+
+## 6. Command palette — search across PRs
+
+Primary navigation. Inbox optional.
+
+```
+⌘K → "Fix login" → Enter
+⌘K → "123"       → Enter
+⌘K → "john"      → Enter  (author)
+```
+
+- [ ] 🔴 **`mod+k` PR search** — v0.1 blocker.
+- [ ] 🟡 PR-context actions — after search works.
+
+---
 
 ## 4. Review workflow
 
-- [ ] 🟢 **Marking viewed should advance to the next file.** Reverses the
-      current in-place `v` toggle. ❓ Decide the default — e.g. `v` = mark viewed
-      **and advance**, `V` (shift) = toggle in place — or make it a setting.
-- [ ] 🟡 **Persist the review draft across navigation.** Pending review comments
-      are currently dropped when leaving the PR (`Esc` to inbox). Keep them in
-      the store keyed by PR (and ideally warn on discard).
+- [ ] 🟢 **`e`** / **`t`** / **`v`**
+- [ ] ⏸ Persist pending comments — post-MVP; flaky local drafts worse than none.
+
+### 4b. Verdict v1
+
+Subtle **`8 / 12`** · auto-open verdict when all viewed · no animation · no streaks.
+
+---
 
 ## 5. Comments UX
 
-- [ ] 🟡 **Surface comments better.** Inline review comments render in the diff,
-      but the broader conversation isn't easy to scan. Add a **Comments /
-      Conversation view** — likely a right-panel tab (or sidebar) listing all
-      review + PR-level comments chronologically, each click-to-jump to its line.
-- [ ] ❓ **UX decision:** right-panel tab vs. dedicated sidebar vs. overlay. Also
-      whether to thread the timeline or group by file/line.
+Inline → Code view. PR-level → Info tab + badge. ⏸ Conversation mode.
 
-## 6. Unify the "add comment" cursor
+---
 
-- [ ] 🟢 **One `+`, not two.** Today both the mouse hover-`+` and the keyboard
-      line-cursor `+` can show at once. Track the **last input modality**: show
-      the mouse `+` on hover while using the mouse, and the keyboard-cursor `+`
-      while navigating by keyboard; switch automatically on `mousemove` vs
-      `keydown`. They can share one affordance.
+## 7. Data freshness
 
-## 7. Command palette — context actions
+60s polling + refetch on focus. No **`r`** key. No sync UI.
 
-- [ ] 🟡 **PR-context commands in ⌘K.** When a PR is open, surface actions driven
-      by the current PR: **Approve**, **Request changes**, **Add comment**,
-      **Mark all viewed**, **Open on GitHub**, **Copy PR URL**, **Next/Prev
-      file**, **Toggle info panel**, etc. The palette already reads the active
-      scope's bindings — extend with PR-scoped action commands.
+- [ ] 🟢 Remove manual refresh.
+- [ ] 🟡 Banner when open PR changes externally.
+- [ ] ⏸ Webhooks — post-MVP.
 
-## 8. UI foundations — shadcn/ui
+---
 
-- [ ] 🔴 **Adopt shadcn/ui** for accessible, consistent primitives (dialog,
-      command, tooltip, dropdown, etc.). Compatible with Tailwind v4. Would back
-      the palette, file finder, submit-review modal, and help overlay, and
-      improve accessibility (focus traps, ARIA roles, escape handling). Migrate
-      incrementally; keep the dark theme tokens.
+## 8. shadcn/ui — Phase 1
 
-## 9. Tooling & quality — Ultracite
+- [ ] 🟡 `command`, `dialog`, `tooltip` — incremental with MVP modals.
 
-- [ ] 🟢 **Add Ultracite** (Biome-based strict lint/format preset):
-      `npx ultracite init`. Add a CI lint/format gate. Confirm interplay with
-      the existing `tsc` typecheck and the Tailwind/Vite setup.
+---
 
-## 10. Better app icon
+## 11. Distribution & adoption
 
-- [ ] 🟡 **More professional icon.** The current icon is a quick PR-glyph on a
-      gradient. Explore a few directions (mark + wordmark, distinctive shape),
-      then regenerate all sizes via `pnpm tauri icon`. Consider light/dark and
-      macOS squircle masking.
+### 11a. Opening PRs from GitHub/GitLab links — staged
 
-## 11. Distribution & platform
+**Raw `https://github.com/.../pull/N` links cannot be OS-hijacked** (you don't
+own github.com). Options exist on a **complexity ladder** — climb only as users
+prove the need.
 
-- [ ] 🔴 **Auto-update.** `tauri-plugin-updater` + signed release artifacts + an
-      update manifest (e.g. a `latest.json` served from GitHub Releases).
-      Requires generating + storing updater signing keys (public key in
-      `tauri.conf.json`, private key in CI secrets).
-- [ ] 🟡 **Autopublish / CI releases.** GitHub Actions using
-      `tauri-apps/tauri-action` to build, sign, and publish installers on tag
-      push (matrix for macOS/Windows/Linux). Pairs with the updater above.
-- [ ] 🔴 **Open PR links in the app (deep linking).**
-      - Register a custom scheme via `tauri-plugin-deep-link`, e.g.
-        `prflow://pr/<owner>/<repo>/<number>` → route straight to the review screen.
-      - ❓ Note: a desktop app **cannot** globally hijack `https://github.com/.../pull/...`.
-        Realistic options to bridge real GitHub URLs: a small **browser
-        extension / bookmarklet** that rewrites a PR URL to the `prflow://`
-        scheme, or an "Open in PR Flow" button surfaced elsewhere. Document the
-        trade-offs before committing to an approach.
+| Stage | What | Slack click → app? | Build when |
+| --- | --- | --- | --- |
+| **1** | `mod+k` + resume + notifications | N/A — don't use Slack link | **v0.1** |
+| **2** | Extension: "Open in PR Flow" on PR page | Browser → one click → app | Daily users |
+| **3** | Interception + native messaging | Brief flash → app | Users ask for it |
+
+**Stage 2 UX (good enough):** user clicks GitHub link in Slack → lands on GitHub
+→ clicks **"Open in PR Flow"** (or toolbar) → app opens. One extra click, ~10%
+of Stage 3 effort.
+
+**Stage 3 UX (best for raw links):** click → brief browser flash → app. Only
+worth it after validation.
+
+- [ ] 🟡 **`prflow://` scheme** — register via `tauri-plugin-deep-link`; used by
+      Stage 2 extension button.
+- [ ] 🟡 **Link-open hydration** — when app opens from any source: cache-first
+      paint, restore file/scroll/viewed.
+- [ ] ⏸ Stage 2 extension (content script + toolbar + context menu).
+- [ ] ⏸ Stage 3 interception + native messaging.
+- [ ] ⏸ Universal Links / wrapper domain.
+
+### 11b. Auto-updates
+
+- [ ] 🔴 Before external users — `tauri-plugin-updater` + CI releases.
+- [ ] ⏸ Crash reporting.
+
+---
+
+## Post-MVP backlog
+
+AI · GitLab · Slack integration · streaks · celebration · Conversation mode ·
+webhooks · icon · Ultracite · vim jumps · persist pending comments · Stage 3
+link interception · Universal Links.
+
+---
+
+## Suggested build order
+
+### v0.1 (validate the inside)
+
+1. Resume where you left off
+2. Keyboard nav + perf budget
+3. **`mod+k` PR search**
+4. Comment + submit review
+5. New review notification (polling-based)
+6. Auto-update
+7. Inbox zero-state · orient banner
+
+### After five friends use it for a week
+
+8. shadcn Phase 1 · code-first layout · Info tab
+9. **Listen** — if *"GitHub links"* comes up → Stage 2 extension
+10. If still painful → Stage 3 interception
+
+### Explicitly do not build before user feedback
+
+- Link interception · native messaging · Universal Links
+- Webhooks · streaks · celebration · Conversation mode · AI
 
 ---
 
 ## Notes / cross-cutting
 
-- Several items ( vim traversal, ⌘T finder, palette context actions) build on the
-  existing scope-aware keyboard layer (`src/keyboard`) — extend, don't replace.
-- shadcn adoption (§8) and the search-UI polish (§3) overlap: doing shadcn first
-  gives an accessible `command`/`dialog` base for the finder and palette.
-- The "viewed → advance" change (§4) intentionally reverses a recent decision;
-  confirm the desired default before implementing.
+- **Inside > entry.** Polish review flow before Slack link magic.
+- **`mod+k` is the v0.1 answer** to "coworker pasted a GitHub link" — PR number
+  or title, Enter, done.
+- **Notifications > interception** — app tells you about new reviews; you don't
+  need Slack to be the entry point.
+- Stage 2 extension is a **delighter**, not foundational — ship without it.
+- Stage 3 is **technically cool** but high maintenance — zero users have asked yet.
+- First testers will complain about comment jumps, Escape, slowness, memory — not
+  missing link interception.
