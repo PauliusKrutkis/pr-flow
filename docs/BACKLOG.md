@@ -333,7 +333,8 @@ worth it after validation.
 
 ### 11b. Auto-updates
 
-- [ ] 🔴 Before external users — `tauri-plugin-updater` + CI releases.
+- [~] 🔴 Before external users — `tauri-plugin-updater` + CI releases.
+      *Plugin + in-app prompt scaffolded; real signing key, feed & CI signing remain (see README "Auto-updates").*
 - [ ] ⏸ Crash reporting.
 
 ---

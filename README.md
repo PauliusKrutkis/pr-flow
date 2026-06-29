@@ -177,6 +177,34 @@ plain JSON — fine for a local MVP; moving it to the OS keychain is on the road
 
 ---
 
+## Auto-updates (scaffolded)
+
+`tauri-plugin-updater` is wired in: the backend exposes `check_for_update` /
+`install_update` commands and the app shows an **"Update available"** prompt
+(`src/components/UpdatePrompt.tsx`) that installs and relaunches in one click.
+The check is best-effort — until a real signing key and release feed exist it
+returns "no update" and the prompt never appears, so the scaffold is safe to ship.
+
+To turn it on (the remaining CI/signing work):
+
+1. **Generate a signing keypair** (once):
+   ```bash
+   pnpm tauri signer generate -w ~/.tauri/prflow.key
+   ```
+2. **Publish the public key** — paste it into `plugins.updater.pubkey` in
+   `src-tauri/tauri.conf.json` (replacing `REPLACE_WITH_TAURI_SIGNER_PUBLIC_KEY`)
+   and point `plugins.updater.endpoints` at your real release feed.
+3. **Enable signed artifacts** — set `bundle.createUpdaterArtifacts` to `true`.
+4. **Sign in CI** — export `TAURI_SIGNING_PRIVATE_KEY` and
+   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (GitHub Actions secrets) so
+   `pnpm tauri build` emits the signed bundle + `.sig`.
+5. **Serve a `latest.json`** at the endpoint describing the newest version,
+   notes, and per-platform signed bundle URLs.
+
+No app-code changes are needed after that — the prompt activates automatically.
+
+---
+
 ## Scope
 
 **In scope (MVP v0.1):** token + OAuth auth · inbox tabs (review-requested ·
@@ -192,7 +220,7 @@ team features · desktop/OS notifications · offline sync.
 ## Roadmap
 
 - OS-keychain token storage
-- Auto-updates (`tauri-plugin-updater` + signed CI releases) before external users
+- Auto-updates: wire the scaffolded updater to a signed CI release feed (above)
 - Fuzzy file finder, richer command palette actions
 - Per-line syntax-highlighting context across hunks
 

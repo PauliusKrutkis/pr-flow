@@ -10,6 +10,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { HelpOverlay } from "./components/HelpOverlay";
 import { StatusBar } from "./components/StatusBar";
 import { ReviewNotifier } from "./components/ReviewNotifier";
+import { UpdatePrompt } from "./components/UpdatePrompt";
 import { PerfOverlay } from "./components/PerfOverlay";
 import { Spinner } from "./components/ui/Spinner";
 
@@ -85,6 +86,7 @@ export default function App() {
       <CommandPalette baseScope={baseScope} />
       <HelpOverlay baseScope={baseScope} />
       {(route.name === "inbox" || route.name === "review") && <ReviewNotifier />}
+      {(route.name === "inbox" || route.name === "review") && <UpdatePrompt />}
       <PerfOverlay />
     </div>
   );

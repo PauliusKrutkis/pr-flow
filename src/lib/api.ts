@@ -5,6 +5,7 @@ import type {
   PullRequestDetail,
   ReviewComment,
   ReviewEvent,
+  UpdateInfo,
   ViewedMap,
 } from "../types";
 
@@ -71,6 +72,10 @@ export const api = {
   // ---- viewed-file state (local only) ----
   getViewedMap: () => invoke<ViewedMap>("get_viewed_map"),
   setViewedMap: (map: ViewedMap) => invoke<void>("set_viewed_map", { map }),
+
+  // ---- auto-update ----
+  checkForUpdate: () => invoke<UpdateInfo | null>("check_for_update"),
+  installUpdate: () => invoke<void>("install_update"),
 };
 
 export type Api = typeof api;
