@@ -19,6 +19,10 @@ Built with **Tauri 2 + React 19 + TypeScript + Tailwind v4**.
 - ⌨️ **Keyboard-first.** Navigate PRs, files, hunks and comments without the mouse.
 - ⚡ **Cache-first.** Everything you've seen paints instantly from a local cache;
   the network refreshes quietly in the background (every 60s and on window focus).
+- ⏯️ **Resume where you left off.** Launch straight back into the last PR — even
+  the file and scroll position you were on.
+- 🔔 **New-review notifications.** When a fresh review request lands, a
+  keyboard-dismissable toast pops up; press `Enter` to open it. No webhooks.
 - 🔍 **Diff-centric review.** Syntax-highlighted, collapsible diffs with inline
   comment threads.
 - 💬 **Comment inline or on the PR** without leaving the keyboard flow.
@@ -38,7 +42,6 @@ Built with **Tauri 2 + React 19 + TypeScript + Tailwind v4**.
 | `j` / `↓`  | Next PR           |
 | `k` / `↑`  | Previous PR       |
 | `Enter`    | Open PR           |
-| `r`        | Refresh list      |
 | `/`        | Focus search      |
 | `1`–`4`    | Switch tab (Review requests · Assigned · Created · Involved) |
 | `⌘K`       | Command palette   |
@@ -49,12 +52,16 @@ Built with **Tauri 2 + React 19 + TypeScript + Tailwind v4**.
 | Key        | Action                       |
 | ---------- | ---------------------------- |
 | `n` / `p`  | Next / previous file         |
-| `j` / `k`  | Scroll diff                  |
+| `j` / `k`  | Move the line cursor (`↑`/`↓`) |
+| `Space`    | Page down the diff           |
 | `]c` / `[c`| Next / previous comment      |
-| `v`        | Toggle file as viewed (and advance) |
+| `c`        | Comment on the cursor line   |
+| `e`        | Mark file viewed and advance |
+| `v`        | Toggle file as viewed        |
 | `o`        | Open the files on GitHub     |
+| `y`        | Copy the PR link             |
 | `i`        | Toggle the info panel        |
-| `r`        | Refresh this PR              |
+| `s`        | Submit review                |
 | `Esc`      | Back to inbox                |
 
 Inline comments: hover a diff line and click the **`+`** in the gutter. PR-level
@@ -173,19 +180,19 @@ plain JSON — fine for a local MVP; moving it to the OS keychain is on the road
 ## Scope
 
 **In scope (MVP v0.1):** token + OAuth auth · inbox tabs (review-requested ·
-assigned · created · involved) · open a PR · view
-changed files · syntax-highlighted diffs · view & add comments (inline, reply,
-PR-level) · mark files viewed · keyboard navigation · local caching · background
-polling.
+assigned · created · involved) · open a PR · view changed files ·
+syntax-highlighted diffs · view & add comments (inline, reply, PR-level) ·
+submit reviews (approve / request changes) with batched comments · mark files
+viewed · resume where you left off · in-app new-review notifications · keyboard
+navigation · local caching · background polling.
 
 **Out of scope (for now):** git operations · GitLab · AI review/chat · webhooks ·
-team features · notifications · offline sync.
+team features · desktop/OS notifications · offline sync.
 
 ## Roadmap
 
-- `c` to comment on the focused diff line (needs a line cursor)
 - OS-keychain token storage
-- Submitting full reviews (approve / request changes) with batched comments
+- Auto-updates (`tauri-plugin-updater` + signed CI releases) before external users
 - Fuzzy file finder, richer command palette actions
 - Per-line syntax-highlighting context across hunks
 

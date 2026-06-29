@@ -151,14 +151,6 @@ export function Inbox() {
       group: "Navigation",
       run: () => open(selectedIndex),
     },
-    {
-      keys: "r",
-      description: "Refresh",
-      group: "General",
-      run: () => {
-        void refetch();
-      },
-    },
     { keys: "/", description: "Search", group: "General", run: openSearch },
     { keys: "1", description: "Tab: Review requests", group: "Tabs", run: () => selectTab("reviewRequested") },
     { keys: "2", description: "Tab: Assigned", group: "Tabs", run: () => selectTab("assigned") },
@@ -235,7 +227,17 @@ export function Inbox() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-1 items-center justify-center px-6">
-          <EmptyState title={`No PRs in “${activeTab.label}”`} hint={activeTab.hint} />
+          {search ? (
+            <EmptyState title="No matches" hint={`No PRs match “${search}”.`} />
+          ) : tab === "reviewRequested" ? (
+            <EmptyState
+              icon="✓"
+              title="Inbox zero — no review requests"
+              hint="Nothing is waiting on your review. New requests show up here and pop a notification."
+            />
+          ) : (
+            <EmptyState title={`No PRs in “${activeTab.label}”`} hint={activeTab.hint} />
+          )}
         </div>
       ) : (
         <div ref={listRef} className="flex-1 overflow-y-auto">

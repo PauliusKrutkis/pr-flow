@@ -130,6 +130,10 @@ export function DiffViewer({
   const [cursorAnchor, setCursorAnchor] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  // Only auto-scroll the cursor into view for explicit user moves — not for the
+  // initial seed / collapse-driven re-placement, which would otherwise yank a
+  // freshly-restored scroll position (resume) back to the top of the file.
+  const userMovedCursorRef = useRef(false);
 
   // Flatten hunks into render items, assigning a sequential nav index to each
   // navigable (non-header, non-collapsed) row.
@@ -176,9 +180,11 @@ export function DiffViewer({
     }
   }, [navAnchors, cursorAnchor]);
 
-  // Scroll the cursor row into view when it moves.
+  // Scroll the cursor row into view when the user moves it (j/k). Seed and
+  // auto-correction don't scroll, so resume's restored scroll position holds.
   useEffect(() => {
-    if (!cursorAnchor) return;
+    if (!cursorAnchor || !userMovedCursorRef.current) return;
+    userMovedCursorRef.current = false;
     const el = containerRef.current?.querySelector<HTMLElement>(
       `[data-anchor="${cursorAnchor}"]`,
     );
@@ -209,6 +215,7 @@ export function DiffViewer({
     const idx = cursorAnchor ? navAnchors.indexOf(cursorAnchor) : -1;
     const base = idx < 0 ? 0 : idx;
     const nextIdx = Math.min(Math.max(base + delta, 0), navAnchors.length - 1);
+    userMovedCursorRef.current = true;
     setCursorAnchor(navAnchors[nextIdx]);
   }
 

@@ -36,13 +36,13 @@ Or resume where you left off. **No Slack link handling required.**
 
 ## v0.1 — ship this, then stop
 
-- [ ] PR list + cached open
-- [ ] Keyboard navigation
-- [ ] **`mod+k` PR search** — primary way to open a PR
-- [ ] Comment + submit review
-- [ ] **Resume where you left off**
+- [x] PR list + cached open
+- [x] Keyboard navigation
+- [x] **`mod+k` PR search** — primary way to open a PR
+- [x] Comment + submit review
+- [x] **Resume where you left off**
 - [ ] Auto-update (before external users)
-- [ ] Inbox zero-state
+- [x] Inbox zero-state
 
 **Not in v0.1:** browser extension, link interception, Universal Links, webhooks.
 
@@ -95,11 +95,11 @@ Or resume where you left off. **No Slack link handling required.**
 **Must have before DM'ing five developer friends:**
 
 - [ ] Perf budget met
-- [ ] Keyboard workflow + stable review
-- [ ] **Resume where you left off**
-- [ ] **`mod+k` jump to any PR**
+- [x] Keyboard workflow + stable review
+- [x] **Resume where you left off**
+- [x] **`mod+k` jump to any PR**
 - [ ] **Auto-updates**
-- [ ] Inbox zero-state
+- [x] Inbox zero-state
 
 **Can wait until users complain:**
 
@@ -123,7 +123,7 @@ GitHub links opened this"*, you've saved weeks of integration work.
 | Switch file | < 16 ms |
 | Command palette | Instant |
 
-- [ ] 🟡 Dev overlay: `⚡ Last PR open: 84 ms · Last file switch: 4 ms`
+- [x] 🟡 Dev overlay: `⚡ Last PR open: 84 ms · Last file switch: 4 ms`
 
 ---
 
@@ -135,9 +135,9 @@ Continue reviewing · Repository X · PR #431 · File 8 / 17
 
 No inbox. Just continue.
 
-- [ ] 🔴 **Resume where you left off** — default app open.
-- [ ] 🟡 Auto-advance to next review-requested PR after submit.
-- [ ] 🟡 **`Esc` → inbox** — exception, not home.
+- [x] 🔴 **Resume where you left off** — default app open.
+- [x] 🟡 Auto-advance to next review-requested PR after submit.
+- [x] 🟡 **`Esc` → inbox** — exception, not home.
 
 ---
 
@@ -158,9 +158,9 @@ Press Enter to open
 Users may never need to click a GitHub link. Pairs with existing 60s polling —
 no webhooks required for v1.
 
-- [ ] 🟡 **In-app notification** for new review requests — keyboard-dismissable,
+- [x] 🟡 **In-app notification** for new review requests — keyboard-dismissable,
       Enter to open. Desktop notification optional later.
-- [ ] 🟡 **Badge / inbox highlight** for unseen PRs.
+- [x] 🟡 **Badge / inbox highlight** for unseen PRs.
 
 ---
 
@@ -213,13 +213,13 @@ Complex: browser API differences, permissions, Slack in-app browser edge cases.
 
 One line when relevant: *"2 files changed."* / *"3 new commits."* — skip when N/A.
 
-- [ ] 🟡 Orient banner on PR open.
+- [x] 🟡 Orient banner on PR open.
 
 ---
 
 ## Inbox zero-state
 
-- [ ] 🟢 *"Inbox zero — no review requests"* + recent / waiting state.
+- [x] 🟢 *"Inbox zero — no review requests"* + recent / waiting state.
 
 ---
 
@@ -236,14 +236,21 @@ One line when relevant: *"2 files changed."* / *"3 new commits."* — skip when 
 
 | Key | Action |
 | --- | --- |
-| **`e`** | Mark viewed + next |
-| **`t`** / **`r`** | Next / prev file |
-| **`↑` / `↓`** | Next / prev line |
-| **`mod+k`** | **Jump to PR** + commands |
-| **`mod+t`** / **`mod+f`** | Files · find in diff |
-| **`Tab`** | Code ↔ Info |
+| **`n`** / **`p`** | Next / prev file |
+| **`j`** / **`k`** (or `↑` / `↓`) | Next / prev line (cursor) |
+| **`Space`** | Page down |
+| **`]c`** / **`[c`** | Next / prev comment thread |
+| **`c`** | Comment on the cursor line |
+| **`e`** | Mark viewed + next file |
+| **`v`** | Toggle file viewed |
+| **`o`** / **`y`** | Open on GitHub · copy PR link |
+| **`i`** | Toggle info panel |
 | **`s`** | Submit review |
+| **`mod+k`** | **Jump to PR** + commands |
 | **`Esc`** | Inbox |
+
+> Shipped keys, matching the app. `mod+t`/`mod+f` (files · find) and `Tab`
+> (Code ↔ Info) remain proposed — see § layout.
 
 ---
 
@@ -257,14 +264,14 @@ Primary navigation. Inbox optional.
 ⌘K → "john"      → Enter  (author)
 ```
 
-- [ ] 🔴 **`mod+k` PR search** — v0.1 blocker.
-- [ ] 🟡 PR-context actions — after search works.
+- [x] 🔴 **`mod+k` PR search** — v0.1 blocker.
+- [x] 🟡 PR-context actions — after search works.
 
 ---
 
 ## 4. Review workflow
 
-- [ ] 🟢 **`e`** / **`t`** / **`v`**
+- [x] 🟢 **`e`** (viewed + next) · **`v`** (toggle viewed) · files via **`n`** / **`p`**
 - [ ] ⏸ Persist pending comments — post-MVP; flaky local drafts worse than none.
 
 ### 4b. Verdict v1
@@ -283,8 +290,8 @@ Inline → Code view. PR-level → Info tab + badge. ⏸ Conversation mode.
 
 60s polling + refetch on focus. No **`r`** key. No sync UI.
 
-- [ ] 🟢 Remove manual refresh.
-- [ ] 🟡 Banner when open PR changes externally.
+- [x] 🟢 Remove manual refresh.
+- [x] 🟡 Banner when open PR changes externally.
 - [ ] ⏸ Webhooks — post-MVP.
 
 ---

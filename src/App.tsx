@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useAppStore } from "./store/appStore";
+import { useAppStore, loadLastRoute } from "./store/appStore";
 import { useHotkeys } from "./keyboard";
 import { useLoadViewed } from "./hooks/useViewed";
 import { api } from "./lib/api";
@@ -9,6 +9,8 @@ import { ReviewScreen } from "./components/review/ReviewScreen";
 import { CommandPalette } from "./components/CommandPalette";
 import { HelpOverlay } from "./components/HelpOverlay";
 import { StatusBar } from "./components/StatusBar";
+import { ReviewNotifier } from "./components/ReviewNotifier";
+import { PerfOverlay } from "./components/PerfOverlay";
 import { Spinner } from "./components/ui/Spinner";
 
 export default function App() {
@@ -19,11 +21,14 @@ export default function App() {
 
   useLoadViewed();
 
-  // Boot: token gate vs inbox.
+  // Boot: token gate, or resume the screen you were last on (falling back to
+  // the inbox). `setRoute` here intentionally restores the persisted route.
   useEffect(() => {
     api
       .hasToken()
-      .then((has) => setRoute(has ? { name: "inbox" } : { name: "token" }))
+      .then((has) =>
+        setRoute(has ? (loadLastRoute() ?? { name: "inbox" }) : { name: "token" }),
+      )
       .catch(() => setRoute({ name: "token" }));
   }, [setRoute]);
 
@@ -79,6 +84,8 @@ export default function App() {
 
       <CommandPalette baseScope={baseScope} />
       <HelpOverlay baseScope={baseScope} />
+      {(route.name === "inbox" || route.name === "review") && <ReviewNotifier />}
+      <PerfOverlay />
     </div>
   );
 }
