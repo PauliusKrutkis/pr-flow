@@ -1,16 +1,9 @@
 @import "tailwindcss";
 
-/* The design lab borrows the desktop palette so experiments read true. As the
-   design system consolidates into @pr-flow/ui, these tokens move there and both
-   apps import them from one place (see docs/DESIGN.md). */
-@theme {
-  --color-bg: #0d1117;
-  --color-surface: #161b22;
-  --color-line: #30363d;
-  --color-fg: #e6edf3;
-  --color-muted: #7d8590;
-  --color-accent: #2f81f7;
-}
+/* The chosen direction ("Quiet") owns its full palette/type as CSS variables
+   scoped to its root class, and themes the shared `.tk-*` (syntax) and `.md`
+   (markdown) classes within that scope. This file stays minimal — just the
+   reset; the canvas colour matches Quiet's so there's no flash on load. */
 
 html,
 body,
@@ -20,10 +13,40 @@ body,
 
 body {
   margin: 0;
-  background: var(--color-bg);
-  color: var(--color-fg);
+  background: #0f0f17;
+  color: #e8e8f3;
   font-family:
-    system-ui,
+    "Inter",
     -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
     sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Slim scrollbars everywhere — directions can override the colours. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a3a transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: currentColor;
+  color: #3a3a3a;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
 }
