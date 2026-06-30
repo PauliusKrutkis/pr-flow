@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+/* The design lab borrows the desktop palette so experiments read true. As the
+   design system consolidates into @pr-flow/ui, these tokens move there and both
+   apps import them from one place (see docs/DESIGN.md). */
+@theme {
+  --color-bg: #0d1117;
+  --color-surface: #161b22;
+  --color-line: #30363d;
+  --color-fg: #e6edf3;
+  --color-muted: #7d8590;
+  --color-accent: #2f81f7;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
