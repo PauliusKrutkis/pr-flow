@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
+import { usePerfStore } from "../lib/perf";
 import type { InboxTabKey, ViewedMap } from "../types";
 
 export type Route =
@@ -7,6 +8,40 @@ export type Route =
   | { name: "token" }
   | { name: "inbox" }
   | { name: "review"; owner: string; repo: string; number: number };
+
+// ---- last-route persistence ("resume where you left off") --------------------
+// We remember the inbox/review screen you were last on (never the token/loading
+// screens) so the next launch reopens it instead of always landing on the inbox.
+const LAST_ROUTE_KEY = "pr-flow:lastRoute";
+type ResumableRoute = Extract<Route, { name: "inbox" } | { name: "review" }>;
+
+function saveLastRoute(route: Route) {
+  if (route.name !== "inbox" && route.name !== "review") return;
+  try {
+    localStorage.setItem(LAST_ROUTE_KEY, JSON.stringify(route));
+  } catch {
+    /* ignore quota / private-mode errors */
+  }
+}
+
+/** The screen to resume on launch, if any. Validated to a known shape. */
+export function loadLastRoute(): ResumableRoute | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(LAST_ROUTE_KEY) ?? "null");
+    if (v?.name === "inbox") return { name: "inbox" };
+    if (
+      v?.name === "review" &&
+      typeof v.owner === "string" &&
+      typeof v.repo === "string" &&
+      typeof v.number === "number"
+    ) {
+      return { name: "review", owner: v.owner, repo: v.repo, number: v.number };
+    }
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
 
 // ---- viewed-file persistence (debounced write to the Rust JSON file) ----
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -95,13 +130,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   inboxTab: "reviewRequested",
   inboxSelectedKey: null,
 
-  setRoute: (route) => set({ route }),
+  setRoute: (route) => {
+    saveLastRoute(route);
+    set({ route });
+  },
   openReview: (owner, repo, number) => {
     flushPersistViewed();
-    set({ route: { name: "review", owner, repo, number }, paletteOpen: false });
+    usePerfStore.getState().markOpenStart();
+    const route: Route = { name: "review", owner, repo, number };
+    saveLastRoute(route);
+    set({ route, paletteOpen: false });
   },
   goInbox: () => {
     flushPersistViewed();
+    saveLastRoute({ name: "inbox" });
     set({ route: { name: "inbox" } });
   },
   setInboxTab: (tab) => set({ inboxTab: tab }),

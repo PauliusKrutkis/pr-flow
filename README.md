@@ -19,6 +19,10 @@ Built with **Tauri 2 + React 19 + TypeScript + Tailwind v4**.
 - ⌨️ **Keyboard-first.** Navigate PRs, files, hunks and comments without the mouse.
 - ⚡ **Cache-first.** Everything you've seen paints instantly from a local cache;
   the network refreshes quietly in the background (every 60s and on window focus).
+- ⏯️ **Resume where you left off.** Launch straight back into the last PR — even
+  the file and scroll position you were on.
+- 🔔 **New-review notifications.** When a fresh review request lands, a
+  keyboard-dismissable toast pops up; press `Enter` to open it. No webhooks.
 - 🔍 **Diff-centric review.** Syntax-highlighted, collapsible diffs with inline
   comment threads.
 - 💬 **Comment inline or on the PR** without leaving the keyboard flow.
@@ -38,7 +42,6 @@ Built with **Tauri 2 + React 19 + TypeScript + Tailwind v4**.
 | `j` / `↓`  | Next PR           |
 | `k` / `↑`  | Previous PR       |
 | `Enter`    | Open PR           |
-| `r`        | Refresh list      |
 | `/`        | Focus search      |
 | `1`–`4`    | Switch tab (Review requests · Assigned · Created · Involved) |
 | `⌘K`       | Command palette   |
@@ -49,12 +52,16 @@ Built with **Tauri 2 + React 19 + TypeScript + Tailwind v4**.
 | Key        | Action                       |
 | ---------- | ---------------------------- |
 | `n` / `p`  | Next / previous file         |
-| `j` / `k`  | Scroll diff                  |
+| `j` / `k`  | Move the line cursor (`↑`/`↓`) |
+| `Space`    | Page down the diff           |
 | `]c` / `[c`| Next / previous comment      |
-| `v`        | Toggle file as viewed (and advance) |
+| `c`        | Comment on the cursor line   |
+| `e`        | Mark file viewed and advance |
+| `v`        | Toggle file as viewed        |
 | `o`        | Open the files on GitHub     |
+| `y`        | Copy the PR link             |
 | `i`        | Toggle the info panel        |
-| `r`        | Refresh this PR              |
+| `s`        | Submit review                |
 | `Esc`      | Back to inbox                |
 
 Inline comments: hover a diff line and click the **`+`** in the gutter. PR-level
@@ -170,22 +177,50 @@ plain JSON — fine for a local MVP; moving it to the OS keychain is on the road
 
 ---
 
+## Auto-updates (scaffolded)
+
+`tauri-plugin-updater` is wired in: the backend exposes `check_for_update` /
+`install_update` commands and the app shows an **"Update available"** prompt
+(`src/components/UpdatePrompt.tsx`) that installs and relaunches in one click.
+The check is best-effort — until a real signing key and release feed exist it
+returns "no update" and the prompt never appears, so the scaffold is safe to ship.
+
+To turn it on (the remaining CI/signing work):
+
+1. **Generate a signing keypair** (once):
+   ```bash
+   pnpm tauri signer generate -w ~/.tauri/prflow.key
+   ```
+2. **Publish the public key** — paste it into `plugins.updater.pubkey` in
+   `src-tauri/tauri.conf.json` (replacing `REPLACE_WITH_TAURI_SIGNER_PUBLIC_KEY`)
+   and point `plugins.updater.endpoints` at your real release feed.
+3. **Enable signed artifacts** — set `bundle.createUpdaterArtifacts` to `true`.
+4. **Sign in CI** — export `TAURI_SIGNING_PRIVATE_KEY` and
+   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (GitHub Actions secrets) so
+   `pnpm tauri build` emits the signed bundle + `.sig`.
+5. **Serve a `latest.json`** at the endpoint describing the newest version,
+   notes, and per-platform signed bundle URLs.
+
+No app-code changes are needed after that — the prompt activates automatically.
+
+---
+
 ## Scope
 
 **In scope (MVP v0.1):** token + OAuth auth · inbox tabs (review-requested ·
-assigned · created · involved) · open a PR · view
-changed files · syntax-highlighted diffs · view & add comments (inline, reply,
-PR-level) · mark files viewed · keyboard navigation · local caching · background
-polling.
+assigned · created · involved) · open a PR · view changed files ·
+syntax-highlighted diffs · view & add comments (inline, reply, PR-level) ·
+submit reviews (approve / request changes) with batched comments · mark files
+viewed · resume where you left off · in-app new-review notifications · keyboard
+navigation · local caching · background polling.
 
 **Out of scope (for now):** git operations · GitLab · AI review/chat · webhooks ·
-team features · notifications · offline sync.
+team features · desktop/OS notifications · offline sync.
 
 ## Roadmap
 
-- `c` to comment on the focused diff line (needs a line cursor)
 - OS-keychain token storage
-- Submitting full reviews (approve / request changes) with batched comments
+- Auto-updates: wire the scaffolded updater to a signed CI release feed (above)
 - Fuzzy file finder, richer command palette actions
 - Per-line syntax-highlighting context across hunks
 
