@@ -1,16 +1,25 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { prKey } from "../../types";
-import type { PendingComment, ReviewEvent } from "../../types";
+import type {
+  InboxData,
+  PendingComment,
+  PullRequest,
+  ReviewEvent,
+} from "../../types";
 import { useAppStore } from "../../store/appStore";
 import { useHotkeys } from "../../keyboard";
 import { usePullRequestDetail } from "../../hooks/usePullRequestDetail";
 import { useCommentMutations } from "../../hooks/useComments";
+import { queryClient, queryKeys } from "../../lib/queryClient";
+import { getReviewMemory, updateReviewMemory } from "../../lib/reviewMemory";
+import { usePerfStore } from "../../lib/perf";
 import { Spinner } from "../ui/Spinner";
 import { Badge } from "../ui/Badge";
 import { FileSidebar } from "./FileSidebar";
 import { DiffViewer } from "./DiffViewer";
 import { RightPanel } from "./RightPanel";
+import { OrientBanner } from "./OrientBanner";
 import { SubmitReviewModal } from "./SubmitReviewModal";
 
 interface ReviewScreenProps {
@@ -20,33 +29,112 @@ interface ReviewScreenProps {
 }
 
 export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
-  const { data, refetch } = usePullRequestDetail(owner, repo, number);
+  const keyValue = prKey({ owner, name: repo, number });
+
+  const { data, isError, error } = usePullRequestDetail(owner, repo, number);
   const { addReviewComment, reply, addIssueComment, submitReview } =
     useCommentMutations(owner, repo, number);
 
   const detail = data;
   const pr = detail?.pr;
 
-  const [selectedFileIndex, setSelectedFileIndex] = useState(0);
+  // Resume position for this PR (captured once per mount, before edits).
+  const [initialMem] = useState(() => getReviewMemory(keyValue));
+
+  const [selectedFileIndex, setSelectedFileIndex] = useState(
+    initialMem?.fileIndex ?? 0,
+  );
   const [rightOpen, setRightOpen] = useState(true);
   const [commentIndex, setCommentIndex] = useState(0);
   const [pending, setPending] = useState<PendingComment[]>([]);
   const [submitOpen, setSubmitOpen] = useState(false);
+  const [banner, setBanner] = useState<{
+    message: string;
+    tone: "info" | "update";
+  } | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const pendingId = useRef(0);
+  const orientedRef = useRef(false);
+  const restoredScrollRef = useRef(false);
+  const mountShaRef = useRef("");
 
   const goInbox = useAppStore((s) => s.goInbox);
   const toggleViewed = useAppStore((s) => s.toggleViewed);
   // Subscribe to the viewed map so the header count stays reactive.
   const viewed = useAppStore((s) => s.viewed);
 
-  const keyValue = prKey({ owner, name: repo, number });
-
   const files = detail?.files ?? [];
   const fileCount = files.length;
   const clampedIndex = Math.min(selectedFileIndex, Math.max(fileCount - 1, 0));
   const selectedFile = files[clampedIndex];
+  const isCurrentViewed =
+    !!selectedFile && (viewed[keyValue] ?? []).includes(selectedFile.filename);
+
+  // Orient on open + record open latency, once detail is in hand.
+  useEffect(() => {
+    if (!detail || !pr || orientedRef.current) return;
+    orientedRef.current = true;
+    usePerfStore.getState().completeOpen();
+    mountShaRef.current = pr.headSha;
+    const updatedSinceSeen =
+      !!initialMem?.headSha && initialMem.headSha !== pr.headSha;
+    const summary = `${fileCount} file${fileCount === 1 ? "" : "s"} changed · +${pr.additions} −${pr.deletions}`;
+    setBanner({
+      message: updatedSinceSeen
+        ? `${summary} · updated since you last viewed`
+        : summary,
+      tone: updatedSinceSeen ? "update" : "info",
+    });
+    updateReviewMemory(keyValue, { headSha: pr.headSha });
+  }, [detail, pr, fileCount, initialMem, keyValue]);
+
+  // Banner when the PR's head moves while you're reviewing it (it already
+  // re-rendered with the latest content — this just explains the shift).
+  useEffect(() => {
+    if (!pr) return;
+    const seen = mountShaRef.current;
+    if (seen && pr.headSha && pr.headSha !== seen) {
+      mountShaRef.current = pr.headSha;
+      updateReviewMemory(keyValue, { headSha: pr.headSha });
+      setBanner({
+        message: "This PR changed while you were reviewing — showing the latest.",
+        tone: "update",
+      });
+    }
+  }, [pr, keyValue]);
+
+  // Restore the saved scroll position once the diff is on screen.
+  useEffect(() => {
+    if (!detail || restoredScrollRef.current) return;
+    restoredScrollRef.current = true;
+    const top = initialMem?.scrollTop ?? 0;
+    if (top > 0) {
+      requestAnimationFrame(() => {
+        if (scrollRef.current) scrollRef.current.scrollTop = top;
+      });
+    }
+  }, [detail, initialMem]);
+
+  // Persist the current file for resume — but only once the real file list is
+  // known, so the placeholder index 0 (while detail loads) can't clobber a
+  // saved position if the user quits mid-load.
+  useEffect(() => {
+    if (!detail || fileCount === 0) return;
+    updateReviewMemory(keyValue, { fileIndex: clampedIndex });
+  }, [detail, fileCount, clampedIndex, keyValue]);
+
+  // Transient orient banners fade; "update" banners stay until dismissed.
+  useEffect(() => {
+    if (!banner || banner.tone !== "info") return;
+    const t = setTimeout(() => setBanner(null), 5000);
+    return () => clearTimeout(t);
+  }, [banner]);
+
+  // Record file-switch latency after the paint that follows the switch.
+  useEffect(() => {
+    requestAnimationFrame(() => usePerfStore.getState().completeFile());
+  }, [clampedIndex]);
 
   function scrollTop() {
     scrollRef.current?.scrollTo({ top: 0 });
@@ -55,20 +143,29 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     const el = scrollRef.current;
     if (el) el.scrollBy({ top: dir * el.clientHeight * 0.85 });
   }
+  function clearInfoBanner() {
+    setBanner((b) => (b && b.tone === "info" ? null : b));
+  }
 
   function nextFile() {
     if (fileCount === 0) return;
+    usePerfStore.getState().markFileStart();
+    clearInfoBanner();
     setSelectedFileIndex((i) => Math.min(i + 1, fileCount - 1));
     setCommentIndex(0);
     scrollTop();
   }
   function prevFile() {
     if (fileCount === 0) return;
+    usePerfStore.getState().markFileStart();
+    clearInfoBanner();
     setSelectedFileIndex((i) => Math.max(i - 1, 0));
     setCommentIndex(0);
     scrollTop();
   }
   function selectFile(i: number) {
+    usePerfStore.getState().markFileStart();
+    clearInfoBanner();
     setSelectedFileIndex(i);
     setCommentIndex(0);
     scrollTop();
@@ -76,6 +173,40 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   function toggleViewedFile() {
     if (selectedFile) toggleViewed(keyValue, selectedFile.filename);
+  }
+  // `e`: ensure the current file is marked viewed, then advance.
+  function markViewedAndNext() {
+    if (selectedFile && !isCurrentViewed) toggleViewed(keyValue, selectedFile.filename);
+    nextFile();
+  }
+  function copyLink() {
+    if (!pr?.url) return;
+    void navigator.clipboard?.writeText(pr.url).then(
+      () => setBanner({ message: "PR link copied to clipboard", tone: "info" }),
+      () => {},
+    );
+  }
+
+  // After submitting, jump to the next review-requested PR (or back to inbox).
+  function advanceAfterSubmit() {
+    const inbox = queryClient.getQueryData<InboxData>(queryKeys.inbox);
+    const list = inbox?.reviewRequested.prs ?? [];
+    const isCurrent = (p: PullRequest) =>
+      p.owner === owner && p.name === repo && p.number === number;
+    const idx = list.findIndex(isCurrent);
+    const next =
+      (idx >= 0 ? list.slice(idx + 1).find((p) => !isCurrent(p)) : undefined) ??
+      list.find((p) => !isCurrent(p));
+    if (next) {
+      const store = useAppStore.getState();
+      store.openReview(next.owner, next.name, next.number);
+      store.markSeen(
+        prKey({ owner: next.owner, name: next.name, number: next.number }),
+        next.updatedAt,
+      );
+    } else {
+      goInbox();
+    }
   }
 
   function goToComment(delta: number) {
@@ -122,6 +253,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       });
       setPending([]);
       setSubmitOpen(false);
+      advanceAfterSubmit();
     } catch {
       // Error is surfaced in the modal via submitReview.error.
     }
@@ -155,6 +287,12 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       run: () => goToComment(-1),
     },
     {
+      keys: "e",
+      description: "Mark viewed & next",
+      group: "Files",
+      run: markViewedAndNext,
+    },
+    {
       keys: "v",
       description: "Toggle file viewed",
       group: "Files",
@@ -175,12 +313,10 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       },
     },
     {
-      keys: "r",
-      description: "Refresh",
+      keys: "y",
+      description: "Copy PR link",
       group: "General",
-      run: () => {
-        void refetch();
-      },
+      run: copyLink,
     },
     {
       keys: "i",
@@ -196,8 +332,31 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     },
   ]);
 
-  // While loading (or before the cache seeds) there is no detail to render.
+  // No detail yet: either still loading, or the fetch failed with nothing
+  // cached. The latter is reachable on boot when resuming into a PR that was
+  // deleted / made inaccessible — show an escape hatch instead of a forever
+  // spinner. (`Esc` → inbox is also bound above.)
   if (!detail || !pr) {
+    if (isError) {
+      return (
+        <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+          <p className="text-sm font-medium text-danger">
+            Couldn't load this pull request
+          </p>
+          <p className="max-w-md break-words text-xs text-muted">
+            {String(error)}
+          </p>
+          <button
+            type="button"
+            onClick={goInbox}
+            className="rounded-card border border-line px-3 py-1.5 text-sm text-fg hover:bg-elevated"
+          >
+            Back to inbox
+          </button>
+          <p className="text-xs text-faint">Press Esc to go back</p>
+        </div>
+      );
+    }
     return (
       <div className="flex h-full items-center justify-center">
         <Spinner label="Loading pull request…" />
@@ -283,8 +442,27 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
             </div>
           </header>
 
+          {banner && (
+            <OrientBanner
+              message={banner.message}
+              tone={banner.tone}
+              onDismiss={
+                banner.tone === "update" ? () => setBanner(null) : undefined
+              }
+            />
+          )}
+
           <div className="flex min-h-0 flex-1">
-            <div ref={scrollRef} className="min-w-0 flex-1 overflow-y-auto">
+            <div
+              ref={scrollRef}
+              onScroll={() => {
+                if (scrollRef.current)
+                  updateReviewMemory(keyValue, {
+                    scrollTop: scrollRef.current.scrollTop,
+                  });
+              }}
+              className="min-w-0 flex-1 overflow-y-auto"
+            >
               {selectedFile ? (
                 <DiffViewer
                   key={selectedFile.filename}

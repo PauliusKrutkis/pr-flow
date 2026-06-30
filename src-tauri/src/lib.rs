@@ -1,6 +1,7 @@
 mod auth;
 mod github;
 mod storage;
+mod update;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -10,6 +11,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             auth::login_with_github,
             auth::is_oauth_configured,
@@ -27,6 +29,8 @@ pub fn run() {
             github::submit_review,
             github::get_viewed_map,
             github::set_viewed_map,
+            update::check_for_update,
+            update::install_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

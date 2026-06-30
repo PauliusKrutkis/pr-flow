@@ -106,6 +106,13 @@ export interface PendingComment {
 /** prKey -> list of filenames marked viewed */
 export type ViewedMap = Record<string, string[]>;
 
+/** A newer release reported by the updater (null when up to date). */
+export interface UpdateInfo {
+  version: string;
+  currentVersion: string;
+  notes: string | null;
+}
+
 export interface PRRef {
   owner: string;
   name: string;
