@@ -4,7 +4,6 @@ import {
   parsePatch,
   relativeTime,
   formatAbsolute,
-  viewedCount,
   totalComments,
 } from "../mock";
 import type {
@@ -265,7 +264,6 @@ export default function Quiet({ review }: DirectionProps) {
   );
 
   const viewedNow = viewedState.filter(Boolean).length;
-  const baseViewed = viewedCount(review); // honest use of the shared helper
   const comments = totalComments(review);
 
   // --- selection helpers -------------------------------------------------
@@ -377,7 +375,6 @@ export default function Quiet({ review }: DirectionProps) {
       className="dir-quiet relative flex h-full w-full overflow-hidden bg-[var(--bg)] text-[var(--fg)] outline-none"
     >
       <style>{CSS}</style>
-
       {/* ============ LEFT: flow rail + file sidebar ============ */}
       <aside className="qf-sidebar flex h-full shrink-0 flex-col border-r border-[var(--line)]">
         {/* sidebar header */}
@@ -459,37 +456,7 @@ export default function Quiet({ review }: DirectionProps) {
             })}
           </nav>
         </div>
-
-        {/* sidebar footer: scope-aware keyboard legend */}
-        <div className="qf-legend">
-          <div className="qf-legend-row">
-            <span className="qf-legend-scope">review</span>
-            <span className="qf-legend-keys">
-              <Kbd>n</Kbd><Kbd>p</Kbd><span className="qf-legend-lbl">files</span>
-              <Kbd>j</Kbd><Kbd>k</Kbd><span className="qf-legend-lbl">line</span>
-              <Kbd>c</Kbd><span className="qf-legend-lbl">comment</span>
-            </span>
-          </div>
-          <div className="qf-legend-row">
-            <span className="qf-legend-scope qf-legend-scope-ghost">·</span>
-            <span className="qf-legend-keys">
-              <Kbd>e</Kbd><span className="qf-legend-lbl">viewed+next</span>
-              <Kbd>s</Kbd><span className="qf-legend-lbl">submit</span>
-              <Kbd>]c</Kbd><Kbd>[c</Kbd><span className="qf-legend-lbl">threads</span>
-            </span>
-          </div>
-          <div className="qf-legend-row">
-            <span className="qf-legend-scope qf-legend-scope-ghost">·</span>
-            <span className="qf-legend-keys">
-              <Kbd>i</Kbd><span className="qf-legend-lbl">info</span>
-              <Kbd>esc</Kbd><span className="qf-legend-lbl">back</span>
-              <span className="qf-legend-sep" />
-              <Kbd>⌘K</Kbd><Kbd>?</Kbd><span className="qf-legend-lbl">global</span>
-            </span>
-          </div>
-        </div>
       </aside>
-
       {/* ============ CENTER: header + diff ============ */}
       <main className="qf-main flex h-full min-w-0 flex-1 flex-col">
         {/* whisper-quiet header */}
@@ -520,11 +487,6 @@ export default function Quiet({ review }: DirectionProps) {
             <div className="qf-stat-group">
               <span className="qf-add">+{pr.additions}</span>
               <span className="qf-del">-{pr.deletions}</span>
-            </div>
-            <div className="qf-viewed-pill" title={`${baseViewed} viewed at load`}>
-              <span className="qf-viewed-num">{viewedNow}</span>
-              <span className="qf-viewed-of">/{files.length}</span>
-              <span className="qf-viewed-lbl">viewed</span>
             </div>
             <button
               type="button"
@@ -626,7 +588,6 @@ export default function Quiet({ review }: DirectionProps) {
           )}
         </div>
       </main>
-
       {/* ============ INFO DRAWER: description + reviewers ============ */}
       <div
         className={"qf-drawer-scrim" + (infoOpen ? " qf-drawer-open" : "")}
