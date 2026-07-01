@@ -36,6 +36,16 @@ palette, and cache-seeding logic without needing Rust or a Mac WebDriver.
 - Good for: fast, deterministic UI/interaction coverage; runs everywhere.
 - Doesn't cover: the real Rust commands / GitHub calls (those are layer 1).
 
+### Performance budgets
+
+`docs/DESIGN.md` sets hard budgets — **open a PR < 300ms, switch PR < 100ms,
+switch file < 16ms (one frame)** — and the rule that cached content never blocks
+on a spinner. These are verified by *targeted measurement*, not a UI overlay:
+wrap a single interaction in `performance.mark`/`measure` (or observe main-thread
+long tasks) and assert the elapsed time against the budget, so a regression fails
+CI. Layer 2 (Playwright) is enough for the render/interaction budgets; cold-start
+timing that includes the Rust backend belongs in layer 1.
+
 ## When implementing, decide
 
 - [ ] Runner + assertion lib (WebdriverIO+Mocha for layer 1; Playwright for layer 2)
@@ -43,6 +53,8 @@ palette, and cache-seeding logic without needing Rust or a Mac WebDriver.
 - [ ] A seeded fake GitHub (MSW / local server) vs. recorded fixtures
 - [ ] CI matrix (Linux for `tauri-driver`; any OS for Playwright)
 - [ ] `pnpm e2e` / `pnpm e2e:ui` scripts + CI workflow
+- [ ] How perf budgets are measured (`performance.mark`/`measure` vs. long-task
+      observer) and where the thresholds live so a regression fails CI
 
 ## Coverage checklist
 
@@ -88,3 +100,11 @@ Caching / polling (`specs/caching.spec.ts`)
 - [ ] First paint comes from the on-disk cache before the network resolves
 - [ ] 60s polling and refetch-on-window-focus update data quietly
 - [ ] Viewed-file state persists across an app restart
+
+Performance / budgets (`specs/perf.spec.ts`)
+- [ ] Opening a PR paints the sidebar + diff in under 300ms
+- [ ] Switching to an already-cached PR renders in under 100ms
+- [ ] Switching files within a PR renders in under 16ms (one frame)
+- [ ] A seen PR paints from cache with no loading spinner
+- [ ] Opening a large diff produces no main-thread long task over 50ms
+- [ ] The command palette opens in under 100ms
