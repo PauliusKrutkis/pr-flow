@@ -46,6 +46,11 @@ pub struct PullRequest {
     pub created_at: String,
     pub comments_count: u64,
     pub head_sha: String,
+    /// Branch names (populated on detail fetch; empty in the list view).
+    #[serde(default)]
+    pub head_ref: String,
+    #[serde(default)]
+    pub base_ref: String,
     pub additions: u64,
     pub deletions: u64,
     pub changed_files: u64,
@@ -226,6 +231,8 @@ fn pr_from_graphql(v: &Value) -> PullRequest {
         created_at: fstr(v, "createdAt"),
         comments_count,
         head_sha: String::new(),
+        head_ref: String::new(),
+        base_ref: String::new(),
         additions: 0,
         deletions: 0,
         changed_files: 0,
@@ -252,6 +259,8 @@ fn pr_from_pull(v: &Value, owner: &str, repo: &str) -> PullRequest {
         created_at: fstr(v, "created_at"),
         comments_count: fu64(v, "review_comments"),
         head_sha: nstr(v, "head", "sha"),
+        head_ref: nstr(v, "head", "ref"),
+        base_ref: nstr(v, "base", "ref"),
         additions: fu64(v, "additions"),
         deletions: fu64(v, "deletions"),
         changed_files: fu64(v, "changed_files"),

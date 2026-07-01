@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Download, RefreshCw } from "lucide-react";
 import { api } from "../lib/api";
 import type { UpdateInfo } from "../types";
 
@@ -44,42 +45,45 @@ export function UpdatePrompt() {
   }
 
   return (
-    <div className="fixed right-4 top-4 z-50 w-80">
-      <div className="overflow-hidden rounded-card border border-line bg-surface shadow-2xl ring-1 ring-accent/30">
-        <div className="px-4 pt-3 text-xs font-medium text-accent">
-          ⬆ Update available
-        </div>
-        <div className="px-4 pb-1 pt-1">
-          <div className="text-sm font-semibold text-fg">
-            PR Flow {update.version}
+    <div className="qb-stack qb-stack-tr">
+      <div className="qb-update" role="status">
+        <span className="qb-update-icon">
+          <Download size={16} aria-hidden />
+        </span>
+        <div className="qb-update-body">
+          <div className="qb-update-head">
+            <span className="qb-update-title">Update available</span>
+            <span className="q-mono qb-update-ver">{update.version}</span>
           </div>
-          <div className="text-xs text-muted">
-            You're on {update.currentVersion}
-          </div>
+          <p className="qb-update-text">
+            You're on {update.currentVersion}. Installs on the next restart —
+            nothing interrupts your review.
+          </p>
           {update.notes ? (
-            <div className="mt-1 max-h-24 overflow-y-auto whitespace-pre-wrap text-xs text-muted">
+            <p className="qb-update-text" style={{ marginTop: 6 }}>
               {update.notes}
-            </div>
+            </p>
           ) : null}
-          {error ? <div className="mt-1 text-xs text-danger">{error}</div> : null}
-        </div>
-        <div className="flex items-center justify-end gap-2 px-4 pb-3 pt-1 text-xs">
-          <button
-            type="button"
-            onClick={() => setUpdate(null)}
-            disabled={installing}
-            className="rounded px-2 py-1 text-muted hover:bg-elevated hover:text-fg disabled:opacity-50"
-          >
-            Later
-          </button>
-          <button
-            type="button"
-            onClick={install}
-            disabled={installing}
-            className="rounded bg-accent/15 px-2 py-1 font-medium text-accent hover:bg-accent/25 disabled:opacity-50"
-          >
-            {installing ? "Installing…" : "Install & Restart"}
-          </button>
+          {error ? <p className="qb-update-err">{error}</p> : null}
+          <div className="qb-update-actions">
+            <button
+              type="button"
+              onClick={install}
+              disabled={installing}
+              className="q-btn q-btn-primary qb-update-primary"
+            >
+              <RefreshCw size={13} aria-hidden />
+              {installing ? "Installing…" : "Restart & update"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setUpdate(null)}
+              disabled={installing}
+              className="qb-update-later"
+            >
+              Later
+            </button>
+          </div>
         </div>
       </div>
     </div>

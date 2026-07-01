@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ReviewComment } from "../../types";
 import { formatRelativeTime, formatAbsolute } from "../../lib/time";
 import { Markdown } from "../Markdown";
+import { Avatar } from "../ui/Avatar";
 import { AddCommentBox } from "./AddCommentBox";
 
 interface CommentThreadProps {
@@ -27,47 +28,41 @@ export function CommentThread({
   }
 
   return (
-    <div className="rounded-card border border-line bg-surface">
-      <div className="divide-y divide-line">
-        {comments.map((c) => (
-          <div key={c.id} className="p-3">
-            <div className="mb-1.5 flex items-center gap-2">
-              <img
-                src={c.userAvatarUrl}
-                alt=""
-                className="h-5 w-5 rounded-full"
-              />
-              <span className="text-sm font-medium text-fg">{c.user}</span>
-              <span
-                className="text-xs text-muted"
-                title={formatAbsolute(c.createdAt)}
-              >
-                {formatRelativeTime(c.createdAt)}
-              </span>
-            </div>
-            <Markdown className="text-sm">{c.body}</Markdown>
+    <div className="qf-thread">
+      {comments.map((c, i) => (
+        <div key={c.id} className={i > 0 ? "qf-comment qf-comment-reply" : "qf-comment"}>
+          <div className="qf-comment-head">
+            <Avatar url={c.userAvatarUrl} name={c.user} size={20} />
+            <span className="qf-comment-author">{c.user}</span>
+            <span className="qf-comment-time" title={formatAbsolute(c.createdAt)}>
+              {formatRelativeTime(c.createdAt)}
+            </span>
           </div>
-        ))}
-      </div>
-      <div className="border-t border-line p-2">
-        {replying ? (
+          <div className="qf-comment-body">
+            <Markdown>{c.body}</Markdown>
+          </div>
+        </div>
+      ))}
+      {replying ? (
+        <div className="qf-comment qf-comment-reply">
           <AddCommentBox
             onSubmit={submitReply}
             onCancel={() => setReplying(false)}
             pending={replyPending}
             placeholder="Reply…"
+            submitLabel="Reply"
             autoFocus
           />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setReplying(true)}
-            className="rounded px-2 py-1 text-xs text-muted hover:bg-elevated hover:text-fg"
-          >
-            Reply
-          </button>
-        )}
-      </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setReplying(true)}
+          className="qf-reply-btn qf-focusable"
+        >
+          Reply
+        </button>
+      )}
     </div>
   );
 }

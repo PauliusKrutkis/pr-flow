@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { api } from "../lib/api";
-import { cn } from "../lib/cn";
 import { Spinner } from "./ui/Spinner";
 
 const CREATE_TOKEN_URL =
@@ -65,8 +64,18 @@ export function TokenGate({
 
   return (
     <div className="flex h-full items-center justify-center bg-bg px-6">
-      <div className="w-full max-w-md rounded-card border border-line bg-surface p-8 shadow-lg">
-        <h1 className="text-2xl font-semibold text-fg">PR Flow</h1>
+      <div className="q-card w-full max-w-md p-8 shadow-lg">
+        <div className="flex items-center gap-2.5">
+          <span
+            className="h-4 w-4 rounded-[5px]"
+            style={{
+              background: "linear-gradient(135deg, #8b80ff, #6f63e6)",
+              boxShadow: "0 0 12px -2px rgba(139,128,255,0.5)",
+            }}
+            aria-hidden
+          />
+          <h1 className="text-2xl font-semibold text-fg">PR Flow</h1>
+        </div>
         <p className="mt-1 text-sm text-muted">Keyboard-first GitHub PR review</p>
 
         {/* Primary: Sign in with GitHub */}
@@ -74,11 +83,7 @@ export function TokenGate({
           type="button"
           onClick={() => void signInWithGithub()}
           disabled={disabled}
-          className={cn(
-            "mt-6 inline-flex w-full items-center justify-center gap-2 rounded-card px-3 py-2.5 text-sm font-medium",
-            "bg-accent text-accent-fg transition-opacity",
-            disabled && "cursor-not-allowed opacity-60",
-          )}
+          className="q-btn q-btn-primary q-focus mt-6 w-full py-2.5"
         >
           {busy === "oauth" ? (
             <>
@@ -130,7 +135,7 @@ export function TokenGate({
           spellCheck={false}
           autoComplete="off"
           disabled={disabled}
-          className="mt-3 w-full rounded-card border border-line bg-bg px-3 py-2 font-mono text-sm text-fg outline-none placeholder:text-faint focus:border-accent disabled:opacity-60"
+          className="q-input mt-3 font-mono disabled:opacity-60"
         />
         <p className="mt-1.5 text-xs text-faint">Stored locally on this device.</p>
 
@@ -143,11 +148,7 @@ export function TokenGate({
             type="button"
             onClick={() => void connect()}
             disabled={disabled || !token.trim()}
-            className={cn(
-              "inline-flex flex-1 items-center justify-center gap-2 rounded-card border border-line px-3 py-2 text-sm font-medium",
-              "text-fg hover:bg-elevated transition-opacity",
-              (disabled || !token.trim()) && "cursor-not-allowed opacity-50",
-            )}
+            className="q-btn q-btn-quiet q-focus flex-1 py-2"
           >
             {busy === "pat" ? <Spinner /> : "Connect with token"}
           </button>

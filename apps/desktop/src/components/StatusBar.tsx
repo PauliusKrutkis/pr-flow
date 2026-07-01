@@ -17,12 +17,12 @@ const HINTS: Record<string, Hint[]> = {
     { keys: ["/"], label: "Search" },
   ],
   review: [
-    { keys: ["n", "p"], label: "Files" },
-    { keys: ["space"], label: "Page" },
+    { keys: ["r", "t"], label: "Files" },
+    { keys: ["j", "k"], label: "Lines" },
+    { keys: ["c"], label: "Comment" },
     { keys: ["e"], label: "Viewed + next" },
-    { keys: ["v"], label: "Viewed" },
     { keys: ["s"], label: "Submit" },
-    { keys: ["]c", "[c"], label: "Threads" },
+    { keys: ["mod", "t"], label: "Find" },
     { keys: ["esc"], label: "Back" },
   ],
 };
@@ -41,11 +41,7 @@ function display(key: string): string {
 }
 
 function Cap({ children }: { children: ReactNode }) {
-  return (
-    <span className="inline-flex min-w-[1.3em] items-center justify-center rounded border border-line bg-elevated px-1 py-0.5 font-mono text-[10px] leading-none text-muted">
-      {children}
-    </span>
-  );
+  return <span className="q-kbd">{children}</span>;
 }
 
 function HintGroup({ hint }: { hint: Hint }) {

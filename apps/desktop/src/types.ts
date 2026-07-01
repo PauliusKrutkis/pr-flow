@@ -27,6 +27,9 @@ export interface PullRequest {
   commentsCount: number;
   /** head commit sha — needed to post inline review comments (empty in list view) */
   headSha: string;
+  /** Branch names (populated on detail fetch; empty in the list view). */
+  headRef: string;
+  baseRef: string;
   additions: number;
   deletions: number;
   changedFiles: number;

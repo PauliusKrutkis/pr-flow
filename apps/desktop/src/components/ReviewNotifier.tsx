@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
 import { useInbox } from "../hooks/useInbox";
 import { useAppStore } from "../store/appStore";
 import { prKey, type PullRequest } from "../types";
+import { Avatar } from "./ui/Avatar";
+import { Kbd } from "./ui/Kbd";
 
 // In-app "new review requested" notification (backlog: stronger than link
 // interception). Piggybacks on the existing 60s inbox poll — when a PR newly
@@ -119,7 +122,7 @@ export function ReviewNotifier() {
   const dismiss = () => setToast(null);
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-80">
+    <div className="qb-stack qb-stack-br" aria-live="polite">
       <div
         ref={cardRef}
         tabIndex={-1}
@@ -135,41 +138,46 @@ export function ReviewNotifier() {
             dismiss();
           }
         }}
-        className="overflow-hidden rounded-card border border-line bg-surface shadow-2xl outline-none ring-1 ring-accent/30"
+        className="qb-toast"
       >
-        <div className="px-4 pt-3 text-xs font-medium text-accent">
-          🔔 New review requested
-        </div>
-        <div className="px-4 pb-1 pt-1">
-          <div className="truncate text-sm font-semibold text-fg" title={pr.title}>
+        <span className="qb-toast-rail" aria-hidden />
+        <Avatar url={pr.authorAvatarUrl} name={pr.author} size={30} />
+        <div className="qb-toast-body">
+          <div className="qb-toast-head">
+            <span className="qb-toast-title">New review request</span>
+            <button
+              type="button"
+              onClick={dismiss}
+              className="qb-x q-focus"
+              aria-label="Dismiss"
+            >
+              <X size={13} aria-hidden />
+            </button>
+          </div>
+          <p className="qb-toast-text">
+            <b>{pr.author}</b> asked you to review{" "}
+            <span className="q-mono qb-toast-num">#{pr.number}</span>
+          </p>
+          <p className="qb-toast-sub" title={pr.title}>
             {pr.title}
-          </div>
-          <div className="truncate text-xs text-muted">
-            {pr.repo} #{pr.number}
-          </div>
+          </p>
           {extra > 0 && (
-            <div className="mt-1 text-xs text-faint">
+            <p className="qb-toast-sub">
               +{extra} more review request{extra > 1 ? "s" : ""}
-            </div>
+            </p>
           )}
-        </div>
-        <div className="flex items-center justify-end gap-2 px-4 pb-3 pt-1 text-xs">
-          <button
-            type="button"
-            onClick={dismiss}
-            className="rounded px-2 py-1 text-muted hover:bg-elevated hover:text-fg"
-          >
-            Dismiss
-            <span className="ml-1 text-faint">Esc</span>
-          </button>
-          <button
-            type="button"
-            onClick={open}
-            className="rounded bg-accent/15 px-2 py-1 font-medium text-accent hover:bg-accent/25"
-          >
-            Open
-            <span className="ml-1 opacity-70">↵</span>
-          </button>
+          <div className="qb-toast-actions">
+            <button type="button" onClick={open} className="qb-toast-open q-focus">
+              Open <Kbd combo="enter" />
+            </button>
+            <button
+              type="button"
+              onClick={dismiss}
+              className="qb-toast-snooze q-focus"
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
       </div>
     </div>

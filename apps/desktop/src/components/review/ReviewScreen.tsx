@@ -15,12 +15,14 @@ import { queryClient, queryKeys } from "../../lib/queryClient";
 import { getReviewMemory, updateReviewMemory } from "../../lib/reviewMemory";
 import { usePerfStore } from "../../lib/perf";
 import { Spinner } from "../ui/Spinner";
-import { Badge } from "../ui/Badge";
+import { Kbd } from "../ui/Kbd";
+import { Avatar } from "../ui/Avatar";
 import { FileSidebar } from "./FileSidebar";
 import { DiffViewer } from "./DiffViewer";
 import { RightPanel } from "./RightPanel";
 import { OrientBanner } from "./OrientBanner";
 import { SubmitReviewModal } from "./SubmitReviewModal";
+import { PrSearch } from "./PrSearch";
 
 interface ReviewScreenProps {
   owner: string;
@@ -44,18 +46,17 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const [selectedFileIndex, setSelectedFileIndex] = useState(
     initialMem?.fileIndex ?? 0,
   );
-  const [rightOpen, setRightOpen] = useState(true);
+  // The info drawer starts closed — the diff dominates until `i` opens it.
+  const [rightOpen, setRightOpen] = useState(false);
   const [commentIndex, setCommentIndex] = useState(0);
   const [pending, setPending] = useState<PendingComment[]>([]);
   const [submitOpen, setSubmitOpen] = useState(false);
-  const [banner, setBanner] = useState<{
-    message: string;
-    tone: "info" | "update";
-  } | null>(null);
+  const [prSearch, setPrSearch] = useState<null | "files" | "text">(null);
+  // Only shown when the PR's head moves mid-review (never on open).
+  const [banner, setBanner] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const pendingId = useRef(0);
-  const orientedRef = useRef(false);
   const restoredScrollRef = useRef(false);
   const mountShaRef = useRef("");
 
@@ -71,36 +72,21 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const isCurrentViewed =
     !!selectedFile && (viewed[keyValue] ?? []).includes(selectedFile.filename);
 
-  // Orient on open + record open latency, once detail is in hand.
-  useEffect(() => {
-    if (!detail || !pr || orientedRef.current) return;
-    orientedRef.current = true;
-    usePerfStore.getState().completeOpen();
-    mountShaRef.current = pr.headSha;
-    const updatedSinceSeen =
-      !!initialMem?.headSha && initialMem.headSha !== pr.headSha;
-    const summary = `${fileCount} file${fileCount === 1 ? "" : "s"} changed · +${pr.additions} −${pr.deletions}`;
-    setBanner({
-      message: updatedSinceSeen
-        ? `${summary} · updated since you last viewed`
-        : summary,
-      tone: updatedSinceSeen ? "update" : "info",
-    });
-    updateReviewMemory(keyValue, { headSha: pr.headSha });
-  }, [detail, pr, fileCount, initialMem, keyValue]);
-
-  // Banner when the PR's head moves while you're reviewing it (it already
-  // re-rendered with the latest content — this just explains the shift).
+  // Seed the head sha on open (recording open latency), then only speak up if
+  // the PR's head *moves while you're reviewing it* — no on-open summary banner.
   useEffect(() => {
     if (!pr) return;
     const seen = mountShaRef.current;
-    if (seen && pr.headSha && pr.headSha !== seen) {
+    if (!seen) {
+      usePerfStore.getState().completeOpen();
       mountShaRef.current = pr.headSha;
       updateReviewMemory(keyValue, { headSha: pr.headSha });
-      setBanner({
-        message: "This PR changed while you were reviewing — showing the latest.",
-        tone: "update",
-      });
+      return;
+    }
+    if (pr.headSha && pr.headSha !== seen) {
+      mountShaRef.current = pr.headSha;
+      updateReviewMemory(keyValue, { headSha: pr.headSha });
+      setBanner("This PR changed while you were reviewing — showing the latest.");
     }
   }, [pr, keyValue]);
 
@@ -124,13 +110,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     updateReviewMemory(keyValue, { fileIndex: clampedIndex });
   }, [detail, fileCount, clampedIndex, keyValue]);
 
-  // Transient orient banners fade; "update" banners stay until dismissed.
-  useEffect(() => {
-    if (!banner || banner.tone !== "info") return;
-    const t = setTimeout(() => setBanner(null), 5000);
-    return () => clearTimeout(t);
-  }, [banner]);
-
   // Record file-switch latency after the paint that follows the switch.
   useEffect(() => {
     requestAnimationFrame(() => usePerfStore.getState().completeFile());
@@ -143,14 +122,10 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     const el = scrollRef.current;
     if (el) el.scrollBy({ top: dir * el.clientHeight * 0.85 });
   }
-  function clearInfoBanner() {
-    setBanner((b) => (b && b.tone === "info" ? null : b));
-  }
 
   function nextFile() {
     if (fileCount === 0) return;
     usePerfStore.getState().markFileStart();
-    clearInfoBanner();
     setSelectedFileIndex((i) => Math.min(i + 1, fileCount - 1));
     setCommentIndex(0);
     scrollTop();
@@ -158,14 +133,12 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   function prevFile() {
     if (fileCount === 0) return;
     usePerfStore.getState().markFileStart();
-    clearInfoBanner();
     setSelectedFileIndex((i) => Math.max(i - 1, 0));
     setCommentIndex(0);
     scrollTop();
   }
   function selectFile(i: number) {
     usePerfStore.getState().markFileStart();
-    clearInfoBanner();
     setSelectedFileIndex(i);
     setCommentIndex(0);
     scrollTop();
@@ -181,10 +154,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   }
   function copyLink() {
     if (!pr?.url) return;
-    void navigator.clipboard?.writeText(pr.url).then(
-      () => setBanner({ message: "PR link copied to clipboard", tone: "info" }),
-      () => {},
-    );
+    void navigator.clipboard?.writeText(pr.url).catch(() => {});
   }
 
   // After submitting, jump to the next review-requested PR (or back to inbox).
@@ -260,8 +230,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   }
 
   useHotkeys("review", [
-    { keys: ["n"], description: "Next file", group: "Files", run: nextFile },
-    { keys: ["p"], description: "Previous file", group: "Files", run: prevFile },
+    { keys: ["r"], description: "Next file", group: "Files", run: nextFile },
+    { keys: ["t"], description: "Previous file", group: "Files", run: prevFile },
     {
       keys: ["space", "pagedown"],
       description: "Page down",
@@ -325,6 +295,18 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       run: () => setRightOpen((o) => !o),
     },
     {
+      keys: "mod+t",
+      description: "Find a file",
+      group: "Navigation",
+      run: () => setPrSearch("files"),
+    },
+    {
+      keys: "mod+f",
+      description: "Search code",
+      group: "Navigation",
+      run: () => setPrSearch("text"),
+    },
+    {
       keys: "esc",
       description: "Back to inbox",
       group: "Navigation",
@@ -364,12 +346,20 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     );
   }
 
-  const stateTone = pr.merged
-    ? "accent"
-    : pr.state === "open"
-      ? "success"
-      : "muted";
-  const stateLabel = pr.merged ? "merged" : pr.state;
+  const stateClass = pr.draft
+    ? "qf-state-draft"
+    : pr.merged
+      ? "qf-state-merged"
+      : pr.state === "open"
+        ? "qf-state-open"
+        : "qf-state-draft";
+  const stateLabel = pr.draft
+    ? "Draft"
+    : pr.merged
+      ? "Merged"
+      : pr.state === "open"
+        ? "Open"
+        : pr.state;
 
   const fileComments = selectedFile
     ? detail.comments.filter((c) => c.path === selectedFile.filename)
@@ -377,134 +367,169 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const pendingForFile = selectedFile
     ? pending.filter((p) => p.path === selectedFile.filename)
     : [];
+  const selectedGlyph = selectedFile ? fileGlyph(selectedFile.status) : null;
+  const viewedNow = viewed[keyValue]?.length ?? 0;
 
   return (
-    <>
-      <div className="flex h-full min-h-0">
-        <aside className="w-[280px] shrink-0 border-r border-line">
-          <FileSidebar
-            files={files}
-            selectedIndex={clampedIndex}
-            onSelect={selectFile}
-            prKeyValue={keyValue}
-          />
-        </aside>
+    <div className="dir-quiet relative flex h-full min-h-0 overflow-hidden">
+      <aside className="w-[300px] shrink-0 border-r border-line">
+        <FileSidebar
+          files={files}
+          selectedIndex={clampedIndex}
+          onSelect={selectFile}
+          prKeyValue={keyValue}
+          comments={detail.comments}
+          pending={pending}
+        />
+      </aside>
 
-        <main className="flex min-w-0 flex-1 flex-col">
-          <header className="flex items-center gap-3 border-b border-line bg-surface px-3 py-2">
+      <main className="qf-main flex min-w-0 flex-1 flex-col">
+        <header className="qf-header flex shrink-0 items-center gap-4 px-6 py-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className={"qf-state " + stateClass}>
+                <span className="qf-state-dot" />
+                {stateLabel}
+              </span>
+              <h1 className="qf-pr-title truncate" title={pr.title}>
+                {pr.title}
+              </h1>
+            </div>
+            <div className="qf-pr-sub mt-1 flex items-center gap-2">
+              <span className="qf-pr-num">#{pr.number}</span>
+              <span className="qf-dot">·</span>
+              <span>{pr.repo}</span>
+              <span className="qf-dot">·</span>
+              <Avatar url={pr.authorAvatarUrl} name={pr.author} size={15} />
+              <span className="qf-muted">{pr.author}</span>
+              {pr.baseRef && pr.headRef && (
+                <>
+                  <span className="qf-dot">·</span>
+                  <span className="qf-branch">
+                    {pr.baseRef} <span className="qf-arrow">←</span> {pr.headRef}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-4">
+            <div className="qf-stat-group">
+              <span className="qf-add">+{pr.additions}</span>
+              <span className="qf-del">−{pr.deletions}</span>
+            </div>
             <button
               type="button"
-              onClick={goInbox}
-              className="shrink-0 rounded px-2 py-1 text-sm text-muted hover:bg-elevated hover:text-fg"
+              onClick={() => void openUrl(pr.url)}
+              className="qf-back qf-focusable"
+              title="Open on GitHub (o)"
             >
-              ← Back
+              Open ↗
             </button>
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <span
-                className="truncate text-sm font-semibold text-fg"
-                title={pr.title}
-              >
-                {pr.title}
-              </span>
-              <span className="shrink-0 text-sm text-muted">#{pr.number}</span>
-            </div>
-            <div className="flex shrink-0 items-center gap-2 text-xs text-muted">
-              <span className="hidden sm:inline">{pr.repo}</span>
-              {pr.draft ? (
-                <Badge tone="warning">Draft</Badge>
-              ) : (
-                <Badge tone={stateTone}>{stateLabel}</Badge>
-              )}
-              <span className="font-mono">
-                <span className="text-success">+{pr.additions}</span>{" "}
-                <span className="text-danger">−{pr.deletions}</span>
-              </span>
-              <span>
-                {viewed[keyValue]?.length ?? 0}/{fileCount} viewed
-              </span>
-              {pending.length > 0 && (
-                <Badge tone="accent">{pending.length} pending</Badge>
-              )}
-              <button
-                type="button"
-                onClick={openSubmit}
-                className="rounded px-2 py-1 font-medium text-accent hover:bg-elevated"
-              >
-                Review
-              </button>
-              <button
-                type="button"
-                onClick={() => void openUrl(pr.url)}
-                className="rounded px-2 py-1 text-accent hover:bg-elevated"
-              >
-                Open ↗
-              </button>
-            </div>
-          </header>
-
-          {banner && (
-            <OrientBanner
-              message={banner.message}
-              tone={banner.tone}
-              onDismiss={
-                banner.tone === "update" ? () => setBanner(null) : undefined
-              }
-            />
-          )}
-
-          <div className="flex min-h-0 flex-1">
-            <div
-              ref={scrollRef}
-              onScroll={() => {
-                if (scrollRef.current)
-                  updateReviewMemory(keyValue, {
-                    scrollTop: scrollRef.current.scrollTop,
-                  });
-              }}
-              className="min-w-0 flex-1 overflow-y-auto"
+            <button
+              type="button"
+              className="qf-info-btn qf-focusable"
+              onClick={() => setRightOpen((o) => !o)}
+              aria-pressed={rightOpen}
+              title="PR description & comment (i)"
             >
-              {selectedFile ? (
-                <DiffViewer
-                  key={selectedFile.filename}
-                  file={selectedFile}
-                  comments={fileComments}
-                  commitId={pr.headSha}
-                  pending={pendingForFile}
-                  onAddPending={addPendingComment}
-                  onRemovePending={removePendingComment}
-                  onAddComment={async (a) => {
-                    await addReviewComment.mutateAsync({
-                      body: a.body,
-                      commitId: pr.headSha,
-                      path: a.path,
-                      line: a.line,
-                      side: a.side,
-                    });
-                  }}
-                  onReply={async (a) => {
-                    await reply.mutateAsync(a);
-                  }}
-                  addPending={addReviewComment.isPending || reply.isPending}
-                />
-              ) : (
-                <div className="p-6 text-sm text-muted">No files changed.</div>
+              i
+            </button>
+            <button
+              type="button"
+              onClick={openSubmit}
+              className="qf-submit qf-focusable"
+            >
+              {pending.length > 0 ? "Submit review" : "Review"}
+              {pending.length > 0 && (
+                <span className="qf-submit-badge">{pending.length}</span>
               )}
-            </div>
-
-            {rightOpen && (
-              <aside className="w-[360px] shrink-0 border-l border-line">
-                <RightPanel
-                  pr={pr}
-                  onAddIssueComment={async (body) => {
-                    await addIssueComment.mutateAsync({ body });
-                  }}
-                  issuePending={addIssueComment.isPending}
-                />
-              </aside>
-            )}
+              <Kbd combo="s" />
+            </button>
           </div>
-        </main>
-      </div>
+        </header>
+
+        {banner && (
+          <OrientBanner
+            message={banner}
+            tone="update"
+            onDismiss={() => setBanner(null)}
+          />
+        )}
+
+        {selectedFile && selectedGlyph && (
+          <div className="qf-filebar flex shrink-0 items-center gap-3 px-6 py-2">
+            <span className={"qf-file-glyph " + selectedGlyph.cls}>
+              {selectedGlyph.letter}
+            </span>
+            <span className="qf-filebar-name min-w-0 truncate">
+              {selectedFile.previousFilename &&
+                selectedFile.status === "renamed" && (
+                  <span className="qf-filebar-prev">
+                    {selectedFile.previousFilename} →{" "}
+                  </span>
+                )}
+              {selectedFile.filename}
+            </span>
+            <span className="qf-filebar-stat">
+              <span className="qf-add">+{selectedFile.additions}</span>
+              <span className="qf-del">−{selectedFile.deletions}</span>
+            </span>
+            <span className="ml-auto qf-muted text-xs">
+              {viewedNow}/{fileCount} viewed
+            </span>
+          </div>
+        )}
+
+        <div
+          ref={scrollRef}
+          onScroll={() => {
+            if (scrollRef.current)
+              updateReviewMemory(keyValue, {
+                scrollTop: scrollRef.current.scrollTop,
+              });
+          }}
+          className="min-w-0 flex-1 overflow-y-auto"
+        >
+          {selectedFile ? (
+            <DiffViewer
+              key={selectedFile.filename}
+              file={selectedFile}
+              comments={fileComments}
+              commitId={pr.headSha}
+              pending={pendingForFile}
+              onAddPending={addPendingComment}
+              onRemovePending={removePendingComment}
+              onAddComment={async (a) => {
+                await addReviewComment.mutateAsync({
+                  body: a.body,
+                  commitId: pr.headSha,
+                  path: a.path,
+                  line: a.line,
+                  side: a.side,
+                });
+              }}
+              onReply={async (a) => {
+                await reply.mutateAsync(a);
+              }}
+              addPending={addReviewComment.isPending || reply.isPending}
+            />
+          ) : (
+            <div className="qf-empty">No files changed.</div>
+          )}
+        </div>
+      </main>
+
+      <RightPanel
+        pr={pr}
+        fileCount={fileCount}
+        open={rightOpen}
+        onClose={() => setRightOpen(false)}
+        onAddIssueComment={async (body) => {
+          await addIssueComment.mutateAsync({ body });
+        }}
+        issuePending={addIssueComment.isPending}
+      />
 
       <SubmitReviewModal
         open={submitOpen}
@@ -514,6 +539,30 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         onClose={() => setSubmitOpen(false)}
         onSubmit={handleSubmitReview}
       />
-    </>
+
+      <PrSearch
+        open={prSearch !== null}
+        mode={prSearch ?? "files"}
+        onClose={() => setPrSearch(null)}
+        files={files}
+        onSelectFile={selectFile}
+      />
+    </div>
   );
+}
+
+/** File-status glyph for the path strip (mirrors FileSidebar's glyphs). */
+function fileGlyph(status: string): { letter: string; cls: string } {
+  switch (status) {
+    case "added":
+      return { letter: "A", cls: "qf-st-add" };
+    case "removed":
+      return { letter: "D", cls: "qf-st-del" };
+    case "renamed":
+      return { letter: "R", cls: "qf-st-ren" };
+    case "copied":
+      return { letter: "C", cls: "qf-st-ren" };
+    default:
+      return { letter: "M", cls: "qf-st-mod" };
+  }
 }

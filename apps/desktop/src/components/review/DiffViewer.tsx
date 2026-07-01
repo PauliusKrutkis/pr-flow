@@ -128,6 +128,9 @@ export function DiffViewer({
   // The keyboard line cursor, tracked by stable row anchor ("side:line") so it
   // stays on the same logical line when hunks collapse/expand.
   const [cursorAnchor, setCursorAnchor] = useState<string | null>(null);
+  // Last input modality — drives which single "+" affordance is shown (the
+  // keyboard cursor row, or the mouse-hovered row) so there's never two.
+  const [inputMode, setInputMode] = useState<"keyboard" | "mouse">("keyboard");
 
   const containerRef = useRef<HTMLDivElement>(null);
   // Only auto-scroll the cursor into view for explicit user moves — not for the
@@ -168,15 +171,12 @@ export function DiffViewer({
     [items],
   );
 
-  // Keep the cursor on a real, visible line; if its line was hidden (its hunk
-  // collapsed) or it is unset, fall back to the first navigable row.
+  // Keep a *set* cursor on a real, visible line (e.g. after its hunk collapses)
+  // — but never seed one on open. The highlight only appears once the user
+  // hovers or presses j/k, so a freshly-opened file reads clean.
   useEffect(() => {
-    if (navAnchors.length === 0) {
-      if (cursorAnchor !== null) setCursorAnchor(null);
-      return;
-    }
-    if (cursorAnchor === null || !navAnchors.includes(cursorAnchor)) {
-      setCursorAnchor(navAnchors[0]);
+    if (cursorAnchor !== null && !navAnchors.includes(cursorAnchor)) {
+      setCursorAnchor(navAnchors.length ? navAnchors[0] : null);
     }
   }, [navAnchors, cursorAnchor]);
 
@@ -210,13 +210,48 @@ export function DiffViewer({
     });
   }
 
-  function moveCursor(delta: number) {
-    if (navAnchors.length === 0) return;
-    const idx = cursorAnchor ? navAnchors.indexOf(cursorAnchor) : -1;
-    const base = idx < 0 ? 0 : idx;
-    const nextIdx = Math.min(Math.max(base + delta, 0), navAnchors.length - 1);
+  // Cursor movement is coalesced per animation frame: rapid key-repeats (and
+  // direction changes) accumulate a net delta that is applied once, so the
+  // cursor can't fall behind a backlog of queued keydowns and reversing
+  // direction cancels the pending move instead of replaying it.
+  const navAnchorsRef = useRef(navAnchors);
+  navAnchorsRef.current = navAnchors;
+  const cursorAnchorRef = useRef(cursorAnchor);
+  cursorAnchorRef.current = cursorAnchor;
+  const pendingDeltaRef = useRef(0);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
+  function flushCursor() {
+    rafRef.current = null;
+    const anchors = navAnchorsRef.current;
+    const delta = pendingDeltaRef.current;
+    pendingDeltaRef.current = 0;
+    if (anchors.length === 0 || delta === 0) return;
+    const cur = cursorAnchorRef.current;
     userMovedCursorRef.current = true;
-    setCursorAnchor(navAnchors[nextIdx]);
+    // First move just reveals the cursor at the top instead of jumping past it.
+    if (!cur) {
+      setCursorAnchor(anchors[0]);
+      return;
+    }
+    const idx = anchors.indexOf(cur);
+    const base = idx < 0 ? 0 : idx;
+    const nextIdx = Math.min(Math.max(base + delta, 0), anchors.length - 1);
+    setCursorAnchor(anchors[nextIdx]);
+  }
+
+  function moveCursor(delta: number) {
+    if (inputMode !== "keyboard") setInputMode("keyboard");
+    pendingDeltaRef.current += delta;
+    if (rafRef.current == null) {
+      rafRef.current = requestAnimationFrame(flushCursor);
+    }
   }
 
   function commentAtCursor() {
@@ -249,152 +284,127 @@ export function DiffViewer({
     { activate: false },
   );
 
-  const renameArrow = file.previousFilename
-    ? `${file.previousFilename} → ${file.filename}`
-    : file.filename;
+  if (!file.patch) {
+    return (
+      <div className="qf-empty">
+        {file.changes > 0
+          ? "Diff not available."
+          : "Binary file or no textual diff."}
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-surface-2 px-3 py-2">
-        <span
-          className="min-w-0 truncate font-mono text-xs text-fg"
-          title={renameArrow}
-        >
-          {renameArrow}
-        </span>
-        <span className="shrink-0 font-mono text-xs">
-          <span className="text-success">+{file.additions}</span>{" "}
-          <span className="text-danger">−{file.deletions}</span>
-        </span>
-      </div>
+    <div
+      ref={containerRef}
+      className="qf-diff"
+      data-mode={inputMode}
+      onMouseMove={() => {
+        if (inputMode !== "mouse") setInputMode("mouse");
+      }}
+    >
+      {items.map((item, idx) => {
+        if (item.kind === "hunk") {
+          const isCollapsed = collapsed.has(item.hunkIndex);
+          return (
+            <button
+              key={`h-${item.hunkIndex}`}
+              type="button"
+              onClick={() => toggleHunk(item.hunkIndex)}
+              className="qf-row qf-row-hunk"
+            >
+              <span className="qf-gutter qf-gutter-old" />
+              <span className="qf-gutter qf-gutter-new" />
+              <span className="qf-marker">{isCollapsed ? "▸" : ""}</span>
+              <code className="qf-code">{item.header}</code>
+            </button>
+          );
+        }
 
-      {!file.patch ? (
-        <p className="px-3 py-6 text-sm text-muted">
-          {file.changes > 0
-            ? "Diff not available."
-            : "Binary file or no textual diff."}
-        </p>
-      ) : (
-        <div ref={containerRef} className="font-mono text-xs leading-relaxed">
-          {items.map((item, idx) => {
-            if (item.kind === "hunk") {
-              const isCollapsed = collapsed.has(item.hunkIndex);
-              return (
-                <button
-                  key={`h-${item.hunkIndex}`}
-                  type="button"
-                  onClick={() => toggleHunk(item.hunkIndex)}
-                  className="flex w-full items-center gap-2 bg-surface-2 px-3 py-1 text-left text-muted hover:bg-elevated"
-                >
-                  <span className="select-none text-faint">
-                    {isCollapsed ? "▸" : "▾"}
-                  </span>
-                  <span className="truncate">{item.header}</span>
-                </button>
-              );
-            }
+        const row = item.row!;
+        const target = item.target ?? null;
+        const key = item.anchor ?? null;
+        const threads = key != null ? threadsByAnchor.get(key) : undefined;
+        const pendingHere = key != null ? pendingByAnchor.get(key) : undefined;
+        const boxOpen = key != null && openBoxes.has(key);
+        const isCursor = item.anchor != null && item.anchor === cursorAnchor;
+        const hasAnchored =
+          (threads && threads.length > 0) ||
+          (pendingHere && pendingHere.length > 0);
+        const marker =
+          row.type === "add" ? "+" : row.type === "del" ? "-" : " ";
 
-            const row = item.row!;
-            const target = item.target ?? null;
-            const key = item.anchor ?? null;
-            const threads = key != null ? threadsByAnchor.get(key) : undefined;
-            const pendingHere = key != null ? pendingByAnchor.get(key) : undefined;
-            const boxOpen = key != null && openBoxes.has(key);
-            const isCursor = item.anchor != null && item.anchor === cursorAnchor;
-            const rowBg =
-              row.type === "add"
-                ? "diff-add"
-                : row.type === "del"
-                  ? "diff-del"
-                  : "";
-            const marker =
-              row.type === "add" ? "+" : row.type === "del" ? "-" : " ";
-
-            return (
-              <Fragment key={`r-${idx}`}>
-                <div
-                  data-anchor={item.anchor ?? undefined}
-                  className={cn(
-                    "group flex border-l-2",
-                    rowBg,
-                    isCursor
-                      ? "border-accent bg-accent/10"
-                      : "border-transparent",
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "relative w-10 shrink-0 select-none px-1 text-right text-faint",
-                      row.type === "del" && "diff-del-gutter",
-                    )}
+        return (
+          <Fragment key={`r-${idx}`}>
+            <div
+              data-anchor={item.anchor ?? undefined}
+              className={cn(
+                "qf-row",
+                row.type === "add" && "qf-row-add",
+                row.type === "del" && "qf-row-del",
+                isCursor && "qf-row-active",
+                hasAnchored && "qf-row-threaded",
+              )}
+            >
+              <span className="qf-gutter qf-gutter-old">
+                {row.oldLine ?? ""}
+                {target != null && key != null && (
+                  <button
+                    type="button"
+                    aria-label="Add comment"
+                    onClick={() => openBox(key)}
+                    className="qf-add-btn"
                   >
-                    {row.oldLine ?? ""}
-                    {target != null && (
-                      <button
-                        type="button"
-                        aria-label="Add comment"
-                        onClick={() => openBox(key!)}
-                        className={cn(
-                          "absolute -left-0.5 top-0 h-4 w-4 items-center justify-center rounded bg-accent text-[10px] font-bold leading-none text-accent-fg",
-                          isCursor ? "flex" : "hidden group-hover:flex",
-                        )}
-                      >
-                        +
-                      </button>
-                    )}
-                  </div>
-                  <div
-                    className={cn(
-                      "w-10 shrink-0 select-none px-1 text-right text-faint",
-                      row.type === "add" && "diff-add-gutter",
-                    )}
-                  >
-                    {row.newLine ?? ""}
-                  </div>
-                  <div className="flex-1 whitespace-pre-wrap break-all px-2">
-                    <span className="select-none text-faint">{marker}</span>
-                    <span
-                      className="hljs"
-                      dangerouslySetInnerHTML={{
-                        __html: highlightLine(row.content, file.filename),
-                      }}
-                    />
-                  </div>
-                </div>
+                    +
+                  </button>
+                )}
+              </span>
+              <span className="qf-gutter qf-gutter-new">
+                {row.newLine ?? ""}
+              </span>
+              <span className="qf-marker">{marker}</span>
+              <code className="qf-code">
+                <span
+                  className="hljs"
+                  dangerouslySetInnerHTML={{
+                    __html: highlightLine(row.content, file.filename),
+                  }}
+                />
+              </code>
+            </div>
 
-                {(threads && threads.length > 0) ||
-                (pendingHere && pendingHere.length > 0) ||
-                boxOpen ? (
-                  <div className="js-comment space-y-2 bg-surface px-3 py-2">
-                    {threads?.map((thread) => (
-                      <CommentThread
-                        key={thread[0].id}
-                        comments={thread}
-                        onReply={onReply}
-                        replyPending={addPending}
-                      />
-                    ))}
-                    {pendingHere?.map((p) => (
-                      <div
-                        key={p.id}
-                        className="rounded-card border border-accent/50 bg-surface-2 p-2 text-xs"
-                      >
-                        <div className="mb-1 flex items-center justify-between">
-                          <span className="font-medium text-accent">
-                            Pending review comment
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => onRemovePending(p.id)}
-                            className="text-muted hover:text-danger"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                        <div className="whitespace-pre-wrap text-fg">{p.body}</div>
+            {hasAnchored || boxOpen ? (
+              <div className="js-comment qf-comment-wrap">
+                {threads?.map((thread) => (
+                  <CommentThread
+                    key={thread[0].id}
+                    comments={thread}
+                    onReply={onReply}
+                    replyPending={addPending}
+                  />
+                ))}
+                {pendingHere?.map((p) => (
+                  <div key={p.id} className="qf-thread qf-pending">
+                    <div className="qf-comment">
+                      <div className="qf-comment-head">
+                        <span className="qf-pending-tag">Pending</span>
+                        <button
+                          type="button"
+                          onClick={() => onRemovePending(p.id)}
+                          className="qf-pending-remove qf-focusable"
+                        >
+                          Discard
+                        </button>
                       </div>
-                    ))}
-                    {boxOpen && target != null && (
+                      <div className="qf-comment-body whitespace-pre-wrap">
+                        {p.body}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {boxOpen && target != null && (
+                  <div className="qf-thread">
+                    <div className="qf-comment">
                       <AddCommentBox
                         pending={addPending}
                         autoFocus
@@ -421,14 +431,14 @@ export function DiffViewer({
                           closeBox(key!);
                         }}
                       />
-                    )}
+                    </div>
                   </div>
-                ) : null}
-              </Fragment>
-            );
-          })}
-        </div>
-      )}
+                )}
+              </div>
+            ) : null}
+          </Fragment>
+        );
+      })}
     </div>
   );
 }

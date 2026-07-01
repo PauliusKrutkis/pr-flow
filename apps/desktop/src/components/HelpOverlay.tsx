@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Command, X } from "lucide-react";
 import { useKeyboard, useHotkeys } from "../keyboard";
 import { useAppStore } from "../store/appStore";
 import { Kbd } from "./ui/Kbd";
@@ -7,14 +8,29 @@ function firstKey(keys: string | string[]): string {
   return Array.isArray(keys) ? keys[0] : keys;
 }
 
-const OTHER = "Other";
+interface ScopeSection {
+  scope: string;
+  note: string;
+  active: boolean;
+  bindings: { combo: string; description: string }[];
+}
 
+const NOTE: Record<string, string> = {
+  global: "Always available",
+  review: "When reading a diff",
+  inbox: "On the home list",
+};
+
+/**
+ * Help overlay (?) — the shortcut cheatsheet, generated from the live bindings
+ * so it can never drift. Shows the always-on global keys alongside the scope
+ * you're currently in, with the active scope carrying the iris tint.
+ */
 export function HelpOverlay({ baseScope }: { baseScope: string }) {
   const helpOpen = useAppStore((s) => s.helpOpen);
   const setHelpOpen = useAppStore((s) => s.setHelpOpen);
   const { getBindings, version } = useKeyboard();
 
-  // Hooks must run unconditionally — gate via `enabled`.
   useHotkeys(
     "help",
     [
@@ -28,64 +44,101 @@ export function HelpOverlay({ baseScope }: { baseScope: string }) {
     { enabled: helpOpen },
   );
 
-  const groups = useMemo(() => {
+  // Split the live bindings into a "global" section and the current scope's
+  // section (the two the user can act on right now).
+  const sections = useMemo<ScopeSection[]>(() => {
     if (!helpOpen) return [];
     void version;
-    const byGroup = new Map<string, { combo: string; description: string }[]>();
+    const byScope = new Map<string, { combo: string; description: string }[]>();
     for (const b of getBindings(baseScope)) {
       if (b.hidden) continue;
-      const group = b.group ?? OTHER;
-      const list = byGroup.get(group) ?? [];
+      const list = byScope.get(b.scope) ?? [];
       list.push({ combo: firstKey(b.keys), description: b.description });
-      byGroup.set(group, list);
+      byScope.set(b.scope, list);
     }
-    return Array.from(byGroup.entries());
+    const out: ScopeSection[] = [];
+    const global = byScope.get("global");
+    if (global) {
+      out.push({ scope: "global", note: NOTE.global, active: false, bindings: global });
+    }
+    for (const [scope, bindings] of byScope) {
+      if (scope === "global") continue;
+      out.push({
+        scope,
+        note: NOTE[scope] ?? "",
+        active: scope === baseScope,
+        bindings,
+      });
+    }
+    return out;
   }, [helpOpen, baseScope, getBindings, version]);
 
   if (!helpOpen) return null;
 
+  // Global (short) stacks on the left; the active scope (tall) stands on the
+  // right so neither column trails off.
+  const left = sections.filter((s) => !s.active);
+  const right = sections.filter((s) => s.active);
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+      className="q-overlay"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) setHelpOpen(false);
       }}
     >
-      <div className="w-full max-w-lg overflow-hidden rounded-card border border-line bg-surface shadow-2xl">
-        <div className="border-b border-line px-5 py-3 text-sm font-semibold text-fg">
-          Keyboard shortcuts
-        </div>
-        <div className="max-h-[60vh] overflow-y-auto px-5 py-4">
-          {groups.length === 0 ? (
-            <div className="py-4 text-center text-sm text-muted">
-              No shortcuts available.
-            </div>
-          ) : (
-            <div className="space-y-5">
-              {groups.map(([group, bindings]) => (
-                <div key={group}>
-                  <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
-                    {group}
+      <div className="q-dialog qh-panel" role="dialog" aria-modal="true">
+        <header className="qh-head">
+          <div className="qh-head-title">
+            <Command size={15} aria-hidden />
+            <span className="qh-title">Keyboard</span>
+            <span className="qh-head-note">
+              Scope-aware — only the screen you're on responds
+            </span>
+          </div>
+          <button
+            type="button"
+            className="qh-close q-focus"
+            onClick={() => setHelpOpen(false)}
+            aria-label="Close"
+          >
+            <X size={16} aria-hidden />
+          </button>
+        </header>
+
+        <div className="qh-grid">
+          {[left, right].map((col, ci) => (
+            <div key={ci} className="qh-col">
+              {col.map((g) => (
+                <section
+                  key={g.scope}
+                  className={"qh-scope" + (g.active ? " qh-scope-active" : "")}
+                >
+                  <div className="qh-scope-head">
+                    <span className="qh-scope-name">{g.scope}</span>
+                    {g.active && <span className="qh-scope-tag">active</span>}
+                    {g.note && <span className="qh-scope-note">{g.note}</span>}
                   </div>
-                  <div className="space-y-1.5">
-                    {bindings.map((b, i) => (
-                      <div
-                        key={`${group}-${i}-${b.combo}`}
-                        className="flex items-center justify-between gap-4"
-                      >
-                        <span className="text-sm text-fg">{b.description}</span>
-                        <Kbd combo={b.combo} />
+                  <dl className="qh-rows">
+                    {g.bindings.map((b, i) => (
+                      <div key={`${g.scope}-${i}-${b.combo}`} className="qh-row">
+                        <dt className="qh-keys">
+                          <Kbd combo={b.combo} />
+                        </dt>
+                        <dd className="qh-label">{b.description}</dd>
                       </div>
                     ))}
-                  </div>
-                </div>
+                  </dl>
+                </section>
               ))}
             </div>
-          )}
+          ))}
         </div>
-        <div className="border-t border-line px-5 py-2.5 text-center text-xs text-muted">
-          Press ? or Esc to close
-        </div>
+
+        <footer className="qh-foot">
+          Generated from the live bindings — the legend, the palette, and this
+          sheet can never drift.
+        </footer>
       </div>
     </div>
   );

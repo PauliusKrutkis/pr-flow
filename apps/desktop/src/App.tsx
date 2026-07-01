@@ -8,10 +8,9 @@ import { Inbox } from "./components/inbox/Inbox";
 import { ReviewScreen } from "./components/review/ReviewScreen";
 import { CommandPalette } from "./components/CommandPalette";
 import { HelpOverlay } from "./components/HelpOverlay";
-import { StatusBar } from "./components/StatusBar";
+import { GlobalSearch } from "./components/GlobalSearch";
 import { ReviewNotifier } from "./components/ReviewNotifier";
 import { UpdatePrompt } from "./components/UpdatePrompt";
-import { PerfOverlay } from "./components/PerfOverlay";
 import { Spinner } from "./components/ui/Spinner";
 
 export default function App() {
@@ -19,6 +18,7 @@ export default function App() {
   const setRoute = useAppStore((s) => s.setRoute);
   const togglePalette = useAppStore((s) => s.togglePalette);
   const toggleHelp = useAppStore((s) => s.toggleHelp);
+  const setSearchOpen = useAppStore((s) => s.setSearchOpen);
 
   useLoadViewed();
 
@@ -51,16 +51,21 @@ export default function App() {
         run: () => toggleHelp(),
         global: true,
       },
+      {
+        keys: "/",
+        description: "Search pull requests",
+        group: "General",
+        run: () => setSearchOpen(true),
+        global: true,
+      },
     ],
     { activate: false },
   );
 
   const baseScope = route.name === "review" ? "review" : "inbox";
 
-  const showStatusBar = route.name === "inbox" || route.name === "review";
-
   return (
-    <div className="flex h-full flex-col">
+    <div className="q-canvas flex h-full flex-col">
       <div className="min-h-0 flex-1">
         {route.name === "loading" && (
           <div className="flex h-full items-center justify-center">
@@ -81,13 +86,11 @@ export default function App() {
         )}
       </div>
 
-      {showStatusBar && <StatusBar baseScope={baseScope} />}
-
       <CommandPalette baseScope={baseScope} />
       <HelpOverlay baseScope={baseScope} />
+      {(route.name === "inbox" || route.name === "review") && <GlobalSearch />}
       {(route.name === "inbox" || route.name === "review") && <ReviewNotifier />}
       {(route.name === "inbox" || route.name === "review") && <UpdatePrompt />}
-      <PerfOverlay />
     </div>
   );
 }

@@ -89,6 +89,8 @@ interface AppState {
   route: Route;
   paletteOpen: boolean;
   helpOpen: boolean;
+  /** Global "/" PR search (jump to any PR), available on every screen. */
+  searchOpen: boolean;
   viewed: ViewedMap;
   lastSeen: Record<string, string>;
   // Inbox view state, kept here so it survives navigating into/out of a PR.
@@ -109,6 +111,8 @@ interface AppState {
   togglePalette: () => void;
   setHelpOpen: (open: boolean) => void;
   toggleHelp: () => void;
+  setSearchOpen: (open: boolean) => void;
+  toggleSearch: () => void;
 
   // viewed-file state
   setViewed: (map: ViewedMap) => void;
@@ -125,6 +129,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   route: { name: "loading" },
   paletteOpen: false,
   helpOpen: false,
+  searchOpen: false,
   viewed: {},
   lastSeen: loadLastSeen(),
   inboxTab: "reviewRequested",
@@ -139,7 +144,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     usePerfStore.getState().markOpenStart();
     const route: Route = { name: "review", owner, repo, number };
     saveLastRoute(route);
-    set({ route, paletteOpen: false });
+    set({ route, paletteOpen: false, searchOpen: false });
   },
   goInbox: () => {
     flushPersistViewed();
@@ -154,6 +159,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
   setHelpOpen: (open) => set({ helpOpen: open }),
   toggleHelp: () => set((s) => ({ helpOpen: !s.helpOpen })),
+  setSearchOpen: (open) => set({ searchOpen: open }),
+  toggleSearch: () => set((s) => ({ searchOpen: !s.searchOpen })),
 
   setViewed: (map) => set({ viewed: map }),
   isViewed: (prKey, file) => (get().viewed[prKey] ?? []).includes(file),

@@ -1,0 +1,1155 @@
+/* ===========================================================================
+   The "Quiet" design system, ported from apps/design-lab.
+
+   Two layers:
+     1. Shared primitives (`q-*`, `.md`, syntax) — unscoped, used everywhere.
+        From design-lab src/theme.ts (BASE_CSS).
+     2. The Review screen (`qf-*`) — scoped under `.dir-quiet`, applied on the
+        ReviewScreen root. From design-lab src/directions/quiet.tsx.
+     3. highlight.js output retheme (`.hljs-*`) — desktop highlights real code
+        via highlight.js, so the Quiet syntax palette is applied to its classes.
+
+   Colour tokens (`--bg`, `--accent`, …) are defined on :root in index.css and
+   kept in sync with the Tailwind `@theme` `--color-*` values.
+   =========================================================================== */
+
+/* ===========================================================================
+   0. APP CANVAS — the indigo backdrop + barely-there iris glow, behind every
+   screen (so the inbox, review, gate, etc. share one calm surface).
+   =========================================================================== */
+.q-canvas {
+  position: relative;
+  background: var(--bg);
+  color: var(--fg);
+}
+.q-canvas::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(1200px 600px at 22% -10%, rgba(139, 128, 255, 0.06), transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+.q-canvas > * { position: relative; z-index: 1; }
+
+/* ===========================================================================
+   1. SHARED PRIMITIVES  (from theme.ts)
+   =========================================================================== */
+
+/* ---- one focus-ring treatment, everywhere ---- */
+.q-focus:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1.5px var(--bg), 0 0 0 3px var(--accent);
+  border-radius: 7px;
+}
+
+/* ---- text helpers ---- */
+.q-add { color: var(--add); }
+.q-del { color: var(--del); }
+.q-muted { color: var(--muted); }
+.q-faint { color: var(--faint); }
+.q-dot { color: var(--faint); }
+.q-mono { font-family: var(--font-mono); }
+
+/* ---- eyebrow / section micro-label ---- */
+.q-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---- keycap ---- */
+.q-kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  color: var(--muted);
+  background: var(--surface-hi);
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  padding: 3px 5px;
+  min-width: 16px;
+  text-align: center;
+  display: inline-block;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* ---- avatar ---- */
+.q-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 999px;
+  font-weight: 600;
+  color: #fff;
+  object-fit: cover;
+  overflow: hidden;
+}
+
+/* ---- status glyph (file / PR change kind) ---- */
+.q-glyph {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+}
+.q-glyph-add { color: var(--add); background: var(--add-bg); }
+.q-glyph-mod { color: var(--warn); background: var(--warn-bg); }
+.q-glyph-del { color: var(--del); background: var(--del-bg); }
+.q-glyph-ren { color: var(--accent); background: var(--accent-soft); }
+
+/* ---- state / status pills ---- */
+.q-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.q-pill-dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+.q-pill-open { color: var(--add); background: var(--add-bg); box-shadow: inset 0 0 0 1px rgba(95, 208, 138, 0.25); }
+.q-pill-draft { color: var(--muted); background: var(--surface-hi); box-shadow: inset 0 0 0 1px var(--line-2); }
+.q-pill-merged { color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.q-pill-muted { color: var(--muted); background: var(--surface-hi); box-shadow: inset 0 0 0 1px var(--line-2); }
+.q-pill-approved { color: var(--add); background: var(--add-bg); }
+.q-pill-changes { color: var(--del); background: var(--del-bg); }
+.q-pill-commented { color: var(--accent); background: var(--accent-soft); }
+.q-pill-pending { color: var(--muted); background: var(--surface-hi); box-shadow: inset 0 0 0 1px var(--line-2); }
+
+/* ---- buttons ---- */
+.q-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border-radius: 8px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, filter 120ms ease;
+  white-space: nowrap;
+}
+.q-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.q-btn-primary { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+.q-btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+.q-btn-primary .q-kbd { color: var(--accent-ink); background: rgba(20, 17, 31, 0.16); border-color: rgba(20, 17, 31, 0.22); box-shadow: none; }
+.q-btn-quiet { color: var(--fg); background: var(--surface); border-color: var(--line); }
+.q-btn-quiet:hover:not(:disabled) { background: var(--surface-hi); border-color: var(--line-2); }
+.q-btn-ghost { color: var(--muted); background: transparent; }
+.q-btn-ghost:hover:not(:disabled) { color: var(--fg); background: var(--surface-2); }
+.q-btn-danger { color: var(--del); background: var(--del-bg); border-color: rgba(255, 112, 136, 0.3); }
+.q-btn-danger:hover:not(:disabled) { background: rgba(255, 112, 136, 0.16); border-color: var(--del); }
+
+.q-btn-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-ink);
+  border-radius: 999px;
+  padding: 1px 7px;
+  line-height: 1.5;
+}
+
+/* ---- inputs ---- */
+.q-input {
+  width: 100%;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 12px;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.q-input::placeholder { color: var(--faint); }
+.q-input:focus {
+  outline: none;
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+textarea.q-input { resize: none; line-height: 1.5; }
+
+/* ---- card / surface ---- */
+.q-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+/* ---- shadcn primitives, Quiet-themed (dialog / tabs / tooltip) ---- */
+.q-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 6, 12, 0.62);
+  backdrop-filter: blur(2px);
+  z-index: 50;
+  animation: q-fade 120ms ease;
+}
+.q-dialog {
+  position: fixed;
+  z-index: 51;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(78vh, 640px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  box-shadow: 0 24px 64px -24px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(139, 128, 255, 0.06);
+  overflow: hidden;
+  animation: q-pop 130ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.q-dialog:focus { outline: none; }
+.q-dialog-top {
+  top: 14vh;
+  transform: translate(-50%, 0);
+  width: min(620px, calc(100vw - 32px));
+  animation: q-pop-top 130ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes q-fade { from { opacity: 0; } }
+@keyframes q-pop { from { opacity: 0; transform: translate(-50%, -48%) scale(0.98); } }
+@keyframes q-pop-top { from { opacity: 0; transform: translate(-50%, -6px) scale(0.99); } }
+
+.q-tabs-list { display: flex; align-items: center; gap: 2px; }
+.q-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+.q-tab:hover { color: var(--fg); background: var(--surface-2); }
+.q-tab[data-state="active"] { color: var(--fg); background: var(--surface-hi); }
+.q-tab-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--faint);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 6px;
+  line-height: 16px;
+  min-width: 20px;
+  text-align: center;
+}
+.q-tab[data-state="active"] .q-tab-count { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
+
+.q-tooltip {
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  color: var(--fg);
+  background: var(--surface-hi);
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  padding: 5px 9px;
+  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  animation: q-fade 100ms ease;
+  z-index: 60;
+}
+.q-tooltip .q-kbd { margin-left: 5px; }
+
+/* ---- markdown (global; the review drawer's scoped copy overrides inside .dir-quiet) ---- */
+.md { font-family: var(--font-ui); color: #d6d6e6; font-size: 13px; line-height: 1.6; }
+.md > *:first-child { margin-top: 0; }
+.md > *:last-child { margin-bottom: 0; }
+.md h1 { font-size: 17px; font-weight: 600; color: var(--fg); margin: 18px 0 8px; }
+.md h2 { font-size: 15px; font-weight: 600; color: var(--fg); margin: 18px 0 8px; }
+.md h3 { font-size: 13px; font-weight: 600; color: var(--fg); margin: 16px 0 6px; letter-spacing: 0.02em; }
+.md h4 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 12px 0 4px; }
+.md p { margin: 8px 0; }
+.md ul { margin: 8px 0; padding-left: 18px; list-style: none; }
+.md ol { margin: 8px 0; padding-left: 22px; }
+.md li { position: relative; margin: 4px 0; }
+.md ul > li::before { content: ""; position: absolute; left: -14px; top: 9px; width: 4px; height: 4px; border-radius: 999px; background: var(--accent); opacity: 0.7; }
+.md a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-line); }
+.md a:hover { border-bottom-color: var(--accent); }
+.md strong { color: var(--fg); font-weight: 600; }
+.md em { color: var(--muted); font-style: italic; }
+.md code { font-family: var(--font-mono); font-size: 11.5px; color: #c4b6ff; background: var(--surface-hi); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+.md pre { font-family: var(--font-mono); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; margin: 10px 0; }
+.md pre code { border: none; background: none; padding: 0; color: var(--fg); }
+.md blockquote { margin: 10px 0; padding: 4px 0 4px 14px; border-left: 2px solid var(--accent-line); color: var(--muted); }
+.md table { border-collapse: collapse; margin: 10px 0; font-size: 12.5px; }
+.md th, .md td { border: 1px solid var(--line); padding: 5px 10px; text-align: left; }
+.md th { background: var(--surface-hi); color: var(--fg); font-weight: 600; }
+.md hr { border: none; border-top: 1px solid var(--line); margin: 16px 0; }
+.md img { max-width: 100%; border-radius: 8px; }
+
+/* ---- syntax tokens (lab tokenizer; harmless if unused by hljs) ---- */
+.tk-kw { color: #c4b6ff; }
+.tk-str { color: #8fe3b0; }
+.tk-num { color: #ffc48a; }
+.tk-com { color: var(--faint); font-style: italic; }
+.tk-fn { color: #7fc8ff; }
+.tk-type { color: #ffd9a0; }
+.tk-punct { color: #b6b6cf; }
+.tk-plain { color: var(--fg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .q-overlay, .q-dialog, .q-tooltip {
+    animation-duration: 0ms !important;
+    transition-duration: 0ms !important;
+  }
+}
+
+/* ===========================================================================
+   3. highlight.js OUTPUT — Quiet syntax palette
+   Desktop renders diffs via highlight.js (.hljs-* classes). Map them onto the
+   Quiet token colours; keep the background transparent so diff-row tints show.
+   =========================================================================== */
+.hljs { background: transparent !important; padding: 0 !important; color: var(--fg); }
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag,
+.hljs-meta,
+.hljs-meta .hljs-keyword { color: #c4b6ff; }
+.hljs-string,
+.hljs-regexp,
+.hljs-addition { color: #8fe3b0; }
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet { color: #ffc48a; }
+.hljs-comment,
+.hljs-quote { color: var(--faint); font-style: italic; }
+.hljs-title,
+.hljs-title.function_,
+.hljs-section,
+.hljs-name { color: #7fc8ff; }
+.hljs-type,
+.hljs-class .hljs-title,
+.hljs-title.class_,
+.hljs-built_in { color: #ffd9a0; }
+.hljs-attr,
+.hljs-attribute,
+.hljs-property,
+.hljs-variable,
+.hljs-template-variable { color: #d6d6e6; }
+.hljs-tag,
+.hljs-punctuation,
+.hljs-operator { color: #b6b6cf; }
+.hljs-params { color: var(--fg); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 600; }
+
+/* ===========================================================================
+   2. REVIEW SCREEN  (from directions/quiet.tsx) — scoped under .dir-quiet
+   =========================================================================== */
+.dir-quiet {
+  --add-bg: rgba(95, 208, 138, 0.08);
+  --del-bg: rgba(255, 112, 136, 0.08);
+
+  position: relative;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.005em;
+}
+
+/* ---- focus ring (single, consistent treatment) ---- */
+.dir-quiet .qf-focusable:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1.5px var(--bg), 0 0 0 3px var(--accent);
+  border-radius: 7px;
+}
+
+/* ============ SIDEBAR ============ */
+.dir-quiet .qf-sidebar { background: var(--surface); }
+.dir-quiet .qf-side-head { }
+.dir-quiet .qf-side-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.dir-quiet .qf-side-count { font-family: var(--font-mono); font-size: 11px; color: var(--faint); }
+
+/* THE FLOW RAIL — the signature */
+.dir-quiet .qf-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 4px;
+  box-sizing: content-box;
+  padding: 10px 7px;
+  flex-shrink: 0;
+}
+.dir-quiet .qf-rail-seg {
+  flex: 1 1 0;
+  min-height: 10px;
+  border-radius: 999px;
+  background: var(--line-2);
+  transition: background-color 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
+}
+.dir-quiet .qf-rail-viewed { background: var(--accent); opacity: 0.5; }
+.dir-quiet .qf-rail-current {
+  background: var(--accent);
+  opacity: 1;
+  box-shadow: 0 0 0 1px var(--accent-soft), 0 0 10px 1px var(--accent-line);
+}
+
+/* file list */
+.dir-quiet .qf-filelist { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.dir-quiet .qf-file {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: calc(100% - 12px);
+  margin: 1px 6px;
+  padding: 6px 8px 6px 6px;
+  border-radius: 7px;
+  text-align: left;
+  color: var(--muted);
+  transition: background-color 120ms ease, color 120ms ease;
+  cursor: pointer;
+}
+/* Hover only affects rows that aren't already selected, so the iris selection
+   is never overwritten by (or double-stacked with) the hover wash. */
+.dir-quiet .qf-file:not(.qf-file-active):hover { background: var(--surface-2); color: var(--fg); }
+.dir-quiet .qf-file-active {
+  background: var(--accent-soft);
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+.dir-quiet .qf-file-viewed:not(.qf-file-active) { opacity: 0.7; }
+/* explicit "viewed" tick so it reads at a glance, not just via dimming */
+.dir-quiet .qf-file-check { color: var(--add); flex-shrink: 0; }
+.dir-quiet .qf-file-glyph {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+}
+.dir-quiet .qf-st-add { color: var(--add); background: var(--add-bg); }
+.dir-quiet .qf-st-mod { color: #d9c46a; background: rgba(217, 196, 106, 0.1); }
+.dir-quiet .qf-st-del { color: var(--del); background: var(--del-bg); }
+.dir-quiet .qf-st-ren { color: var(--accent); background: var(--accent-soft); }
+.dir-quiet .qf-file-name {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.dir-quiet .qf-file-dir { color: var(--faint); overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; }
+.dir-quiet .qf-file-base { color: inherit; font-weight: 500; flex-shrink: 0; }
+.dir-quiet .qf-file-meta { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.dir-quiet .qf-file-badge { font-family: var(--font-mono); font-size: 10px; line-height: 1; padding: 2px 5px; border-radius: 999px; }
+.dir-quiet .qf-file-badge-comment { color: var(--muted); background: var(--surface-hi); border: 1px solid var(--line-2); }
+.dir-quiet .qf-file-badge-pending { color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent-line); }
+.dir-quiet .qf-file-stat { font-family: var(--font-mono); font-size: 11px; display: flex; gap: 5px; }
+.dir-quiet .qf-add { color: var(--add); }
+.dir-quiet .qf-del { color: var(--del); }
+
+/* filter input in the sidebar head */
+.dir-quiet .qf-filter { margin-top: 8px; }
+
+/* keycaps */
+.dir-quiet .qf-kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  color: var(--muted);
+  background: var(--surface-hi);
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  padding: 3px 5px;
+  min-width: 16px;
+  text-align: center;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* ============ MAIN ============ */
+.dir-quiet .qf-main { background: var(--bg); }
+.dir-quiet .qf-header {
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--surface-2), var(--bg));
+}
+.dir-quiet .qf-pr-title { font-size: 15px; font-weight: 600; color: var(--fg); letter-spacing: -0.01em; }
+.dir-quiet .qf-pr-sub { font-size: 12px; color: var(--muted); }
+.dir-quiet .qf-pr-num { font-family: var(--font-mono); color: var(--faint); }
+.dir-quiet .qf-muted { color: var(--muted); }
+.dir-quiet .qf-dot { color: var(--faint); }
+.dir-quiet .qf-branch { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.dir-quiet .qf-arrow { color: var(--faint); }
+
+.dir-quiet .qf-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px 2px 7px;
+  border-radius: 999px;
+  letter-spacing: 0.01em;
+}
+.dir-quiet .qf-state-dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+.dir-quiet .qf-state-open { color: var(--add); background: var(--add-bg); box-shadow: inset 0 0 0 1px rgba(95, 208, 138, 0.25); }
+.dir-quiet .qf-state-draft { color: var(--muted); background: var(--surface-hi); box-shadow: inset 0 0 0 1px var(--line-2); }
+.dir-quiet .qf-state-merged { color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
+
+.dir-quiet .qf-stat-group { font-family: var(--font-mono); font-size: 12px; display: flex; gap: 7px; }
+
+.dir-quiet .qf-info-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  font-family: var(--font-mono);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+.dir-quiet .qf-info-btn:hover,
+.dir-quiet .qf-info-btn[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+
+.dir-quiet .qf-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 13px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #14111f;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  cursor: pointer;
+  transition: filter 120ms ease;
+}
+.dir-quiet .qf-submit:hover { filter: brightness(1.08); }
+.dir-quiet .qf-submit .qf-kbd { color: #14111f; background: rgba(20, 17, 31, 0.16); border-color: rgba(20, 17, 31, 0.22); box-shadow: none; }
+.dir-quiet .qf-submit-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  background: #14111f;
+  border-radius: 999px;
+  padding: 1px 7px;
+  line-height: 1.5;
+}
+
+.dir-quiet .qf-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  padding: 5px 8px;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+.dir-quiet .qf-back:hover { color: var(--fg); background: var(--surface-2); }
+
+/* file path strip */
+.dir-quiet .qf-filebar { border-bottom: 1px solid var(--line); background: var(--bg); }
+.dir-quiet .qf-filebar-name { font-family: var(--font-mono); font-size: 12px; color: var(--fg); }
+.dir-quiet .qf-filebar-prev { color: var(--faint); }
+.dir-quiet .qf-filebar-stat { font-family: var(--font-mono); font-size: 11px; display: flex; gap: 6px; }
+.dir-quiet .qf-filebar-lang {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+/* ============ DIFF ============ */
+.dir-quiet .qf-diff {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.75;
+  padding: 6px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-2) transparent;
+}
+.dir-quiet .qf-row {
+  display: grid;
+  grid-template-columns: 52px 52px 22px 1fr;
+  align-items: baseline;
+  padding: 1.5px 16px 1.5px 0;
+  border-left: 2px solid transparent;
+}
+.dir-quiet .qf-row-hunk {
+  width: 100%;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding-top: 4px;
+  padding-bottom: 4px;
+  margin: 4px 0;
+  cursor: pointer;
+  text-align: left;
+}
+.dir-quiet .qf-row-hunk:hover { background: var(--surface-hi); }
+.dir-quiet .qf-row-hunk .qf-code { color: var(--accent); opacity: 0.85; font-size: 11px; }
+.dir-quiet .qf-row-add { background: var(--add-bg); }
+.dir-quiet .qf-row-del { background: var(--del-bg); }
+.dir-quiet .qf-row-add .qf-marker { color: var(--add); }
+.dir-quiet .qf-row-del .qf-marker { color: var(--del); }
+.dir-quiet .qf-row-add .qf-gutter-new { color: var(--add-num); }
+.dir-quiet .qf-row-del .qf-gutter-old { color: var(--del-num); }
+
+.dir-quiet .qf-row:not(.qf-row-hunk) { cursor: text; }
+/* The active-row highlight is never shown on open — only the keyboard cursor
+   (keyboard mode) or the row under the pointer (mouse mode) lights up, and only
+   one at a time. Both wear the same iris wash + left rail. */
+.dir-quiet .qf-diff:not([data-mode="mouse"]) .qf-row-active,
+.dir-quiet .qf-diff[data-mode="mouse"] .qf-row:not(.qf-row-hunk):hover {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+.dir-quiet .qf-diff:not([data-mode="mouse"]) .qf-row-active .qf-gutter,
+.dir-quiet .qf-diff[data-mode="mouse"] .qf-row:not(.qf-row-hunk):hover .qf-gutter {
+  color: var(--fg);
+}
+.dir-quiet .qf-row-threaded .qf-marker { color: var(--accent); opacity: 0.9; }
+
+.dir-quiet .qf-gutter {
+  position: relative;
+  text-align: right;
+  padding-right: 12px;
+  color: var(--faint);
+  font-size: 11px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.dir-quiet .qf-marker { text-align: center; color: var(--faint); user-select: none; -webkit-user-select: none; }
+.dir-quiet .qf-code { white-space: pre-wrap; word-break: break-word; color: var(--fg); }
+
+/* inline "add comment" affordance on the old-line gutter */
+.dir-quiet .qf-add-btn {
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+}
+/* A single "+" affordance, driven by the last input modality: keyboard shows it
+   on the cursor row, mouse shows it on the hovered row — never both at once. */
+.dir-quiet .qf-diff:not([data-mode="mouse"]) .qf-row-active .qf-add-btn { display: grid; }
+.dir-quiet .qf-diff[data-mode="mouse"] .qf-row:hover .qf-add-btn { display: grid; }
+
+.dir-quiet .qf-empty { padding: 40px; text-align: center; color: var(--faint); font-family: var(--font-ui); }
+
+/* ============ COMMENT THREADS ============ */
+.dir-quiet .qf-comment-wrap { background: var(--bg); padding: 0 16px 6px 70px; }
+.dir-quiet .qf-thread {
+  margin: 6px 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+  font-family: var(--font-ui);
+}
+.dir-quiet .qf-comment { padding: 11px 14px; }
+.dir-quiet .qf-comment-reply { border-top: 1px solid var(--line); background: var(--surface-2); }
+.dir-quiet .qf-comment-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.dir-quiet .qf-comment-author { font-size: 12.5px; font-weight: 600; color: var(--fg); }
+.dir-quiet .qf-comment-time { font-family: var(--font-mono); font-size: 10.5px; color: var(--faint); }
+.dir-quiet .qf-comment-body { font-size: 13px; color: #d6d6e6; }
+
+.dir-quiet .qf-reply-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 8px 14px;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+.dir-quiet .qf-reply-btn:hover { color: var(--fg); background: var(--surface-2); }
+
+/* pending */
+.dir-quiet .qf-pending {
+  border-color: var(--accent-line);
+  border-style: dashed;
+  background: linear-gradient(0deg, var(--accent-soft), var(--accent-soft)), var(--surface);
+}
+.dir-quiet .qf-pending-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--bg);
+  border: 1px solid var(--accent-line);
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+.dir-quiet .qf-pending-remove {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  padding: 3px 9px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.dir-quiet .qf-pending-remove:hover { color: var(--del); border-color: var(--del); }
+
+/* add-comment composer (inline) */
+.dir-quiet .qf-compose { padding: 4px 0; }
+.dir-quiet .qf-compose-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+
+/* segmented "batch vs now" composer (from views/AddCommentBox.tsx) — unscoped
+   so replies/issue composers reuse it too. */
+.qa-inline { font-family: var(--font-ui); }
+.qa-textarea { background: var(--bg); min-height: 64px; }
+.qa-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 11px; flex-wrap: wrap; }
+.qa-seg { display: inline-flex; padding: 3px; border-radius: 9px; background: var(--bg); border: 1px solid var(--line); }
+.qa-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+.qa-seg-btn:hover { color: var(--fg); }
+.qa-seg-on { color: var(--fg); background: var(--surface-hi); box-shadow: inset 0 0 0 1px var(--line-2); }
+.qa-seg-on svg { color: var(--accent); }
+.qa-actions { display: flex; align-items: center; gap: 8px; }
+.qa-explain { margin-top: 10px; font-size: 11.5px; color: var(--faint); line-height: 1.5; }
+
+/* ============ INFO DRAWER ============ */
+.dir-quiet .qf-drawer-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 8, 14, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+  z-index: 20;
+}
+.dir-quiet .qf-drawer-scrim.qf-drawer-open { opacity: 1; pointer-events: auto; }
+.dir-quiet .qf-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 420px;
+  max-width: 86vw;
+  background: var(--surface);
+  border-left: 1px solid var(--line-2);
+  box-shadow: -24px 0 48px -24px rgba(0, 0, 0, 0.6);
+  transform: translateX(100%);
+  transition: transform 150ms ease;
+  z-index: 21;
+  display: flex;
+  flex-direction: column;
+}
+.dir-quiet .qf-drawer.qf-drawer-open { transform: translateX(0); }
+.dir-quiet .qf-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.dir-quiet .qf-drawer-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.dir-quiet .qf-drawer-close {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--surface-hi);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.dir-quiet .qf-drawer-close:hover { color: var(--fg); }
+.dir-quiet .qf-drawer-body {
+  padding: 18px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-2) transparent;
+}
+.dir-quiet .qf-drawer-section { margin-bottom: 24px; }
+.dir-quiet .qf-drawer-pr { display: flex; gap: 8px; align-items: baseline; margin-bottom: 6px; }
+.dir-quiet .qf-drawer-pr-title { font-size: 14px; font-weight: 600; color: var(--fg); }
+.dir-quiet .qf-drawer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.dir-quiet .qf-drawer-h {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 10px;
+}
+
+/* ============ RESPONSIVE (~1100px) ============ */
+@media (max-width: 1100px) {
+  .dir-quiet .qf-branch { display: none; }
+}
+
+/* ============ REDUCED MOTION ============ */
+@media (prefers-reduced-motion: reduce) {
+  .dir-quiet *, .dir-quiet *::before, .dir-quiet *::after {
+    transition-duration: 0ms !important;
+  }
+}
+
+/* ===========================================================================
+   INBOX — simplified underline tabs + keyboard/mouse mode gating.
+   =========================================================================== */
+.qi-tabs { display: flex; align-items: center; gap: 2px; }
+.qi-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 10px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.qi-tab:hover { color: var(--fg); }
+.qi-tab[data-state="active"] { color: var(--fg); border-bottom-color: var(--accent); }
+.qi-tab-count { font-family: var(--font-mono); font-size: 11px; color: var(--faint); }
+.qi-tab:hover .qi-tab-count { color: var(--muted); }
+.qi-tab[data-state="active"] .qi-tab-count { color: var(--accent); }
+
+/* When the keyboard drives the cursor, suppress the stale pointer :hover wash so
+   only the keyboard-selected row is lit. */
+.q-inbox-list[data-mode="keyboard"] [role="option"]:not([aria-selected="true"]):hover {
+  background-color: transparent !important;
+}
+
+/* ===========================================================================
+   4. TRANSIENT CHROME (from views/ChromeSurfaces.tsx) — global, unscoped.
+   Orient banner, new-review toast, update prompt. "No nags": each is
+   dismissable, low-chrome, iris reserved for the single wanted action.
+   =========================================================================== */
+
+/* orient banner (inline, top of the diff area) */
+.qb-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 14px;
+  border-radius: 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.qb-banner-icon { color: var(--accent); display: grid; place-items: center; flex-shrink: 0; }
+.qb-banner-text { flex: 1; min-width: 0; font-size: 13px; color: var(--muted); }
+.qb-banner-text b { color: var(--fg); font-weight: 600; }
+.qb-banner-update { box-shadow: inset 3px 0 0 var(--accent); }
+.qb-banner-info { box-shadow: inset 3px 0 0 var(--line-2); }
+.qb-banner-info .qb-banner-icon { color: var(--faint); }
+
+.qb-x {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--faint);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease;
+  flex-shrink: 0;
+}
+.qb-x:hover { color: var(--fg); background: var(--surface-hi); }
+
+/* bottom-right / top-right transient card stack */
+.qb-stack {
+  position: fixed;
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 340px;
+  max-width: calc(100vw - 36px);
+}
+.qb-stack-br { right: 18px; bottom: 18px; }
+.qb-stack-tr { right: 18px; top: 18px; }
+
+.qb-toast {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding: 13px 14px 13px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: 13px;
+  box-shadow: 0 18px 48px -24px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+  animation: qb-rise 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.qb-toast:focus, .qb-toast:focus-visible { outline: none; }
+.qb-toast-rail {
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 12px 0 var(--accent-line);
+}
+.qb-toast-body { flex: 1; min-width: 0; }
+.qb-toast-head { display: flex; align-items: center; justify-content: space-between; }
+.qb-toast-title { font-size: 12px; font-weight: 700; letter-spacing: 0.01em; color: var(--fg); }
+.qb-toast-text { margin-top: 3px; font-size: 12.5px; color: var(--muted); }
+.qb-toast-text b { color: var(--fg); font-weight: 600; }
+.qb-toast-num { color: var(--accent); }
+.qb-toast-sub { margin-top: 2px; font-size: 12px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qb-toast-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.qb-toast-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+}
+.qb-toast-open:hover { filter: brightness(1.08); }
+.qb-toast-open .q-kbd { color: var(--accent-ink); background: rgba(20, 17, 31, 0.16); border-color: rgba(20, 17, 31, 0.22); box-shadow: none; }
+.qb-toast-snooze { font-size: 12px; color: var(--muted); background: transparent; border: none; cursor: pointer; padding: 5px 4px; }
+.qb-toast-snooze:hover { color: var(--fg); }
+
+.qb-update {
+  display: flex;
+  gap: 12px;
+  padding: 13px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  border-radius: 13px;
+  box-shadow: 0 18px 48px -24px rgba(0, 0, 0, 0.7);
+  animation: qb-rise 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.qb-update-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  flex-shrink: 0;
+  color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+.qb-update-body { flex: 1; min-width: 0; }
+.qb-update-head { display: flex; align-items: baseline; gap: 8px; }
+.qb-update-title { font-size: 13px; font-weight: 600; color: var(--fg); }
+.qb-update-ver { font-size: 11px; color: var(--faint); }
+.qb-update-text { margin-top: 3px; font-size: 12px; color: var(--muted); line-height: 1.45; max-height: 6rem; overflow-y: auto; white-space: pre-wrap; }
+.qb-update-actions { display: flex; align-items: center; gap: 10px; margin-top: 11px; }
+.qb-update-primary { padding: 6px 11px; font-size: 12px; }
+.qb-update-later { font-size: 12px; color: var(--muted); background: transparent; border: none; cursor: pointer; padding: 6px 4px; }
+.qb-update-later:hover { color: var(--fg); }
+.qb-update-err { margin-top: 6px; font-size: 11px; color: var(--del); }
+
+@keyframes qb-rise { from { opacity: 0; transform: translateY(10px); } }
+
+/* ===========================================================================
+   5. SEARCH PANE (from views/SearchPane.tsx) — global, portalled dialog.
+   `/` opens a full pane over the inbox rather than an inline filter.
+   =========================================================================== */
+.qsp-panel { width: min(680px, calc(100vw - 32px)); max-height: 70vh; padding: 0; }
+
+.qsp-search { display: flex; align-items: center; gap: 12px; padding: 17px 20px; border-bottom: 1px solid var(--line); }
+.qsp-search-icon { color: var(--faint); flex-shrink: 0; }
+.qsp-input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; font-family: var(--font-ui); font-size: 16px; color: var(--fg); }
+.qsp-input::placeholder { color: var(--faint); }
+
+.qsp-list { overflow-y: auto; padding: 8px; flex: 1; }
+.qsp-section { display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); padding: 8px 10px 6px; }
+
+.qsp-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--muted);
+}
+.qsp-rail { position: absolute; left: 3px; top: 9px; bottom: 9px; width: 2px; border-radius: 999px; background: transparent; }
+.qsp-row-on { background: var(--accent-soft); color: var(--fg); }
+.qsp-row-on .qsp-rail { background: var(--accent); box-shadow: 0 0 10px 0 var(--accent-line); }
+.qsp-num { font-family: var(--font-mono); font-size: 12px; color: var(--faint); flex-shrink: 0; min-width: 40px; }
+.qsp-row-on .qsp-num { color: var(--accent); }
+.qsp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.qsp-title { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--fg); font-weight: 500; }
+.qsp-title > :first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qsp-meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.qsp-time { font-size: 11px; color: var(--faint); flex-shrink: 0; }
+
+.qsp-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 44px 16px; text-align: center; color: var(--faint); }
+.qsp-empty svg { color: var(--accent); opacity: 0.8; margin-bottom: 4px; }
+.qsp-empty p { font-size: 14px; color: var(--fg); }
+.qsp-empty span { font-size: 12px; }
+
+.qsp-foot { display: flex; align-items: center; gap: 18px; padding: 10px 20px; border-top: 1px solid var(--line); background: var(--surface-2); }
+.qsp-foot span { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--faint); }
+.qsp-foot-scope { margin-left: auto; font-family: var(--font-mono); }
+
+/* ===========================================================================
+   6. HELP / SHORTCUTS (from views/HelpOverlay.tsx) — scope-aware cheatsheet.
+   =========================================================================== */
+.qh-panel { width: min(720px, calc(100vw - 32px)); padding: 0; }
+.qh-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.qh-head-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.qh-head-title svg { color: var(--accent); flex-shrink: 0; }
+.qh-title { font-size: 14px; font-weight: 700; color: var(--fg); }
+.qh-head-note { font-size: 12px; color: var(--faint); }
+.qh-close { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; color: var(--muted); background: var(--surface-hi); border: 1px solid var(--line-2); cursor: pointer; transition: color 120ms ease; flex-shrink: 0; }
+.qh-close:hover { color: var(--fg); }
+
+.qh-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; padding: 20px; overflow-y: auto; align-items: start; }
+.qh-col { display: flex; flex-direction: column; gap: 6px; }
+.qh-scope { padding: 12px 14px; border-radius: 10px; border: 1px solid transparent; }
+.qh-scope-active { background: var(--accent-soft); border-color: var(--accent-line); }
+.qh-scope-head { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
+.qh-scope-name { font-family: var(--font-mono); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: var(--accent); }
+.qh-scope-tag { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 2px 6px; }
+.qh-scope-note { font-size: 11px; color: var(--faint); margin-left: auto; }
+.qh-rows { display: flex; flex-direction: column; gap: 1px; }
+.qh-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.qh-keys { display: flex; gap: 4px; min-width: 64px; flex-shrink: 0; }
+.qh-label { font-size: 13px; color: var(--fg); }
+.qh-foot { padding: 12px 20px; border-top: 1px solid var(--line); background: var(--surface-2); font-size: 12px; color: var(--faint); }
+
+@media (max-width: 640px) { .qh-grid { grid-template-columns: 1fr; } }
+
+/* ===========================================================================
+   7. COMMAND PALETTE (from views/CommandPalette.tsx) — ⌘K actions.
+   =========================================================================== */
+.qc-panel { padding: 0; }
+.qc-search { display: flex; align-items: center; gap: 11px; padding: 15px 18px; border-bottom: 1px solid var(--line); }
+.qc-search-icon { color: var(--faint); flex-shrink: 0; }
+.qc-input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; font-family: var(--font-ui); font-size: 15px; color: var(--fg); }
+.qc-input::placeholder { color: var(--faint); }
+
+.qc-list { overflow-y: auto; padding: 8px; flex: 1; }
+.qc-group + .qc-group { margin-top: 6px; }
+.qc-group-label { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); padding: 8px 10px 6px; }
+
+.qc-opt {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 12px 9px 14px;
+  border-radius: 9px;
+  cursor: pointer;
+  color: var(--muted);
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+}
+.qc-rail { position: absolute; left: 3px; top: 8px; bottom: 8px; width: 2px; border-radius: 999px; background: transparent; }
+.qc-opt-on { background: var(--accent-soft); color: var(--fg); }
+.qc-opt-on .qc-rail { background: var(--accent); box-shadow: 0 0 10px 0 var(--accent-line); }
+.qc-opt-icon { color: var(--faint); flex-shrink: 0; }
+.qc-opt-on .qc-opt-icon { color: var(--accent); }
+.qc-opt-label { flex: 1; font-size: 13.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qc-opt-sub { font-family: var(--font-mono); font-size: 11px; color: var(--faint); flex-shrink: 0; }
+
+.qc-empty { padding: 34px 16px; text-align: center; font-size: 13px; color: var(--faint); }
+.qc-foot { display: flex; gap: 18px; padding: 10px 18px; border-top: 1px solid var(--line); background: var(--surface-2); }
+.qc-foot span { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--faint); }

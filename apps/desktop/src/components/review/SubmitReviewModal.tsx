@@ -66,13 +66,13 @@ export function SubmitReviewModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 px-4 pt-[12vh]"
+      className="q-overlay"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-lg overflow-hidden rounded-card border border-line bg-surface shadow-2xl">
-        <div className="border-b border-line px-4 py-3">
+      <div className="q-dialog q-dialog-top" role="dialog" aria-modal="true">
+        <div className="border-b border-line px-5 py-3.5">
           <h2 className="text-sm font-semibold text-fg">Submit review</h2>
           <p className="mt-0.5 text-xs text-muted">
             {pendingCount > 0
@@ -81,7 +81,7 @@ export function SubmitReviewModal({
           </p>
         </div>
 
-        <div className="px-4 py-3">
+        <div className="px-5 py-4">
           <div className="flex gap-2">
             {EVENTS.map((opt) => (
               <button
@@ -90,10 +90,10 @@ export function SubmitReviewModal({
                 onClick={() => setEvent(opt.value)}
                 title={opt.hint}
                 className={cn(
-                  "flex-1 rounded-card border px-2 py-2 text-xs font-medium",
+                  "flex-1 rounded-lg border px-2 py-2 text-xs font-semibold transition-colors",
                   event === opt.value
-                    ? "border-accent bg-accent/10 text-fg"
-                    : "border-line text-muted hover:bg-elevated hover:text-fg",
+                    ? "border-accent bg-accent/15 text-fg"
+                    : "border-line text-muted hover:bg-surface-2 hover:text-fg",
                 )}
               >
                 {opt.label}
@@ -114,7 +114,7 @@ export function SubmitReviewModal({
                   : "Review summary…"
             }
             rows={4}
-            className="mt-3 w-full resize-y rounded border border-line bg-bg px-2 py-1.5 text-sm text-fg placeholder:text-faint focus:border-accent focus:outline-none"
+            className="q-input mt-3"
           />
 
           {error ? (
@@ -122,26 +122,17 @@ export function SubmitReviewModal({
           ) : null}
         </div>
 
-        <div className="flex items-center justify-between border-t border-line px-4 py-3">
+        <div className="flex items-center justify-between border-t border-line px-5 py-3.5">
           <span className="text-xs text-faint">⌘↵ to submit · Esc to cancel</span>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded px-3 py-1.5 text-xs text-muted hover:bg-elevated hover:text-fg"
-            >
+            <button type="button" onClick={onClose} className="q-btn q-btn-ghost">
               Cancel
             </button>
             <button
               type="button"
               onClick={submit}
               disabled={!canSubmit}
-              className={cn(
-                "rounded px-3 py-1.5 text-xs font-medium",
-                canSubmit
-                  ? "bg-accent text-accent-fg hover:opacity-90"
-                  : "cursor-not-allowed bg-elevated text-faint",
-              )}
+              className="q-btn q-btn-primary"
             >
               {busy ? "Submitting…" : "Submit review"}
             </button>

@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
 import { useHotkeys } from "../../keyboard";
 import { useAppStore } from "../../store/appStore";
 import { useInbox } from "../../hooks/useInbox";
 import { prefetchPullRequest } from "../../hooks/usePullRequestDetail";
 import { prKey } from "../../types";
 import type { InboxData, InboxTabKey, PullRequest } from "../../types";
-import { cn } from "../../lib/cn";
+import { formatRelativeTime, formatAbsolute } from "../../lib/time";
 import { Spinner } from "../ui/Spinner";
 import { Badge } from "../ui/Badge";
 import { EmptyState } from "../ui/EmptyState";
+import { Avatar } from "../ui/Avatar";
+import { Markdown } from "../Markdown";
 import { PRListItem } from "./PRListItem";
 
 const TABS: { key: InboxTabKey; label: string; hint: string }[] = [
@@ -45,25 +46,12 @@ export function Inbox() {
   const selectedKey = useAppStore((s) => s.inboxSelectedKey);
   const setSelectedKey = useAppStore((s) => s.setInboxSelectedKey);
 
-  const [search, setSearch] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
-
-  const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  // Whether the cursor is being driven by keyboard or pointer (gates hover wash).
+  const [listMode, setListMode] = useState<"keyboard" | "mouse">("mouse");
 
   const inbox = data ?? EMPTY;
-  const prs = inbox[tab].prs;
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return prs;
-    return prs.filter(
-      (pr) =>
-        pr.title.toLowerCase().includes(q) ||
-        pr.repo.toLowerCase().includes(q) ||
-        pr.author.toLowerCase().includes(q),
-    );
-  }, [prs, search]);
+  const filtered = inbox[tab].prs;
 
   // Resolve the selected PR key to a position in the current list (follows the
   // PR through reorders/filtering; falls back to the top if it's gone).
@@ -92,55 +80,40 @@ export function Inbox() {
     return () => clearTimeout(timer);
   }, [selectedIndex, filtered]);
 
-  // Focus the search field whenever it opens.
-  useEffect(() => {
-    if (searchOpen) searchRef.current?.focus();
-  }, [searchOpen]);
-
-  const open = (index: number) => {
-    const pr = filtered[index];
-    if (!pr) return;
+  const openPR = (pr: PullRequest) => {
     setSelectedKey(keyFor(pr));
     markSeen(keyFor(pr), pr.updatedAt);
     openReview(pr.owner, pr.name, pr.number);
+  };
+  const open = (index: number) => {
+    const pr = filtered[index];
+    if (pr) openPR(pr);
   };
 
   const selectTab = (key: InboxTabKey) => {
     setTab(key);
     setSelectedKey(null);
   };
+  const cycleTab = (dir: number) => {
+    const order = TABS.map((t) => t.key);
+    const i = order.indexOf(tab);
+    selectTab(order[(i + dir + order.length) % order.length]);
+  };
 
   const moveTo = (index: number) => {
     const pr = filtered[index];
     if (pr) setSelectedKey(keyFor(pr));
   };
-  const next = () => moveTo(Math.min(selectedIndex + 1, filtered.length - 1));
-  const prev = () => moveTo(Math.max(selectedIndex - 1, 0));
-
-  const openSearch = () => {
-    setSearch("");
-    setSearchOpen(true);
+  // Keyboard nav flips the list into "keyboard mode" so a stale pointer :hover
+  // doesn't leave a second row lit under the cursor.
+  const next = () => {
+    setListMode("keyboard");
+    moveTo(Math.min(selectedIndex + 1, filtered.length - 1));
   };
-  const closeSearch = () => {
-    setSearch("");
-    setSearchOpen(false);
+  const prev = () => {
+    setListMode("keyboard");
+    moveTo(Math.max(selectedIndex - 1, 0));
   };
-
-  function onSearchKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      next();
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      prev();
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      open(selectedIndex);
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      closeSearch();
-    }
-  }
 
   useHotkeys("inbox", [
     { keys: ["j", "down"], description: "Next PR", group: "Navigation", run: next },
@@ -151,7 +124,7 @@ export function Inbox() {
       group: "Navigation",
       run: () => open(selectedIndex),
     },
-    { keys: "/", description: "Search", group: "General", run: openSearch },
+    { keys: "tab", description: "Next tab", group: "Tabs", run: () => cycleTab(1) },
     { keys: "1", description: "Tab: Review requests", group: "Tabs", run: () => selectTab("reviewRequested") },
     { keys: "2", description: "Tab: Assigned", group: "Tabs", run: () => selectTab("assigned") },
     { keys: "3", description: "Tab: Created", group: "Tabs", run: () => selectTab("created") },
@@ -159,11 +132,12 @@ export function Inbox() {
   ]);
 
   const activeTab = TABS.find((t) => t.key === tab) ?? TABS[0];
+  const selectedPR = filtered[selectedIndex];
 
   return (
     <div className="flex h-full flex-col">
       {/* Tabs (also serve as the header) */}
-      <div className="flex shrink-0 items-center gap-1 border-b border-line bg-surface px-2">
+      <div className="qi-tabs shrink-0 border-b border-line px-3">
         {TABS.map((t, i) => {
           const active = t.key === tab;
           return (
@@ -172,39 +146,16 @@ export function Inbox() {
               type="button"
               onClick={() => selectTab(t.key)}
               title={`${t.hint} (${i + 1})`}
-              className={cn(
-                "-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm",
-                active
-                  ? "border-accent text-fg"
-                  : "border-transparent text-muted hover:text-fg",
-              )}
+              className="qi-tab"
+              data-state={active ? "active" : "inactive"}
             >
               {t.label}
-              <Badge tone={active ? "accent" : "muted"}>{inbox[t.key].count}</Badge>
+              <span className="qi-tab-count">{inbox[t.key].count}</span>
             </button>
           );
         })}
       </div>
 
-      {/* Transient search — opened with "/", arrows to move, Enter to open, Esc to close */}
-      {searchOpen && (
-        <div className="shrink-0 border-b border-line bg-surface px-3 py-1.5">
-          <input
-            ref={searchRef}
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={onSearchKeyDown}
-            onBlur={() => {
-              if (!search) setSearchOpen(false);
-            }}
-            placeholder="Search PRs…   ↑↓ move · ↵ open · Esc close"
-            className="w-full rounded-card border border-line bg-bg px-3 py-1.5 text-sm text-fg placeholder:text-faint focus:border-accent focus:outline-none"
-          />
-        </div>
-      )}
-
-      {/* List */}
       {isLoading && !data ? (
         <div className="flex flex-1 items-center justify-center">
           <Spinner label="Loading pull requests…" />
@@ -219,43 +170,150 @@ export function Inbox() {
             <button
               type="button"
               onClick={() => void refetch()}
-              className="mt-3 rounded-card border border-line px-3 py-1.5 text-sm text-fg hover:bg-elevated"
+              className="q-btn q-btn-quiet mt-3"
             >
               Retry
             </button>
           </div>
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center px-6">
-          {search ? (
-            <EmptyState title="No matches" hint={`No PRs match “${search}”.`} />
-          ) : tab === "reviewRequested" ? (
-            <EmptyState
-              icon="✓"
-              title="Inbox zero — no review requests"
-              hint="Nothing is waiting on your review. New requests show up here and pop a notification."
-            />
+      ) : (
+        // Two-pane: a dense list left, a reading pane for the selected PR right.
+        <div className="grid min-h-0 flex-1 grid-cols-[1fr_380px] max-[900px]:grid-cols-1">
+          <div
+            ref={listRef}
+            role="listbox"
+            aria-label={activeTab.label}
+            data-mode={listMode}
+            onMouseMove={() => {
+              if (listMode !== "mouse") setListMode("mouse");
+            }}
+            className="q-inbox-list min-h-0 overflow-y-auto border-r border-line py-1.5"
+          >
+            {filtered.length === 0 ? (
+              <div className="flex h-full items-center justify-center px-6">
+                {tab === "reviewRequested" ? (
+                  <EmptyState
+                    icon="✓"
+                    title="Inbox zero — no review requests"
+                    hint="Nothing is waiting on your review. New requests show up here and pop a notification."
+                  />
+                ) : (
+                  <EmptyState
+                    title={`No PRs in “${activeTab.label}”`}
+                    hint={activeTab.hint}
+                  />
+                )}
+              </div>
+            ) : (
+              filtered.map((pr, i) => (
+                <div key={pr.id} data-index={i}>
+                  <PRListItem
+                    pr={pr}
+                    selected={i === selectedIndex}
+                    unread={isUnread(keyFor(pr), pr.updatedAt)}
+                    onOpen={() => open(i)}
+                    onHover={() => {
+                      // Hover moves the cursor (and the reading pane); click opens.
+                      setSelectedKey(keyFor(pr));
+                      prefetchPullRequest(pr.owner, pr.name, pr.number);
+                    }}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+
+          {selectedPR ? (
+            <InboxDetail pr={selectedPR} />
           ) : (
-            <EmptyState title={`No PRs in “${activeTab.label}”`} hint={activeTab.hint} />
+            <aside className="hidden items-center justify-center bg-surface px-6 text-center text-sm text-faint min-[900px]:flex">
+              Select a pull request to see its summary.
+            </aside>
           )}
         </div>
-      ) : (
-        <div ref={listRef} className="flex-1 overflow-y-auto">
-          {filtered.map((pr, i) => (
-            <div key={pr.id} data-index={i}>
-              <PRListItem
-                pr={pr}
-                selected={i === selectedIndex}
-                unread={isUnread(keyFor(pr), pr.updatedAt)}
-                onOpen={() => open(i)}
-                onHover={() =>
-                  prefetchPullRequest(pr.owner, pr.name, pr.number)
-                }
-              />
-            </div>
-          ))}
-        </div>
       )}
+    </div>
+  );
+}
+
+/** The reading pane: an expanded summary of the selected inbox PR. */
+function InboxDetail({ pr }: { pr: PullRequest }) {
+  const body = pr.body?.trim() ?? "";
+  const stateTone = pr.draft ? "warning" : pr.merged ? "accent" : "success";
+  const stateLabel = pr.draft ? "Draft" : pr.merged ? "Merged" : "Open";
+
+  return (
+    <aside
+      className="hidden min-h-0 flex-col bg-surface min-[900px]:flex"
+      aria-label="Pull request detail"
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={stateTone}>{stateLabel}</Badge>
+            <span className="font-mono text-xs text-faint">#{pr.number}</span>
+          </div>
+          <h2 className="mt-2 text-[17px] font-bold leading-snug tracking-tight text-fg">
+            {pr.title}
+          </h2>
+          <div className="mt-1 font-mono text-xs text-muted">{pr.repo}</div>
+        </div>
+
+        <div className="flex items-center gap-3 border-y border-line py-3.5">
+          <Avatar url={pr.authorAvatarUrl} name={pr.author} size={26} />
+          <div>
+            <div className="text-sm font-semibold text-fg">{pr.author}</div>
+            <div
+              className="font-mono text-[11px] text-faint"
+              title={formatAbsolute(pr.updatedAt)}
+            >
+              updated {formatRelativeTime(pr.updatedAt)}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard label="changes">
+            <span className="font-mono text-sm">
+              <span className="text-success">+{pr.additions}</span>{" "}
+              <span className="text-danger">−{pr.deletions}</span>
+            </span>
+          </StatCard>
+          <StatCard label="files">
+            <span className="font-mono text-sm text-fg">{pr.changedFiles}</span>
+          </StatCard>
+          <StatCard label="comments">
+            <span className="font-mono text-sm text-fg">{pr.commentsCount}</span>
+          </StatCard>
+          <StatCard label="state">
+            <span className="text-sm font-semibold text-fg">{stateLabel}</span>
+          </StatCard>
+        </div>
+
+        {body && (
+          <div>
+            <div className="q-eyebrow mb-2 block">Description</div>
+            <Markdown>{body}</Markdown>
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function StatCard({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1 rounded-[10px] border border-line bg-surface-2 px-3 py-2.5">
+      {children}
+      <span className="text-[10px] uppercase tracking-wider text-faint">
+        {label}
+      </span>
     </div>
   );
 }

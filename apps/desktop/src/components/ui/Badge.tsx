@@ -3,13 +3,14 @@ import { cn } from "../../lib/cn";
 
 type Tone = "default" | "accent" | "success" | "danger" | "warning" | "muted";
 
+/** Map tones onto the shared Quiet pill variants. */
 const toneClasses: Record<Tone, string> = {
-  default: "bg-elevated text-fg border border-line",
-  accent: "bg-accent/15 text-accent border border-accent/30",
-  success: "bg-success/15 text-success border border-success/30",
-  danger: "bg-danger/15 text-danger border border-danger/30",
-  warning: "bg-warning/15 text-warning border border-warning/30",
-  muted: "bg-surface-2 text-muted border border-line",
+  default: "q-pill-muted",
+  accent: "q-pill-commented",
+  success: "q-pill-open",
+  danger: "q-pill-changes",
+  warning: "q-pill-draft",
+  muted: "q-pill-muted",
 };
 
 export function Badge({
@@ -22,14 +23,6 @@ export function Badge({
   className?: string;
 }) {
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium leading-none",
-        toneClasses[tone],
-        className,
-      )}
-    >
-      {children}
-    </span>
+    <span className={cn("q-pill", toneClasses[tone], className)}>{children}</span>
   );
 }

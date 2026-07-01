@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent } from "react";
-import { cn } from "../../lib/cn";
+import { Layers, Send } from "lucide-react";
+import { Kbd } from "../ui/Kbd";
 
 interface AddCommentBoxProps {
   onSubmit: (body: string) => Promise<void> | void;
@@ -14,6 +15,12 @@ interface AddCommentBoxProps {
   secondaryLabel?: string;
 }
 
+/**
+ * The inline comment composer. When a secondary action is provided (the diff
+ * "add to review" vs. "comment now" choice) it shows a segmented control that
+ * makes the mode explicit, and the primary button + ⌘↵ follow the chosen mode.
+ * Replies and issue comments (no secondary) fall back to a single button.
+ */
 export function AddCommentBox({
   onSubmit,
   onCancel,
@@ -22,11 +29,16 @@ export function AddCommentBox({
   autoFocus,
   submitLabel = "Comment",
   onSecondary,
-  secondaryLabel,
+  secondaryLabel = "Comment now",
 }: AddCommentBoxProps) {
   const [text, setText] = useState("");
+  const [mode, setMode] = useState<"batch" | "now">("batch");
   const trimmed = text.trim();
   const canSubmit = !pending && trimmed.length > 0;
+
+  const primaryAction =
+    onSecondary && mode === "now" ? onSecondary : onSubmit;
+  const primaryLabel = onSecondary && mode === "now" ? secondaryLabel : submitLabel;
 
   async function run(action: (body: string) => Promise<void> | void) {
     if (!canSubmit) return;
@@ -37,7 +49,7 @@ export function AddCommentBox({
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
-      void run(onSubmit);
+      void run(primaryAction);
     } else if (e.key === "Escape") {
       e.preventDefault();
       onCancel();
@@ -45,60 +57,68 @@ export function AddCommentBox({
   }
 
   return (
-    <div className="rounded-card border border-line bg-surface-2 p-2">
+    <div className="qa-inline">
       <textarea
         autoFocus={autoFocus}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={placeholder ?? "Leave a comment…"}
+        placeholder={placeholder ?? "Leave a comment…  ⌘↵ to save"}
         rows={3}
-        className={cn(
-          "w-full resize-y rounded border border-line bg-bg px-2 py-1.5",
-          "font-mono text-xs text-fg placeholder:text-faint",
-          "focus:border-accent focus:outline-none",
-        )}
+        className="q-input qa-textarea"
       />
-      <div className="mt-2 flex items-center justify-between">
-        <span className="text-xs text-faint">⌘↵ to submit · Esc to cancel</span>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded px-2.5 py-1 text-xs text-muted hover:bg-elevated hover:text-fg"
-          >
-            Cancel
-          </button>
-          {onSecondary && (
+
+      <div className="qa-foot">
+        {onSecondary ? (
+          <div className="qa-seg" role="radiogroup" aria-label="When to post">
             <button
               type="button"
-              onClick={() => void run(onSecondary)}
-              disabled={!canSubmit}
-              className={cn(
-                "rounded border border-line px-2.5 py-1 text-xs font-medium",
-                canSubmit
-                  ? "text-fg hover:bg-elevated"
-                  : "cursor-not-allowed text-faint",
-              )}
+              role="radio"
+              aria-checked={mode === "batch"}
+              className={"qa-seg-btn q-focus" + (mode === "batch" ? " qa-seg-on" : "")}
+              onClick={() => setMode("batch")}
             >
-              {secondaryLabel ?? "Secondary"}
+              <Layers size={13} aria-hidden />
+              {submitLabel}
             </button>
-          )}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={mode === "now"}
+              className={"qa-seg-btn q-focus" + (mode === "now" ? " qa-seg-on" : "")}
+              onClick={() => setMode("now")}
+            >
+              <Send size={13} aria-hidden />
+              {secondaryLabel}
+            </button>
+          </div>
+        ) : (
+          <span className="text-xs text-faint">⌘↵ to submit · Esc to cancel</span>
+        )}
+
+        <div className="qa-actions">
+          <button type="button" onClick={onCancel} className="q-btn q-btn-ghost">
+            Cancel
+          </button>
           <button
             type="button"
-            onClick={() => void run(onSubmit)}
+            onClick={() => void run(primaryAction)}
             disabled={!canSubmit}
-            className={cn(
-              "rounded px-2.5 py-1 text-xs font-medium",
-              canSubmit
-                ? "bg-accent text-accent-fg hover:opacity-90"
-                : "cursor-not-allowed bg-elevated text-faint",
-            )}
+            className="q-btn q-btn-primary"
           >
-            {pending ? "Submitting…" : submitLabel}
+            {pending ? "Submitting…" : primaryLabel}
+            <Kbd combo="mod+enter" />
           </button>
         </div>
       </div>
+
+      {onSecondary && (
+        <p className="qa-explain">
+          {mode === "batch"
+            ? "Held with your other pending comments until you submit the review."
+            : "Posted to the PR immediately, on its own."}
+        </p>
+      )}
     </div>
   );
 }

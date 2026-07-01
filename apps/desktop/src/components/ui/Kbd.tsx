@@ -1,8 +1,7 @@
 import { Fragment } from "react";
 import { cn } from "../../lib/cn";
 
-const capClass =
-  "inline-flex min-w-[1.4em] justify-center rounded border border-line bg-elevated px-1.5 py-0.5 text-xs font-mono text-muted";
+const capClass = "q-kbd";
 
 const NAMED: Record<string, string> = {
   mod: "⌘",

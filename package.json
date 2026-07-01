@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter @pr-flow/desktop dev",
+    "dev:desktop": "pnpm --filter @pr-flow/desktop tauri dev",
     "build": "pnpm --filter @pr-flow/desktop build",
     "tauri": "pnpm --filter @pr-flow/desktop tauri",
     "lab": "pnpm --filter @pr-flow/design-lab dev",

@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { ChangedFile, FileStatus } from "../../types";
+import { useEffect, useMemo, useRef } from "react";
+import { Check } from "lucide-react";
+import type {
+  ChangedFile,
+  FileStatus,
+  PendingComment,
+  ReviewComment,
+} from "../../types";
 import { useAppStore } from "../../store/appStore";
 import { cn } from "../../lib/cn";
 
@@ -8,197 +14,185 @@ interface FileSidebarProps {
   selectedIndex: number;
   onSelect: (i: number) => void;
   prKeyValue: string;
+  comments: ReviewComment[];
+  pending: PendingComment[];
 }
 
-interface StatusGlyph {
+interface Glyph {
   letter: string;
-  className: string;
+  cls: string;
   title: string;
 }
 
-function statusGlyph(status: FileStatus): StatusGlyph {
+function glyphFor(status: FileStatus): Glyph {
   switch (status) {
     case "added":
-      return { letter: "A", className: "text-success", title: "Added" };
+      return { letter: "A", cls: "qf-st-add", title: "Added" };
     case "removed":
-      return { letter: "D", className: "text-danger", title: "Removed" };
+      return { letter: "D", cls: "qf-st-del", title: "Removed" };
     case "renamed":
-      return { letter: "R", className: "text-accent", title: "Renamed" };
+      return { letter: "R", cls: "qf-st-ren", title: "Renamed" };
     case "copied":
-      return { letter: "C", className: "text-accent", title: "Copied" };
+      return { letter: "C", cls: "qf-st-ren", title: "Copied" };
     default:
-      return { letter: "M", className: "text-warning", title: "Modified" };
+      return { letter: "M", cls: "qf-st-mod", title: "Modified" };
   }
 }
 
+/** Split a path into a trailing-slashed dir and its basename. */
 function splitPath(filename: string): { dir: string; base: string } {
   const idx = filename.lastIndexOf("/");
   if (idx === -1) return { dir: "", base: filename };
-  return { dir: filename.slice(0, idx), base: filename.slice(idx + 1) };
+  return { dir: filename.slice(0, idx + 1), base: filename.slice(idx + 1) };
 }
 
+/**
+ * The Quiet review sidebar: a flat file list fronted by the signature FLOW RAIL
+ * — one segment per changed file that fills with the iris accent as files are
+ * marked viewed (the brightest segment is the current file). Directory grouping
+ * is intentionally dropped for the calm flat list; a filter stays as a
+ * lightweight refinement.
+ */
 export function FileSidebar({
   files,
   selectedIndex,
   onSelect,
   prKeyValue,
+  comments,
+  pending,
 }: FileSidebarProps) {
-  const [filter, setFilter] = useState("");
-  const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(
-    () => new Set(),
-  );
-  // Subscribe to THIS PR's viewed list so checkmarks/count re-render on toggle.
+  // Subscribe to THIS PR's viewed list so the rail + rows re-render on toggle.
   const viewedFiles = useAppStore((s) => s.viewed[prKeyValue]);
   const viewedSet = useMemo(() => new Set(viewedFiles ?? []), [viewedFiles]);
 
   const listRef = useRef<HTMLDivElement>(null);
+
+  // Per-file thread (root comment) + pending counts for the row badges.
+  const threadCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of comments) {
+      if (c.inReplyToId != null) continue; // roots only
+      m.set(c.path, (m.get(c.path) ?? 0) + 1);
+    }
+    return m;
+  }, [comments]);
+  const pendingCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of pending) m.set(p.path, (m.get(p.path) ?? 0) + 1);
+    return m;
+  }, [pending]);
 
   const indexed = useMemo(
     () => files.map((file, index) => ({ file, index })),
     [files],
   );
 
-  const filtered = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    if (!q) return indexed;
-    return indexed.filter(({ file }) =>
-      file.filename.toLowerCase().includes(q),
-    );
-  }, [indexed, filter]);
-
-  // Group files by directory, preserving order.
-  const groups = useMemo(() => {
-    const m = new Map<string, { file: ChangedFile; index: number }[]>();
-    for (const it of filtered) {
-      const dir = splitPath(it.file.filename).dir;
-      const arr = m.get(dir) ?? [];
-      arr.push(it);
-      m.set(dir, arr);
-    }
-    return Array.from(m.entries());
-  }, [filtered]);
-
-  // Make sure the selected file's directory is expanded.
-  useEffect(() => {
-    const f = files[selectedIndex];
-    if (!f) return;
-    const dir = splitPath(f.filename).dir;
-    setCollapsedDirs((prev) => {
-      if (!prev.has(dir)) return prev;
-      const n = new Set(prev);
-      n.delete(dir);
-      return n;
-    });
-  }, [selectedIndex, files]);
-
-  // Scroll the selected file into view (e.g. after n/p navigation).
+  // Scroll the selected file into view (e.g. after r/t navigation).
   useEffect(() => {
     const el = listRef.current?.querySelector<HTMLElement>(
       `[data-file-index="${selectedIndex}"]`,
     );
     el?.scrollIntoView({ block: "nearest" });
-  }, [selectedIndex, collapsedDirs]);
-
-  function toggleDir(dir: string) {
-    setCollapsedDirs((prev) => {
-      const n = new Set(prev);
-      if (n.has(dir)) n.delete(dir);
-      else n.add(dir);
-      return n;
-    });
-  }
+  }, [selectedIndex]);
 
   return (
-    <div className="flex h-full flex-col bg-surface">
-      <div className="border-b border-line px-3 py-2.5">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-fg">Files</span>
-          <span className="text-xs text-muted">
-            {viewedSet.size}/{files.length} viewed
-          </span>
-        </div>
-        <input
-          type="text"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter files…"
-          className={cn(
-            "mt-2 w-full rounded border border-line bg-bg px-2 py-1 text-xs",
-            "text-fg placeholder:text-faint focus:border-accent focus:outline-none",
-          )}
-        />
+    <div className="qf-sidebar flex h-full flex-col">
+      <div className="qf-side-head flex items-center justify-between px-4 py-3">
+        <span className="qf-side-title">Files</span>
+        <span className="qf-side-count">
+          {viewedSet.size}/{files.length} viewed
+        </span>
       </div>
 
-      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto py-1">
-        {groups.map(([dir, items]) => {
-          const collapsed = !filter && collapsedDirs.has(dir);
-          return (
-            <div key={dir || "/"}>
-              <button
-                type="button"
-                onClick={() => toggleDir(dir)}
-                title={dir || "/"}
-                className="flex w-full items-center gap-1.5 px-2 py-1 text-left text-[11px] text-muted hover:bg-surface-2/60"
-              >
-                <span className="select-none text-faint">
-                  {collapsed ? "▸" : "▾"}
-                </span>
-                <span className="min-w-0 flex-1 truncate font-medium">
-                  {dir || "/"}
-                </span>
-                <span className="shrink-0 text-faint">{items.length}</span>
-              </button>
+      <div className="flex min-h-0 flex-1">
+        {/* THE SIGNATURE: flow rail — one segment per changed file (all files). */}
+        <div className="qf-rail" aria-hidden>
+          {files.map((f, i) => (
+            <div
+              key={f.filename}
+              className={cn(
+                "qf-rail-seg",
+                viewedSet.has(f.filename) && "qf-rail-viewed",
+                i === selectedIndex && "qf-rail-current",
+              )}
+            />
+          ))}
+        </div>
 
-              {!collapsed &&
-                items.map(({ file, index }) => {
-                  const glyph = statusGlyph(file.status);
-                  const { base } = splitPath(file.filename);
-                  const selected = index === selectedIndex;
-                  const viewed = viewedSet.has(file.filename);
-                  return (
-                    <button
-                      key={file.filename}
-                      type="button"
-                      data-file-index={index}
-                      onClick={() => onSelect(index)}
-                      title={file.filename}
-                      className={cn(
-                        "flex w-full items-center gap-2 border-l-2 py-1 pl-5 pr-3 text-left",
-                        selected
-                          ? "border-accent bg-surface-2"
-                          : "border-transparent hover:bg-surface-2/60",
-                        viewed && !selected && "opacity-60",
-                      )}
+        {/* flat file list */}
+        <nav
+          ref={listRef}
+          className="qf-filelist min-h-0 flex-1 overflow-y-auto py-1"
+        >
+          {indexed.map(({ file, index }) => {
+            const glyph = glyphFor(file.status);
+            const { dir, base } = splitPath(file.filename);
+            const on = index === selectedIndex;
+            const isViewed = viewedSet.has(file.filename);
+            const threads = threadCounts.get(file.filename) ?? 0;
+            const pend = pendingCounts.get(file.filename) ?? 0;
+            return (
+              <button
+                key={file.filename}
+                type="button"
+                data-file-index={index}
+                onClick={() => onSelect(index)}
+                aria-current={on}
+                title={file.filename}
+                className={cn(
+                  "qf-file qf-focusable",
+                  on && "qf-file-active",
+                  isViewed && "qf-file-viewed",
+                )}
+              >
+                <span
+                  className={cn("qf-file-glyph", glyph.cls)}
+                  title={glyph.title}
+                >
+                  {glyph.letter}
+                </span>
+                <span className="qf-file-name">
+                  <span className="qf-file-dir">{dir}</span>
+                  <span className="qf-file-base">{base}</span>
+                </span>
+                <span className="qf-file-meta">
+                  {threads > 0 && (
+                    <span
+                      className="qf-file-badge qf-file-badge-comment"
+                      title={`${threads} thread${threads > 1 ? "s" : ""}`}
                     >
-                      <span
-                        className={cn(
-                          "w-3 font-mono text-xs font-bold",
-                          glyph.className,
-                        )}
-                        title={glyph.title}
-                      >
-                        {glyph.letter}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-xs font-medium text-fg">
-                        {base}
-                      </span>
-                      <span className="shrink-0 font-mono text-[11px]">
-                        <span className="text-success">+{file.additions}</span>{" "}
-                        <span className="text-danger">−{file.deletions}</span>
-                      </span>
-                      <span className="w-3 shrink-0 text-center text-xs">
-                        {viewed ? (
-                          <span className="text-success">✓</span>
-                        ) : (
-                          <span className="text-faint">○</span>
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
+                      {threads}
+                    </span>
+                  )}
+                  {pend > 0 && (
+                    <span
+                      className="qf-file-badge qf-file-badge-pending"
+                      title={`${pend} pending`}
+                    >
+                      {pend}
+                    </span>
+                  )}
+                  <span className="qf-file-stat">
+                    <span className="qf-add">+{file.additions}</span>
+                    <span className="qf-del">−{file.deletions}</span>
+                  </span>
+                  {isViewed && (
+                    <Check
+                      size={13}
+                      className="qf-file-check"
+                      aria-label="Viewed"
+                    />
+                  )}
+                </span>
+              </button>
+            );
+          })}
+          {indexed.length === 0 && (
+            <div className="px-4 py-6 text-center text-xs text-faint">
+              No files changed.
             </div>
-          );
-        })}
+          )}
+        </nav>
       </div>
     </div>
   );
