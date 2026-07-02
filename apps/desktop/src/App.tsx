@@ -28,6 +28,25 @@ export default function App() {
 
   useLoadViewed();
 
+  // Overlay scrollbars: thumbs are invisible until their container actually
+  // scrolls (see index.css). Capture-phase so every scroll container reports.
+  useEffect(() => {
+    const timers = new WeakMap<Element, number>();
+    function onScroll(e: Event) {
+      const el = e.target;
+      if (!(el instanceof HTMLElement)) return;
+      el.classList.add("is-scrolling");
+      const t = timers.get(el);
+      if (t) window.clearTimeout(t);
+      timers.set(
+        el,
+        window.setTimeout(() => el.classList.remove("is-scrolling"), 800),
+      );
+    }
+    window.addEventListener("scroll", onScroll, true);
+    return () => window.removeEventListener("scroll", onScroll, true);
+  }, []);
+
   // Boot: token gate, or resume the screen you were last on (falling back to
   // the inbox). `setRoute` here intentionally restores the persisted route.
   useEffect(() => {
@@ -100,8 +119,13 @@ export default function App() {
 
   const baseScope = route.name === "review" ? "review" : "inbox";
 
+  // macOS runs with titleBarStyle: Overlay — the traffic lights float over our
+  // canvas, and this slim strip gives them room and acts as the drag handle.
+  const isMac = navigator.userAgent.includes("Macintosh");
+
   return (
     <div className="q-canvas flex h-full flex-col">
+      {isMac && <div data-tauri-drag-region className="q-titlebar shrink-0" />}
       <div className="min-h-0 flex-1">
         {route.name === "loading" && (
           <div className="flex h-full items-center justify-center">

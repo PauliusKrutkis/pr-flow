@@ -3,6 +3,8 @@ import { Search } from "lucide-react";
 import { useKeyboard, useHotkeys } from "../keyboard";
 import { useAppStore } from "../store/appStore";
 import { cn } from "../lib/cn";
+import { fuzzyMatch } from "../lib/fuzzy";
+import { HighlightIndices } from "./ui/Highlight";
 import { Kbd } from "./ui/Kbd";
 
 interface Entry {
@@ -57,9 +59,14 @@ export function CommandPalette({ baseScope }: { baseScope: string }) {
   }, [paletteOpen, baseScope, getBindings, version, closePalette]);
 
   const entries = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return commandEntries;
-    return commandEntries.filter((e) => e.label.toLowerCase().includes(q));
+    const q = query.trim();
+    if (!q) return commandEntries.map((e) => ({ ...e, matched: [] as number[] }));
+    return commandEntries
+      .flatMap((e) => {
+        const m = fuzzyMatch(q, e.label);
+        return m ? [{ ...e, matched: m.indices, score: m.score }] : [];
+      })
+      .sort((a, b) => b.score - a.score);
   }, [commandEntries, query]);
 
   useEffect(() => {
@@ -157,7 +164,9 @@ export function CommandPalette({ baseScope }: { baseScope: string }) {
                   <span className="qc-opt-icon" aria-hidden>
                     {entry.icon && <entry.icon size={14} />}
                   </span>
-                  <span className="qc-opt-label">{entry.label}</span>
+                  <span className="qc-opt-label">
+                    <HighlightIndices text={entry.label} indices={entry.matched} />
+                  </span>
                   {entry.group && <span className="qc-opt-sub">{entry.group}</span>}
                   {entry.keyCombo && <Kbd combo={entry.keyCombo} />}
                 </button>

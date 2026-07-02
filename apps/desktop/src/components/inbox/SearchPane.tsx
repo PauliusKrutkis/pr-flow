@@ -5,7 +5,8 @@ import { formatRelativeTime } from "../../lib/time";
 import { Avatar } from "../ui/Avatar";
 import { Kbd } from "../ui/Kbd";
 import { Badge } from "../ui/Badge";
-import { HighlightMatch } from "../ui/Highlight";
+import { HighlightIndices } from "../ui/Highlight";
+import { fuzzyMatchFields } from "../../lib/fuzzy";
 
 /**
  * Search pane — the Superhuman move: `/` doesn't drop a filter field into the
@@ -30,15 +31,23 @@ export function SearchPane({
   const listRef = useRef<HTMLDivElement>(null);
 
   const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return prs.slice(0, 8);
-    return prs.filter(
-      (pr) =>
-        String(pr.number).includes(q) ||
-        pr.title.toLowerCase().includes(q) ||
-        pr.author.toLowerCase().includes(q) ||
-        pr.repo.toLowerCase().includes(q),
-    );
+    const q = query.trim();
+    if (!q) {
+      return prs.slice(0, 8).map((pr) => ({ pr, hl: {} as Record<string, number[]> }));
+    }
+    // Fuzzy across every visible field; rank by the best-matching field.
+    const out: { pr: PullRequest; hl: Record<string, number[]>; score: number }[] = [];
+    for (const pr of prs) {
+      const m = fuzzyMatchFields(q, {
+        title: pr.title,
+        number: `#${pr.number}`,
+        author: pr.author,
+        repo: pr.repo,
+      });
+      if (m) out.push({ pr, hl: m.indices, score: m.score });
+    }
+    out.sort((a, b) => b.score - a.score);
+    return out;
   }, [query, prs]);
 
   useEffect(() => setSel(0), [query]);
@@ -68,9 +77,9 @@ export function SearchPane({
       setSel((s) => Math.max(s - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const pr = results[sel];
-      if (pr) {
-        onOpen(pr);
+      const r = results[sel];
+      if (r) {
+        onOpen(r.pr);
         onOpenChange(false);
       }
     } else if (e.key === "Escape") {
@@ -115,7 +124,7 @@ export function SearchPane({
               <Clock size={12} aria-hidden /> Pull requests
             </div>
           )}
-          {results.map((pr, i) => (
+          {results.map(({ pr, hl }, i) => (
             <div
               key={pr.id}
               role="option"
@@ -130,21 +139,28 @@ export function SearchPane({
             >
               <span className="qsp-rail" aria-hidden />
               <span className="qsp-num">
-                <HighlightMatch text={`#${pr.number}`} query={query} />
+                <HighlightIndices text={`#${pr.number}`} indices={hl.number ?? []} />
               </span>
               <span className="qsp-main">
                 <span className="qsp-title">
                   <span>
-                    <HighlightMatch text={pr.title} query={query} />
+                    <HighlightIndices text={pr.title} indices={hl.title ?? []} />
                   </span>
                   {pr.draft && <Badge tone="warning">Draft</Badge>}
                   {pr.merged && <Badge tone="accent">Merged</Badge>}
                 </span>
+                {/* Each field is wrapped in its own span: the meta row is a flex
+                    container, and bare highlight fragments would become flex
+                    items — the gap would split the word around the mark. */}
                 <span className="qsp-meta">
                   <Avatar url={pr.authorAvatarUrl} name={pr.author} size={14} />
-                  <HighlightMatch text={pr.author} query={query} />
+                  <span>
+                    <HighlightIndices text={pr.author} indices={hl.author ?? []} />
+                  </span>
                   <span className="q-dot">·</span>
-                  <HighlightMatch text={pr.repo} query={query} />
+                  <span>
+                    <HighlightIndices text={pr.repo} indices={hl.repo ?? []} />
+                  </span>
                 </span>
               </span>
               <span className="qsp-time q-mono">

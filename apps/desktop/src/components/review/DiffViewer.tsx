@@ -474,10 +474,17 @@ export function DiffViewer({
     return null;
   }
 
-  function moveCursor(delta: number) {
+  // Holding j/k accelerates: after ~1s of key-repeat the cursor moves 3 lines
+  // per repeat, after ~2.5s six — long diffs stay traversable without paging.
+  const heldRepeatsRef = useRef(0);
+
+  function moveCursor(delta: number, isRepeat = false) {
     keyboardHoldRef.current = true;
     if (inputMode !== "keyboard") setInputMode("keyboard");
-    pendingDeltaRef.current += delta;
+    heldRepeatsRef.current = isRepeat ? heldRepeatsRef.current + 1 : 0;
+    const held = heldRepeatsRef.current;
+    const multiplier = held >= 40 ? 6 : held >= 15 ? 3 : 1;
+    pendingDeltaRef.current += delta * multiplier;
     if (rafRef.current == null) {
       rafRef.current = requestAnimationFrame(flushCursor);
     }
@@ -500,14 +507,14 @@ export function DiffViewer({
         description: "Next line",
         group: "Navigation",
         icon: ArrowDown,
-        run: () => moveCursor(1),
+        run: (e) => moveCursor(1, e.repeat),
       },
       {
         keys: ["k", "up"],
         description: "Previous line",
         group: "Navigation",
         icon: ArrowUp,
-        run: () => moveCursor(-1),
+        run: (e) => moveCursor(-1, e.repeat),
       },
       {
         keys: "c",

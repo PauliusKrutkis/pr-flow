@@ -3,6 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { ArrowLeft } from "lucide-react";
 import { api } from "../lib/api";
 import { useAppStore } from "../store/appStore";
+import { useHotkeys } from "../keyboard";
 import { cn } from "../lib/cn";
 import { Spinner } from "./ui/Spinner";
 
@@ -48,6 +49,19 @@ export function TokenGate() {
       .then(setOauthReady)
       .catch(() => setOauthReady(false));
   }, []);
+
+  // Esc backs out of "add account" — only when there's an inbox to go back to.
+  useHotkeys("token", [
+    {
+      keys: "esc",
+      description: "Back to inbox",
+      group: "Navigation",
+      hidden: !hasAccounts,
+      run: () => {
+        if (hasAccounts) goInbox();
+      },
+    },
+  ]);
 
   // The account changed under the app — reload into the inbox so queries,
   // caches, and viewed state all belong to the new active account.

@@ -3,8 +3,9 @@ import { Search, FileCode, CornerDownLeft } from "lucide-react";
 import type { ChangedFile } from "../../types";
 import { parsePatch } from "../../lib/diff";
 import { highlightLineWithMatch } from "../../lib/highlight";
+import { fuzzyMatch } from "../../lib/fuzzy";
 import { Kbd } from "../ui/Kbd";
-import { fuzzyIndices, HighlightIndices } from "../ui/Highlight";
+import { HighlightIndices } from "../ui/Highlight";
 
 type Mode = "files" | "text";
 
@@ -72,13 +73,20 @@ export function PrSearch({
     const q = query.trim().toLowerCase();
 
     if (mode === "files") {
-      const out: FileItem[] = [];
+      const out: (FileItem & { score: number })[] = [];
       files.forEach((f, i) => {
-        const matched = fuzzyIndices(q, f.filename.toLowerCase());
-        if (matched !== null) {
-          out.push({ kind: "file", fileIndex: i, filename: f.filename, matched });
+        const m = fuzzyMatch(q, f.filename);
+        if (m !== null) {
+          out.push({
+            kind: "file",
+            fileIndex: i,
+            filename: f.filename,
+            matched: m.indices,
+            score: m.score,
+          });
         }
       });
+      out.sort((a, b) => b.score - a.score);
       return out;
     }
 
