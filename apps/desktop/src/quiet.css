@@ -1019,6 +1019,128 @@ textarea.q-input { resize: none; line-height: 1.5; }
 }
 
 /* ===========================================================================
+   THE GATE (TokenGate) — identity, never configuration. One stack of
+   continue-as rows; sub-steps ask a single question and collapse back into
+   rows. The iris rail on hover is the same selection language as the palette
+   and search rows.
+   =========================================================================== */
+.qg-card { width: 100%; max-width: 400px; }
+.qg-logo {
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  background: linear-gradient(135deg, #8b80ff, #6f63e6);
+  box-shadow: 0 0 12px -2px rgba(139, 128, 255, 0.5);
+}
+
+.qg-stack {
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: 13px;
+  overflow: hidden;
+}
+.qg-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 18px;
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 120ms ease;
+}
+.qg-row + .qg-row { border-top: 1px solid var(--line); }
+.qg-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 2.5px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+.qg-row:hover:not(:disabled) { background: var(--accent-soft); }
+.qg-row:hover:not(:disabled)::before { background: var(--accent); box-shadow: 0 0 10px 0 var(--accent-line); }
+.qg-row:disabled { opacity: 0.55; cursor: default; }
+.qg-row svg { color: var(--muted); flex-shrink: 0; transition: color 120ms ease; }
+.qg-row:hover:not(:disabled) svg { color: var(--accent); }
+.qg-row-hint {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--faint);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.qg-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+.qg-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 3px 4px;
+  border-radius: 6px;
+  transition: color 120ms ease;
+}
+.qg-link:hover { color: var(--fg); }
+.qg-link svg { color: var(--faint); }
+
+.qg-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 7px;
+}
+.qg-label-soft { font-weight: 400; color: var(--faint); }
+.qg-reveal { margin-top: 16px; animation: qb-rise 180ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.qg-ok {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--add);
+  margin-bottom: 14px;
+}
+.qg-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 12px;
+  font-size: 11px;
+  color: var(--faint);
+}
+.qg-divider::before,
+.qg-divider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--line);
+}
+@media (prefers-reduced-motion: reduce) {
+  .qg-reveal { animation: none; }
+}
+
+/* ===========================================================================
    INBOX — simplified underline tabs + keyboard/mouse mode gating.
    =========================================================================== */
 .qi-tabs { display: flex; align-items: center; gap: 2px; }

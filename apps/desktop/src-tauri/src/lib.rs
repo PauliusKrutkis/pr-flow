@@ -21,6 +21,7 @@ pub fn run() {
             auth::is_oauth_configured,
             auth::login_with_gitlab,
             auth::is_gitlab_oauth_configured,
+            auth::probe_gitlab,
             accounts::list_accounts,
             accounts::add_account,
             accounts::set_active_account,
