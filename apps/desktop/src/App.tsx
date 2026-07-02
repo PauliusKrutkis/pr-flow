@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Command, HelpCircle, Search } from "lucide-react";
 import { useAppStore, loadLastRoute } from "./store/appStore";
 import { useHotkeys } from "./keyboard";
 import { useLoadViewed } from "./hooks/useViewed";
@@ -41,6 +42,7 @@ export default function App() {
         keys: "mod+k",
         description: "Open command palette",
         group: "General",
+        icon: Command,
         run: () => togglePalette(),
         global: true,
       },
@@ -48,6 +50,7 @@ export default function App() {
         keys: "?",
         description: "Show keyboard shortcuts",
         group: "General",
+        icon: HelpCircle,
         run: () => toggleHelp(),
         global: true,
       },
@@ -55,6 +58,7 @@ export default function App() {
         keys: "/",
         description: "Search pull requests",
         group: "General",
+        icon: Search,
         run: () => setSearchOpen(true),
         global: true,
       },

@@ -1,5 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import {
+  ArrowLeftRight,
+  Check,
+  CheckCheck,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsDown,
+  ChevronsUp,
+  ExternalLink,
+  FileSearch,
+  GitBranch,
+  Inbox,
+  Info,
+  Link,
+  MessageSquare,
+  Search,
+  Send,
+} from "lucide-react";
 import { prKey } from "../../types";
 import type {
   InboxData,
@@ -14,11 +32,12 @@ import { useCommentMutations } from "../../hooks/useComments";
 import { queryClient, queryKeys } from "../../lib/queryClient";
 import { getReviewMemory, updateReviewMemory } from "../../lib/reviewMemory";
 import { usePerfStore } from "../../lib/perf";
+import { cn } from "../../lib/cn";
 import { Spinner } from "../ui/Spinner";
 import { Kbd } from "../ui/Kbd";
 import { Avatar } from "../ui/Avatar";
 import { FileSidebar } from "./FileSidebar";
-import { DiffViewer } from "./DiffViewer";
+import { DiffViewer, type JumpTarget } from "./DiffViewer";
 import { RightPanel } from "./RightPanel";
 import { OrientBanner } from "./OrientBanner";
 import { SubmitReviewModal } from "./SubmitReviewModal";
@@ -54,11 +73,16 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const [prSearch, setPrSearch] = useState<null | "files" | "text">(null);
   // Only shown when the PR's head moves mid-review (never on open).
   const [banner, setBanner] = useState<string | null>(null);
+  // A pending "land on this line" request from in-PR text search.
+  const [jump, setJump] = useState<(JumpTarget & { filename: string }) | null>(
+    null,
+  );
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const pendingId = useRef(0);
   const restoredScrollRef = useRef(false);
   const mountShaRef = useRef("");
+  const jumpNonceRef = useRef(0);
 
   const goInbox = useAppStore((s) => s.goInbox);
   const toggleViewed = useAppStore((s) => s.toggleViewed);
@@ -123,25 +147,60 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     if (el) el.scrollBy({ top: dir * el.clientHeight * 0.85 });
   }
 
-  function nextFile() {
-    if (fileCount === 0) return;
+  // File switching is coalesced per animation frame, mirroring the diff line
+  // cursor: holding r/t (or Tab) accumulates a net delta applied once per
+  // frame, so a burst of key-repeats can't queue up a remount per press.
+  const fileCountRef = useRef(fileCount);
+  fileCountRef.current = fileCount;
+  const fileDeltaRef = useRef(0);
+  const fileRafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (fileRafRef.current != null) cancelAnimationFrame(fileRafRef.current);
+    };
+  }, []);
+
+  function flushFileMove() {
+    fileRafRef.current = null;
+    const delta = fileDeltaRef.current;
+    fileDeltaRef.current = 0;
+    if (delta === 0 || fileCountRef.current === 0) return;
     usePerfStore.getState().markFileStart();
-    setSelectedFileIndex((i) => Math.min(i + 1, fileCount - 1));
+    setSelectedFileIndex((i) =>
+      Math.min(Math.max(i + delta, 0), fileCountRef.current - 1),
+    );
     setCommentIndex(0);
+    setJump(null);
     scrollTop();
   }
-  function prevFile() {
-    if (fileCount === 0) return;
-    usePerfStore.getState().markFileStart();
-    setSelectedFileIndex((i) => Math.max(i - 1, 0));
-    setCommentIndex(0);
-    scrollTop();
+  function moveFile(delta: number) {
+    if (fileCountRef.current === 0) return;
+    fileDeltaRef.current += delta;
+    if (fileRafRef.current == null) {
+      fileRafRef.current = requestAnimationFrame(flushFileMove);
+    }
   }
+  const nextFile = () => moveFile(1);
+  const prevFile = () => moveFile(-1);
+
   function selectFile(i: number) {
     usePerfStore.getState().markFileStart();
     setSelectedFileIndex(i);
     setCommentIndex(0);
+    setJump(null);
     scrollTop();
+  }
+
+  // From text search: open the file AND land on the matched line.
+  function selectLine(fileIndex: number, anchor: string) {
+    const target = files[fileIndex];
+    if (!target) return;
+    usePerfStore.getState().markFileStart();
+    setSelectedFileIndex(fileIndex);
+    setCommentIndex(0);
+    jumpNonceRef.current += 1;
+    setJump({ filename: target.filename, anchor, nonce: jumpNonceRef.current });
   }
 
   function toggleViewedFile() {
@@ -230,54 +289,84 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   }
 
   useHotkeys("review", [
-    { keys: ["r"], description: "Next file", group: "Files", run: nextFile },
-    { keys: ["t"], description: "Previous file", group: "Files", run: prevFile },
+    {
+      keys: ["r"],
+      description: "Next file",
+      group: "Files",
+      icon: ChevronRight,
+      run: nextFile,
+    },
+    {
+      keys: ["t"],
+      description: "Previous file",
+      group: "Files",
+      icon: ChevronLeft,
+      run: prevFile,
+    },
+    {
+      // Tab is repurposed Superhuman-style: instead of wandering focus, it
+      // cycles files (Shift+Tab goes back). This also removes stray focus
+      // rings — focus never leaves the diff.
+      keys: "tab",
+      description: "Next / previous file",
+      group: "Files",
+      icon: ArrowLeftRight,
+      run: (e) => (e.shiftKey ? prevFile() : nextFile()),
+    },
     {
       keys: ["space", "pagedown"],
       description: "Page down",
       group: "Navigation",
+      icon: ChevronsDown,
       run: () => pageScroll(1),
     },
     {
       keys: ["pageup"],
       description: "Page up",
       group: "Navigation",
+      icon: ChevronsUp,
       run: () => pageScroll(-1),
     },
     {
       keys: "]c",
       description: "Next comment",
       group: "Comments",
+      icon: MessageSquare,
       run: () => goToComment(1),
     },
     {
       keys: "[c",
       description: "Previous comment",
       group: "Comments",
+      icon: MessageSquare,
       run: () => goToComment(-1),
     },
     {
       keys: "e",
       description: "Mark viewed & next",
       group: "Files",
+      icon: CheckCheck,
       run: markViewedAndNext,
     },
     {
       keys: "v",
       description: "Toggle file viewed",
       group: "Files",
+      icon: Check,
       run: toggleViewedFile,
     },
     {
       keys: "s",
       description: "Submit review",
       group: "Review",
+      icon: Send,
       run: openSubmit,
     },
     {
       keys: "o",
       description: "Open files on GitHub",
       group: "General",
+      icon: ExternalLink,
       run: () => {
         if (pr) void openUrl(pr.url + "/files");
       },
@@ -286,30 +375,35 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       keys: "y",
       description: "Copy PR link",
       group: "General",
+      icon: Link,
       run: copyLink,
     },
     {
       keys: "i",
       description: "Toggle info panel",
       group: "General",
+      icon: Info,
       run: () => setRightOpen((o) => !o),
     },
     {
       keys: "mod+t",
       description: "Find a file",
       group: "Navigation",
+      icon: FileSearch,
       run: () => setPrSearch("files"),
     },
     {
       keys: "mod+f",
       description: "Search code",
       group: "Navigation",
+      icon: Search,
       run: () => setPrSearch("text"),
     },
     {
       keys: "esc",
       description: "Back to inbox",
       group: "Navigation",
+      icon: Inbox,
       run: goInbox,
     },
   ]);
@@ -406,7 +500,15 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
                 <>
                   <span className="qf-dot">·</span>
                   <span className="qf-branch">
-                    {pr.baseRef} <span className="qf-arrow">←</span> {pr.headRef}
+                    <BranchChip
+                      name={pr.baseRef}
+                      label="Target branch — click to copy"
+                    />
+                    <span className="qf-arrow">←</span>
+                    <BranchChip
+                      name={pr.headRef}
+                      label="PR branch — click to copy"
+                    />
                   </span>
                 </>
               )}
@@ -497,6 +599,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
               file={selectedFile}
               comments={fileComments}
               commitId={pr.headSha}
+              jumpTo={
+                jump && jump.filename === selectedFile.filename ? jump : null
+              }
               pending={pendingForFile}
               onAddPending={addPendingComment}
               onRemovePending={removePendingComment}
@@ -546,8 +651,40 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         onClose={() => setPrSearch(null)}
         files={files}
         onSelectFile={selectFile}
+        onSelectLine={selectLine}
       />
     </div>
+  );
+}
+
+/** A branch name as a copyable chip: click copies the name, the icon confirms. */
+function BranchChip({ name, label }: { name: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+  return (
+    <button
+      type="button"
+      className={cn("qf-branch-chip", copied && "qf-branch-copied")}
+      title={copied ? "Copied" : label}
+      onClick={() => {
+        void navigator.clipboard?.writeText(name).catch(() => {});
+        setCopied(true);
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => setCopied(false), 1200);
+      }}
+    >
+      {copied ? (
+        <Check size={11} aria-hidden />
+      ) : (
+        <GitBranch size={11} aria-hidden />
+      )}
+      {name}
+    </button>
   );
 }
 

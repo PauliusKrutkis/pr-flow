@@ -232,7 +232,13 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
       if (single) {
         e.preventDefault();
         single.run(e);
+        return;
       }
+
+      // Unbound Tab outside a field: swallow it. This is a keyboard-first app —
+      // focus jumping between arbitrary elements (and its focus rings) reads as
+      // noise, so Tab only ever does what a scope explicitly binds it to.
+      if (key === "tab") e.preventDefault();
     }
 
     window.addEventListener("keydown", onKeyDown);

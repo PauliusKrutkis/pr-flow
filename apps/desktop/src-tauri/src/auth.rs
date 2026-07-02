@@ -12,7 +12,7 @@ use std::net::{TcpListener, TcpStream};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::github::{build_client, fetch_user, GitHubUser};
 use crate::storage;
@@ -80,6 +80,13 @@ pub async fn login_with_github(app: AppHandle) -> Result<GitHubUser, String> {
     let client = build_client(&token)?;
     let user = fetch_user(&client).await?;
     storage::write_token(&app, &token)?;
+
+    // Bring the app back to the front — the user just finished in the browser,
+    // so the handoff should land them straight in PR Flow.
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
     Ok(user)
 }
 
@@ -207,7 +214,7 @@ fn handle_connection(
             write_response(
                 stream,
                 "200 OK",
-                &page("Signed in! You can close this tab and return to PR Flow."),
+                &success_page("Signed in! Sending you back to PR Flow…"),
             );
             Ok(Some(c))
         }
@@ -230,11 +237,26 @@ fn write_response(stream: &mut TcpStream, status: &str, body_html: &str) {
 }
 
 fn page(message: &str) -> String {
+    page_with_script(message, "")
+}
+
+/// Success page: tries to close the tab (browsers only honor this in some
+/// cases, e.g. Chrome tabs opened by an app); the app window is refocused from
+/// Rust either way, so the fallback copy still reads correctly.
+fn success_page(message: &str) -> String {
+    page_with_script(
+        message,
+        "<script>setTimeout(function(){window.open('','_self');window.close();},300)</script>",
+    )
+}
+
+fn page_with_script(message: &str, script: &str) -> String {
     format!(
         "<!doctype html><html><head><meta charset=\"utf-8\"><title>PR Flow</title></head>\
          <body style=\"font-family:-apple-system,system-ui,sans-serif;background:#0d1117;\
          color:#e6edf3;display:flex;align-items:center;justify-content:center;height:100vh;margin:0\">\
          <div style=\"text-align:center\"><h2 style=\"margin:0 0 8px;color:#2f81f7\">PR Flow</h2>\
-         <p>{message}</p></div></body></html>"
+         <p>{message}</p><p style=\"color:#8b949e;font-size:13px\">You can close this tab.</p></div>\
+         {script}</body></html>"
     )
 }

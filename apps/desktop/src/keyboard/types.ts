@@ -1,3 +1,5 @@
+import type { ComponentType } from "react";
+
 export type KeyHandler = (e: KeyboardEvent) => void;
 
 export interface Binding {
@@ -11,6 +13,8 @@ export interface Binding {
   description: string;
   /** Grouping label for the help overlay / command palette (e.g. "Navigation"). */
   group?: string;
+  /** Icon shown next to the action in the command palette (a lucide component). */
+  icon?: ComponentType<{ size?: number | string; className?: string }>;
   run: KeyHandler;
   /** Global bindings fire regardless of which scope is active (e.g. ⌘K). */
   global?: boolean;

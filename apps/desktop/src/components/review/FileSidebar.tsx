@@ -47,11 +47,9 @@ function splitPath(filename: string): { dir: string; base: string } {
 }
 
 /**
- * The Quiet review sidebar: a flat file list fronted by the signature FLOW RAIL
- * — one segment per changed file that fills with the iris accent as files are
- * marked viewed (the brightest segment is the current file). Directory grouping
- * is intentionally dropped for the calm flat list; a filter stays as a
- * lightweight refinement.
+ * The Quiet review sidebar: a calm flat file list. Progress reads through the
+ * viewed ticks and the header count; directory grouping is intentionally
+ * dropped in favor of the flat list.
  */
 export function FileSidebar({
   files,
@@ -105,20 +103,6 @@ export function FileSidebar({
       </div>
 
       <div className="flex min-h-0 flex-1">
-        {/* THE SIGNATURE: flow rail — one segment per changed file (all files). */}
-        <div className="qf-rail" aria-hidden>
-          {files.map((f, i) => (
-            <div
-              key={f.filename}
-              className={cn(
-                "qf-rail-seg",
-                viewedSet.has(f.filename) && "qf-rail-viewed",
-                i === selectedIndex && "qf-rail-current",
-              )}
-            />
-          ))}
-        </div>
-
         {/* flat file list */}
         <nav
           ref={listRef}

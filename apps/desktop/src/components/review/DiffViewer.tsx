@@ -1,4 +1,13 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { ArrowDown, ArrowUp, MessageSquarePlus } from "lucide-react";
 import type { ChangedFile, PendingComment, ReviewComment } from "../../types";
 import { parsePatch, type DiffRow } from "../../lib/diff";
 import { highlightLine } from "../../lib/highlight";
@@ -6,6 +15,13 @@ import { cn } from "../../lib/cn";
 import { useHotkeys } from "../../keyboard";
 import { CommentThread } from "./CommentThread";
 import { AddCommentBox } from "./AddCommentBox";
+
+/** A request to land on a specific line (from in-PR text search). */
+export interface JumpTarget {
+  anchor: string;
+  /** Bumped per jump so repeating the same anchor still re-triggers. */
+  nonce: number;
+}
 
 interface DiffViewerProps {
   file: ChangedFile;
@@ -27,6 +43,7 @@ interface DiffViewerProps {
     body: string;
   }) => void;
   onRemovePending: (id: string) => void;
+  jumpTo?: JumpTarget | null;
 }
 
 /** A stable key for anchoring comments/boxes to a (side, line) location. */
@@ -35,7 +52,7 @@ function anchorKey(side: string, line: number): string {
 }
 
 /** Resolve the comment target for a diff row. */
-function rowTarget(row: DiffRow): { line: number; side: string } | null {
+export function rowTarget(row: DiffRow): { line: number; side: string } | null {
   if (row.type === "del") {
     return row.oldLine != null ? { line: row.oldLine, side: "LEFT" } : null;
   }
@@ -99,6 +116,73 @@ interface RenderItem {
   target?: { line: number; side: string } | null;
 }
 
+/**
+ * One diff line. Memoized so cursor moves (which flip `isCursor` on exactly two
+ * rows) re-render two rows instead of the whole file — this is what keeps j/k
+ * responsive on large diffs.
+ */
+const DiffLine = memo(function DiffLine({
+  row,
+  anchor,
+  filename,
+  isCursor,
+  isFlash,
+  hasAnchored,
+  canComment,
+  onEnter,
+  onOpenBox,
+}: {
+  row: DiffRow;
+  anchor: string | null;
+  filename: string;
+  isCursor: boolean;
+  isFlash: boolean;
+  hasAnchored: boolean;
+  canComment: boolean;
+  onEnter: (anchor: string) => void;
+  onOpenBox: (anchor: string) => void;
+}) {
+  const marker = row.type === "add" ? "+" : row.type === "del" ? "-" : " ";
+  return (
+    <div
+      data-anchor={anchor ?? undefined}
+      onMouseEnter={anchor != null ? () => onEnter(anchor) : undefined}
+      className={cn(
+        "qf-row",
+        row.type === "add" && "qf-row-add",
+        row.type === "del" && "qf-row-del",
+        isCursor && "qf-row-active",
+        isFlash && "qf-row-flash",
+        hasAnchored && "qf-row-threaded",
+      )}
+    >
+      <span className="qf-gutter qf-gutter-old">
+        {row.oldLine ?? ""}
+        {canComment && anchor != null && (
+          <button
+            type="button"
+            aria-label="Add comment"
+            onClick={() => onOpenBox(anchor)}
+            className="qf-add-btn"
+          >
+            +
+          </button>
+        )}
+      </span>
+      <span className="qf-gutter qf-gutter-new">{row.newLine ?? ""}</span>
+      <span className="qf-marker">{marker}</span>
+      <code className="qf-code">
+        <span
+          className="hljs"
+          dangerouslySetInnerHTML={{
+            __html: highlightLine(row.content, filename),
+          }}
+        />
+      </code>
+    </div>
+  );
+});
+
 export function DiffViewer({
   file,
   comments,
@@ -109,6 +193,7 @@ export function DiffViewer({
   pending,
   onAddPending,
   onRemovePending,
+  jumpTo,
 }: DiffViewerProps) {
   const hunks = useMemo(() => parsePatch(file.patch), [file.patch]);
   const threadsByAnchor = useMemo(() => buildThreads(comments), [comments]);
@@ -126,17 +211,21 @@ export function DiffViewer({
   const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
   const [openBoxes, setOpenBoxes] = useState<Set<string>>(() => new Set());
   // The keyboard line cursor, tracked by stable row anchor ("side:line") so it
-  // stays on the same logical line when hunks collapse/expand.
+  // stays on the same logical line when hunks collapse/expand. Hovering a row
+  // also moves it, so keyboard and mouse always agree on "the current line".
   const [cursorAnchor, setCursorAnchor] = useState<string | null>(null);
   // Last input modality — drives which single "+" affordance is shown (the
   // keyboard cursor row, or the mouse-hovered row) so there's never two.
   const [inputMode, setInputMode] = useState<"keyboard" | "mouse">("keyboard");
+  // The row briefly lit after a search jump.
+  const [flashAnchor, setFlashAnchor] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   // Only auto-scroll the cursor into view for explicit user moves — not for the
   // initial seed / collapse-driven re-placement, which would otherwise yank a
   // freshly-restored scroll position (resume) back to the top of the file.
   const userMovedCursorRef = useRef(false);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Flatten hunks into render items, assigning a sequential nav index to each
   // navigable (non-header, non-collapsed) row.
@@ -180,8 +269,9 @@ export function DiffViewer({
     }
   }, [navAnchors, cursorAnchor]);
 
-  // Scroll the cursor row into view when the user moves it (j/k). Seed and
-  // auto-correction don't scroll, so resume's restored scroll position holds.
+  // Scroll the cursor row into view when the user moves it (j/k). Seed, hover
+  // sync, and auto-correction don't scroll, so the mouse never fights the view
+  // and resume's restored scroll position holds.
   useEffect(() => {
     if (!cursorAnchor || !userMovedCursorRef.current) return;
     userMovedCursorRef.current = false;
@@ -191,6 +281,28 @@ export function DiffViewer({
     el?.scrollIntoView({ block: "nearest" });
   }, [cursorAnchor]);
 
+  // Land a search jump: move the cursor there, scroll it to center, flash it.
+  useEffect(() => {
+    if (!jumpTo) return;
+    const { anchor } = jumpTo;
+    setInputMode("keyboard");
+    setCursorAnchor(anchor);
+    setFlashAnchor(anchor);
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setFlashAnchor(null), 1600);
+    requestAnimationFrame(() => {
+      containerRef.current
+        ?.querySelector<HTMLElement>(`[data-anchor="${anchor}"]`)
+        ?.scrollIntoView({ block: "center" });
+    });
+  }, [jumpTo]);
+
+  useEffect(() => {
+    return () => {
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    };
+  }, []);
+
   function toggleHunk(i: number) {
     setCollapsed((prev) => {
       const next = new Set(prev);
@@ -199,9 +311,9 @@ export function DiffViewer({
       return next;
     });
   }
-  function openBox(key: string) {
+  const openBox = useCallback((key: string) => {
     setOpenBoxes((prev) => new Set(prev).add(key));
-  }
+  }, []);
   function closeBox(key: string) {
     setOpenBoxes((prev) => {
       const next = new Set(prev);
@@ -209,6 +321,13 @@ export function DiffViewer({
       return next;
     });
   }
+
+  // Hovering a row moves the line cursor (without scrolling), so a following
+  // j/k continues from the line under the pointer and `c` comments on it.
+  const handleRowEnter = useCallback((anchor: string) => {
+    setInputMode((m) => (m === "mouse" ? m : "mouse"));
+    setCursorAnchor((cur) => (cur === anchor ? cur : anchor));
+  }, []);
 
   // Cursor movement is coalesced per animation frame: rapid key-repeats (and
   // direction changes) accumulate a net delta that is applied once, so the
@@ -255,7 +374,11 @@ export function DiffViewer({
   }
 
   function commentAtCursor() {
-    if (cursorAnchor) openBox(cursorAnchor);
+    const anchor = cursorAnchorRef.current ?? navAnchorsRef.current[0];
+    if (anchor) {
+      if (cursorAnchorRef.current !== anchor) setCursorAnchor(anchor);
+      openBox(anchor);
+    }
   }
 
   // Line-cursor navigation + comment, added to the active "review" scope.
@@ -266,18 +389,21 @@ export function DiffViewer({
         keys: ["j", "down"],
         description: "Next line",
         group: "Navigation",
+        icon: ArrowDown,
         run: () => moveCursor(1),
       },
       {
         keys: ["k", "up"],
         description: "Previous line",
         group: "Navigation",
+        icon: ArrowUp,
         run: () => moveCursor(-1),
       },
       {
         keys: "c",
         description: "Comment on line",
         group: "Comments",
+        icon: MessageSquarePlus,
         run: commentAtCursor,
       },
     ],
@@ -327,51 +453,23 @@ export function DiffViewer({
         const threads = key != null ? threadsByAnchor.get(key) : undefined;
         const pendingHere = key != null ? pendingByAnchor.get(key) : undefined;
         const boxOpen = key != null && openBoxes.has(key);
-        const isCursor = item.anchor != null && item.anchor === cursorAnchor;
         const hasAnchored =
           (threads && threads.length > 0) ||
           (pendingHere && pendingHere.length > 0);
-        const marker =
-          row.type === "add" ? "+" : row.type === "del" ? "-" : " ";
 
         return (
           <Fragment key={`r-${idx}`}>
-            <div
-              data-anchor={item.anchor ?? undefined}
-              className={cn(
-                "qf-row",
-                row.type === "add" && "qf-row-add",
-                row.type === "del" && "qf-row-del",
-                isCursor && "qf-row-active",
-                hasAnchored && "qf-row-threaded",
-              )}
-            >
-              <span className="qf-gutter qf-gutter-old">
-                {row.oldLine ?? ""}
-                {target != null && key != null && (
-                  <button
-                    type="button"
-                    aria-label="Add comment"
-                    onClick={() => openBox(key)}
-                    className="qf-add-btn"
-                  >
-                    +
-                  </button>
-                )}
-              </span>
-              <span className="qf-gutter qf-gutter-new">
-                {row.newLine ?? ""}
-              </span>
-              <span className="qf-marker">{marker}</span>
-              <code className="qf-code">
-                <span
-                  className="hljs"
-                  dangerouslySetInnerHTML={{
-                    __html: highlightLine(row.content, file.filename),
-                  }}
-                />
-              </code>
-            </div>
+            <DiffLine
+              row={row}
+              anchor={key}
+              filename={file.filename}
+              isCursor={key != null && key === cursorAnchor}
+              isFlash={key != null && key === flashAnchor}
+              hasAnchored={!!hasAnchored}
+              canComment={target != null}
+              onEnter={handleRowEnter}
+              onOpenBox={openBox}
+            />
 
             {hasAnchored || boxOpen ? (
               <div className="js-comment qf-comment-wrap">

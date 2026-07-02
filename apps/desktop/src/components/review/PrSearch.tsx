@@ -3,6 +3,11 @@ import { Search, FileCode, CornerDownLeft } from "lucide-react";
 import type { ChangedFile } from "../../types";
 import { parsePatch } from "../../lib/diff";
 import { Kbd } from "../ui/Kbd";
+import {
+  fuzzyIndices,
+  HighlightIndices,
+  HighlightMatch,
+} from "../ui/Highlight";
 
 type Mode = "files" | "text";
 
@@ -10,6 +15,13 @@ interface FileItem {
   kind: "file";
   fileIndex: number;
   filename: string;
+  /** Char indices of the fuzzy match, for highlighting. */
+  matched: number[];
+}
+interface SnippetLine {
+  num: number | null;
+  text: string;
+  hit: boolean;
 }
 interface LineItem {
   kind: "line";
@@ -17,30 +29,27 @@ interface LineItem {
   filename: string;
   line: number | null;
   content: string;
+  /** Diff anchor ("SIDE:line") to land on, when the row has one. */
+  anchor: string | null;
+  /** The matched line ±2 neighbours, for the expanded snippet. */
+  context: SnippetLine[];
 }
 type Item = FileItem | LineItem;
 
 const MAX_LINES = 60;
+const SNIPPET_RADIUS = 2;
 
 function base(path: string): string {
   const i = path.lastIndexOf("/");
   return i < 0 ? path : path.slice(i + 1);
 }
 
-/** Subsequence fuzzy match: every char of `q` appears in order within `text`. */
-function fuzzy(q: string, text: string): boolean {
-  if (!q) return true;
-  let i = 0;
-  for (let j = 0; j < text.length && i < q.length; j++) {
-    if (text[j] === q[i]) i++;
-  }
-  return i === q.length;
-}
-
 /**
  * In-PR search. Two modes over the current pull request, in the same pane shape
  * as the global "/" search: `files` (Ctrl/⌘-T) fuzzy-matches changed file paths;
- * `text` (Ctrl/⌘-F) searches the diff text. Selecting a result opens its file.
+ * `text` (Ctrl/⌘-F) searches the diff text. Matches are highlighted; the
+ * selected text result expands into a small context snippet, and choosing it
+ * lands the diff on that exact line.
  */
 export function PrSearch({
   open,
@@ -48,12 +57,14 @@ export function PrSearch({
   onClose,
   files,
   onSelectFile,
+  onSelectLine,
 }: {
   open: boolean;
   mode: Mode;
   onClose: () => void;
   files: ChangedFile[];
   onSelectFile: (index: number) => void;
+  onSelectLine: (index: number, anchor: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [sel, setSel] = useState(0);
@@ -64,14 +75,14 @@ export function PrSearch({
     const q = query.trim().toLowerCase();
 
     if (mode === "files") {
-      return files
-        .map((f, i) => ({ f, i }))
-        .filter(({ f }) => fuzzy(q, f.filename.toLowerCase()))
-        .map(({ f, i }) => ({
-          kind: "file" as const,
-          fileIndex: i,
-          filename: f.filename,
-        }));
+      const out: FileItem[] = [];
+      files.forEach((f, i) => {
+        const matched = fuzzyIndices(q, f.filename.toLowerCase());
+        if (matched !== null) {
+          out.push({ kind: "file", fileIndex: i, filename: f.filename, matched });
+        }
+      });
+      return out;
     }
 
     // text mode
@@ -81,18 +92,42 @@ export function PrSearch({
       const f = files[i];
       if (!f.patch) continue;
       for (const hunk of parsePatch(f.patch)) {
-        for (const row of hunk.rows) {
-          if (row.type === "hunk") continue;
-          if (row.content.toLowerCase().includes(q)) {
-            out.push({
-              kind: "line",
-              fileIndex: i,
-              filename: f.filename,
-              line: row.newLine ?? row.oldLine,
-              content: row.content.trim(),
+        // Rows minus the "@@" header, so snippet neighbours are real lines.
+        const rows = hunk.rows.filter((r) => r.type !== "hunk");
+        for (let ri = 0; ri < rows.length; ri++) {
+          const row = rows[ri];
+          if (!row.content.toLowerCase().includes(q)) continue;
+          const context: SnippetLine[] = [];
+          for (
+            let ci = Math.max(0, ri - SNIPPET_RADIUS);
+            ci <= Math.min(rows.length - 1, ri + SNIPPET_RADIUS);
+            ci++
+          ) {
+            const r = rows[ci];
+            context.push({
+              num: r.newLine ?? r.oldLine,
+              text: r.content,
+              hit: ci === ri,
             });
-            if (out.length >= MAX_LINES) break;
           }
+          const anchor =
+            row.type === "del"
+              ? row.oldLine != null
+                ? `LEFT:${row.oldLine}`
+                : null
+              : row.newLine != null
+                ? `RIGHT:${row.newLine}`
+                : null;
+          out.push({
+            kind: "line",
+            fileIndex: i,
+            filename: f.filename,
+            line: row.newLine ?? row.oldLine,
+            content: row.content.trim(),
+            anchor,
+            context,
+          });
+          if (out.length >= MAX_LINES) break;
         }
         if (out.length >= MAX_LINES) break;
       }
@@ -116,12 +151,17 @@ export function PrSearch({
 
   if (!open) return null;
 
-  const empty = query.trim().length > 0 && items.length === 0;
+  const q = query.trim();
+  const empty = q.length > 0 && items.length === 0;
   const placeholder =
     mode === "files" ? "Find a file in this PR…" : "Search code in this PR…";
 
   const choose = (it: Item) => {
-    onSelectFile(it.fileIndex);
+    if (it.kind === "line" && it.anchor != null) {
+      onSelectLine(it.fileIndex, it.anchor);
+    } else {
+      onSelectFile(it.fileIndex);
+    }
     onClose();
   };
 
@@ -173,7 +213,7 @@ export function PrSearch({
         </div>
 
         <div className="qsp-list" role="listbox" ref={listRef}>
-          {mode === "text" && !query.trim() && (
+          {mode === "text" && !q && (
             <div className="qsp-empty">
               <Search size={20} aria-hidden />
               <p>Search the diff text</p>
@@ -196,7 +236,12 @@ export function PrSearch({
                   <FileCode size={14} className="qsp-search-icon" aria-hidden />
                   <span className="qsp-main">
                     <span className="qsp-title">
-                      <span>{it.filename}</span>
+                      <span>
+                        <HighlightIndices
+                          text={it.filename}
+                          indices={it.matched}
+                        />
+                      </span>
                     </span>
                   </span>
                 </>
@@ -205,9 +250,37 @@ export function PrSearch({
                   <span className="qsp-num">L{it.line ?? "?"}</span>
                   <span className="qsp-main">
                     <span className="qsp-title q-mono">
-                      <span>{it.content || " "}</span>
+                      <span>
+                        {it.content ? (
+                          <HighlightMatch text={it.content} query={q} />
+                        ) : (
+                          " "
+                        )}
+                      </span>
                     </span>
                     <span className="qsp-meta">{base(it.filename)}</span>
+                    {i === sel && it.context.length > 1 && (
+                      <span className="qsp-snippet" aria-hidden>
+                        {it.context.map((l, j) => (
+                          <span
+                            key={j}
+                            className={
+                              "qsp-snip-line" +
+                              (l.hit ? " qsp-snip-line-hit" : "")
+                            }
+                          >
+                            <span className="qsp-snip-num">{l.num ?? ""}</span>
+                            <span className="qsp-snip-code">
+                              {l.hit ? (
+                                <HighlightMatch text={l.text} query={q} />
+                              ) : (
+                                l.text || " "
+                              )}
+                            </span>
+                          </span>
+                        ))}
+                      </span>
+                    )}
                   </span>
                 </>
               )}
@@ -216,7 +289,7 @@ export function PrSearch({
           {empty && (
             <div className="qsp-empty">
               <Search size={20} aria-hidden />
-              <p>Nothing matches “{query.trim()}”.</p>
+              <p>Nothing matches “{q}”.</p>
               <span>
                 {mode === "files" ? "Try part of a file name." : "Try other code text."}
               </span>
@@ -230,7 +303,8 @@ export function PrSearch({
             <Kbd combo="down" /> navigate
           </span>
           <span>
-            <CornerDownLeft size={11} aria-hidden /> open file
+            <CornerDownLeft size={11} aria-hidden />{" "}
+            {mode === "files" ? "open file" : "go to line"}
           </span>
           <span className="qsp-foot-scope">
             {mode === "files" ? "files in this PR" : "code in this PR"}

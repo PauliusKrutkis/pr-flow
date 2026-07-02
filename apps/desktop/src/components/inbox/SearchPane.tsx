@@ -5,6 +5,7 @@ import { formatRelativeTime } from "../../lib/time";
 import { Avatar } from "../ui/Avatar";
 import { Kbd } from "../ui/Kbd";
 import { Badge } from "../ui/Badge";
+import { HighlightMatch } from "../ui/Highlight";
 
 /**
  * Search pane — the Superhuman move: `/` doesn't drop a filter field into the
@@ -128,18 +129,22 @@ export function SearchPane({
               }}
             >
               <span className="qsp-rail" aria-hidden />
-              <span className="qsp-num">#{pr.number}</span>
+              <span className="qsp-num">
+                <HighlightMatch text={`#${pr.number}`} query={query} />
+              </span>
               <span className="qsp-main">
                 <span className="qsp-title">
-                  <span>{pr.title}</span>
+                  <span>
+                    <HighlightMatch text={pr.title} query={query} />
+                  </span>
                   {pr.draft && <Badge tone="warning">Draft</Badge>}
                   {pr.merged && <Badge tone="accent">Merged</Badge>}
                 </span>
                 <span className="qsp-meta">
                   <Avatar url={pr.authorAvatarUrl} name={pr.author} size={14} />
-                  {pr.author}
+                  <HighlightMatch text={pr.author} query={query} />
                   <span className="q-dot">·</span>
-                  {pr.repo}
+                  <HighlightMatch text={pr.repo} query={query} />
                 </span>
               </span>
               <span className="qsp-time q-mono">

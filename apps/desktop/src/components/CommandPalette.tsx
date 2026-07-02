@@ -9,6 +9,7 @@ interface Entry {
   label: string;
   group?: string;
   keyCombo?: string;
+  icon?: React.ComponentType<{ size?: number | string; className?: string }>;
   run: () => void;
 }
 
@@ -47,6 +48,7 @@ export function CommandPalette({ baseScope }: { baseScope: string }) {
         label: b.description,
         group: b.group,
         keyCombo: firstKey(b.keys),
+        icon: b.icon,
         run: () => {
           b.run(new KeyboardEvent("keydown"));
           closePalette();
@@ -152,6 +154,9 @@ export function CommandPalette({ baseScope }: { baseScope: string }) {
                   className={cn("qc-opt q-focus", i === index && "qc-opt-on")}
                 >
                   <span className="qc-rail" aria-hidden />
+                  <span className="qc-opt-icon" aria-hidden>
+                    {entry.icon && <entry.icon size={14} />}
+                  </span>
                   <span className="qc-opt-label">{entry.label}</span>
                   {entry.group && <span className="qc-opt-sub">{entry.group}</span>}
                   {entry.keyCombo && <Kbd combo={entry.keyCombo} />}

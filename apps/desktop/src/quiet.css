@@ -326,7 +326,6 @@ textarea.q-input { resize: none; line-height: 1.5; }
 .hljs-keyword,
 .hljs-selector-tag,
 .hljs-literal,
-.hljs-doctag,
 .hljs-meta,
 .hljs-meta .hljs-keyword { color: #c4b6ff; }
 .hljs-string,
@@ -335,8 +334,14 @@ textarea.q-input { resize: none; line-height: 1.5; }
 .hljs-number,
 .hljs-symbol,
 .hljs-bullet { color: #ffc48a; }
+/* comments read as one quiet gray block — including JSDoc tags (@param) and
+   anything hljs nests inside a comment */
 .hljs-comment,
-.hljs-quote { color: var(--faint); font-style: italic; }
+.hljs-quote,
+.hljs-doctag,
+.hljs-comment .hljs-keyword,
+.hljs-comment .hljs-type,
+.hljs-comment .hljs-variable { color: var(--faint); font-style: italic; }
 .hljs-title,
 .hljs-title.function_,
 .hljs-section,
@@ -390,30 +395,6 @@ textarea.q-input { resize: none; line-height: 1.5; }
   color: var(--muted);
 }
 .dir-quiet .qf-side-count { font-family: var(--font-mono); font-size: 11px; color: var(--faint); }
-
-/* THE FLOW RAIL — the signature */
-.dir-quiet .qf-rail {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  width: 4px;
-  box-sizing: content-box;
-  padding: 10px 7px;
-  flex-shrink: 0;
-}
-.dir-quiet .qf-rail-seg {
-  flex: 1 1 0;
-  min-height: 10px;
-  border-radius: 999px;
-  background: var(--line-2);
-  transition: background-color 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
-}
-.dir-quiet .qf-rail-viewed { background: var(--accent); opacity: 0.5; }
-.dir-quiet .qf-rail-current {
-  background: var(--accent);
-  opacity: 1;
-  box-shadow: 0 0 0 1px var(--accent-soft), 0 0 10px 1px var(--accent-line);
-}
 
 /* file list */
 .dir-quiet .qf-filelist { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
@@ -504,8 +485,34 @@ textarea.q-input { resize: none; line-height: 1.5; }
 .dir-quiet .qf-pr-num { font-family: var(--font-mono); color: var(--faint); }
 .dir-quiet .qf-muted { color: var(--muted); }
 .dir-quiet .qf-dot { color: var(--faint); }
-.dir-quiet .qf-branch { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.dir-quiet .qf-branch { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
 .dir-quiet .qf-arrow { color: var(--faint); }
+/* branch names as copyable chips — click copies the name to the clipboard */
+.dir-quiet .qf-branch-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--fg);
+  background: var(--surface-hi);
+  border: 1px solid var(--line-2);
+  border-radius: 5px;
+  padding: 3px 7px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+.dir-quiet .qf-branch-chip svg { color: var(--faint); }
+.dir-quiet .qf-branch-chip:hover {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+.dir-quiet .qf-branch-chip:hover svg { color: var(--accent); }
+.dir-quiet .qf-branch-copied,
+.dir-quiet .qf-branch-copied:hover { color: var(--accent); border-color: var(--accent-line); }
+.dir-quiet .qf-branch-copied svg,
+.dir-quiet .qf-branch-copied:hover svg { color: var(--add); }
 
 .dir-quiet .qf-state {
   display: inline-flex;
@@ -617,6 +624,8 @@ textarea.q-input { resize: none; line-height: 1.5; }
   align-items: baseline;
   padding: 1.5px 16px 1.5px 0;
   border-left: 2px solid transparent;
+  /* the "+" affordance positions against the whole row (see .qf-add-btn) */
+  position: relative;
 }
 .dir-quiet .qf-row-hunk {
   width: 100%;
@@ -653,8 +662,15 @@ textarea.q-input { resize: none; line-height: 1.5; }
 }
 .dir-quiet .qf-row-threaded .qf-marker { color: var(--accent); opacity: 0.9; }
 
+/* the row a search jump landed on — a brief iris flash that settles back */
+.dir-quiet .qf-row-flash { animation: qf-flash 1.5s ease-out; }
+@keyframes qf-flash {
+  0% { background-color: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
+  60% { background-color: var(--accent-soft); }
+  100% { box-shadow: none; }
+}
+
 .dir-quiet .qf-gutter {
-  position: relative;
   text-align: right;
   padding-right: 12px;
   color: var(--faint);
@@ -665,7 +681,9 @@ textarea.q-input { resize: none; line-height: 1.5; }
 .dir-quiet .qf-marker { text-align: center; color: var(--faint); user-select: none; -webkit-user-select: none; }
 .dir-quiet .qf-code { white-space: pre-wrap; word-break: break-word; color: var(--fg); }
 
-/* inline "add comment" affordance on the old-line gutter */
+/* inline "add comment" affordance in the gutter — absolutely positioned against
+   the ROW (not the gutter's one-line text box), so it stays vertically centered
+   on add/del tints and on wrapped multi-line rows alike. */
 .dir-quiet .qf-add-btn {
   position: absolute;
   left: 2px;
@@ -1078,6 +1096,36 @@ textarea.q-input { resize: none; line-height: 1.5; }
 .qsp-meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .qsp-time { font-size: 11px; color: var(--faint); flex-shrink: 0; }
 
+/* matched-text highlight, shared by every search surface */
+.q-hl {
+  color: var(--fg);
+  background: var(--accent-soft);
+  box-shadow: inset 0 -1px 0 var(--accent-line);
+  border-radius: 2px;
+  padding: 0 1px;
+  margin: 0 -1px;
+}
+.qsp-row-on .q-hl { box-shadow: inset 0 -1px 0 var(--accent); }
+
+/* text-search context snippet (the selected result expands, VS Code style) */
+.qsp-snippet {
+  display: block;
+  margin: 6px 0 2px;
+  padding: 6px 0;
+  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  overflow: hidden;
+}
+.qsp-snip-line { display: flex; gap: 10px; padding: 0 10px; color: var(--muted); white-space: pre; overflow: hidden; }
+.qsp-snip-line-hit { background: var(--accent-soft); }
+.qsp-snip-num { min-width: 34px; text-align: right; color: var(--faint); flex-shrink: 0; user-select: none; }
+.qsp-snip-line-hit .qsp-snip-num { color: var(--accent); }
+.qsp-snip-code { overflow: hidden; text-overflow: ellipsis; }
+
 .qsp-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 44px 16px; text-align: center; color: var(--faint); }
 .qsp-empty svg { color: var(--accent); opacity: 0.8; margin-bottom: 4px; }
 .qsp-empty p { font-size: 14px; color: var(--fg); }
@@ -1145,7 +1193,7 @@ textarea.q-input { resize: none; line-height: 1.5; }
 .qc-rail { position: absolute; left: 3px; top: 8px; bottom: 8px; width: 2px; border-radius: 999px; background: transparent; }
 .qc-opt-on { background: var(--accent-soft); color: var(--fg); }
 .qc-opt-on .qc-rail { background: var(--accent); box-shadow: 0 0 10px 0 var(--accent-line); }
-.qc-opt-icon { color: var(--faint); flex-shrink: 0; }
+.qc-opt-icon { display: grid; place-items: center; width: 16px; color: var(--faint); flex-shrink: 0; }
 .qc-opt-on .qc-opt-icon { color: var(--accent); }
 .qc-opt-label { flex: 1; font-size: 13.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qc-opt-sub { font-family: var(--font-mono); font-size: 11px; color: var(--faint); flex-shrink: 0; }

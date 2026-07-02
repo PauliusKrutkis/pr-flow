@@ -1,4 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Archive,
+  ArrowDown,
+  ArrowLeftRight,
+  ArrowUp,
+  CornerDownLeft,
+  Undo2,
+} from "lucide-react";
 import { useHotkeys } from "../../keyboard";
 import { useAppStore } from "../../store/appStore";
 import { useInbox } from "../../hooks/useInbox";
@@ -50,8 +58,20 @@ export function Inbox() {
   // Whether the cursor is being driven by keyboard or pointer (gates hover wash).
   const [listMode, setListMode] = useState<"keyboard" | "mouse">("mouse");
 
+  // Archived PRs stay hidden until they update again (see appStore.dismiss).
+  const dismissed = useAppStore((s) => s.dismissed);
+  const dismiss = useAppStore((s) => s.dismiss);
+  const undoDismiss = useAppStore((s) => s.undoDismiss);
+
   const inbox = data ?? EMPTY;
-  const filtered = inbox[tab].prs;
+  const filtered = useMemo(
+    () =>
+      inbox[tab].prs.filter((pr) => {
+        const at = dismissed[keyFor(pr)];
+        return !at || new Date(pr.updatedAt).getTime() > new Date(at).getTime();
+      }),
+    [inbox, tab, dismissed],
+  );
 
   // Resolve the selected PR key to a position in the current list (follows the
   // PR through reorders/filtering; falls back to the top if it's gone).
@@ -115,16 +135,46 @@ export function Inbox() {
     moveTo(Math.max(selectedIndex - 1, 0));
   };
 
+  // `e` — archive the selected PR (hidden until it updates), cursor stays put.
+  const archiveSelected = () => {
+    const pr = filtered[selectedIndex];
+    if (!pr) return;
+    const fallback = filtered[selectedIndex + 1] ?? filtered[selectedIndex - 1];
+    setSelectedKey(fallback ? keyFor(fallback) : null);
+    dismiss(keyFor(pr), pr.updatedAt);
+  };
+
   useHotkeys("inbox", [
-    { keys: ["j", "down"], description: "Next PR", group: "Navigation", run: next },
-    { keys: ["k", "up"], description: "Previous PR", group: "Navigation", run: prev },
+    { keys: ["j", "down"], description: "Next PR", group: "Navigation", icon: ArrowDown, run: next },
+    { keys: ["k", "up"], description: "Previous PR", group: "Navigation", icon: ArrowUp, run: prev },
     {
       keys: "enter",
       description: "Open PR",
       group: "Navigation",
+      icon: CornerDownLeft,
       run: () => open(selectedIndex),
     },
-    { keys: "tab", description: "Next tab", group: "Tabs", run: () => cycleTab(1) },
+    {
+      keys: "e",
+      description: "Archive until it updates",
+      group: "Navigation",
+      icon: Archive,
+      run: archiveSelected,
+    },
+    {
+      keys: "z",
+      description: "Undo archive",
+      group: "Navigation",
+      icon: Undo2,
+      run: undoDismiss,
+    },
+    {
+      keys: "tab",
+      description: "Next / previous tab",
+      group: "Tabs",
+      icon: ArrowLeftRight,
+      run: (e) => cycleTab(e.shiftKey ? -1 : 1),
+    },
     { keys: "1", description: "Tab: Review requests", group: "Tabs", run: () => selectTab("reviewRequested") },
     { keys: "2", description: "Tab: Assigned", group: "Tabs", run: () => selectTab("assigned") },
     { keys: "3", description: "Tab: Created", group: "Tabs", run: () => selectTab("created") },
@@ -187,7 +237,7 @@ export function Inbox() {
             onMouseMove={() => {
               if (listMode !== "mouse") setListMode("mouse");
             }}
-            className="q-inbox-list min-h-0 overflow-y-auto border-r border-line py-1.5"
+            className="q-inbox-list min-h-0 overflow-y-auto border-r border-line py-3"
           >
             {filtered.length === 0 ? (
               <div className="flex h-full items-center justify-center px-6">

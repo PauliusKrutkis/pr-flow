@@ -85,6 +85,27 @@ function saveLastSeen(map: Record<string, string>) {
   }
 }
 
+// ---- archived PRs ("e" in the inbox) -----------------------------------------
+// Archiving hides a PR from the inbox *until it updates again* — the Superhuman
+// "done" move. We store the updatedAt seen at archive time; any newer activity
+// resurfaces the PR on its own.
+const DISMISSED_KEY = "pr-flow:dismissed";
+function loadDismissed(): Record<string, string> {
+  try {
+    const v = JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? "{}");
+    return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  } catch {
+    return {};
+  }
+}
+function saveDismissed(map: Record<string, string>) {
+  try {
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(map));
+  } catch {
+    /* ignore quota / private-mode errors */
+  }
+}
+
 interface AppState {
   route: Route;
   paletteOpen: boolean;
@@ -123,6 +144,14 @@ interface AppState {
   // unread tracking
   markSeen: (prKey: string, updatedAt: string) => void;
   isUnread: (prKey: string, updatedAt: string) => boolean;
+
+  // archive ("done until it updates")
+  dismissed: Record<string, string>;
+  /** The most recent archive, so `z` can undo it. */
+  lastDismissedKey: string | null;
+  dismiss: (prKey: string, updatedAt: string) => void;
+  undoDismiss: () => void;
+  isDismissed: (prKey: string, updatedAt: string) => boolean;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -185,5 +214,27 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Unseen entirely, or updated since we last opened it.
     if (!seen) return true;
     return new Date(updatedAt).getTime() > new Date(seen).getTime();
+  },
+
+  dismissed: loadDismissed(),
+  lastDismissedKey: null,
+  dismiss: (prKey, updatedAt) => {
+    const map = { ...get().dismissed, [prKey]: updatedAt };
+    set({ dismissed: map, lastDismissedKey: prKey });
+    saveDismissed(map);
+  },
+  undoDismiss: () => {
+    const key = get().lastDismissedKey;
+    if (!key) return;
+    const map = { ...get().dismissed };
+    delete map[key];
+    set({ dismissed: map, lastDismissedKey: null });
+    saveDismissed(map);
+  },
+  isDismissed: (prKey, updatedAt) => {
+    const at = get().dismissed[prKey];
+    // Archived, and the PR hasn't updated since — newer activity resurfaces it.
+    if (!at) return false;
+    return new Date(updatedAt).getTime() <= new Date(at).getTime();
   },
 }));
