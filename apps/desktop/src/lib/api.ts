@@ -21,7 +21,13 @@ export const api = {
   isOAuthConfigured: () => invoke<boolean>("is_oauth_configured"),
   loginWithGithub: () => invoke<GitHubUser>("login_with_github"),
   isGitlabOAuthConfigured: () => invoke<boolean>("is_gitlab_oauth_configured"),
-  loginWithGitlab: () => invoke<GitHubUser>("login_with_gitlab"),
+  loginWithGitlab: (args?: { host?: string | null; clientId?: string | null }) =>
+    invoke<GitHubUser>("login_with_gitlab", {
+      host: args?.host ?? null,
+      clientId: args?.clientId ?? null,
+    }),
+  /** Confirms a GitLab API answers at the host; returns the normalized host. */
+  probeGitlab: (host: string) => invoke<string>("probe_gitlab", { host }),
   setToken: (token: string) => invoke<GitHubUser>("set_token", { token }),
   clearToken: () => invoke<void>("clear_token"),
   getCurrentUser: () => invoke<GitHubUser>("get_current_user"),

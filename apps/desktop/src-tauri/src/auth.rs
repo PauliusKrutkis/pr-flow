@@ -135,13 +135,68 @@ pub fn is_gitlab_oauth_configured() -> bool {
     gitlab_client_id().is_ok()
 }
 
+/// Normalize a user-typed host into "https://host" with no trailing slash.
+fn normalize_gitlab_host(host: Option<String>) -> String {
+    let h = host.unwrap_or_default();
+    let h = h.trim().trim_end_matches('/');
+    if h.is_empty() {
+        return accounts::GITLAB_HOST.to_string();
+    }
+    if h.starts_with("http://") || h.starts_with("https://") {
+        h.to_string()
+    } else {
+        format!("https://{h}")
+    }
+}
+
+/// Sanity-check a host before offering sign-in: does /api/v4 answer like a
+/// GitLab? Returns the normalized host. 200/401/403 all count — we only need
+/// to know a GitLab API lives there, not to authenticate yet.
 #[tauri::command]
-pub async fn login_with_gitlab(app: AppHandle) -> Result<GitHubUser, String> {
+pub async fn probe_gitlab(host: String) -> Result<String, String> {
+    let normalized = normalize_gitlab_host(Some(host));
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(6))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let url = format!("{normalized}/api/v4/version");
+    let resp = client
+        .get(&url)
+        .header(reqwest::header::USER_AGENT, "nod")
+        .send()
+        .await
+        .map_err(|e| format!("Couldn't reach {normalized}: {e}"))?;
+    let s = resp.status().as_u16();
+    if s == 200 || s == 401 || s == 403 {
+        Ok(normalized)
+    } else {
+        Err(format!(
+            "{normalized} doesn't answer like a GitLab instance (HTTP {s})."
+        ))
+    }
+}
+
+#[tauri::command]
+pub async fn login_with_gitlab(
+    app: AppHandle,
+    host: Option<String>,
+    client_id: Option<String>,
+) -> Result<GitHubUser, String> {
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
     use rand::{distributions::Alphanumeric, Rng};
     use sha2::{Digest, Sha256};
 
-    let client_id = gitlab_client_id()?;
+    let host = normalize_gitlab_host(host);
+    let client_id = match client_id.filter(|s| !s.trim().is_empty()) {
+        Some(id) => id.trim().to_string(),
+        None if host == accounts::GITLAB_HOST => gitlab_client_id()?,
+        None => {
+            return Err(
+                "One-click sign-in on a self-hosted GitLab needs its application ID                  (any group owner can create one). You can connect with a token instead."
+                    .to_string(),
+            )
+        }
+    };
     let state = make_state();
     let verifier: String = rand::thread_rng()
         .sample_iter(&Alphanumeric)
@@ -154,7 +209,7 @@ pub async fn login_with_gitlab(app: AppHandle) -> Result<GitHubUser, String> {
         format!("Couldn't start the local sign-in listener on port {OAUTH_PORT}: {e}")
     })?;
 
-    let mut authorize = url::Url::parse("https://gitlab.com/oauth/authorize")
+    let mut authorize = url::Url::parse(&format!("{host}/oauth/authorize"))
         .map_err(|e| e.to_string())?;
     authorize
         .query_pairs_mut()
@@ -175,7 +230,7 @@ pub async fn login_with_gitlab(app: AppHandle) -> Result<GitHubUser, String> {
     // Exchange the code — PKCE verifier instead of a client secret.
     let client = reqwest::Client::new();
     let resp = client
-        .post("https://gitlab.com/oauth/token")
+        .post(format!("{host}/oauth/token"))
         .header(reqwest::header::ACCEPT, "application/json")
         .header(reqwest::header::USER_AGENT, "nod")
         .json(&json!({
@@ -202,14 +257,14 @@ pub async fn login_with_gitlab(app: AppHandle) -> Result<GitHubUser, String> {
         .ok_or_else(|| "GitLab did not return an access token".to_string())?;
 
     // Validate + store as a first-class account.
-    let platform = GitLabPlatform::new(accounts::GITLAB_HOST, &token)?;
+    let platform = GitLabPlatform::new(&host, &token)?;
     let user = platform.current_user().await?;
     accounts::upsert(
         &app,
         accounts::Account {
-            id: accounts::account_id("gitlab", accounts::GITLAB_HOST, &user.login),
+            id: accounts::account_id("gitlab", &host, &user.login),
             provider: "gitlab".to_string(),
-            host: accounts::GITLAB_HOST.to_string(),
+            host: host.clone(),
             token,
             login: user.login.clone(),
             avatar_url: user.avatar_url.clone(),
