@@ -183,6 +183,7 @@ plain JSON — fine for a local MVP; moving it to the OS keychain is on the road
 
 ```bash
 brew tap pauliuskrutkis/tap
+brew trust pauliuskrutkis/tap   # one-time, newer Homebrew versions
 brew install --cask --no-quarantine nod
 ```
 
