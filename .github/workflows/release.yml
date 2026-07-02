@@ -78,6 +78,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # OAuth identities baked into the binary at compile time (auth.rs
+          # option_env!). Unset secrets/vars just disable the buttons in the
+          # released app — the build still succeeds.
+          PRFLOW_GH_CLIENT_ID: ${{ secrets.PRFLOW_GH_CLIENT_ID }}
+          PRFLOW_GH_CLIENT_SECRET: ${{ secrets.PRFLOW_GH_CLIENT_SECRET }}
+          NOD_GITLAB_CLIENT_ID: ${{ vars.NOD_GITLAB_CLIENT_ID }}
         with:
           projectPath: apps/desktop
           tagName: ${{ github.ref_name }}
