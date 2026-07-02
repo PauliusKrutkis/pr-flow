@@ -184,10 +184,12 @@ plain JSON — fine for a local MVP; moving it to the OS keychain is on the road
 ```bash
 brew tap pauliuskrutkis/tap
 brew trust pauliuskrutkis/tap   # one-time, newer Homebrew versions
-brew install --cask --no-quarantine nod
+brew install --cask nod
+xattr -dr com.apple.quarantine /Applications/Nod.app   # not notarized yet
 ```
 
-(`--no-quarantine` because releases aren't Apple-notarized yet. Alternatively,
+(The `xattr` step is needed because releases aren't Apple-notarized yet;
+Homebrew 6 removed the old `--no-quarantine` flag. Alternatively,
 download the `.dmg` from [Releases](https://github.com/PauliusKrutkis/pr-flow/releases)
 and right-click → Open on first launch.)
 

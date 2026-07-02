@@ -39,7 +39,7 @@ install + relaunch in one click.
 | Public key in `tauri.conf.json` | ✅ `plugins.updater.pubkey` |
 | Repo secrets | ✅ `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (empty) |
 | Homebrew tap repo | ✅ `PauliusKrutkis/homebrew-tap` (public), seeded with the v0.1.0 cask. The release workflow pushes bumps over SSH via the `TAP_DEPLOY_KEY` secret — a deploy key that can write only to that one repo. Cask template: `packaging/homebrew/Casks/nod.rb`. |
-| Apple notarization | ⬜ Optional — needs an Apple Developer cert ($99/yr). Until then macOS users install with `--no-quarantine` (brew) or right-click → Open. |
+| Apple notarization | ⬜ Optional — needs an Apple Developer cert ($99/yr). Until then macOS users clear quarantine after install (`xattr -dr com.apple.quarantine /Applications/Nod.app`) or right-click → Open. (Homebrew 6 removed `--no-quarantine`.) |
 
 ## Private repo vs auto-updates
 
@@ -144,6 +144,6 @@ Gotchas learned the hard way:
 - [ ] Decide repo visibility (public vs releases-only repo, above).
 - [ ] Create the Homebrew tap + `TAP_REPO_TOKEN` secret.
 - [ ] (Optional) Apple Developer cert → signing + notarization, then drop
-  `--no-quarantine` from the install docs.
+  the `xattr` step from the install docs.
 - [ ] First tagged release: expect one round of CI fixup on the Windows/Linux
   builders (first full build on those runners).

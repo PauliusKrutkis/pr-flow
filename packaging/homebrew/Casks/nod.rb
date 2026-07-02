@@ -4,10 +4,11 @@
 #
 # Install:
 #   brew tap pauliuskrutkis/tap
-#   brew install --cask --no-quarantine nod
+#   brew install --cask nod
+#   xattr -dr com.apple.quarantine /Applications/Nod.app
 #
-# (--no-quarantine because releases aren't Apple-notarized yet; the in-app
-# updater keeps it current after the first install.)
+# (the xattr step because releases aren't Apple-notarized yet — Homebrew 6
+# removed --no-quarantine; the in-app updater keeps it current afterwards.)
 cask "nod" do
   arch arm: "aarch64", intel: "x64"
 
