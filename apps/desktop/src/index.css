@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "./quiet.css";
 
-/* PR Flow theme — the "Quiet" palette (deep indigo canvas, one iris accent),
+/* Nod theme — the "Quiet" palette (deep indigo canvas, one iris accent),
    ported from apps/design-lab. Tailwind v4 reads these CSS variables and
    generates utilities like `bg-surface`, `text-muted`, `border-line`, etc.
    This @theme block is the SINGLE source of truth for colors: the short-named

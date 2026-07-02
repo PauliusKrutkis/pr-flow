@@ -90,8 +90,8 @@ export function TokenGate() {
   const disabled = busy !== "idle";
   const tokenUrl =
     provider === "github"
-      ? "https://github.com/settings/tokens/new?scopes=repo&description=PR%20Flow"
-      : `${(host.trim() || "https://gitlab.com").replace(/\/$/, "")}/-/user_settings/personal_access_tokens?name=PR%20Flow&scopes=api`;
+      ? "https://github.com/settings/tokens/new?scopes=repo&description=Nod"
+      : `${(host.trim() || "https://gitlab.com").replace(/\/$/, "")}/-/user_settings/personal_access_tokens?name=Nod&scopes=api`;
 
   return (
     <div className="flex h-full items-center justify-center bg-bg px-6">
@@ -115,7 +115,7 @@ export function TokenGate() {
             }}
             aria-hidden
           />
-          <h1 className="text-2xl font-semibold text-fg">PR Flow</h1>
+          <h1 className="text-2xl font-semibold text-fg">Nod</h1>
         </div>
         <p className="mt-1 text-sm text-muted">
           {hasAccounts

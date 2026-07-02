@@ -20,6 +20,7 @@ import HelpOverlay from "./views/HelpOverlay";
 import SubmitReviewModal from "./views/SubmitReviewModal";
 import AddCommentBox from "./views/AddCommentBox";
 import ChromeSurfaces from "./views/ChromeSurfaces";
+import IconGallery from "./views/IconGallery";
 
 interface ViewDef {
   id: string;
@@ -42,6 +43,7 @@ const VIEWS: ViewDef[] = [
   { id: "submit", label: "Submit", group: "Overlays", render: () => <SubmitReviewModal /> },
   { id: "comment", label: "Comment", group: "Overlays", render: () => <AddCommentBox /> },
   { id: "chrome", label: "Chrome & alerts", group: "Chrome", render: () => <ChromeSurfaces /> },
+  { id: "icons", label: "App icon", group: "Brand", render: () => <IconGallery /> },
 ];
 
 const REVIEW_INDEX = VIEWS.findIndex((v) => v.id === "review");

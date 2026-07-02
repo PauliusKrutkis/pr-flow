@@ -26,3 +26,4 @@ apps/design-lab/public/designs/
 *.njsproj
 *.sln
 *.sw?
+.playwright-mcp/

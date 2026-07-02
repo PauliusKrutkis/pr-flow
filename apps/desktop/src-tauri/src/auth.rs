@@ -214,7 +214,7 @@ fn handle_connection(
             write_response(
                 stream,
                 "200 OK",
-                &success_page("Signed in! Sending you back to PR Flow…"),
+                &success_page("Signed in! Sending you back to Nod…"),
             );
             Ok(Some(c))
         }
@@ -252,10 +252,10 @@ fn success_page(message: &str) -> String {
 
 fn page_with_script(message: &str, script: &str) -> String {
     format!(
-        "<!doctype html><html><head><meta charset=\"utf-8\"><title>PR Flow</title></head>\
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Nod</title></head>\
          <body style=\"font-family:-apple-system,system-ui,sans-serif;background:#0d1117;\
          color:#e6edf3;display:flex;align-items:center;justify-content:center;height:100vh;margin:0\">\
-         <div style=\"text-align:center\"><h2 style=\"margin:0 0 8px;color:#2f81f7\">PR Flow</h2>\
+         <div style=\"text-align:center\"><h2 style=\"margin:0 0 8px;color:#2f81f7\">Nod</h2>\
          <p>{message}</p><p style=\"color:#8b949e;font-size:13px\">You can close this tab.</p></div>\
          {script}</body></html>"
     )

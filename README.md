@@ -1,8 +1,8 @@
-# PR Flow
+# Nod
 
 > A keyboard-first, cache-first desktop app for reviewing GitHub pull requests.
 
-PR Flow is a focused experiment with one hypothesis:
+Nod (formerly PR Flow) is a focused experiment with one hypothesis:
 
 > **Keyboard-first + cache-first PR review is faster and more satisfying than the GitHub web UI** — closer to triaging an inbox than navigating a website.
 
@@ -172,36 +172,51 @@ Paste a **PAT** with the **`repo`** scope. Create one at
 
 Either way, the token and all cached data are stored locally under the app config
 directory (e.g. on macOS:
-`~/Library/Application Support/com.pauliuskrutkis.prflow/`). The token is stored in
+`~/Library/Application Support/com.pauliuskrutkis.nod/`). The token is stored in
 plain JSON — fine for a local MVP; moving it to the OS keychain is on the roadmap.
 
 ---
 
-## Auto-updates (scaffolded)
+## Install & auto-updates
 
-`tauri-plugin-updater` is wired in: the backend exposes `check_for_update` /
-`install_update` commands and the app shows an **"Update available"** prompt
-(`src/components/UpdatePrompt.tsx`) that installs and relaunches in one click.
-The check is best-effort — until a real signing key and release feed exist it
-returns "no update" and the prompt never appears, so the scaffold is safe to ship.
+**macOS (Homebrew):**
 
-To turn it on (the remaining CI/signing work):
+```bash
+brew tap pauliuskrutkis/tap
+brew install --cask --no-quarantine nod
+```
 
-1. **Generate a signing keypair** (once):
-   ```bash
-   pnpm tauri signer generate -w ~/.tauri/prflow.key
-   ```
-2. **Publish the public key** — paste it into `plugins.updater.pubkey` in
-   `src-tauri/tauri.conf.json` (replacing `REPLACE_WITH_TAURI_SIGNER_PUBLIC_KEY`)
-   and point `plugins.updater.endpoints` at your real release feed.
-3. **Enable signed artifacts** — set `bundle.createUpdaterArtifacts` to `true`.
-4. **Sign in CI** — export `TAURI_SIGNING_PRIVATE_KEY` and
-   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (GitHub Actions secrets) so
-   `pnpm tauri build` emits the signed bundle + `.sig`.
-5. **Serve a `latest.json`** at the endpoint describing the newest version,
-   notes, and per-platform signed bundle URLs.
+(`--no-quarantine` because releases aren't Apple-notarized yet. Alternatively,
+download the `.dmg` from [Releases](https://github.com/PauliusKrutkis/pr-flow/releases)
+and right-click → Open on first launch.)
 
-No app-code changes are needed after that — the prompt activates automatically.
+**Windows / Linux:** grab the installer (`.msi` / `.deb` / `.AppImage`) from
+[Releases](https://github.com/PauliusKrutkis/pr-flow/releases).
+
+After the first install the app keeps itself current: it polls the release
+feed, shows an **"Update available"** prompt, and installs + relaunches in one
+click. Updates are signed (minisign via `tauri-plugin-updater`) and verified
+against the public key baked into the app.
+
+### Cutting a release
+
+Full guide — including testing auto-updates locally while the repo is private,
+and the go-public checklist (name, identifier, icon) — in
+**[docs/RELEASING.md](docs/RELEASING.md)**.
+
+```bash
+git tag v0.1.1 && git push origin v0.1.1
+```
+
+The `release.yml` workflow builds macOS (arm64 + x64), Windows and Linux
+bundles, signs the updater artifacts, publishes a GitHub Release with
+`latest.json`, and bumps the Homebrew tap (when the `TAP_REPO_TOKEN` secret is
+set). Bump `version` in `apps/desktop/src-tauri/tauri.conf.json` before
+tagging — that's the version the updater compares against.
+
+Signing secrets (already configured): `TAURI_SIGNING_PRIVATE_KEY` (from
+`~/.tauri/prflow.key` — **back this file up**; losing it breaks the update
+chain) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 
 ---
 

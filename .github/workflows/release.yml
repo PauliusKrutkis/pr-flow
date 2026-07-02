@@ -1,0 +1,147 @@
+# Release pipeline: pushing a `v*` tag builds signed installers for macOS
+# (both architectures), Windows and Linux, publishes them to a GitHub Release,
+# and uploads the `latest.json` manifest the in-app auto-updater polls.
+#
+# Required repo secrets:
+#   TAURI_SIGNING_PRIVATE_KEY           (contents of ~/.tauri/prflow.key)
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  (empty string for a passwordless key)
+#
+# Cut a release with:
+#   git tag v0.1.0 && git push origin v0.1.0
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin
+            rust-targets: aarch64-apple-darwin
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin
+            rust-targets: x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            args: ""
+            rust-targets: ""
+          - platform: windows-latest
+            args: ""
+            rust-targets: ""
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl \
+            wget file libxdo-dev libssl-dev libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: apps/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: "Nod ${{ github.ref_name }}"
+          releaseBody: "See the assets below to install this version. The app auto-updates from here on."
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          args: ${{ matrix.args }}
+
+  # Bumps the Homebrew tap so `brew install --cask pauliuskrutkis/tap/nod`
+  # serves the new version. Skipped quietly until the TAP_REPO_TOKEN secret
+  # (a PAT with push access to PauliusKrutkis/homebrew-tap) exists.
+  update-tap:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bump cask in homebrew-tap
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_REPO_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "TAP_REPO_TOKEN not set — skipping Homebrew tap update."
+            exit 0
+          fi
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          BASE="https://github.com/$REPO/releases/download/$TAG"
+          curl -fsSL -o arm.dmg "$BASE/Nod_${VERSION}_aarch64.dmg"
+          curl -fsSL -o intel.dmg "$BASE/Nod_${VERSION}_x64.dmg"
+          ARM_SHA=$(sha256sum arm.dmg | cut -d' ' -f1)
+          INTEL_SHA=$(sha256sum intel.dmg | cut -d' ' -f1)
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/PauliusKrutkis/homebrew-tap.git" tap
+          mkdir -p tap/Casks
+          {
+            echo 'cask "nod" do'
+            echo '  arch arm: "aarch64", intel: "x64"'
+            echo ''
+            echo "  version \"$VERSION\""
+            echo "  sha256 arm:   \"$ARM_SHA\","
+            echo "         intel: \"$INTEL_SHA\""
+            echo ''
+            echo '  url "https://github.com/PauliusKrutkis/pr-flow/releases/download/v#{version}/Nod_#{version}_#{arch}.dmg"'
+            echo '  name "Nod"'
+            echo '  desc "Keyboard-first code review for GitHub and GitLab"'
+            echo '  homepage "https://github.com/PauliusKrutkis/pr-flow"'
+            echo ''
+            echo '  livecheck do'
+            echo '    url :url'
+            echo '    strategy :github_latest'
+            echo '  end'
+            echo ''
+            echo '  auto_updates true'
+            echo ''
+            echo '  app "Nod.app"'
+            echo ''
+            echo '  zap trash: ['
+            echo '    "~/Library/Application Support/com.pauliuskrutkis.nod",'
+            echo '  ]'
+            echo 'end'
+          } > tap/Casks/nod.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/nod.rb
+          git commit -m "nod ${VERSION}" || { echo "cask unchanged"; exit 0; }
+          git push

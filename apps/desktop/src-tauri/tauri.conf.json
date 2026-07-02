@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "PR Flow",
+  "productName": "Nod",
   "version": "0.1.0",
-  "identifier": "com.pauliuskrutkis.prflow",
+  "identifier": "com.pauliuskrutkis.nod",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "PR Flow",
+        "title": "Nod",
         "width": 1400,
         "height": 900,
         "minWidth": 900,
@@ -33,14 +33,14 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "createUpdaterArtifacts": false
+    "createUpdaterArtifacts": true
   },
   "plugins": {
     "updater": {
       "endpoints": [
         "https://github.com/PauliusKrutkis/pr-flow/releases/latest/download/latest.json"
       ],
-      "pubkey": "REPLACE_WITH_TAURI_SIGNER_PUBLIC_KEY"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFCMDFERTA3MDFEMTIyODUKUldTRkl0RUJCOTRCcS9sMHdNNnZSTlhRelRTUTkzVnpHeWRVSjVmRDRYZTJqNmFHRXNRaDh5RjMK"
     }
   }
 }
