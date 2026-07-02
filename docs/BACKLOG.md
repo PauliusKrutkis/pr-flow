@@ -383,3 +383,8 @@ link interception · Universal Links.
 - Stage 3 is **technically cool** but high maintenance — zero users have asked yet.
 - First testers will complain about comment jumps, Escape, slowness, memory — not
   missing link interception.
+
+## Parked ideas (2026-07-02)
+
+- **Subscribed repos**: watch chosen repositories (not just PRs involving you) —
+  a fifth inbox source, likely per-account repo picker + polling. Shape TBD.
