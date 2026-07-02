@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ArrowLeftRight,
@@ -23,10 +23,12 @@ import type {
   InboxData,
   PendingComment,
   PullRequest,
+  ReviewComment,
   ReviewEvent,
 } from "../../types";
 import { useAppStore } from "../../store/appStore";
 import { useHotkeys } from "../../keyboard";
+import type { Binding } from "../../keyboard/types";
 import { usePullRequestDetail } from "../../hooks/usePullRequestDetail";
 import { useCommentMutations } from "../../hooks/useComments";
 import { queryClient, queryKeys } from "../../lib/queryClient";
@@ -37,7 +39,9 @@ import { Spinner } from "../ui/Spinner";
 import { Kbd } from "../ui/Kbd";
 import { Avatar } from "../ui/Avatar";
 import { FileSidebar } from "./FileSidebar";
-import { DiffViewer, type JumpTarget } from "./DiffViewer";
+import { FileSection } from "./FileSection";
+import { isImageFile } from "./ImageDiff";
+import type { CursorSeed, JumpTarget } from "./DiffViewer";
 import { RightPanel } from "./RightPanel";
 import { OrientBanner } from "./OrientBanner";
 import { SubmitReviewModal } from "./SubmitReviewModal";
@@ -48,6 +52,12 @@ interface ReviewScreenProps {
   repo: string;
   number: number;
 }
+
+const EMPTY_COMMENTS: ReviewComment[] = [];
+const EMPTY_PENDING: PendingComment[] = [];
+
+/** A section counts as "current" once its header crosses this offset. */
+const ACTIVE_OFFSET = 48;
 
 export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const keyValue = prKey({ owner, name: repo, number });
@@ -62,8 +72,13 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   // Resume position for this PR (captured once per mount, before edits).
   const [initialMem] = useState(() => getReviewMemory(keyValue));
 
-  const [selectedFileIndex, setSelectedFileIndex] = useState(
-    initialMem?.fileIndex ?? 0,
+  // The "current" file: what the keyboard talks to and the sidebar highlights.
+  // Driven by scrolling (topmost visible section), hover, and file navigation.
+  const [activeIndex, setActiveIndex] = useState(initialMem?.fileIndex ?? 0);
+  // Windowing: sections whose diff bodies are rendered. Grows as you approach
+  // sections; never shrinks, so scrolling back is always instant.
+  const [mounted, setMounted] = useState<Set<number>>(
+    () => new Set([0, initialMem?.fileIndex ?? 0]),
   );
   // The info drawer starts closed — the diff dominates until `i` opens it.
   const [rightOpen, setRightOpen] = useState(false);
@@ -77,24 +92,71 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const [jump, setJump] = useState<(JumpTarget & { filename: string }) | null>(
     null,
   );
+  // Cross-file cursor handoff (j/k moving past a file edge).
+  const [seed, setSeed] = useState<(CursorSeed & { index: number }) | null>(
+    null,
+  );
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sectionEls = useRef(new Map<number, HTMLElement>());
   const pendingId = useRef(0);
-  const restoredScrollRef = useRef(false);
+  const resumedRef = useRef(false);
   const mountShaRef = useRef("");
   const jumpNonceRef = useRef(0);
+  const seedNonceRef = useRef(0);
+  const scrollRafRef = useRef<number | null>(null);
 
   const goInbox = useAppStore((s) => s.goInbox);
   const toggleViewed = useAppStore((s) => s.toggleViewed);
-  // Subscribe to the viewed map so the header count stays reactive.
+  // Subscribe to the viewed map so the sidebar and headers stay reactive.
   const viewed = useAppStore((s) => s.viewed);
+  const viewedFiles = viewed[keyValue];
+  const viewedSet = useMemo(() => new Set(viewedFiles ?? []), [viewedFiles]);
 
-  const files = detail?.files ?? [];
+  const files = useMemo(() => detail?.files ?? [], [detail]);
   const fileCount = files.length;
-  const clampedIndex = Math.min(selectedFileIndex, Math.max(fileCount - 1, 0));
-  const selectedFile = files[clampedIndex];
-  const isCurrentViewed =
-    !!selectedFile && (viewed[keyValue] ?? []).includes(selectedFile.filename);
+  const clampedIndex = Math.min(activeIndex, Math.max(fileCount - 1, 0));
+  const activeFile = files[clampedIndex];
+  const isCurrentViewed = !!activeFile && viewedSet.has(activeFile.filename);
+
+  // Live refs so rAF-coalesced handlers and stable callbacks read fresh state.
+  const activeIndexRef = useRef(clampedIndex);
+  activeIndexRef.current = clampedIndex;
+  const fileCountRef = useRef(fileCount);
+  fileCountRef.current = fileCount;
+  const filesRef = useRef(files);
+  filesRef.current = files;
+
+  // Per-file buckets, memoized so FileSection memoization holds across the
+  // frequent active-index re-renders.
+  const commentsByFile = useMemo(() => {
+    const m = new Map<string, ReviewComment[]>();
+    for (const c of detail?.comments ?? []) {
+      const arr = m.get(c.path) ?? [];
+      arr.push(c);
+      m.set(c.path, arr);
+    }
+    return m;
+  }, [detail?.comments]);
+  const pendingByFile = useMemo(() => {
+    const m = new Map<string, PendingComment[]>();
+    for (const p of pending) {
+      const arr = m.get(p.path) ?? [];
+      arr.push(p);
+      m.set(p.path, arr);
+    }
+    return m;
+  }, [pending]);
+
+  // Placeholder heights for not-yet-rendered sections, from patch line counts.
+  const estimates = useMemo(
+    () =>
+      files.map((f) => {
+        if (!f.patch) return 280;
+        return Math.max(80, f.patch.split("\n").length * 26 + 56);
+      }),
+    [files],
+  );
 
   // Seed the head sha on open (recording open latency), then only speak up if
   // the PR's head *moves while you're reviewing it* — no on-open summary banner.
@@ -114,14 +176,16 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     }
   }, [pr, keyValue]);
 
-  // Restore the saved scroll position once the diff is on screen.
+  // Resume: scroll back to the file you were on. Anchoring to the file section
+  // (not a raw scrollTop) stays correct even though placeholder heights above
+  // it are estimates.
   useEffect(() => {
-    if (!detail || restoredScrollRef.current) return;
-    restoredScrollRef.current = true;
-    const top = initialMem?.scrollTop ?? 0;
-    if (top > 0) {
+    if (!detail || resumedRef.current) return;
+    resumedRef.current = true;
+    const idx = initialMem?.fileIndex ?? 0;
+    if (idx > 0 && idx < detail.files.length) {
       requestAnimationFrame(() => {
-        if (scrollRef.current) scrollRef.current.scrollTop = top;
+        sectionEls.current.get(idx)?.scrollIntoView({ block: "start" });
       });
     }
   }, [detail, initialMem]);
@@ -139,40 +203,103 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     requestAnimationFrame(() => usePerfStore.getState().completeFile());
   }, [clampedIndex]);
 
-  function scrollTop() {
-    scrollRef.current?.scrollTo({ top: 0 });
+  const registerEl = useCallback((index: number, el: HTMLElement | null) => {
+    if (el) sectionEls.current.set(index, el);
+    else sectionEls.current.delete(index);
+  }, []);
+
+  // Mount diff bodies as their sections approach the viewport.
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root || fileCount === 0) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const add: number[] = [];
+        for (const en of entries) {
+          if (!en.isIntersecting) continue;
+          const idx = Number((en.target as HTMLElement).dataset.fileIndex);
+          if (Number.isFinite(idx)) add.push(idx);
+        }
+        if (add.length) {
+          setMounted((prev) => {
+            if (add.every((i) => prev.has(i))) return prev;
+            const next = new Set(prev);
+            for (const i of add) next.add(i);
+            return next;
+          });
+        }
+      },
+      { root, rootMargin: "1000px 0px" },
+    );
+    for (const el of sectionEls.current.values()) io.observe(el);
+    return () => io.disconnect();
+  }, [fileCount]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollRafRef.current != null) cancelAnimationFrame(scrollRafRef.current);
+      if (fileRafRef.current != null) cancelAnimationFrame(fileRafRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // The topmost section whose header has crossed the active line is "current".
+  function computeActive() {
+    const c = scrollRef.current;
+    if (!c) return;
+    const top = c.getBoundingClientRect().top;
+    let cur = 0;
+    for (let i = 0; i < fileCountRef.current; i++) {
+      const el = sectionEls.current.get(i);
+      if (!el) continue;
+      if (el.getBoundingClientRect().top - top <= ACTIVE_OFFSET) cur = i;
+      else break;
+    }
+    if (activeIndexRef.current !== cur) setActiveIndex(cur);
   }
+
+  function handleScroll() {
+    if (scrollRef.current) {
+      updateReviewMemory(keyValue, { scrollTop: scrollRef.current.scrollTop });
+    }
+    if (scrollRafRef.current == null) {
+      scrollRafRef.current = requestAnimationFrame(() => {
+        scrollRafRef.current = null;
+        computeActive();
+      });
+    }
+  }
+
   function pageScroll(dir: number) {
     const el = scrollRef.current;
     if (el) el.scrollBy({ top: dir * el.clientHeight * 0.85 });
   }
 
-  // File switching is coalesced per animation frame, mirroring the diff line
-  // cursor: holding r/t (or Tab) accumulates a net delta applied once per
-  // frame, so a burst of key-repeats can't queue up a remount per press.
-  const fileCountRef = useRef(fileCount);
-  fileCountRef.current = fileCount;
+  // ---- file navigation ------------------------------------------------------
+
+  function scrollToFile(i: number) {
+    if (fileCountRef.current === 0) return;
+    const target = Math.min(Math.max(i, 0), fileCountRef.current - 1);
+    usePerfStore.getState().markFileStart();
+    setMounted((prev) => (prev.has(target) ? prev : new Set(prev).add(target)));
+    setActiveIndex(target);
+    setCommentIndex(0);
+    setJump(null);
+    requestAnimationFrame(() => {
+      sectionEls.current.get(target)?.scrollIntoView({ block: "start" });
+    });
+  }
+
+  // r/t/Tab are coalesced per animation frame, mirroring the line cursor:
+  // holding the key accumulates a net delta applied once per frame.
   const fileDeltaRef = useRef(0);
   const fileRafRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (fileRafRef.current != null) cancelAnimationFrame(fileRafRef.current);
-    };
-  }, []);
-
   function flushFileMove() {
     fileRafRef.current = null;
     const delta = fileDeltaRef.current;
     fileDeltaRef.current = 0;
-    if (delta === 0 || fileCountRef.current === 0) return;
-    usePerfStore.getState().markFileStart();
-    setSelectedFileIndex((i) =>
-      Math.min(Math.max(i + delta, 0), fileCountRef.current - 1),
-    );
-    setCommentIndex(0);
-    setJump(null);
-    scrollTop();
+    if (delta === 0) return;
+    scrollToFile(activeIndexRef.current + delta);
   }
   function moveFile(delta: number) {
     if (fileCountRef.current === 0) return;
@@ -184,32 +311,54 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const nextFile = () => moveFile(1);
   const prevFile = () => moveFile(-1);
 
-  function selectFile(i: number) {
-    usePerfStore.getState().markFileStart();
-    setSelectedFileIndex(i);
-    setCommentIndex(0);
-    setJump(null);
-    scrollTop();
-  }
-
-  // From text search: open the file AND land on the matched line.
+  // From text search: reveal the file AND land on the matched line.
   function selectLine(fileIndex: number, anchor: string) {
     const target = files[fileIndex];
     if (!target) return;
     usePerfStore.getState().markFileStart();
-    setSelectedFileIndex(fileIndex);
+    setMounted((prev) =>
+      prev.has(fileIndex) ? prev : new Set(prev).add(fileIndex),
+    );
+    setActiveIndex(fileIndex);
     setCommentIndex(0);
     jumpNonceRef.current += 1;
     setJump({ filename: target.filename, anchor, nonce: jumpNonceRef.current });
   }
 
+  // j/k crossing a file edge: activate the neighbour and seed its cursor.
+  const handleCursorExit = useCallback((index: number, dir: 1 | -1) => {
+    const next = index + dir;
+    if (next < 0 || next >= fileCountRef.current) return;
+    setMounted((prev) => (prev.has(next) ? prev : new Set(prev).add(next)));
+    setActiveIndex(next);
+    seedNonceRef.current += 1;
+    setSeed({
+      index: next,
+      edge: dir > 0 ? "first" : "last",
+      nonce: seedNonceRef.current,
+    });
+  }, []);
+
+  // Hovering a row claims the keyboard for that file.
+  const handleActivate = useCallback((index: number) => {
+    setActiveIndex((cur) => (cur === index ? cur : index));
+  }, []);
+
+  const handleToggleViewedAt = useCallback(
+    (index: number) => {
+      const f = filesRef.current[index];
+      if (f) toggleViewed(keyValue, f.filename);
+    },
+    [toggleViewed, keyValue],
+  );
+
   function toggleViewedFile() {
-    if (selectedFile) toggleViewed(keyValue, selectedFile.filename);
+    if (activeFile) toggleViewed(keyValue, activeFile.filename);
   }
   // `e`: ensure the current file is marked viewed, then advance.
   function markViewedAndNext() {
-    if (selectedFile && !isCurrentViewed) toggleViewed(keyValue, selectedFile.filename);
-    nextFile();
+    if (activeFile && !isCurrentViewed) toggleViewed(keyValue, activeFile.filename);
+    scrollToFile(activeIndexRef.current + 1);
   }
   function copyLink() {
     if (!pr?.url) return;
@@ -250,17 +399,36 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     nodes[next].scrollIntoView({ block: "center" });
   }
 
-  function addPendingComment(c: {
-    path: string;
-    line: number;
-    side: string;
-    body: string;
-  }) {
-    setPending((cur) => [...cur, { id: `p${pendingId.current++}`, ...c }]);
-  }
-  function removePendingComment(id: string) {
+  const addPendingComment = useCallback(
+    (c: { path: string; line: number; side: string; body: string }) => {
+      setPending((cur) => [...cur, { id: `p${pendingId.current++}`, ...c }]);
+    },
+    [],
+  );
+  const removePendingComment = useCallback((id: string) => {
     setPending((cur) => cur.filter((p) => p.id !== id));
-  }
+  }, []);
+
+  const headShaRef = useRef("");
+  headShaRef.current = pr?.headSha ?? "";
+  const handleAddComment = useCallback(
+    async (a: { path: string; line: number; side: string; body: string }) => {
+      await addReviewComment.mutateAsync({
+        body: a.body,
+        commitId: headShaRef.current,
+        path: a.path,
+        line: a.line,
+        side: a.side,
+      });
+    },
+    [addReviewComment.mutateAsync],
+  );
+  const handleReply = useCallback(
+    async (a: { inReplyTo: number; body: string }) => {
+      await reply.mutateAsync(a);
+    },
+    [reply.mutateAsync],
+  );
 
   function openSubmit() {
     submitReview.reset();
@@ -288,7 +456,31 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     }
   }
 
+  // When the current file has no diff to cursor through (an image or a plain
+  // binary without a mounted viewer), j/k flow straight into the neighbours.
+  // These fallbacks are listed only in that case, so a mounted DiffViewer's own
+  // j/k always wins.
+  const activeHasNoDiffCursor =
+    !!activeFile && (isImageFile(activeFile) || !mounted.has(clampedIndex));
+  const cursorFallbacks: Binding[] = activeHasNoDiffCursor
+    ? [
+        {
+          keys: ["j", "down"],
+          description: "Next line",
+          hidden: true,
+          run: () => handleCursorExit(activeIndexRef.current, 1),
+        },
+        {
+          keys: ["k", "up"],
+          description: "Previous line",
+          hidden: true,
+          run: () => handleCursorExit(activeIndexRef.current, -1),
+        },
+      ]
+    : [];
+
   useHotkeys("review", [
+    ...cursorFallbacks,
     {
       keys: ["r"],
       description: "Next file",
@@ -455,14 +647,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         ? "Open"
         : pr.state;
 
-  const fileComments = selectedFile
-    ? detail.comments.filter((c) => c.path === selectedFile.filename)
-    : [];
-  const pendingForFile = selectedFile
-    ? pending.filter((p) => p.path === selectedFile.filename)
-    : [];
-  const selectedGlyph = selectedFile ? fileGlyph(selectedFile.status) : null;
-  const viewedNow = viewed[keyValue]?.length ?? 0;
+  const viewedNow = viewedSet.size;
+  const mutationPending = addReviewComment.isPending || reply.isPending;
 
   return (
     <div className="dir-quiet relative flex h-full min-h-0 overflow-hidden">
@@ -470,7 +656,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         <FileSidebar
           files={files}
           selectedIndex={clampedIndex}
-          onSelect={selectFile}
+          onSelect={scrollToFile}
           prKeyValue={keyValue}
           comments={detail.comments}
           pending={pending}
@@ -516,6 +702,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
           </div>
 
           <div className="flex shrink-0 items-center gap-4">
+            <span className="qf-muted text-xs">
+              {viewedNow}/{fileCount} viewed
+            </span>
             <div className="qf-stat-group">
               <span className="qf-add">+{pr.additions}</span>
               <span className="qf-del">−{pr.deletions}</span>
@@ -559,69 +748,43 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
           />
         )}
 
-        {selectedFile && selectedGlyph && (
-          <div className="qf-filebar flex shrink-0 items-center gap-3 px-6 py-2">
-            <span className={"qf-file-glyph " + selectedGlyph.cls}>
-              {selectedGlyph.letter}
-            </span>
-            <span className="qf-filebar-name min-w-0 truncate">
-              {selectedFile.previousFilename &&
-                selectedFile.status === "renamed" && (
-                  <span className="qf-filebar-prev">
-                    {selectedFile.previousFilename} →{" "}
-                  </span>
-                )}
-              {selectedFile.filename}
-            </span>
-            <span className="qf-filebar-stat">
-              <span className="qf-add">+{selectedFile.additions}</span>
-              <span className="qf-del">−{selectedFile.deletions}</span>
-            </span>
-            <span className="ml-auto qf-muted text-xs">
-              {viewedNow}/{fileCount} viewed
-            </span>
-          </div>
-        )}
-
         <div
           ref={scrollRef}
-          onScroll={() => {
-            if (scrollRef.current)
-              updateReviewMemory(keyValue, {
-                scrollTop: scrollRef.current.scrollTop,
-              });
-          }}
-          className="min-w-0 flex-1 overflow-y-auto"
+          onScroll={handleScroll}
+          className="qf-scrollhost min-w-0 flex-1 overflow-y-auto"
         >
-          {selectedFile ? (
-            <DiffViewer
-              key={selectedFile.filename}
-              file={selectedFile}
-              comments={fileComments}
-              commitId={pr.headSha}
-              jumpTo={
-                jump && jump.filename === selectedFile.filename ? jump : null
-              }
-              pending={pendingForFile}
+          {files.map((file, i) => (
+            <FileSection
+              key={file.filename}
+              file={file}
+              index={i}
+              active={i === clampedIndex}
+              mountedBody={mounted.has(i)}
+              estimatedHeight={estimates[i]}
+              registerEl={registerEl}
+              viewed={viewedSet.has(file.filename)}
+              owner={owner}
+              repo={repo}
+              baseSha={pr.baseSha}
+              headSha={pr.headSha}
+              comments={commentsByFile.get(file.filename) ?? EMPTY_COMMENTS}
+              pending={pendingByFile.get(file.filename) ?? EMPTY_PENDING}
+              jump={jump && jump.filename === file.filename ? jump : null}
+              seed={seed && seed.index === i ? seed : null}
+              addPending={mutationPending}
+              onActivate={handleActivate}
+              onCursorExit={handleCursorExit}
+              onToggleViewed={handleToggleViewedAt}
+              onAddComment={handleAddComment}
+              onReply={handleReply}
               onAddPending={addPendingComment}
               onRemovePending={removePendingComment}
-              onAddComment={async (a) => {
-                await addReviewComment.mutateAsync({
-                  body: a.body,
-                  commitId: pr.headSha,
-                  path: a.path,
-                  line: a.line,
-                  side: a.side,
-                });
-              }}
-              onReply={async (a) => {
-                await reply.mutateAsync(a);
-              }}
-              addPending={addReviewComment.isPending || reply.isPending}
             />
-          ) : (
-            <div className="qf-empty">No files changed.</div>
-          )}
+          ))}
+          {fileCount === 0 && <div className="qf-empty">No files changed.</div>}
+          {/* Scroll-past-end room so the last file can reach the top and
+              become the current file for keyboard navigation. */}
+          {fileCount > 1 && <div style={{ height: "55vh" }} aria-hidden />}
         </div>
       </main>
 
@@ -650,7 +813,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         mode={prSearch ?? "files"}
         onClose={() => setPrSearch(null)}
         files={files}
-        onSelectFile={selectFile}
+        onSelectFile={scrollToFile}
         onSelectLine={selectLine}
       />
     </div>
@@ -686,20 +849,4 @@ function BranchChip({ name, label }: { name: string; label: string }) {
       {name}
     </button>
   );
-}
-
-/** File-status glyph for the path strip (mirrors FileSidebar's glyphs). */
-function fileGlyph(status: string): { letter: string; cls: string } {
-  switch (status) {
-    case "added":
-      return { letter: "A", cls: "qf-st-add" };
-    case "removed":
-      return { letter: "D", cls: "qf-st-del" };
-    case "renamed":
-      return { letter: "R", cls: "qf-st-ren" };
-    case "copied":
-      return { letter: "C", cls: "qf-st-ren" };
-    default:
-      return { letter: "M", cls: "qf-st-mod" };
-  }
 }

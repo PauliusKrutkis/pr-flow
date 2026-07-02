@@ -46,6 +46,9 @@ pub struct PullRequest {
     pub created_at: String,
     pub comments_count: u64,
     pub head_sha: String,
+    /// Base branch tip sha (populated on detail fetch; used for image diffs).
+    #[serde(default)]
+    pub base_sha: String,
     /// Branch names (populated on detail fetch; empty in the list view).
     #[serde(default)]
     pub head_ref: String,
@@ -231,6 +234,7 @@ fn pr_from_graphql(v: &Value) -> PullRequest {
         created_at: fstr(v, "createdAt"),
         comments_count,
         head_sha: String::new(),
+        base_sha: String::new(),
         head_ref: String::new(),
         base_ref: String::new(),
         additions: 0,
@@ -259,6 +263,7 @@ fn pr_from_pull(v: &Value, owner: &str, repo: &str) -> PullRequest {
         created_at: fstr(v, "created_at"),
         comments_count: fu64(v, "review_comments"),
         head_sha: nstr(v, "head", "sha"),
+        base_sha: nstr(v, "base", "sha"),
         head_ref: nstr(v, "head", "ref"),
         base_ref: nstr(v, "base", "ref"),
         additions: fu64(v, "additions"),
@@ -685,6 +690,70 @@ pub async fn submit_review(
         .map_err(net_err)?;
     read_body(resp).await?;
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Commands: file blobs (image diffs)
+// ---------------------------------------------------------------------------
+
+/// Hard cap on blob size shipped to the webview — images beyond this are
+/// better opened on GitHub than base64-encoded into the UI.
+const MAX_BLOB_BYTES: usize = 20 * 1024 * 1024;
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct FileBlob {
+    /// Raw file bytes, base64-encoded (the frontend builds a data: URL).
+    pub base64: String,
+    pub size: u64,
+}
+
+/// Fetches a file's raw contents at a given ref (sha or branch). Used by the
+/// image diff view to load the before/after versions of a binary file.
+#[tauri::command]
+pub async fn get_file_blob(
+    app: AppHandle,
+    owner: String,
+    repo: String,
+    path: String,
+    r#ref: String,
+) -> Result<FileBlob, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+    let token = token_or_err(&app).await?;
+    let client = build_client(&token)?;
+
+    // Build via Url so exotic path characters are percent-encoded safely.
+    let mut u = url::Url::parse(API).map_err(|e| e.to_string())?;
+    u.set_path(&format!("repos/{owner}/{repo}/contents/{path}"));
+    u.query_pairs_mut().append_pair("ref", &r#ref);
+
+    let resp = client
+        .get(u)
+        .header(reqwest::header::ACCEPT, "application/vnd.github.raw+json")
+        .send()
+        .await
+        .map_err(net_err)?;
+    let status = resp.status();
+    if !status.is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        let msg = serde_json::from_str::<Value>(&text)
+            .ok()
+            .and_then(|v| v.get("message").and_then(Value::as_str).map(String::from))
+            .unwrap_or(text);
+        return Err(format!("GitHub API error ({}): {}", status.as_u16(), msg));
+    }
+    let bytes = resp.bytes().await.map_err(net_err)?;
+    if bytes.len() > MAX_BLOB_BYTES {
+        return Err(format!(
+            "File is too large to preview ({} MB).",
+            bytes.len() / (1024 * 1024)
+        ));
+    }
+    Ok(FileBlob {
+        base64: STANDARD.encode(&bytes),
+        size: bytes.len() as u64,
+    })
 }
 
 // ---------------------------------------------------------------------------

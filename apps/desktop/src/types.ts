@@ -27,6 +27,8 @@ export interface PullRequest {
   commentsCount: number;
   /** head commit sha — needed to post inline review comments (empty in list view) */
   headSha: string;
+  /** base branch tip sha (populated on detail fetch; used for image diffs) */
+  baseSha: string;
   /** Branch names (populated on detail fetch; empty in the list view). */
   headRef: string;
   baseRef: string;
@@ -108,6 +110,12 @@ export interface PendingComment {
 
 /** prKey -> list of filenames marked viewed */
 export type ViewedMap = Record<string, string[]>;
+
+/** Raw file bytes at a ref, base64-encoded (image diffs). */
+export interface FileBlob {
+  base64: string;
+  size: number;
+}
 
 /** A newer release reported by the updater (null when up to date). */
 export interface UpdateInfo {

@@ -23,6 +23,7 @@ pub fn run() {
             github::get_cached_inbox,
             github::get_pull_request_detail,
             github::get_cached_pull_request_detail,
+            github::get_file_blob,
             github::create_review_comment,
             github::reply_to_review_comment,
             github::create_issue_comment,

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  FileBlob,
   GitHubUser,
   InboxData,
   PullRequestDetail,
@@ -68,6 +69,10 @@ export const api = {
     commitId: string;
     comments: { path: string; line: number; side: string; body: string }[];
   }) => invoke<void>("submit_review", args),
+
+  // ---- file blobs (image diffs) ----
+  getFileBlob: (owner: string, repo: string, path: string, ref: string) =>
+    invoke<FileBlob>("get_file_blob", { owner, repo, path, ref }),
 
   // ---- viewed-file state (local only) ----
   getViewedMap: () => invoke<ViewedMap>("get_viewed_map"),

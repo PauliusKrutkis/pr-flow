@@ -23,6 +23,12 @@ export interface JumpTarget {
   nonce: number;
 }
 
+/** Seed the line cursor at a file edge (j/k flowing in from a neighbour file). */
+export interface CursorSeed {
+  edge: "first" | "last";
+  nonce: number;
+}
+
 interface DiffViewerProps {
   file: ChangedFile;
   comments: ReviewComment[];
@@ -44,6 +50,17 @@ interface DiffViewerProps {
   }) => void;
   onRemovePending: (id: string) => void;
   jumpTo?: JumpTarget | null;
+  /**
+   * With several DiffViewers on one page only the active one owns the j/k/c
+   * hotkeys. Defaults to true for single-viewer use.
+   */
+  active?: boolean;
+  /** The pointer entered one of this file's rows — claim the keyboard. */
+  onActivate?: () => void;
+  /** j/k pressed past this file's first/last line. */
+  onCursorExit?: (dir: 1 | -1) => void;
+  /** Place the cursor on this file's first/last line (cross-file j/k). */
+  seed?: CursorSeed | null;
 }
 
 /** A stable key for anchoring comments/boxes to a (side, line) location. */
@@ -194,6 +211,10 @@ export function DiffViewer({
   onAddPending,
   onRemovePending,
   jumpTo,
+  active = true,
+  onActivate,
+  onCursorExit,
+  seed,
 }: DiffViewerProps) {
   const hunks = useMemo(() => parsePatch(file.patch), [file.patch]);
   const threadsByAnchor = useMemo(() => buildThreads(comments), [comments]);
@@ -322,12 +343,31 @@ export function DiffViewer({
     });
   }
 
+  // Parent callbacks, read through refs so row/cursor handlers stay stable.
+  const onActivateRef = useRef(onActivate);
+  onActivateRef.current = onActivate;
+  const onCursorExitRef = useRef(onCursorExit);
+  onCursorExitRef.current = onCursorExit;
+
   // Hovering a row moves the line cursor (without scrolling), so a following
-  // j/k continues from the line under the pointer and `c` comments on it.
+  // j/k continues from the line under the pointer and `c` comments on it. It
+  // also claims the keyboard for this file when several diffs share the page.
   const handleRowEnter = useCallback((anchor: string) => {
     setInputMode((m) => (m === "mouse" ? m : "mouse"));
     setCursorAnchor((cur) => (cur === anchor ? cur : anchor));
+    onActivateRef.current?.();
   }, []);
+
+  // Cross-file cursor entry: place the cursor on this file's first/last line.
+  useEffect(() => {
+    if (!seed) return;
+    const anchors = navAnchorsRef.current;
+    if (anchors.length === 0) return;
+    const anchor = seed.edge === "first" ? anchors[0] : anchors[anchors.length - 1];
+    setInputMode("keyboard");
+    userMovedCursorRef.current = true;
+    setCursorAnchor(anchor);
+  }, [seed]);
 
   // Cursor movement is coalesced per animation frame: rapid key-repeats (and
   // direction changes) accumulate a net delta that is applied once, so the
@@ -351,18 +391,53 @@ export function DiffViewer({
     const anchors = navAnchorsRef.current;
     const delta = pendingDeltaRef.current;
     pendingDeltaRef.current = 0;
-    if (anchors.length === 0 || delta === 0) return;
+    if (delta === 0) return;
+    // Nothing to cursor through here (empty/binary diff) — pass j/k along.
+    if (anchors.length === 0) {
+      onCursorExitRef.current?.(delta > 0 ? 1 : -1);
+      return;
+    }
     const cur = cursorAnchorRef.current;
     userMovedCursorRef.current = true;
-    // First move just reveals the cursor at the top instead of jumping past it.
+    // First move just reveals the cursor — on the first line still visible in
+    // the scroll viewport, so a mid-file reader isn't yanked to the file top.
     if (!cur) {
-      setCursorAnchor(anchors[0]);
+      setCursorAnchor(firstVisibleAnchor() ?? anchors[0]);
       return;
     }
     const idx = anchors.indexOf(cur);
     const base = idx < 0 ? 0 : idx;
-    const nextIdx = Math.min(Math.max(base + delta, 0), anchors.length - 1);
+    const raw = base + delta;
+    // Moving past either edge hands the cursor to the neighbouring file.
+    if (raw < 0 && base === 0 && onCursorExitRef.current) {
+      onCursorExitRef.current(-1);
+      return;
+    }
+    if (
+      raw > anchors.length - 1 &&
+      base === anchors.length - 1 &&
+      onCursorExitRef.current
+    ) {
+      onCursorExitRef.current(1);
+      return;
+    }
+    const nextIdx = Math.min(Math.max(raw, 0), anchors.length - 1);
     setCursorAnchor(anchors[nextIdx]);
+  }
+
+  /** The anchor of the topmost row currently inside the scroll viewport. */
+  function firstVisibleAnchor(): string | null {
+    const container = containerRef.current;
+    const host = container?.closest(".qf-scrollhost");
+    if (!container || !host) return null;
+    const hostTop = host.getBoundingClientRect().top;
+    const rows = container.querySelectorAll<HTMLElement>("[data-anchor]");
+    for (const el of rows) {
+      if (el.getBoundingClientRect().bottom > hostTop + 4) {
+        return el.dataset.anchor ?? null;
+      }
+    }
+    return null;
   }
 
   function moveCursor(delta: number) {
@@ -407,7 +482,7 @@ export function DiffViewer({
         run: commentAtCursor,
       },
     ],
-    { activate: false },
+    { activate: false, enabled: active },
   );
 
   if (!file.patch) {

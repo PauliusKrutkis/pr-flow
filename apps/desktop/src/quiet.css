@@ -593,11 +593,105 @@ textarea.q-input { resize: none; line-height: 1.5; }
 }
 .dir-quiet .qf-back:hover { color: var(--fg); background: var(--surface-2); }
 
-/* file path strip */
-.dir-quiet .qf-filebar { border-bottom: 1px solid var(--line); background: var(--bg); }
-.dir-quiet .qf-filebar-name { font-family: var(--font-mono); font-size: 12px; color: var(--fg); }
+/* ============ FILE SECTIONS (continuous scroll) ============ */
+/* One section per changed file; the header stays stuck while its diff scrolls. */
+.dir-quiet .qf-fsec { border-bottom: 1px solid var(--line); }
+.dir-quiet .qf-fsec-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 16px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  /* the iris edge marks the file the keyboard is talking to */
+  box-shadow: inset 2px 0 0 transparent;
+  transition: box-shadow 120ms ease;
+}
+.dir-quiet .qf-fsec-active .qf-fsec-head { box-shadow: inset 2px 0 0 var(--accent); }
+.dir-quiet .qf-fsec-name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dir-quiet .qf-fsec-base { color: var(--fg); font-weight: 500; }
 .dir-quiet .qf-filebar-prev { color: var(--faint); }
 .dir-quiet .qf-filebar-stat { font-family: var(--font-mono); font-size: 11px; display: flex; gap: 6px; }
+.dir-quiet .qf-viewed-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--faint);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+.dir-quiet .qf-viewed-btn:hover { color: var(--fg); border-color: var(--line-2); }
+.dir-quiet .qf-viewed-btn.qf-viewed-on {
+  color: var(--add);
+  border-color: rgba(95, 208, 138, 0.35);
+  background: var(--add-bg);
+}
+/* not-yet-rendered section body — height comes from the patch line count */
+.dir-quiet .qf-fsec-ph { background: transparent; }
+
+/* ============ IMAGE DIFF ============ */
+.dir-quiet .qf-imgdiff {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 20px 24px;
+  font-family: var(--font-ui);
+}
+.dir-quiet .qf-img-pane { flex: 1 1 280px; max-width: 620px; margin: 0; }
+.dir-quiet .qf-img-cap {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.dir-quiet .qf-img-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.dir-quiet .qf-img-old .qf-img-label { color: var(--del); }
+.dir-quiet .qf-img-new .qf-img-label { color: var(--add); }
+.dir-quiet .qf-img-meta { font-family: var(--font-mono); font-size: 11px; color: var(--faint); }
+.dir-quiet .qf-img-frame {
+  display: grid;
+  place-items: center;
+  min-height: 140px;
+  padding: 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  /* checkerboard so transparency reads */
+  background-image: conic-gradient(
+    rgba(255, 255, 255, 0.045) 0 25%,
+    transparent 0 50%,
+    rgba(255, 255, 255, 0.045) 0 75%,
+    transparent 0
+  );
+  background-size: 16px 16px;
+}
+.dir-quiet .qf-img-old .qf-img-frame { border-color: rgba(255, 112, 136, 0.28); }
+.dir-quiet .qf-img-new .qf-img-frame { border-color: rgba(95, 208, 138, 0.28); }
+.dir-quiet .qf-img-frame img { max-width: 100%; max-height: 480px; border-radius: 4px; }
+.dir-quiet .qf-img-err { font-size: 12px; color: var(--muted); text-align: center; }
 .dir-quiet .qf-filebar-lang {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -650,13 +744,14 @@ textarea.q-input { resize: none; line-height: 1.5; }
 .dir-quiet .qf-row:not(.qf-row-hunk) { cursor: text; }
 /* The active-row highlight is never shown on open — only the keyboard cursor
    (keyboard mode) or the row under the pointer (mouse mode) lights up, and only
-   one at a time. Both wear the same iris wash + left rail. */
-.dir-quiet .qf-diff:not([data-mode="mouse"]) .qf-row-active,
+   one at a time. Both wear the same iris wash + left rail. The cursor highlight
+   is scoped to the ACTIVE file section so stale cursors in other files stay dark. */
+.dir-quiet .qf-fsec-active .qf-diff:not([data-mode="mouse"]) .qf-row-active,
 .dir-quiet .qf-diff[data-mode="mouse"] .qf-row:not(.qf-row-hunk):hover {
   border-left-color: var(--accent);
   background: var(--accent-soft);
 }
-.dir-quiet .qf-diff:not([data-mode="mouse"]) .qf-row-active .qf-gutter,
+.dir-quiet .qf-fsec-active .qf-diff:not([data-mode="mouse"]) .qf-row-active .qf-gutter,
 .dir-quiet .qf-diff[data-mode="mouse"] .qf-row:not(.qf-row-hunk):hover .qf-gutter {
   color: var(--fg);
 }
@@ -702,8 +797,9 @@ textarea.q-input { resize: none; line-height: 1.5; }
   cursor: pointer;
 }
 /* A single "+" affordance, driven by the last input modality: keyboard shows it
-   on the cursor row, mouse shows it on the hovered row — never both at once. */
-.dir-quiet .qf-diff:not([data-mode="mouse"]) .qf-row-active .qf-add-btn { display: grid; }
+   on the cursor row (active file only), mouse shows it on the hovered row —
+   never both at once. */
+.dir-quiet .qf-fsec-active .qf-diff:not([data-mode="mouse"]) .qf-row-active .qf-add-btn { display: grid; }
 .dir-quiet .qf-diff[data-mode="mouse"] .qf-row:hover .qf-add-btn { display: grid; }
 
 .dir-quiet .qf-empty { padding: 40px; text-align: center; color: var(--faint); font-family: var(--font-ui); }
