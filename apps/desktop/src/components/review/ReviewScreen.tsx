@@ -82,6 +82,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   );
   // The info drawer starts closed — the diff dominates until `i` opens it.
   const [rightOpen, setRightOpen] = useState(false);
+  const rightOpenRef = useRef(false);
+  rightOpenRef.current = rightOpen;
   const [commentIndex, setCommentIndex] = useState(0);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [prSearch, setPrSearch] = useState<null | "files" | "text">(null);
@@ -115,6 +117,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const removePendingStore = useAppStore((s) => s.removePendingComment);
   const clearPendingComments = useAppStore((s) => s.clearPendingComments);
   const setFlash = useAppStore((s) => s.setFlash);
+  const activeLogin = useAppStore(
+    (s) => s.accounts.find((a) => a.id === s.activeAccountId)?.login,
+  );
   const viewedFiles = viewed[keyValue];
   const viewedSet = useMemo(() => new Set(viewedFiles ?? []), [viewedFiles]);
 
@@ -352,10 +357,13 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   function toggleViewedFile() {
     if (activeFile) toggleViewed(keyValue, activeFile.filename);
   }
-  // `e`: toggle the current file's viewed state, then advance.
+  // `e`: toggle the current file's viewed state. Marking advances to the next
+  // file; UNmarking stays put (you're revisiting, not moving on).
   function markViewedAndNext() {
-    if (activeFile) toggleViewed(keyValue, activeFile.filename);
-    scrollToFile(activeIndexRef.current + 1);
+    if (!activeFile) return;
+    const wasViewed = viewedSet.has(activeFile.filename);
+    toggleViewed(keyValue, activeFile.filename);
+    if (!wasViewed) scrollToFile(activeIndexRef.current + 1);
   }
   function copyLink() {
     if (!pr?.url) return;
@@ -598,11 +606,15 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       run: () => setPrSearch("text"),
     },
     {
+      // Esc walks out one layer at a time: info drawer first, then the inbox.
       keys: "esc",
-      description: "Back to inbox",
+      description: "Close panel / back to inbox",
       group: "Navigation",
       icon: Inbox,
-      run: goInbox,
+      run: () => {
+        if (rightOpenRef.current) setRightOpen(false);
+        else goInbox();
+      },
     },
   ]);
 
@@ -722,6 +734,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         : pr.state;
 
   const viewedNow = viewedSet.size;
+  const isOwnPr = !!activeLogin && pr.author === activeLogin;
   // Design principle: no loading states — mutations are optimistic, so the
   // composers never enter a busy mode.
 
@@ -863,16 +876,17 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       <RightPanel
         pr={pr}
         fileCount={fileCount}
+        conversation={detail.issueComments ?? []}
         open={rightOpen}
         onClose={() => setRightOpen(false)}
         onAddIssueComment={async (body) => {
           await addIssueComment.mutateAsync({ body });
         }}
-        issuePending={addIssueComment.isPending}
       />
 
       <SubmitReviewModal
         open={submitOpen}
+        ownPr={isOwnPr}
         pendingCount={pending.length}
         busy={false}
         error={null}

@@ -980,6 +980,23 @@ textarea.q-input { resize: none; line-height: 1.5; }
   font-size: 11px;
   color: var(--muted);
 }
+.dir-quiet .qf-drawer-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: 7px;
+}
+
+/* PR-level conversation inside the drawer */
+.dir-quiet .qf-convo { display: flex; flex-direction: column; gap: 14px; }
+.dir-quiet .qf-convo-item { display: flex; gap: 10px; }
+.dir-quiet .qf-convo-item > :first-child { margin-top: 2px; }
+.dir-quiet .qf-convo-main { min-width: 0; flex: 1; }
+.dir-quiet .qf-convo-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+
 .dir-quiet .qf-drawer-h {
   font-size: 11px;
   font-weight: 600;
@@ -1084,6 +1101,34 @@ textarea.q-input { resize: none; line-height: 1.5; }
 }
 .qb-stack-br { right: 18px; bottom: 18px; }
 .qb-stack-tr { right: 18px; top: 18px; }
+
+/* THE alert host — every transient surface stacks here, anchored to the
+   bottom-right of the content column. On the inbox the reading pane (380px)
+   is chrome, not content, so alerts sit just left of it. */
+.qb-stack-host { right: 18px; bottom: 18px; }
+[data-route="inbox"] .qb-stack-host { right: calc(380px + 30px); }
+@media (max-width: 900px) {
+  [data-route="inbox"] .qb-stack-host { right: 18px; }
+}
+
+/* ---- inbox zero — a calm full-bleed moment ---- */
+.qz-wrap {
+  position: relative;
+  background: radial-gradient(560px 320px at 50% 38%, rgba(139, 128, 255, 0.07), transparent 70%);
+}
+.qz-glyph {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 0 40px -8px var(--accent-soft), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.qz-title { margin-top: 18px; font-size: 15px; font-weight: 600; color: var(--fg); }
+.qz-hint { margin-top: 6px; max-width: 380px; font-size: 12.5px; line-height: 1.55; color: var(--faint); }
 
 .qb-toast {
   position: relative;

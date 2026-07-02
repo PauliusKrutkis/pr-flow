@@ -1,29 +1,30 @@
-import type { PullRequest } from "../../types";
+import type { IssueComment, PullRequest } from "../../types";
 import { formatRelativeTime, formatAbsolute } from "../../lib/time";
 import { Markdown } from "../Markdown";
+import { Avatar } from "../ui/Avatar";
 import { AddCommentBox } from "./AddCommentBox";
 
 interface RightPanelProps {
   pr: PullRequest;
   fileCount: number;
+  conversation: IssueComment[];
   open: boolean;
   onClose: () => void;
   onAddIssueComment: (body: string) => Promise<void>;
-  issuePending: boolean;
 }
 
 /**
- * The Quiet info drawer — a slide-in panel (toggled with `i`) holding the PR
- * description, quick meta, and an issue-comment composer. It positions against
- * the review root (`.dir-quiet`, which is `position: relative`).
+ * The info drawer (toggled with `i`, Esc closes): the PR description, the
+ * PR-level conversation, and a composer. Comments post optimistically — the
+ * composer never blocks.
  */
 export function RightPanel({
   pr,
   fileCount,
+  conversation,
   open,
   onClose,
   onAddIssueComment,
-  issuePending,
 }: RightPanelProps) {
   const body = pr.body?.trim() ?? "";
 
@@ -44,10 +45,10 @@ export function RightPanel({
             type="button"
             className="qf-drawer-close qf-focusable"
             onClick={onClose}
-            title="Close (i)"
+            title="Close (Esc)"
             aria-label="Close"
           >
-            ✕
+            Esc
           </button>
         </div>
 
@@ -58,6 +59,9 @@ export function RightPanel({
               <span className="qf-drawer-pr-title">{pr.title}</span>
             </div>
             <div className="qf-drawer-meta">
+              <Avatar url={pr.authorAvatarUrl} name={pr.author} size={15} />
+              <span>{pr.author}</span>
+              <span className="qf-dot">·</span>
               <span>
                 {fileCount} file{fileCount === 1 ? "" : "s"}
               </span>
@@ -66,7 +70,7 @@ export function RightPanel({
               <span className="qf-del">−{pr.deletions}</span>
               <span className="qf-dot">·</span>
               <span className="qf-muted" title={formatAbsolute(pr.updatedAt)}>
-                updated {formatRelativeTime(pr.updatedAt)}
+                {formatRelativeTime(pr.updatedAt)}
               </span>
             </div>
           </section>
@@ -76,16 +80,54 @@ export function RightPanel({
             {body ? (
               <Markdown>{body}</Markdown>
             ) : (
-              <p className="text-sm text-muted">No description.</p>
+              <p className="text-sm text-faint">No description.</p>
             )}
           </section>
 
           <section className="qf-drawer-section">
-            <h3 className="qf-drawer-h">Add a comment</h3>
+            <h3 className="qf-drawer-h">
+              Conversation
+              {conversation.length > 0 && (
+                <span className="qf-drawer-count">{conversation.length}</span>
+              )}
+            </h3>
+            {conversation.length === 0 ? (
+              <p className="text-sm text-faint">
+                No discussion yet — start one below.
+              </p>
+            ) : (
+              <div className="qf-convo">
+                {conversation.map((c) => (
+                  <div key={c.id} className="qf-convo-item">
+                    <Avatar url={c.userAvatarUrl} name={c.user} size={20} />
+                    <div className="qf-convo-main">
+                      <div className="qf-convo-head">
+                        <span className="qf-comment-author">{c.user}</span>
+                        <span
+                          className="qf-comment-time"
+                          title={formatAbsolute(c.createdAt)}
+                        >
+                          {formatRelativeTime(c.createdAt)}
+                        </span>
+                      </div>
+                      <div className="qf-comment-body">
+                        <Markdown>{c.body}</Markdown>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="qf-drawer-section">
             <AddCommentBox
-              onSubmit={onAddIssueComment}
-              onCancel={() => {}}
-              pending={issuePending}
+              onSubmit={(text) => {
+                // Optimistic — appears in the conversation instantly.
+                void onAddIssueComment(text);
+              }}
+              onCancel={onClose}
+              pending={false}
               placeholder="Comment on this pull request…"
               submitLabel="Comment"
               autoFocus={false}

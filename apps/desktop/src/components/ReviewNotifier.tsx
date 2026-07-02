@@ -122,7 +122,6 @@ export function ReviewNotifier() {
   const dismiss = () => setToast(null);
 
   return (
-    <div className="qb-stack qb-stack-br" aria-live="polite">
       <div
         ref={cardRef}
         tabIndex={-1}
@@ -180,6 +179,5 @@ export function ReviewNotifier() {
           </div>
         </div>
       </div>
-    </div>
   );
 }

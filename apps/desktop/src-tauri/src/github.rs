@@ -90,12 +90,26 @@ pub struct ReviewComment {
     pub in_reply_to_id: Option<u64>,
 }
 
+/// A PR-level conversation comment (not anchored to a diff line).
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueComment {
+    pub id: u64,
+    pub body: String,
+    pub user: String,
+    pub user_avatar_url: String,
+    pub created_at: String,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PullRequestDetail {
     pub pr: PullRequest,
     pub files: Vec<ChangedFile>,
     pub comments: Vec<ReviewComment>,
+    /// PR-level conversation, oldest first (default keeps old caches readable).
+    #[serde(default)]
+    pub issue_comments: Vec<IssueComment>,
     pub fetched_at: u64,
 }
 
@@ -221,14 +235,18 @@ pub(crate) async fn read_body(resp: reqwest::Response) -> Result<Value, String> 
     let status = resp.status();
     let text = resp.text().await.map_err(net_err)?;
     if !status.is_success() {
-        let msg = serde_json::from_str::<Value>(&text)
-            .ok()
-            .and_then(|v| {
-                v.get("message")
-                    .and_then(Value::as_str)
-                    .map(|s| s.to_string())
-            })
+        let parsed = serde_json::from_str::<Value>(&text).ok();
+        let mut msg = parsed
+            .as_ref()
+            .and_then(|v| v.get("message").and_then(Value::as_str))
+            .map(|s| s.to_string())
             .unwrap_or_else(|| text.clone());
+        // GitHub's 422s carry the actual reason in `errors` — surface it.
+        if let Some(errors) = parsed.as_ref().and_then(|v| v.get("errors")) {
+            if !errors.is_null() {
+                msg = format!("{msg} — {errors}");
+            }
+        }
         log(&format!("API error {}: {}", status.as_u16(), msg));
         return Err(format!("API error ({}): {}", status.as_u16(), msg));
     }
@@ -521,10 +539,27 @@ impl GitHubPlatform {
         .await?;
         let comments: Vec<ReviewComment> = comments_v.iter().map(comment_from).collect();
 
+        let issue_v = get_all_pages(
+            &self.client,
+            &format!("{API}/repos/{owner}/{repo}/issues/{number}/comments"),
+        )
+        .await?;
+        let issue_comments: Vec<IssueComment> = issue_v
+            .iter()
+            .map(|v| IssueComment {
+                id: fu64(v, "id"),
+                body: fstr(v, "body"),
+                user: nstr(v, "user", "login"),
+                user_avatar_url: nstr(v, "user", "avatar_url"),
+                created_at: fstr(v, "created_at"),
+            })
+            .collect();
+
         let detail = PullRequestDetail {
             pr,
             files,
             comments,
+            issue_comments,
             fetched_at: now_millis(),
         };
         log(&format!(

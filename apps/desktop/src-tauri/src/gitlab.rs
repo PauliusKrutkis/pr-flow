@@ -16,8 +16,8 @@ use serde_json::{json, Value};
 
 use crate::github::{
     fbool, fopt_u64, fstr, fu64, get_all_pages, get_json, log, net_err, now_millis, nstr,
-    read_body, ChangedFile, FileBlob, GitHubUser, InboxBucket, InboxData, PullRequest,
-    PullRequestDetail, ReviewComment, ReviewCommentInput, MAX_BLOB_BYTES,
+    read_body, ChangedFile, FileBlob, GitHubUser, InboxBucket, InboxData, IssueComment,
+    PullRequest, PullRequestDetail, ReviewComment, ReviewCommentInput, MAX_BLOB_BYTES,
 };
 
 pub struct GitLabPlatform {
@@ -318,17 +318,34 @@ impl GitLabPlatform {
         )
         .await?;
         let mut comments: Vec<ReviewComment> = Vec::new();
+        let mut issue_comments: Vec<IssueComment> = Vec::new();
         for disc in &discussions {
             let notes = disc
                 .get("notes")
                 .and_then(Value::as_array)
                 .cloned()
                 .unwrap_or_default();
-            // Only diff-anchored, human threads become review comments.
             let Some(root) = notes.first() else { continue };
-            if fbool(root, "system") || root.get("position").map_or(true, Value::is_null) {
+            if fbool(root, "system") {
                 continue;
             }
+            // Positionless human threads are MR-level conversation.
+            if root.get("position").map_or(true, Value::is_null) {
+                for note in &notes {
+                    if fbool(note, "system") {
+                        continue;
+                    }
+                    issue_comments.push(IssueComment {
+                        id: fu64(note, "id"),
+                        body: fstr(note, "body"),
+                        user: nstr(note, "author", "username"),
+                        user_avatar_url: nstr(note, "author", "avatar_url"),
+                        created_at: fstr(note, "created_at"),
+                    });
+                }
+                continue;
+            }
+            // Diff-anchored threads become review comments.
             comments.push(note_to_comment(root, None));
             for reply in notes.iter().skip(1) {
                 if fbool(reply, "system") {
@@ -337,11 +354,13 @@ impl GitLabPlatform {
                 comments.push(note_to_comment(reply, Some(root)));
             }
         }
+        issue_comments.sort_by(|a, b| a.created_at.cmp(&b.created_at));
 
         let detail = PullRequestDetail {
             pr,
             files,
             comments,
+            issue_comments,
             fetched_at: now_millis(),
         };
         log(&format!(

@@ -39,6 +39,7 @@ install + relaunch in one click.
 | Public key in `tauri.conf.json` | ✅ `plugins.updater.pubkey` |
 | Repo secrets | ✅ `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (empty) |
 | Homebrew tap repo | ✅ `PauliusKrutkis/homebrew-tap` (public), seeded with the v0.1.0 cask. The release workflow pushes bumps over SSH via the `TAP_DEPLOY_KEY` secret — a deploy key that can write only to that one repo. Cask template: `packaging/homebrew/Casks/nod.rb`. |
+| OAuth in released builds | ✅ Baked in at compile time (`option_env!` in auth.rs): secrets `PRFLOW_GH_CLIENT_ID` / `PRFLOW_GH_CLIENT_SECRET` are set; the repo **variable** `NOD_GITLAB_CLIENT_ID` activates GitLab sign-in once the gitlab.com app is registered (`gh variable set NOD_GITLAB_CLIENT_ID`). Runtime `.env` still overrides in dev. Note: a client secret inside a desktop binary is extractable — a known, accepted trade-off for GitHub OAuth apps (GitHub CLI does the same); GitLab uses PKCE and has no secret at all. |
 | Apple notarization | ⬜ Optional — needs an Apple Developer cert ($99/yr). Until then macOS users clear quarantine after install (`xattr -dr com.apple.quarantine /Applications/Nod.app`) or right-click → Open. (Homebrew 6 removed `--no-quarantine`.) |
 
 ## Private repo vs auto-updates

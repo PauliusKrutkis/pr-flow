@@ -22,9 +22,23 @@ const OAUTH_PORT: u16 = 8765;
 const REDIRECT_URI: &str = "http://127.0.0.1:8765/callback";
 const SCOPE: &str = "repo read:org";
 
+/// Runtime env (dev: `src-tauri/.env` via dotenvy) wins; otherwise fall back
+/// to values baked in at COMPILE time — packaged builds have no .env, so CI
+/// exports these before `tauri build` (see release.yml).
+fn env_or_baked(runtime: &str, baked: Option<&'static str>) -> String {
+    let v = std::env::var(runtime).unwrap_or_default();
+    if !v.trim().is_empty() {
+        return v.trim().to_string();
+    }
+    baked.unwrap_or_default().trim().to_string()
+}
+
 fn oauth_credentials() -> Result<(String, String), String> {
-    let id = std::env::var("PRFLOW_GH_CLIENT_ID").unwrap_or_default();
-    let secret = std::env::var("PRFLOW_GH_CLIENT_SECRET").unwrap_or_default();
+    let id = env_or_baked("PRFLOW_GH_CLIENT_ID", option_env!("PRFLOW_GH_CLIENT_ID"));
+    let secret = env_or_baked(
+        "PRFLOW_GH_CLIENT_SECRET",
+        option_env!("PRFLOW_GH_CLIENT_SECRET"),
+    );
     if id.trim().is_empty() || secret.trim().is_empty() {
         return Err(
             "GitHub sign-in isn't configured. Set PRFLOW_GH_CLIENT_ID and \
@@ -104,7 +118,7 @@ fn focus_main(app: &AppHandle) {
 // ---------------------------------------------------------------------------
 
 fn gitlab_client_id() -> Result<String, String> {
-    let id = std::env::var("NOD_GITLAB_CLIENT_ID").unwrap_or_default();
+    let id = env_or_baked("NOD_GITLAB_CLIENT_ID", option_env!("NOD_GITLAB_CLIENT_ID"));
     if id.trim().is_empty() {
         return Err(
             "GitLab sign-in isn't configured. Set NOD_GITLAB_CLIENT_ID and restart \
