@@ -244,18 +244,33 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   }, []);
 
   // The topmost section whose header has crossed the active line is "current".
-  function computeActive() {
+  function lastCrossedIndex(threshold: number): number {
     const c = scrollRef.current;
-    if (!c) return;
+    if (!c) return 0;
     const top = c.getBoundingClientRect().top;
     let cur = 0;
     for (let i = 0; i < fileCountRef.current; i++) {
       const el = sectionEls.current.get(i);
       if (!el) continue;
-      if (el.getBoundingClientRect().top - top <= ACTIVE_OFFSET) cur = i;
+      if (el.getBoundingClientRect().top - top <= threshold) cur = i;
       else break;
     }
-    if (activeIndexRef.current !== cur) setActiveIndex(cur);
+    return cur;
+  }
+
+  // Hysteresis: advancing (scrolling down) switches as soon as the next header
+  // crosses the line; retreating (scrolling up) waits until the current header
+  // is clearly below it. The dead zone in between stops the sidebar highlight
+  // from flapping between two files on small scrolls.
+  function computeActive() {
+    const current = activeIndexRef.current;
+    const ahead = lastCrossedIndex(ACTIVE_OFFSET);
+    if (ahead > current) {
+      setActiveIndex(ahead);
+      return;
+    }
+    const behind = lastCrossedIndex(ACTIVE_OFFSET + 40);
+    if (behind < current) setActiveIndex(behind);
   }
 
   function handleScroll() {
@@ -310,6 +325,21 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   }
   const nextFile = () => moveFile(1);
   const prevFile = () => moveFile(-1);
+
+  // Tab cycles with wrap-around: past the last file it returns to the first.
+  function cycleFile(dir: number) {
+    const n = fileCountRef.current;
+    if (n === 0) return;
+    scrollToFile((activeIndexRef.current + dir + n) % n);
+  }
+
+  // From file search: open the file and seed the comment cursor on its first
+  // line, so `c` (and j/k) work immediately without a hover.
+  function selectFileFromSearch(fileIndex: number) {
+    scrollToFile(fileIndex);
+    seedNonceRef.current += 1;
+    setSeed({ index: fileIndex, edge: "first", nonce: seedNonceRef.current });
+  }
 
   // From text search: reveal the file AND land on the matched line.
   function selectLine(fileIndex: number, anchor: string) {
@@ -497,13 +527,13 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     },
     {
       // Tab is repurposed Superhuman-style: instead of wandering focus, it
-      // cycles files (Shift+Tab goes back). This also removes stray focus
-      // rings — focus never leaves the diff.
+      // cycles files with wrap-around (Shift+Tab goes back). This also removes
+      // stray focus rings — focus never leaves the diff.
       keys: "tab",
-      description: "Next / previous file",
+      description: "Cycle files",
       group: "Files",
       icon: ArrowLeftRight,
-      run: (e) => (e.shiftKey ? prevFile() : nextFile()),
+      run: (e) => cycleFile(e.shiftKey ? -1 : 1),
     },
     {
       keys: ["space", "pagedown"],
@@ -813,7 +843,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         mode={prSearch ?? "files"}
         onClose={() => setPrSearch(null)}
         files={files}
-        onSelectFile={scrollToFile}
+        onSelectFile={selectFileFromSearch}
         onSelectLine={selectLine}
       />
     </div>

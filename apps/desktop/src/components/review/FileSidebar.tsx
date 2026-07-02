@@ -85,12 +85,21 @@ export function FileSidebar({
     [files],
   );
 
-  // Scroll the selected file into view (e.g. after r/t navigation).
+  // Keep the selected file visible — but only scroll when it actually leaves
+  // the visible band, and glide there. Scrolling the diff retargets the
+  // selection continuously; snapping the sidebar on every change reads jumpy.
   useEffect(() => {
-    const el = listRef.current?.querySelector<HTMLElement>(
+    const list = listRef.current;
+    const el = list?.querySelector<HTMLElement>(
       `[data-file-index="${selectedIndex}"]`,
     );
-    el?.scrollIntoView({ block: "nearest" });
+    if (!list || !el) return;
+    const listRect = list.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const pad = 8;
+    if (elRect.top < listRect.top + pad || elRect.bottom > listRect.bottom - pad) {
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
   }, [selectedIndex]);
 
   return (

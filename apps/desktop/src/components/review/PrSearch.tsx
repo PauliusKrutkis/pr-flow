@@ -2,12 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, FileCode, CornerDownLeft } from "lucide-react";
 import type { ChangedFile } from "../../types";
 import { parsePatch } from "../../lib/diff";
+import { highlightLineWithMatch } from "../../lib/highlight";
 import { Kbd } from "../ui/Kbd";
-import {
-  fuzzyIndices,
-  HighlightIndices,
-  HighlightMatch,
-} from "../ui/Highlight";
+import { fuzzyIndices, HighlightIndices } from "../ui/Highlight";
 
 type Mode = "files" | "text";
 
@@ -250,13 +247,20 @@ export function PrSearch({
                   <span className="qsp-num">L{it.line ?? "?"}</span>
                   <span className="qsp-main">
                     <span className="qsp-title q-mono">
-                      <span>
-                        {it.content ? (
-                          <HighlightMatch text={it.content} query={q} />
-                        ) : (
-                          " "
-                        )}
-                      </span>
+                      {it.content ? (
+                        <span
+                          className="hljs"
+                          dangerouslySetInnerHTML={{
+                            __html: highlightLineWithMatch(
+                              it.content,
+                              it.filename,
+                              q,
+                            ),
+                          }}
+                        />
+                      ) : (
+                        <span> </span>
+                      )}
                     </span>
                     <span className="qsp-meta">{base(it.filename)}</span>
                     {i === sel && it.context.length > 1 && (
@@ -270,13 +274,18 @@ export function PrSearch({
                             }
                           >
                             <span className="qsp-snip-num">{l.num ?? ""}</span>
-                            <span className="qsp-snip-code">
-                              {l.hit ? (
-                                <HighlightMatch text={l.text} query={q} />
-                              ) : (
-                                l.text || " "
-                              )}
-                            </span>
+                            <span
+                              className="qsp-snip-code hljs"
+                              dangerouslySetInnerHTML={{
+                                __html: l.text
+                                  ? highlightLineWithMatch(
+                                      l.text,
+                                      it.filename,
+                                      l.hit ? q : "",
+                                    )
+                                  : " ",
+                              }}
+                            />
                           </span>
                         ))}
                       </span>

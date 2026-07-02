@@ -14,8 +14,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
 
+use crate::accounts;
 use crate::github::{build_client, fetch_user, GitHubUser};
-use crate::storage;
 
 const OAUTH_PORT: u16 = 8765;
 const REDIRECT_URI: &str = "http://127.0.0.1:8765/callback";
@@ -79,7 +79,7 @@ pub async fn login_with_github(app: AppHandle) -> Result<GitHubUser, String> {
     let token = exchange_code(&client_id, &client_secret, &code, &state).await?;
     let client = build_client(&token)?;
     let user = fetch_user(&client).await?;
-    storage::write_token(&app, &token)?;
+    accounts::upsert_github(&app, &token, &user.login, &user.avatar_url)?;
 
     // Bring the app back to the front — the user just finished in the browser,
     // so the handoff should land them straight in PR Flow.

@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AccountInfo,
+  AccountsInfo,
   FileBlob,
   GitHubUser,
   InboxData,
@@ -21,6 +23,13 @@ export const api = {
   setToken: (token: string) => invoke<GitHubUser>("set_token", { token }),
   clearToken: () => invoke<void>("clear_token"),
   getCurrentUser: () => invoke<GitHubUser>("get_current_user"),
+
+  // ---- accounts ----
+  listAccounts: () => invoke<AccountsInfo>("list_accounts"),
+  addAccount: (args: { provider: string; host?: string | null; token: string }) =>
+    invoke<AccountInfo>("add_account", args),
+  setActiveAccount: (id: string) => invoke<void>("set_active_account", { id }),
+  removeAccount: (id: string) => invoke<AccountsInfo>("remove_account", { id }),
 
   // ---- inbox (all tabs in one GraphQL request) ----
   listInbox: () => invoke<InboxData>("list_inbox"),

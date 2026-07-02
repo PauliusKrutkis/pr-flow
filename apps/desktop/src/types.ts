@@ -117,6 +117,21 @@ export interface FileBlob {
   size: number;
 }
 
+/** A connected code-host account (token stays in the backend). */
+export interface AccountInfo {
+  id: string;
+  /** "github" | "gitlab" */
+  provider: string;
+  host: string;
+  login: string;
+  avatarUrl: string;
+}
+
+export interface AccountsInfo {
+  accounts: AccountInfo[];
+  activeId: string | null;
+}
+
 /** A newer release reported by the updater (null when up to date). */
 export interface UpdateInfo {
   version: string;

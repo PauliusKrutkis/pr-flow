@@ -156,14 +156,18 @@ const DiffLine = memo(function DiffLine({
   isFlash: boolean;
   hasAnchored: boolean;
   canComment: boolean;
-  onEnter: (anchor: string) => void;
+  onEnter: (anchor: string, x: number, y: number) => void;
   onOpenBox: (anchor: string) => void;
 }) {
   const marker = row.type === "add" ? "+" : row.type === "del" ? "-" : " ";
   return (
     <div
       data-anchor={anchor ?? undefined}
-      onMouseEnter={anchor != null ? () => onEnter(anchor) : undefined}
+      onMouseEnter={
+        anchor != null
+          ? (e) => onEnter(anchor, e.clientX, e.clientY)
+          : undefined
+      }
       className={cn(
         "qf-row",
         row.type === "add" && "qf-row-add",
@@ -306,6 +310,7 @@ export function DiffViewer({
   useEffect(() => {
     if (!jumpTo) return;
     const { anchor } = jumpTo;
+    keyboardHoldRef.current = true;
     setInputMode("keyboard");
     setCursorAnchor(anchor);
     setFlashAnchor(anchor);
@@ -349,14 +354,42 @@ export function DiffViewer({
   const onCursorExitRef = useRef(onCursorExit);
   onCursorExitRef.current = onCursorExit;
 
+  // Pointer-intent gate. Scrolling under a stationary pointer fires hover
+  // events with unchanged coordinates, which would steal the cursor right back
+  // after every j/k, search jump, or seed. While a keyboard action "holds" the
+  // cursor, hover only wins once the pointer has genuinely moved (> 6px).
+  const keyboardHoldRef = useRef(false);
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+  const isRealPointer = useCallback((x: number, y: number): boolean => {
+    if (!keyboardHoldRef.current) {
+      lastPointRef.current = { x, y };
+      return true;
+    }
+    const last = lastPointRef.current;
+    if (!last) {
+      lastPointRef.current = { x, y };
+      return false;
+    }
+    if (Math.abs(x - last.x) + Math.abs(y - last.y) > 6) {
+      keyboardHoldRef.current = false;
+      lastPointRef.current = { x, y };
+      return true;
+    }
+    return false;
+  }, []);
+
   // Hovering a row moves the line cursor (without scrolling), so a following
   // j/k continues from the line under the pointer and `c` comments on it. It
   // also claims the keyboard for this file when several diffs share the page.
-  const handleRowEnter = useCallback((anchor: string) => {
-    setInputMode((m) => (m === "mouse" ? m : "mouse"));
-    setCursorAnchor((cur) => (cur === anchor ? cur : anchor));
-    onActivateRef.current?.();
-  }, []);
+  const handleRowEnter = useCallback(
+    (anchor: string, x: number, y: number) => {
+      if (!isRealPointer(x, y)) return;
+      setInputMode((m) => (m === "mouse" ? m : "mouse"));
+      setCursorAnchor((cur) => (cur === anchor ? cur : anchor));
+      onActivateRef.current?.();
+    },
+    [isRealPointer],
+  );
 
   // Cross-file cursor entry: place the cursor on this file's first/last line.
   useEffect(() => {
@@ -364,6 +397,7 @@ export function DiffViewer({
     const anchors = navAnchorsRef.current;
     if (anchors.length === 0) return;
     const anchor = seed.edge === "first" ? anchors[0] : anchors[anchors.length - 1];
+    keyboardHoldRef.current = true;
     setInputMode("keyboard");
     userMovedCursorRef.current = true;
     setCursorAnchor(anchor);
@@ -441,6 +475,7 @@ export function DiffViewer({
   }
 
   function moveCursor(delta: number) {
+    keyboardHoldRef.current = true;
     if (inputMode !== "keyboard") setInputMode("keyboard");
     pendingDeltaRef.current += delta;
     if (rafRef.current == null) {
@@ -500,7 +535,8 @@ export function DiffViewer({
       ref={containerRef}
       className="qf-diff"
       data-mode={inputMode}
-      onMouseMove={() => {
+      onMouseMove={(e) => {
+        if (!isRealPointer(e.clientX, e.clientY)) return;
         if (inputMode !== "mouse") setInputMode("mouse");
       }}
     >

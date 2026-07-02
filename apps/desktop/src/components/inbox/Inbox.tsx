@@ -6,8 +6,10 @@ import {
   ArrowUp,
   CornerDownLeft,
   Undo2,
+  X,
 } from "lucide-react";
 import { useHotkeys } from "../../keyboard";
+import { Kbd } from "../ui/Kbd";
 import { useAppStore } from "../../store/appStore";
 import { useInbox } from "../../hooks/useInbox";
 import { prefetchPullRequest } from "../../hooks/usePullRequestDetail";
@@ -62,6 +64,14 @@ export function Inbox() {
   const dismissed = useAppStore((s) => s.dismissed);
   const dismiss = useAppStore((s) => s.dismiss);
   const undoDismiss = useAppStore((s) => s.undoDismiss);
+  // Transient "Archived — undo?" toast after `e`.
+  const [archiveToast, setArchiveToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   const inbox = data ?? EMPTY;
   const filtered = useMemo(
@@ -142,6 +152,14 @@ export function Inbox() {
     const fallback = filtered[selectedIndex + 1] ?? filtered[selectedIndex - 1];
     setSelectedKey(fallback ? keyFor(fallback) : null);
     dismiss(keyFor(pr), pr.updatedAt);
+    setArchiveToast(pr.title);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setArchiveToast(null), 6000);
+  };
+  const undoArchive = () => {
+    undoDismiss();
+    setArchiveToast(null);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
   };
 
   useHotkeys("inbox", [
@@ -166,7 +184,7 @@ export function Inbox() {
       description: "Undo archive",
       group: "Navigation",
       icon: Undo2,
-      run: undoDismiss,
+      run: undoArchive,
     },
     {
       keys: "tab",
@@ -229,6 +247,7 @@ export function Inbox() {
       ) : (
         // Two-pane: a dense list left, a reading pane for the selected PR right.
         <div className="grid min-h-0 flex-1 grid-cols-[1fr_380px] max-[900px]:grid-cols-1">
+          <div className="relative min-h-0 min-w-0">
           <div
             ref={listRef}
             role="listbox"
@@ -237,7 +256,7 @@ export function Inbox() {
             onMouseMove={() => {
               if (listMode !== "mouse") setListMode("mouse");
             }}
-            className="q-inbox-list min-h-0 overflow-y-auto border-r border-line py-3"
+            className="q-inbox-list h-full min-h-0 overflow-y-auto border-r border-line py-3"
           >
             {filtered.length === 0 ? (
               <div className="flex h-full items-center justify-center px-6">
@@ -271,6 +290,40 @@ export function Inbox() {
                 </div>
               ))
             )}
+          </div>
+
+          {/* Archive-undo toast, anchored over the list (not the reading pane). */}
+          {archiveToast && (
+            <div className="absolute bottom-4 left-1/2 z-40 w-[340px] max-w-[calc(100%-32px)] -translate-x-1/2">
+              <div className="qb-toast" role="status">
+                <span className="qb-toast-rail" aria-hidden />
+                <div className="qb-toast-body">
+                  <div className="qb-toast-head">
+                    <span className="qb-toast-title">Archived</span>
+                    <button
+                      type="button"
+                      className="qb-x"
+                      onClick={() => setArchiveToast(null)}
+                      aria-label="Dismiss"
+                    >
+                      <X size={14} aria-hidden />
+                    </button>
+                  </div>
+                  <div className="qb-toast-sub">{archiveToast}</div>
+                  <div className="qb-toast-actions">
+                    <button
+                      type="button"
+                      className="qb-toast-open"
+                      onClick={undoArchive}
+                    >
+                      Undo <Kbd combo="z" />
+                    </button>
+                    <span className="text-xs text-faint">Back when it updates</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           </div>
 
           {selectedPR ? (

@@ -61,23 +61,13 @@ struct TokenFile {
     token: String,
 }
 
-/// Reads the stored GitHub token, if any.
+/// Reads the legacy single-token file, if any (migrated into accounts.json on
+/// first load by `accounts::load_migrated`).
 pub fn read_token(app: &AppHandle) -> Result<Option<String>, String> {
     Ok(read_json::<TokenFile>(app, TOKEN_FILE)?.map(|t| t.token))
 }
 
-/// Persists the GitHub token.
-pub fn write_token(app: &AppHandle, token: &str) -> Result<(), String> {
-    write_json(
-        app,
-        TOKEN_FILE,
-        &TokenFile {
-            token: token.to_string(),
-        },
-    )
-}
-
-/// Deletes the stored token.
+/// Deletes the legacy token file after migration.
 pub fn clear_token(app: &AppHandle) -> Result<(), String> {
     remove_file(app, TOKEN_FILE)
 }

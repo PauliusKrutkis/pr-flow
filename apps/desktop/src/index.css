@@ -4,9 +4,10 @@
 /* PR Flow theme — the "Quiet" palette (deep indigo canvas, one iris accent),
    ported from apps/design-lab. Tailwind v4 reads these CSS variables and
    generates utilities like `bg-surface`, `text-muted`, `border-line`, etc.
-   NOTE: these `--color-*` values must stay in sync with the short-named Quiet
-   vars on `:root` below (and in quiet.css) — they are the same hexes exposed
-   under two naming schemes (Tailwind utilities vs. the ported q- and qf- CSS). */
+   This @theme block is the SINGLE source of truth for colors: the short-named
+   Quiet vars on `:root` below alias these `--color-*` custom properties, so a
+   palette change here propagates to both the Tailwind utilities and the ported
+   q-/qf- CSS in quiet.css. */
 @theme {
   --color-bg: #0f0f17;
   --color-surface: #15151f;
@@ -30,32 +31,33 @@
 }
 
 /* Short-named Quiet tokens for the ported q- and qf- classes (see quiet.css).
-   Kept outside @theme, which only emits color vars. Keep in sync with @theme. */
+   Pure aliases of the @theme vars above — never hardcode a hex here. The
+   translucent variants (soft washes, gutter tints) are derived with color-mix
+   so they follow the palette too. */
 :root {
-  --bg: #0f0f17;
-  --surface: #15151f;
-  --surface-2: #191924;
-  --surface-hi: #1c1c2a;
-  --line: #232334;
-  --line-2: #2c2c40;
-  --fg: #e8e8f3;
-  --muted: #9a9ab2;
-  --faint: #5f5f78;
-  --accent: #8b80ff;
-  --accent-soft: rgba(139, 128, 255, 0.16);
-  --accent-line: rgba(139, 128, 255, 0.4);
-  --accent-ink: #14111f;
-  --add: #5fd08a;
-  --del: #ff7088;
-  --warn: #e7c56a;
-  --add-bg: rgba(95, 208, 138, 0.1);
-  --del-bg: rgba(255, 112, 136, 0.1);
-  --warn-bg: rgba(231, 197, 106, 0.12);
+  --bg: var(--color-bg);
+  --surface: var(--color-surface);
+  --surface-2: var(--color-surface-2);
+  --surface-hi: var(--color-elevated);
+  --line: var(--color-line);
+  --line-2: var(--color-line-strong);
+  --fg: var(--color-fg);
+  --muted: var(--color-muted);
+  --faint: var(--color-faint);
+  --accent: var(--color-accent);
+  --accent-soft: color-mix(in srgb, var(--color-accent) 16%, transparent);
+  --accent-line: color-mix(in srgb, var(--color-accent) 40%, transparent);
+  --accent-ink: var(--color-accent-fg);
+  --add: var(--color-success);
+  --del: var(--color-danger);
+  --warn: var(--color-warning);
+  --add-bg: color-mix(in srgb, var(--color-success) 10%, transparent);
+  --del-bg: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  --warn-bg: color-mix(in srgb, var(--color-warning) 12%, transparent);
   /* diff gutter number tints (qf-only) */
-  --add-num: rgba(95, 208, 138, 0.55);
-  --del-num: rgba(255, 112, 136, 0.55);
+  --add-num: color-mix(in srgb, var(--color-success) 55%, transparent);
+  --del-num: color-mix(in srgb, var(--color-danger) 55%, transparent);
   --font-ui: Inter, system-ui, sans-serif;
-  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
 }
 
 html,

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
 import { usePerfStore } from "../lib/perf";
-import type { InboxTabKey, ViewedMap } from "../types";
+import type { AccountInfo, AccountsInfo, InboxTabKey, ViewedMap } from "../types";
 
 export type Route =
   | { name: "loading" }
@@ -152,6 +152,13 @@ interface AppState {
   dismiss: (prKey: string, updatedAt: string) => void;
   undoDismiss: () => void;
   isDismissed: (prKey: string, updatedAt: string) => boolean;
+
+  // accounts
+  accounts: AccountInfo[];
+  activeAccountId: string | null;
+  setAccounts: (info: AccountsInfo) => void;
+  /** Switch the backend's active account, then reload so every cache swaps. */
+  switchAccount: (id: string) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -236,5 +243,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Archived, and the PR hasn't updated since — newer activity resurfaces it.
     if (!at) return false;
     return new Date(updatedAt).getTime() <= new Date(at).getTime();
+  },
+
+  accounts: [],
+  activeAccountId: null,
+  setAccounts: (info) =>
+    set({ accounts: info.accounts, activeAccountId: info.activeId }),
+  switchAccount: (id) => {
+    if (get().activeAccountId === id) return;
+    // Land on the inbox after the reload — the previous account's last route
+    // (e.g. a PR) doesn't exist in the new one.
+    saveLastRoute({ name: "inbox" });
+    api
+      .setActiveAccount(id)
+      .then(() => window.location.reload())
+      .catch((e) => console.error("switch account failed", e));
   },
 }));

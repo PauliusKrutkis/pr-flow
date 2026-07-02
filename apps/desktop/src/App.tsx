@@ -1,6 +1,7 @@
 import { useEffect } from "react";
-import { Command, HelpCircle, Search } from "lucide-react";
+import { Command, HelpCircle, Search, User, UserPlus } from "lucide-react";
 import { useAppStore, loadLastRoute } from "./store/appStore";
+import type { Binding } from "./keyboard/types";
 import { useHotkeys } from "./keyboard";
 import { useLoadViewed } from "./hooks/useViewed";
 import { api } from "./lib/api";
@@ -20,6 +21,10 @@ export default function App() {
   const togglePalette = useAppStore((s) => s.togglePalette);
   const toggleHelp = useAppStore((s) => s.toggleHelp);
   const setSearchOpen = useAppStore((s) => s.setSearchOpen);
+  const accounts = useAppStore((s) => s.accounts);
+  const activeAccountId = useAppStore((s) => s.activeAccountId);
+  const setAccounts = useAppStore((s) => s.setAccounts);
+  const switchAccount = useAppStore((s) => s.switchAccount);
 
   useLoadViewed();
 
@@ -32,7 +37,33 @@ export default function App() {
         setRoute(has ? (loadLastRoute() ?? { name: "inbox" }) : { name: "token" }),
       )
       .catch(() => setRoute({ name: "token" }));
-  }, [setRoute]);
+    api.listAccounts().then(setAccounts).catch(() => {});
+  }, [setRoute, setAccounts]);
+
+  // Accounts in the palette: ⌘1…⌘9 switch, plus an "Add account" entry.
+  const accountBindings: Binding[] = [
+    ...accounts.slice(0, 9).map(
+      (a, i): Binding => ({
+        keys: `mod+${i + 1}`,
+        description:
+          a.id === activeAccountId
+            ? `Account: ${a.login} · ${a.provider} (current)`
+            : `Switch to ${a.login} · ${a.provider}`,
+        group: "Accounts",
+        icon: User,
+        run: () => switchAccount(a.id),
+        global: true,
+      }),
+    ),
+    {
+      keys: "mod+shift+a",
+      description: "Add account (GitHub / GitLab)",
+      group: "Accounts",
+      icon: UserPlus,
+      run: () => setRoute({ name: "token" }),
+      global: true,
+    },
+  ];
 
   // Shortcuts available everywhere (registered without changing active scope).
   useHotkeys(
@@ -62,6 +93,7 @@ export default function App() {
         run: () => setSearchOpen(true),
         global: true,
       },
+      ...accountBindings,
     ],
     { activate: false },
   );
@@ -76,9 +108,7 @@ export default function App() {
             <Spinner label="Loading…" />
           </div>
         )}
-        {route.name === "token" && (
-          <TokenGate onAuthenticated={() => setRoute({ name: "inbox" })} />
-        )}
+        {route.name === "token" && <TokenGate />}
         {route.name === "inbox" && <Inbox />}
         {route.name === "review" && (
           <ReviewScreen
