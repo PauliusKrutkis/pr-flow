@@ -14,6 +14,7 @@ import { GlobalSearch } from "./components/GlobalSearch";
 import { ReviewNotifier } from "./components/ReviewNotifier";
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { Spinner } from "./components/ui/Spinner";
+import { Kbd } from "./components/ui/Kbd";
 
 export default function App() {
   const route = useAppStore((s) => s.route);
@@ -25,15 +26,15 @@ export default function App() {
   const activeAccountId = useAppStore((s) => s.activeAccountId);
   const setAccounts = useAppStore((s) => s.setAccounts);
   const switchAccount = useAppStore((s) => s.switchAccount);
-  const flash = useAppStore((s) => s.flash);
-  const setFlash = useAppStore((s) => s.setFlash);
+  const toast = useAppStore((s) => s.toast);
+  const setToast = useAppStore((s) => s.setToast);
 
-  // Flash messages self-dismiss; they exist for failures of optimistic actions.
+  // Toasts self-dismiss (archive undo, failed optimistic actions, …).
   useEffect(() => {
-    if (!flash) return;
-    const t = window.setTimeout(() => setFlash(null), 10_000);
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 8_000);
     return () => window.clearTimeout(t);
-  }, [flash, setFlash]);
+  }, [toast, setToast]);
 
   useLoadViewed();
 
@@ -133,7 +134,7 @@ export default function App() {
   const isMac = navigator.userAgent.includes("Macintosh");
 
   return (
-    <div className="q-canvas flex h-full flex-col">
+    <div className="q-canvas flex h-full flex-col" data-route={route.name}>
       {isMac && <div data-tauri-drag-region className="q-titlebar shrink-0" />}
       <div className="min-h-0 flex-1">
         {route.name === "loading" && (
@@ -153,33 +154,55 @@ export default function App() {
         )}
       </div>
 
-      {flash && (
-        <div className="qb-stack qb-stack-br">
+      {/* THE alert host: every transient surface (update prompt, new-review
+          toast, archive undo, failure flashes) stacks here — bottom-right of
+          the content column (offset from the inbox reading pane via CSS). */}
+      <div className="qb-stack qb-stack-host" aria-live="polite">
+        {(route.name === "inbox" || route.name === "review") && <UpdatePrompt />}
+        {(route.name === "inbox" || route.name === "review") && <ReviewNotifier />}
+        {toast && (
           <div className="qb-toast" role="alert">
             <span className="qb-toast-rail" aria-hidden />
             <div className="qb-toast-body">
               <div className="qb-toast-head">
-                <span className="qb-toast-title">Something didn't stick</span>
+                <span className="qb-toast-title">{toast.title}</span>
                 <button
                   type="button"
                   className="qb-x"
-                  onClick={() => setFlash(null)}
+                  onClick={() => setToast(null)}
                   aria-label="Dismiss"
                 >
                   <X size={14} aria-hidden />
                 </button>
               </div>
-              <div className="qb-toast-text break-words">{flash}</div>
+              <div className="qb-toast-sub break-words">{toast.message}</div>
+              {(toast.action || toast.note) && (
+                <div className="qb-toast-actions">
+                  {toast.action && (
+                    <button
+                      type="button"
+                      className="qb-toast-open"
+                      onClick={() => {
+                        toast.action?.();
+                        setToast(null);
+                      }}
+                    >
+                      {toast.actionLabel ?? "Undo"} <Kbd combo="z" />
+                    </button>
+                  )}
+                  {toast.note && (
+                    <span className="text-xs text-faint">{toast.note}</span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <CommandPalette baseScope={baseScope} />
       <HelpOverlay baseScope={baseScope} />
       {(route.name === "inbox" || route.name === "review") && <GlobalSearch />}
-      {(route.name === "inbox" || route.name === "review") && <ReviewNotifier />}
-      {(route.name === "inbox" || route.name === "review") && <UpdatePrompt />}
     </div>
   );
 }

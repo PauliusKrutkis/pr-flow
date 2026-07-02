@@ -107,10 +107,31 @@ export function useCommentMutations(
   const addIssueComment = useMutation({
     mutationFn: (args: { body: string }) =>
       api.createIssueComment({ owner, repo, number, ...args }),
-    onError: (e) =>
-      useAppStore
-        .getState()
-        .setFlash(`Comment didn't post on ${owner}/${repo}#${number} — ${String(e)}`),
+    onMutate: async (args) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const before = queryClient.getQueryData<PullRequestDetail>(detailKey);
+      const s = useAppStore.getState();
+      const account = s.accounts.find((a) => a.id === s.activeAccountId);
+      queryClient.setQueryData<PullRequestDetail>(detailKey, (cur) =>
+        cur
+          ? {
+              ...cur,
+              issueComments: [
+                ...(cur.issueComments ?? []),
+                {
+                  id: tempId--,
+                  body: args.body,
+                  user: account?.login ?? "you",
+                  userAvatarUrl: account?.avatarUrl ?? "",
+                  createdAt: new Date().toISOString(),
+                },
+              ],
+            }
+          : cur,
+      );
+      return before;
+    },
+    onError: (e, _args, before) => rollback(before, "Comment", e),
     onSettled: invalidate,
   });
 

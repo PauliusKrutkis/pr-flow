@@ -196,9 +196,24 @@ interface AppState {
   removePendingComment: (prKey: string, id: string) => void;
   clearPendingComments: (prKey: string) => void;
 
-  /** Transient app-level message (e.g. a background submit failed). */
-  flash: string | null;
+  /**
+   * The single transient alert. Everything transient (archive undo, failed
+   * optimistic actions, …) goes through here so alerts always appear in the
+   * one shared host (bottom-right of the content column).
+   */
+  toast: AppToast | null;
+  setToast: (toast: AppToast | null) => void;
+  /** Convenience for failure messages. */
   setFlash: (message: string | null) => void;
+}
+
+export interface AppToast {
+  title: string;
+  message: string;
+  actionLabel?: string;
+  action?: () => void;
+  /** Extra line under the action row. */
+  note?: string;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -310,8 +325,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     savePending(map);
   },
 
-  flash: null,
-  setFlash: (message) => set({ flash: message }),
+  toast: null,
+  setToast: (toast) => set({ toast }),
+  setFlash: (message) =>
+    set({
+      toast: message ? { title: "Something didn't stick", message } : null,
+    }),
 
   accounts: [],
   activeAccountId: null,

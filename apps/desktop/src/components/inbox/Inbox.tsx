@@ -6,7 +6,6 @@ import {
   ArrowUp,
   CornerDownLeft,
   Undo2,
-  X,
 } from "lucide-react";
 import { useHotkeys } from "../../keyboard";
 import { Kbd } from "../ui/Kbd";
@@ -17,8 +16,6 @@ import { prKey } from "../../types";
 import type { InboxData, InboxTabKey, PullRequest } from "../../types";
 import { formatRelativeTime, formatAbsolute } from "../../lib/time";
 import { Spinner } from "../ui/Spinner";
-import { Badge } from "../ui/Badge";
-import { EmptyState } from "../ui/EmptyState";
 import { Avatar } from "../ui/Avatar";
 import { Markdown } from "../Markdown";
 import { PRListItem } from "./PRListItem";
@@ -64,14 +61,7 @@ export function Inbox() {
   const dismissed = useAppStore((s) => s.dismissed);
   const dismiss = useAppStore((s) => s.dismiss);
   const undoDismiss = useAppStore((s) => s.undoDismiss);
-  // Transient "Archived — undo?" toast after `e`.
-  const [archiveToast, setArchiveToast] = useState<string | null>(null);
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    return () => {
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    };
-  }, []);
+  const setToast = useAppStore((s) => s.setToast);
 
   const inbox = data ?? EMPTY;
   const isHidden = (pr: PullRequest, at: string | undefined) =>
@@ -163,14 +153,17 @@ export function Inbox() {
     const fallback = filtered[selectedIndex + 1] ?? filtered[selectedIndex - 1];
     setSelectedKey(fallback ? keyFor(fallback) : null);
     dismiss(keyFor(pr), pr.updatedAt);
-    setArchiveToast(pr.title);
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setArchiveToast(null), 6000);
+    setToast({
+      title: "Archived",
+      message: pr.title,
+      actionLabel: "Undo",
+      action: undoDismiss,
+      note: "Back when it updates",
+    });
   };
   const undoArchive = () => {
     undoDismiss();
-    setArchiveToast(null);
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast(null);
   };
 
   useHotkeys("inbox", [
@@ -255,10 +248,23 @@ export function Inbox() {
             </button>
           </div>
         </div>
+      ) : filtered.length === 0 ? (
+        // Empty tab: no list, no reading pane — one calm full-bleed state.
+        <InboxZero
+          title={
+            tab === "reviewRequested"
+              ? "All clear"
+              : `Nothing in “${activeTab.label}”`
+          }
+          hint={
+            tab === "reviewRequested"
+              ? "Nothing is waiting on your review. New requests land here and pop a toast."
+              : activeTab.hint
+          }
+        />
       ) : (
         // Two-pane: a dense list left, a reading pane for the selected PR right.
         <div className="grid min-h-0 flex-1 grid-cols-[1fr_380px] max-[900px]:grid-cols-1">
-          <div className="relative min-h-0 min-w-0">
           <div
             ref={listRef}
             role="listbox"
@@ -267,93 +273,75 @@ export function Inbox() {
             onMouseMove={() => {
               if (listMode !== "mouse") setListMode("mouse");
             }}
-            className="q-inbox-list h-full min-h-0 overflow-y-auto border-r border-line py-3"
+            className="q-inbox-list min-h-0 overflow-y-auto border-r border-line py-3"
           >
-            {filtered.length === 0 ? (
-              <div className="flex h-full items-center justify-center px-6">
-                {tab === "reviewRequested" ? (
-                  <EmptyState
-                    icon="✓"
-                    title="Inbox zero — no review requests"
-                    hint="Nothing is waiting on your review. New requests show up here and pop a notification."
-                  />
-                ) : (
-                  <EmptyState
-                    title={`No PRs in “${activeTab.label}”`}
-                    hint={activeTab.hint}
-                  />
-                )}
+            {filtered.map((pr, i) => (
+              <div key={pr.id} data-index={i}>
+                <PRListItem
+                  pr={pr}
+                  selected={i === selectedIndex}
+                  unread={isUnread(keyFor(pr), pr.updatedAt)}
+                  onOpen={() => open(i)}
+                  onHover={() => {
+                    // Hover moves the cursor (and the reading pane); click opens.
+                    setSelectedKey(keyFor(pr));
+                    prefetchPullRequest(pr.owner, pr.name, pr.number);
+                  }}
+                />
               </div>
-            ) : (
-              filtered.map((pr, i) => (
-                <div key={pr.id} data-index={i}>
-                  <PRListItem
-                    pr={pr}
-                    selected={i === selectedIndex}
-                    unread={isUnread(keyFor(pr), pr.updatedAt)}
-                    onOpen={() => open(i)}
-                    onHover={() => {
-                      // Hover moves the cursor (and the reading pane); click opens.
-                      setSelectedKey(keyFor(pr));
-                      prefetchPullRequest(pr.owner, pr.name, pr.number);
-                    }}
-                  />
-                </div>
-              ))
-            )}
+            ))}
           </div>
 
-          {/* Archive-undo toast — bottom-right of the PR list column. */}
-          {archiveToast && (
-            <div className="absolute bottom-4 right-4 z-40 w-[340px] max-w-[calc(100%-32px)]">
-              <div className="qb-toast" role="status">
-                <span className="qb-toast-rail" aria-hidden />
-                <div className="qb-toast-body">
-                  <div className="qb-toast-head">
-                    <span className="qb-toast-title">Archived</span>
-                    <button
-                      type="button"
-                      className="qb-x"
-                      onClick={() => setArchiveToast(null)}
-                      aria-label="Dismiss"
-                    >
-                      <X size={14} aria-hidden />
-                    </button>
-                  </div>
-                  <div className="qb-toast-sub">{archiveToast}</div>
-                  <div className="qb-toast-actions">
-                    <button
-                      type="button"
-                      className="qb-toast-open"
-                      onClick={undoArchive}
-                    >
-                      Undo <Kbd combo="z" />
-                    </button>
-                    <span className="text-xs text-faint">Back when it updates</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          </div>
-
-          {selectedPR ? (
-            <InboxDetail pr={selectedPR} />
-          ) : (
-            <aside className="hidden items-center justify-center bg-surface px-6 text-center text-sm text-faint min-[900px]:flex">
-              Select a pull request to see its summary.
-            </aside>
-          )}
+          {selectedPR && <InboxDetail pr={selectedPR} />}
         </div>
       )}
     </div>
   );
 }
 
-/** The reading pane: an expanded summary of the selected inbox PR. */
+/**
+ * The empty inbox — a quiet full-bleed moment instead of an empty two-pane
+ * layout. The return-key mark nods back at the app icon.
+ */
+function InboxZero({ title, hint }: { title: string; hint: string }) {
+  return (
+    <div className="qz-wrap flex flex-1 flex-col items-center justify-center px-6 text-center">
+      <div className="qz-glyph" aria-hidden>
+        <svg viewBox="0 0 48 48" width="26" height="26" fill="none">
+          <path
+            d="M34 12 v10 a5 5 0 0 1 -5 5 H14"
+            stroke="currentColor"
+            strokeWidth="4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M20 19 L12 27 L20 35"
+            stroke="currentColor"
+            strokeWidth="4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </div>
+      <p className="qz-title">{title}</p>
+      <p className="qz-hint">{hint}</p>
+    </div>
+  );
+}
+
+/**
+ * The reading pane — a calm summary of the selected PR: one meta line, the
+ * title carrying the weight, an author row, a single stat strip, and the
+ * description. No boxes-in-boxes.
+ */
 function InboxDetail({ pr }: { pr: PullRequest }) {
   const body = pr.body?.trim() ?? "";
-  const stateTone = pr.draft ? "warning" : pr.merged ? "accent" : "success";
+  const stateCls = pr.draft
+    ? "q-pill-draft"
+    : pr.merged
+      ? "q-pill-merged"
+      : "q-pill-open";
   const stateLabel = pr.draft ? "Draft" : pr.merged ? "Merged" : "Open";
 
   return (
@@ -361,73 +349,62 @@ function InboxDetail({ pr }: { pr: PullRequest }) {
       className="hidden min-h-0 flex-col bg-surface min-[900px]:flex"
       aria-label="Pull request detail"
     >
-      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={stateTone}>{stateLabel}</Badge>
-            <span className="font-mono text-xs text-faint">#{pr.number}</span>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <header className="border-b border-line px-5 pb-4 pt-5">
+          <div className="flex flex-wrap items-center gap-2 font-mono text-xs text-faint">
+            <span className={"q-pill " + stateCls}>
+              <span className="q-pill-dot" />
+              {stateLabel}
+            </span>
+            <span>#{pr.number}</span>
+            <span className="q-dot">·</span>
+            <span className="truncate" title={pr.repo}>
+              {pr.repo}
+            </span>
           </div>
-          <h2 className="mt-2 text-[17px] font-bold leading-snug tracking-tight text-fg">
+          <h2 className="mt-2.5 text-[17px] font-semibold leading-snug tracking-tight text-fg">
             {pr.title}
           </h2>
-          <div className="mt-1 font-mono text-xs text-muted">{pr.repo}</div>
-        </div>
-
-        <div className="flex items-center gap-3 border-y border-line py-3.5">
-          <Avatar url={pr.authorAvatarUrl} name={pr.author} size={26} />
-          <div>
-            <div className="text-sm font-semibold text-fg">{pr.author}</div>
-            <div
+          <div className="mt-3 flex items-center gap-2.5">
+            <Avatar url={pr.authorAvatarUrl} name={pr.author} size={22} />
+            <span className="text-[13px] font-medium text-fg">{pr.author}</span>
+            <span
               className="font-mono text-[11px] text-faint"
               title={formatAbsolute(pr.updatedAt)}
             >
               updated {formatRelativeTime(pr.updatedAt)}
-            </div>
+            </span>
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <StatCard label="changes">
-            <span className="font-mono text-sm">
+          <div className="mt-3.5 flex items-center gap-2 font-mono text-xs text-muted">
+            <span>
+              {pr.changedFiles} file{pr.changedFiles === 1 ? "" : "s"}
+            </span>
+            <span className="q-dot">·</span>
+            <span>
               <span className="text-success">+{pr.additions}</span>{" "}
               <span className="text-danger">−{pr.deletions}</span>
             </span>
-          </StatCard>
-          <StatCard label="files">
-            <span className="font-mono text-sm text-fg">{pr.changedFiles}</span>
-          </StatCard>
-          <StatCard label="comments">
-            <span className="font-mono text-sm text-fg">{pr.commentsCount}</span>
-          </StatCard>
-          <StatCard label="state">
-            <span className="text-sm font-semibold text-fg">{stateLabel}</span>
-          </StatCard>
+            <span className="q-dot">·</span>
+            <span>
+              {pr.commentsCount} comment{pr.commentsCount === 1 ? "" : "s"}
+            </span>
+          </div>
+        </header>
+
+        <div className="flex-1 px-5 py-4">
+          {body ? (
+            <Markdown>{body}</Markdown>
+          ) : (
+            <p className="text-sm text-faint">No description.</p>
+          )}
         </div>
 
-        {body && (
-          <div>
-            <div className="q-eyebrow mb-2 block">Description</div>
-            <Markdown>{body}</Markdown>
-          </div>
-        )}
+        <footer className="flex items-center gap-2 border-t border-line px-5 py-2.5 text-xs text-faint">
+          <Kbd combo="enter" /> open review
+          <span className="q-dot">·</span>
+          <Kbd combo="e" /> archive
+        </footer>
       </div>
     </aside>
-  );
-}
-
-function StatCard({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1 rounded-[10px] border border-line bg-surface-2 px-3 py-2.5">
-      {children}
-      <span className="text-[10px] uppercase tracking-wider text-faint">
-        {label}
-      </span>
-    </div>
   );
 }

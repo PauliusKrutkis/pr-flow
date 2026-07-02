@@ -11,6 +11,8 @@ const EVENTS: { value: ReviewEvent; label: string; hint: string }[] = [
 
 interface Props {
   open: boolean;
+  /** GitHub/GitLab reject approving or requesting changes on your own PR. */
+  ownPr?: boolean;
   pendingCount: number;
   busy: boolean;
   error?: string | null;
@@ -20,6 +22,7 @@ interface Props {
 
 export function SubmitReviewModal({
   open,
+  ownPr = false,
   pendingCount,
   busy,
   error,
@@ -54,10 +57,16 @@ export function SubmitReviewModal({
     onSubmit(event, body.trim());
   }
 
+  const disabledEvent = (value: ReviewEvent) => ownPr && value !== "COMMENT";
+
   function cycleEvent(dir: number) {
     setEvent((cur) => {
-      const i = EVENTS.findIndex((ev) => ev.value === cur);
-      return EVENTS[(i + dir + EVENTS.length) % EVENTS.length].value;
+      let i = EVENTS.findIndex((ev) => ev.value === cur);
+      for (let step = 0; step < EVENTS.length; step++) {
+        i = (i + dir + EVENTS.length) % EVENTS.length;
+        if (!disabledEvent(EVENTS[i].value)) return EVENTS[i].value;
+      }
+      return cur;
     });
   }
 
@@ -94,23 +103,37 @@ export function SubmitReviewModal({
         </div>
 
         <div className="px-5 py-4">
+          {ownPr && (
+            <p className="mb-2.5 text-xs text-faint">
+              This is your own PR — only a comment review can be submitted.
+            </p>
+          )}
           <div className="flex gap-2">
-            {EVENTS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setEvent(opt.value)}
-                title={opt.hint}
-                className={cn(
-                  "flex-1 rounded-lg border px-2 py-2 text-xs font-semibold transition-colors",
-                  event === opt.value
-                    ? "border-accent bg-accent/15 text-fg"
-                    : "border-line text-muted hover:bg-surface-2 hover:text-fg",
-                )}
-              >
-                {opt.label}
-              </button>
-            ))}
+            {EVENTS.map((opt) => {
+              const disabled = disabledEvent(opt.value);
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => setEvent(opt.value)}
+                  title={
+                    disabled
+                      ? "You can't approve or request changes on your own PR"
+                      : opt.hint
+                  }
+                  className={cn(
+                    "flex-1 rounded-lg border px-2 py-2 text-xs font-semibold transition-colors",
+                    event === opt.value
+                      ? "border-accent bg-accent/15 text-fg"
+                      : "border-line text-muted hover:bg-surface-2 hover:text-fg",
+                    disabled && "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted",
+                  )}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
           </div>
 
           <textarea

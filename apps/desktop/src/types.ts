@@ -74,10 +74,21 @@ export interface ReviewComment {
   inReplyToId: number | null;
 }
 
+/** A PR-level conversation comment (not anchored to a diff line). */
+export interface IssueComment {
+  id: number;
+  body: string;
+  user: string;
+  userAvatarUrl: string;
+  createdAt: string;
+}
+
 export interface PullRequestDetail {
   pr: PullRequest;
   files: ChangedFile[];
   comments: ReviewComment[];
+  /** PR-level conversation, oldest first. */
+  issueComments: IssueComment[];
   /** unix epoch millis */
   fetchedAt: number;
 }

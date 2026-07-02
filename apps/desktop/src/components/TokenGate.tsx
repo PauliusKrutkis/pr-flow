@@ -223,38 +223,39 @@ export function TokenGate() {
 
         {provider === "gitlab" && (
           <>
-            {gitlabOauthReady && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => void signInWithGitlab()}
-                  disabled={disabled}
-                  className="q-btn q-btn-primary q-focus mt-5 w-full py-2.5"
-                >
-                  {busy === "oauth" ? (
-                    <>
-                      <Spinner /> Waiting for GitLab…
-                    </>
-                  ) : (
-                    <>
-                      <GitLabMark /> Sign in with GitLab
-                    </>
-                  )}
-                </button>
-                {busy === "oauth" && (
-                  <p className="mt-2 text-center text-xs text-muted">
-                    Complete the sign-in in your browser — the app comes back on
-                    its own.
-                  </p>
-                )}
-                <div className="my-5 flex items-center gap-3 text-xs text-faint">
-                  <span className="h-px flex-1 bg-line" />
-                  or self-managed / token
-                  <span className="h-px flex-1 bg-line" />
-                </div>
-              </>
-            )}
-            <p className={gitlabOauthReady ? "text-sm text-muted" : "mt-5 text-sm text-muted"}>
+            <button
+              type="button"
+              onClick={() => void signInWithGitlab()}
+              disabled={disabled}
+              className="q-btn q-btn-primary q-focus mt-5 w-full py-2.5"
+            >
+              {busy === "oauth" ? (
+                <>
+                  <Spinner /> Waiting for GitLab…
+                </>
+              ) : (
+                <>
+                  <GitLabMark /> Sign in with GitLab
+                </>
+              )}
+            </button>
+            {busy === "oauth" ? (
+              <p className="mt-2 text-center text-xs text-muted">
+                Complete the sign-in in your browser — the app comes back on its
+                own.
+              </p>
+            ) : gitlabOauthReady === false ? (
+              <p className="mt-2 text-center text-xs text-faint">
+                Needs a one-time app registration on gitlab.com — see README →
+                GitLab. You can paste a token below in the meantime.
+              </p>
+            ) : null}
+            <div className="my-5 flex items-center gap-3 text-xs text-faint">
+              <span className="h-px flex-1 bg-line" />
+              or self-managed / token
+              <span className="h-px flex-1 bg-line" />
+            </div>
+            <p className="text-sm text-muted">
               GitLab host — leave empty for gitlab.com.
             </p>
             <input

@@ -57,7 +57,6 @@ export function UpdatePrompt() {
   }
 
   return (
-    <div className="qb-stack qb-stack-tr">
       <div className="qb-update" role="status">
         <span className="qb-update-icon">
           <Download size={16} aria-hidden />
@@ -98,6 +97,5 @@ export function UpdatePrompt() {
           </div>
         </div>
       </div>
-    </div>
   );
 }
