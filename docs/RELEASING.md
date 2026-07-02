@@ -38,7 +38,7 @@ install + relaunch in one click.
 | Updater signing keypair | ✅ `~/.tauri/prflow.key` (passwordless). **Back this file up** (password manager / secure storage). If it's lost, installed apps can never verify another update — the chain is dead and users must reinstall manually. |
 | Public key in `tauri.conf.json` | ✅ `plugins.updater.pubkey` |
 | Repo secrets | ✅ `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (empty) |
-| Homebrew tap repo | ⬜ `gh repo create PauliusKrutkis/homebrew-tap --public`, then `gh secret set TAP_REPO_TOKEN` with a PAT that can push to it. Cask template: `packaging/homebrew/Casks/nod.rb`. |
+| Homebrew tap repo | ✅ `PauliusKrutkis/homebrew-tap` (public), seeded with the v0.1.0 cask. The release workflow pushes bumps over SSH via the `TAP_DEPLOY_KEY` secret — a deploy key that can write only to that one repo. Cask template: `packaging/homebrew/Casks/nod.rb`. |
 | Apple notarization | ⬜ Optional — needs an Apple Developer cert ($99/yr). Until then macOS users install with `--no-quarantine` (brew) or right-click → Open. |
 
 ## Private repo vs auto-updates
