@@ -13,6 +13,8 @@ import { parsePatch, type DiffRow } from "../../lib/diff";
 import { highlightLine } from "../../lib/highlight";
 import { cn } from "../../lib/cn";
 import { useHotkeys } from "../../keyboard";
+import { useAppStore } from "../../store/appStore";
+import { Avatar } from "../ui/Avatar";
 import { CommentThread } from "./CommentThread";
 import { AddCommentBox } from "./AddCommentBox";
 
@@ -222,6 +224,10 @@ export function DiffViewer({
 }: DiffViewerProps) {
   const hunks = useMemo(() => parsePatch(file.patch), [file.patch]);
   const threadsByAnchor = useMemo(() => buildThreads(comments), [comments]);
+  // Pending comments render with the signed-in identity, like the lab design.
+  const activeAccount = useAppStore((s) =>
+    s.accounts.find((a) => a.id === s.activeAccountId),
+  );
   const pendingByAnchor = useMemo(() => {
     const m = new Map<string, PendingComment[]>();
     for (const p of pending) {
@@ -623,6 +629,14 @@ export function DiffViewer({
                   <div key={p.id} className="qf-thread qf-pending">
                     <div className="qf-comment">
                       <div className="qf-comment-head">
+                        <Avatar
+                          url={activeAccount?.avatarUrl ?? ""}
+                          name={activeAccount?.login ?? "you"}
+                          size={20}
+                        />
+                        <span className="qf-comment-author">
+                          {activeAccount?.login ?? "You"}
+                        </span>
                         <span className="qf-pending-tag">Pending</span>
                         <button
                           type="button"
@@ -657,8 +671,10 @@ export function DiffViewer({
                           });
                           closeBox(key!);
                         }}
-                        onSecondary={async (body) => {
-                          await onAddComment({
+                        onSecondary={(body) => {
+                          // Optimistic — the comment is already in the cache;
+                          // close immediately, the network settles behind.
+                          void onAddComment({
                             path: file.filename,
                             line: target.line,
                             side: target.side,

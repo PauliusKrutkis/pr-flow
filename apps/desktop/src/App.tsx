@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Command, HelpCircle, Search, User, UserPlus } from "lucide-react";
+import { Command, HelpCircle, Search, User, UserPlus, X } from "lucide-react";
 import { useAppStore, loadLastRoute } from "./store/appStore";
 import type { Binding } from "./keyboard/types";
 import { useHotkeys } from "./keyboard";
@@ -25,6 +25,15 @@ export default function App() {
   const activeAccountId = useAppStore((s) => s.activeAccountId);
   const setAccounts = useAppStore((s) => s.setAccounts);
   const switchAccount = useAppStore((s) => s.switchAccount);
+  const flash = useAppStore((s) => s.flash);
+  const setFlash = useAppStore((s) => s.setFlash);
+
+  // Flash messages self-dismiss; they exist for failures of optimistic actions.
+  useEffect(() => {
+    if (!flash) return;
+    const t = window.setTimeout(() => setFlash(null), 10_000);
+    return () => window.clearTimeout(t);
+  }, [flash, setFlash]);
 
   useLoadViewed();
 
@@ -143,6 +152,28 @@ export default function App() {
           />
         )}
       </div>
+
+      {flash && (
+        <div className="qb-stack qb-stack-br">
+          <div className="qb-toast" role="alert">
+            <span className="qb-toast-rail" aria-hidden />
+            <div className="qb-toast-body">
+              <div className="qb-toast-head">
+                <span className="qb-toast-title">Something didn't stick</span>
+                <button
+                  type="button"
+                  className="qb-x"
+                  onClick={() => setFlash(null)}
+                  aria-label="Dismiss"
+                >
+                  <X size={14} aria-hidden />
+                </button>
+              </div>
+              <div className="qb-toast-text break-words">{flash}</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <CommandPalette baseScope={baseScope} />
       <HelpOverlay baseScope={baseScope} />

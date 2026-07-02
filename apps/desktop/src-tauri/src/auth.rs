@@ -16,6 +16,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::accounts;
 use crate::github::{build_client, fetch_user, GitHubUser};
+use crate::gitlab::GitLabPlatform;
 
 const OAUTH_PORT: u16 = 8765;
 const REDIRECT_URI: &str = "http://127.0.0.1:8765/callback";
@@ -81,12 +82,128 @@ pub async fn login_with_github(app: AppHandle) -> Result<GitHubUser, String> {
     let user = fetch_user(&client).await?;
     accounts::upsert_github(&app, &token, &user.login, &user.avatar_url)?;
 
-    // Bring the app back to the front — the user just finished in the browser,
-    // so the handoff should land them straight in PR Flow.
+    focus_main(&app);
+    Ok(user)
+}
+
+/// Bring the app back to the front — the user just finished in the browser,
+/// so the handoff should land them straight back in Nod.
+fn focus_main(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
+}
+
+// ---------------------------------------------------------------------------
+// GitLab (gitlab.com) — OAuth authorization-code flow WITH PKCE. GitLab
+// supports public clients, so no client secret is involved; only a client id
+// (register the app on gitlab.com with redirect http://127.0.0.1:8765/callback,
+// scope `api`, "Confidential" OFF and "Expire access tokens" OFF).
+// Self-managed instances need their own registered app, so they use a PAT.
+// ---------------------------------------------------------------------------
+
+fn gitlab_client_id() -> Result<String, String> {
+    let id = std::env::var("NOD_GITLAB_CLIENT_ID").unwrap_or_default();
+    if id.trim().is_empty() {
+        return Err(
+            "GitLab sign-in isn't configured. Set NOD_GITLAB_CLIENT_ID and restart \
+             (see README → Sign in with GitLab). You can still paste a token instead."
+                .to_string(),
+        );
+    }
+    Ok(id.trim().to_string())
+}
+
+/// Whether the "Sign in with GitLab" button should be offered.
+#[tauri::command]
+pub fn is_gitlab_oauth_configured() -> bool {
+    gitlab_client_id().is_ok()
+}
+
+#[tauri::command]
+pub async fn login_with_gitlab(app: AppHandle) -> Result<GitHubUser, String> {
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+    use rand::{distributions::Alphanumeric, Rng};
+    use sha2::{Digest, Sha256};
+
+    let client_id = gitlab_client_id()?;
+    let state = make_state();
+    let verifier: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(64)
+        .map(char::from)
+        .collect();
+    let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
+
+    let listener = TcpListener::bind(("127.0.0.1", OAUTH_PORT)).map_err(|e| {
+        format!("Couldn't start the local sign-in listener on port {OAUTH_PORT}: {e}")
+    })?;
+
+    let mut authorize = url::Url::parse("https://gitlab.com/oauth/authorize")
+        .map_err(|e| e.to_string())?;
+    authorize
+        .query_pairs_mut()
+        .append_pair("client_id", &client_id)
+        .append_pair("redirect_uri", REDIRECT_URI)
+        .append_pair("response_type", "code")
+        .append_pair("scope", "api")
+        .append_pair("state", &state)
+        .append_pair("code_challenge", &challenge)
+        .append_pair("code_challenge_method", "S256");
+    open_in_browser(authorize.as_str())?;
+
+    let wait_state = state.clone();
+    let code = tokio::task::spawn_blocking(move || wait_for_code(listener, &wait_state))
+        .await
+        .map_err(|e| format!("sign-in task failed: {e}"))??;
+
+    // Exchange the code — PKCE verifier instead of a client secret.
+    let client = reqwest::Client::new();
+    let resp = client
+        .post("https://gitlab.com/oauth/token")
+        .header(reqwest::header::ACCEPT, "application/json")
+        .header(reqwest::header::USER_AGENT, "nod")
+        .json(&json!({
+            "client_id": client_id,
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": REDIRECT_URI,
+            "code_verifier": verifier,
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("token exchange failed: {e}"))?;
+    let v: Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("token exchange parse failed: {e}"))?;
+    if let Some(err) = v.get("error_description").and_then(Value::as_str) {
+        return Err(format!("GitLab: {err}"));
+    }
+    let token = v
+        .get("access_token")
+        .and_then(Value::as_str)
+        .map(|s| s.to_string())
+        .ok_or_else(|| "GitLab did not return an access token".to_string())?;
+
+    // Validate + store as a first-class account.
+    let platform = GitLabPlatform::new(accounts::GITLAB_HOST, &token)?;
+    let user = platform.current_user().await?;
+    accounts::upsert(
+        &app,
+        accounts::Account {
+            id: accounts::account_id("gitlab", accounts::GITLAB_HOST, &user.login),
+            provider: "gitlab".to_string(),
+            host: accounts::GITLAB_HOST.to_string(),
+            token,
+            login: user.login.clone(),
+            avatar_url: user.avatar_url.clone(),
+        },
+        true,
+    )?;
+
+    focus_main(&app);
     Ok(user)
 }
 

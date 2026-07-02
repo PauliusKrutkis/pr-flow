@@ -19,6 +19,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             auth::login_with_github,
             auth::is_oauth_configured,
+            auth::login_with_gitlab,
+            auth::is_gitlab_oauth_configured,
             accounts::list_accounts,
             accounts::add_account,
             accounts::set_active_account,

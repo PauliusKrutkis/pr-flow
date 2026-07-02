@@ -54,10 +54,22 @@ export function SubmitReviewModal({
     onSubmit(event, body.trim());
   }
 
+  function cycleEvent(dir: number) {
+    setEvent((cur) => {
+      const i = EVENTS.findIndex((ev) => ev.value === cur);
+      return EVENTS[(i + dir + EVENTS.length) % EVENTS.length].value;
+    });
+  }
+
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
       submit();
+    } else if (e.key === "Tab") {
+      // Tab cycles the verdict (Comment → Approve → Request changes) without
+      // leaving the summary field.
+      e.preventDefault();
+      cycleEvent(e.shiftKey ? -1 : 1);
     } else if (e.key === "Escape") {
       e.preventDefault();
       onClose();
@@ -123,7 +135,9 @@ export function SubmitReviewModal({
         </div>
 
         <div className="flex items-center justify-between border-t border-line px-5 py-3.5">
-          <span className="text-xs text-faint">⌘↵ to submit · Esc to cancel</span>
+          <span className="text-xs text-faint">
+            Tab switches verdict · ⌘↵ to submit · Esc to cancel
+          </span>
           <div className="flex items-center gap-2">
             <button type="button" onClick={onClose} className="q-btn q-btn-ghost">
               Cancel

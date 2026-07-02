@@ -27,6 +27,9 @@ url = "2"
 tokio = { version = "1", features = ["rt"] }
 # Image diffs: file blobs are shipped to the webview as base64 data URLs.
 base64 = "0.22"
+# GitLab OAuth (PKCE): code-challenge hashing + verifier generation.
+sha2 = "0.10"
+rand = "0.8"
 dotenvy = "0.15"
 # Auto-update. PR Flow is a desktop-only app, so this stays a plain dependency.
 tauri-plugin-updater = "2"

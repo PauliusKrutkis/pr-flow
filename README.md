@@ -170,6 +170,25 @@ Paste a **PAT** with the **`repo`** scope. Create one at
 [github.com/settings/tokens/new](https://github.com/settings/tokens/new?scopes=repo&description=PR%20Flow)
 (the in-app link pre-selects the scope). No OAuth App needed.
 
+#### GitLab
+
+**gitlab.com — Sign in with GitLab (OAuth + PKCE, no client secret):** needs a
+one-time application registration:
+
+1. GitLab → **Preferences → Applications → Add new application**
+   ([gitlab.com/-/user_settings/applications](https://gitlab.com/-/user_settings/applications)).
+2. Redirect URI: `http://127.0.0.1:8765/callback`, scope: **`api`**,
+   **uncheck "Confidential"** (public client, PKCE) and **uncheck "Expire
+   access tokens"** (otherwise tokens expire after 2h and you'd re-auth).
+3. Put the Application ID in `src-tauri/.env`:
+   ```dotenv
+   NOD_GITLAB_CLIENT_ID=xxxxxxxx
+   ```
+
+**Self-managed GitLab:** OAuth apps register per instance, so use a **PAT**
+with the `api` scope plus your host URL in the GitLab tab of the sign-in
+screen.
+
 Either way, the token and all cached data are stored locally under the app config
 directory (e.g. on macOS:
 `~/Library/Application Support/com.pauliuskrutkis.nod/`). The token is stored in

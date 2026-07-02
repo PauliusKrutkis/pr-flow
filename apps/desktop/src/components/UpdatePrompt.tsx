@@ -3,13 +3,12 @@ import { Download, RefreshCw } from "lucide-react";
 import { api } from "../lib/api";
 import type { UpdateInfo } from "../types";
 
-// "Update available" prompt. Checks the release feed once on mount (best-effort
-// — silent when the updater isn't configured or the feed is unreachable) and,
-// if a newer signed build exists, offers a one-click install + relaunch.
-//
-// SCAFFOLD: functional end-to-end once `plugins.updater` has a real pubkey +
-// endpoint and CI publishes signed bundles — see the README "Auto-updates"
-// section. Until then `checkForUpdate` returns null and this renders nothing.
+// "Update available" prompt. Checks the release feed on launch, then every few
+// hours and on window focus (best-effort — silent when the feed is
+// unreachable), so a long-running app still notices new releases. When a newer
+// signed build exists it offers a one-click install + relaunch.
+
+const RECHECK_MS = 4 * 60 * 60 * 1000;
 
 export function UpdatePrompt() {
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
@@ -18,14 +17,27 @@ export function UpdatePrompt() {
 
   useEffect(() => {
     let cancelled = false;
-    api
-      .checkForUpdate()
-      .then((u) => {
-        if (!cancelled) setUpdate(u);
-      })
-      .catch(() => {});
+    let lastCheck = 0;
+    function check(minGapMs = 0) {
+      const now = Date.now();
+      if (now - lastCheck < minGapMs) return;
+      lastCheck = now;
+      api
+        .checkForUpdate()
+        .then((u) => {
+          if (!cancelled && u) setUpdate(u);
+        })
+        .catch(() => {});
+    }
+    check();
+    const timer = window.setInterval(() => check(), RECHECK_MS);
+    // Refocusing after a while is the natural "came back to the app" moment.
+    const onFocus = () => check(30 * 60 * 1000);
+    window.addEventListener("focus", onFocus);
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
     };
   }, []);
 

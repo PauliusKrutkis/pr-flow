@@ -35,7 +35,6 @@ import { queryClient, queryKeys } from "../../lib/queryClient";
 import { getReviewMemory, updateReviewMemory } from "../../lib/reviewMemory";
 import { usePerfStore } from "../../lib/perf";
 import { cn } from "../../lib/cn";
-import { Spinner } from "../ui/Spinner";
 import { Kbd } from "../ui/Kbd";
 import { Avatar } from "../ui/Avatar";
 import { FileSidebar } from "./FileSidebar";
@@ -84,7 +83,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   // The info drawer starts closed — the diff dominates until `i` opens it.
   const [rightOpen, setRightOpen] = useState(false);
   const [commentIndex, setCommentIndex] = useState(0);
-  const [pending, setPending] = useState<PendingComment[]>([]);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [prSearch, setPrSearch] = useState<null | "files" | "text">(null);
   // Only shown when the PR's head moves mid-review (never on open).
@@ -100,7 +98,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const sectionEls = useRef(new Map<number, HTMLElement>());
-  const pendingId = useRef(0);
   const resumedRef = useRef(false);
   const mountShaRef = useRef("");
   const jumpNonceRef = useRef(0);
@@ -110,6 +107,14 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const toggleViewed = useAppStore((s) => s.toggleViewed);
   // Subscribe to the viewed map so the sidebar and headers stay reactive.
   const viewed = useAppStore((s) => s.viewed);
+  // Pending review comments live in the store, so leaving the screen (or the
+  // app) never drops a draft.
+  const pendingMap = useAppStore((s) => s.pendingComments);
+  const pending = pendingMap[keyValue] ?? EMPTY_PENDING;
+  const addPendingStore = useAppStore((s) => s.addPendingComment);
+  const removePendingStore = useAppStore((s) => s.removePendingComment);
+  const clearPendingComments = useAppStore((s) => s.clearPendingComments);
+  const setFlash = useAppStore((s) => s.setFlash);
   const viewedFiles = viewed[keyValue];
   const viewedSet = useMemo(() => new Set(viewedFiles ?? []), [viewedFiles]);
 
@@ -117,7 +122,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const fileCount = files.length;
   const clampedIndex = Math.min(activeIndex, Math.max(fileCount - 1, 0));
   const activeFile = files[clampedIndex];
-  const isCurrentViewed = !!activeFile && viewedSet.has(activeFile.filename);
 
   // Live refs so rAF-coalesced handlers and stable callbacks read fresh state.
   const activeIndexRef = useRef(clampedIndex);
@@ -348,9 +352,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   function toggleViewedFile() {
     if (activeFile) toggleViewed(keyValue, activeFile.filename);
   }
-  // `e`: ensure the current file is marked viewed, then advance.
+  // `e`: toggle the current file's viewed state, then advance.
   function markViewedAndNext() {
-    if (activeFile && !isCurrentViewed) toggleViewed(keyValue, activeFile.filename);
+    if (activeFile) toggleViewed(keyValue, activeFile.filename);
     scrollToFile(activeIndexRef.current + 1);
   }
   function copyLink() {
@@ -394,13 +398,16 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   const addPendingComment = useCallback(
     (c: { path: string; line: number; side: string; body: string }) => {
-      setPending((cur) => [...cur, { id: `p${pendingId.current++}`, ...c }]);
+      addPendingStore(keyValue, c);
     },
-    [],
+    [addPendingStore, keyValue],
   );
-  const removePendingComment = useCallback((id: string) => {
-    setPending((cur) => cur.filter((p) => p.id !== id));
-  }, []);
+  const removePendingComment = useCallback(
+    (id: string) => {
+      removePendingStore(keyValue, id);
+    },
+    [removePendingStore, keyValue],
+  );
 
   const headShaRef = useRef("");
   headShaRef.current = pr?.headSha ?? "";
@@ -428,25 +435,31 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     setSubmitOpen(true);
   }
 
-  async function handleSubmitReview(event: ReviewEvent, body: string) {
-    try {
-      await submitReview.mutateAsync({
-        event,
-        body,
-        commitId: pr?.headSha ?? "",
-        comments: pending.map((p) => ({
-          path: p.path,
-          line: p.line,
-          side: p.side,
-          body: p.body,
-        })),
+  // Optimistic: close + advance immediately; the network settles behind you.
+  // On failure the drafts are still pending (they only clear on success) and a
+  // flash message says so.
+  function handleSubmitReview(event: ReviewEvent, body: string) {
+    const payload = {
+      event,
+      body,
+      commitId: pr?.headSha ?? "",
+      comments: pending.map((p) => ({
+        path: p.path,
+        line: p.line,
+        side: p.side,
+        body: p.body,
+      })),
+    };
+    setSubmitOpen(false);
+    advanceAfterSubmit();
+    submitReview
+      .mutateAsync(payload)
+      .then(() => clearPendingComments(keyValue))
+      .catch((e) => {
+        setFlash(
+          `Review for ${owner}/${repo}#${number} didn't submit — your comments are still pending. ${String(e)}`,
+        );
       });
-      setPending([]);
-      setSubmitOpen(false);
-      advanceAfterSubmit();
-    } catch {
-      // Error is surfaced in the modal via submitReview.error.
-    }
   }
 
   // When the current file has no diff to cursor through (an image or a plain
@@ -618,9 +631,77 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         </div>
       );
     }
+    // Cold cache: no full-screen loader — paint the review shell with what the
+    // inbox already knows (title, number, repo) and skeleton the rest.
+    const cached = findCachedInboxPr(owner, repo, number);
     return (
-      <div className="flex h-full items-center justify-center">
-        <Spinner label="Loading pull request…" />
+      <div className="dir-quiet relative flex h-full min-h-0 overflow-hidden">
+        <aside className="w-[300px] shrink-0 border-r border-line">
+          <div className="qf-sidebar flex h-full flex-col">
+            <div className="qf-side-head flex items-center justify-between px-4 py-3">
+              <span className="qf-side-title">Files</span>
+            </div>
+            <div className="px-3 py-1">
+              {Array.from({ length: 9 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="qf-skel"
+                  style={{
+                    height: 17,
+                    margin: "10px 8px",
+                    width: `${88 - (i % 4) * 16}%`,
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        </aside>
+        <main className="qf-main flex min-w-0 flex-1 flex-col">
+          <header className="qf-header shrink-0 px-6 py-3">
+            {cached ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <h1 className="qf-pr-title truncate" title={cached.title}>
+                    {cached.title}
+                  </h1>
+                </div>
+                <div className="qf-pr-sub mt-1 flex items-center gap-2">
+                  <span className="qf-pr-num">#{cached.number}</span>
+                  <span className="qf-dot">·</span>
+                  <span>{cached.repo}</span>
+                  <span className="qf-dot">·</span>
+                  <Avatar
+                    url={cached.authorAvatarUrl}
+                    name={cached.author}
+                    size={15}
+                  />
+                  <span className="qf-muted">{cached.author}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="qf-skel" style={{ height: 16, width: 340 }} />
+                <div
+                  className="qf-skel"
+                  style={{ height: 11, width: 190, marginTop: 9 }}
+                />
+              </>
+            )}
+          </header>
+          <div className="min-w-0 flex-1 overflow-hidden px-6 py-5">
+            {Array.from({ length: 16 }).map((_, i) => (
+              <div
+                key={i}
+                className="qf-skel"
+                style={{
+                  height: 12,
+                  margin: "11px 0",
+                  width: `${((i * 37) % 52) + 32}%`,
+                }}
+              />
+            ))}
+          </div>
+        </main>
       </div>
     );
   }
@@ -641,7 +722,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         : pr.state;
 
   const viewedNow = viewedSet.size;
-  const mutationPending = addReviewComment.isPending || reply.isPending;
+  // Design principle: no loading states — mutations are optimistic, so the
+  // composers never enter a busy mode.
 
   return (
     <div className="dir-quiet relative flex h-full min-h-0 overflow-hidden">
@@ -764,7 +846,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
               pending={pendingByFile.get(file.filename) ?? EMPTY_PENDING}
               jump={jump && jump.filename === file.filename ? jump : null}
               seed={seed && seed.index === i ? seed : null}
-              addPending={mutationPending}
+              addPending={false}
               onActivate={handleActivate}
               onCursorExit={handleCursorExit}
               onToggleViewed={handleToggleViewedAt}
@@ -792,8 +874,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       <SubmitReviewModal
         open={submitOpen}
         pendingCount={pending.length}
-        busy={submitReview.isPending}
-        error={submitReview.error ? String(submitReview.error) : null}
+        busy={false}
+        error={null}
         onClose={() => setSubmitOpen(false)}
         onSubmit={handleSubmitReview}
       />
@@ -808,6 +890,23 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       />
     </div>
   );
+}
+
+/** The inbox cache's view of a PR, for painting the shell before detail loads. */
+function findCachedInboxPr(
+  owner: string,
+  repo: string,
+  number: number,
+): PullRequest | undefined {
+  const inbox = queryClient.getQueryData<InboxData>(queryKeys.inbox);
+  if (!inbox) return undefined;
+  for (const key of ["reviewRequested", "assigned", "created", "involved"] as const) {
+    const hit = inbox[key].prs.find(
+      (p) => p.owner === owner && p.name === repo && p.number === number,
+    );
+    if (hit) return hit;
+  }
+  return undefined;
 }
 
 /** A branch name as a copyable chip: click copies the name, the icon confirms. */
