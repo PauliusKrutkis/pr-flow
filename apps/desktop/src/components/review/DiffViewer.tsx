@@ -296,14 +296,34 @@ export function DiffViewer({
 
   // Scroll the cursor row into view when the user moves it (j/k). Seed, hover
   // sync, and auto-correction don't scroll, so the mouse never fights the view
-  // and resume's restored scroll position holds.
+  // and resume's restored scroll position holds. The manual math (instead of
+  // scrollIntoView nearest) keeps the row clear of the sticky file header,
+  // which would otherwise cover the cursor when moving upward.
   useEffect(() => {
     if (!cursorAnchor || !userMovedCursorRef.current) return;
     userMovedCursorRef.current = false;
     const el = containerRef.current?.querySelector<HTMLElement>(
       `[data-anchor="${cursorAnchor}"]`,
     );
-    el?.scrollIntoView({ block: "nearest" });
+    if (!el) return;
+    const host = containerRef.current?.closest<HTMLElement>(".qf-scrollhost");
+    if (!host) {
+      el.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    const headerH =
+      containerRef.current
+        ?.closest(".qf-fsec")
+        ?.querySelector<HTMLElement>(".qf-fsec-head")?.offsetHeight ?? 40;
+    const hostRect = host.getBoundingClientRect();
+    const rowRect = el.getBoundingClientRect();
+    const topEdge = hostRect.top + headerH + 4;
+    const bottomEdge = hostRect.bottom - 4;
+    if (rowRect.top < topEdge) {
+      host.scrollBy({ top: rowRect.top - topEdge });
+    } else if (rowRect.bottom > bottomEdge) {
+      host.scrollBy({ top: rowRect.bottom - bottomEdge });
+    }
   }, [cursorAnchor]);
 
   // Land a search jump: move the cursor there, scroll it to center, flash it.

@@ -397,7 +397,7 @@ textarea.q-input { resize: none; line-height: 1.5; }
 .dir-quiet .qf-side-count { font-family: var(--font-mono); font-size: 11px; color: var(--faint); }
 
 /* file list */
-.dir-quiet .qf-filelist { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.dir-quiet .qf-filelist { }
 .dir-quiet .qf-file {
   display: flex;
   align-items: center;
@@ -709,8 +709,6 @@ textarea.q-input { resize: none; line-height: 1.5; }
   font-size: 13px;
   line-height: 1.75;
   padding: 6px 0;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line-2) transparent;
 }
 .dir-quiet .qf-row {
   display: grid;
@@ -954,8 +952,6 @@ textarea.q-input { resize: none; line-height: 1.5; }
 .dir-quiet .qf-drawer-body {
   padding: 18px;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line-2) transparent;
 }
 .dir-quiet .qf-drawer-section { margin-bottom: 24px; }
 .dir-quiet .qf-drawer-pr { display: flex; gap: 8px; align-items: baseline; margin-bottom: 6px; }
