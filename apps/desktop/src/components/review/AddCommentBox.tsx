@@ -50,6 +50,11 @@ export function AddCommentBox({
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
       void run(primaryAction);
+    } else if (e.key === "Tab" && onSecondary) {
+      // Tab flips between "add to review" and "comment now" without leaving
+      // the textarea — focus never wanders.
+      e.preventDefault();
+      setMode((m) => (m === "batch" ? "now" : "batch"));
     } else if (e.key === "Escape") {
       e.preventDefault();
       onCancel();
@@ -116,7 +121,8 @@ export function AddCommentBox({
         <p className="qa-explain">
           {mode === "batch"
             ? "Held with your other pending comments until you submit the review."
-            : "Posted to the PR immediately, on its own."}
+            : "Posted to the PR immediately, on its own."}{" "}
+          Tab switches.
         </p>
       )}
     </div>

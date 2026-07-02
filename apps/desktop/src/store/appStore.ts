@@ -1,7 +1,13 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
 import { usePerfStore } from "../lib/perf";
-import type { AccountInfo, AccountsInfo, InboxTabKey, ViewedMap } from "../types";
+import type {
+  AccountInfo,
+  AccountsInfo,
+  InboxTabKey,
+  PendingComment,
+  ViewedMap,
+} from "../types";
 
 export type Route =
   | { name: "loading" }
@@ -106,6 +112,27 @@ function saveDismissed(map: Record<string, string>) {
   }
 }
 
+// ---- pending review comments (drafts batched until submit) -------------------
+// Kept in the store (and localStorage) so leaving the review screen — or the
+// app — never loses a drafted comment.
+const PENDING_KEY = "pr-flow:pendingComments";
+function loadPending(): Record<string, PendingComment[]> {
+  try {
+    const v = JSON.parse(localStorage.getItem(PENDING_KEY) ?? "{}");
+    return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  } catch {
+    return {};
+  }
+}
+function savePending(map: Record<string, PendingComment[]>) {
+  try {
+    localStorage.setItem(PENDING_KEY, JSON.stringify(map));
+  } catch {
+    /* ignore quota / private-mode errors */
+  }
+}
+let pendingIdCounter = 0;
+
 interface AppState {
   route: Route;
   paletteOpen: boolean;
@@ -159,6 +186,19 @@ interface AppState {
   setAccounts: (info: AccountsInfo) => void;
   /** Switch the backend's active account, then reload so every cache swaps. */
   switchAccount: (id: string) => void;
+
+  // pending review comments, keyed by prKey
+  pendingComments: Record<string, PendingComment[]>;
+  addPendingComment: (
+    prKey: string,
+    c: { path: string; line: number; side: string; body: string },
+  ) => void;
+  removePendingComment: (prKey: string, id: string) => void;
+  clearPendingComments: (prKey: string) => void;
+
+  /** Transient app-level message (e.g. a background submit failed). */
+  flash: string | null;
+  setFlash: (message: string | null) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -244,6 +284,34 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!at) return false;
     return new Date(updatedAt).getTime() <= new Date(at).getTime();
   },
+
+  pendingComments: loadPending(),
+  addPendingComment: (prKey, c) => {
+    const id = `p${Date.now()}-${pendingIdCounter++}`;
+    const map = {
+      ...get().pendingComments,
+      [prKey]: [...(get().pendingComments[prKey] ?? []), { id, ...c }],
+    };
+    set({ pendingComments: map });
+    savePending(map);
+  },
+  removePendingComment: (prKey, id) => {
+    const map = {
+      ...get().pendingComments,
+      [prKey]: (get().pendingComments[prKey] ?? []).filter((p) => p.id !== id),
+    };
+    set({ pendingComments: map });
+    savePending(map);
+  },
+  clearPendingComments: (prKey) => {
+    const map = { ...get().pendingComments };
+    delete map[prKey];
+    set({ pendingComments: map });
+    savePending(map);
+  },
+
+  flash: null,
+  setFlash: (message) => set({ flash: message }),
 
   accounts: [],
   activeAccountId: null,

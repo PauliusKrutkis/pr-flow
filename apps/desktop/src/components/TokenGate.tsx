@@ -42,12 +42,17 @@ export function TokenGate() {
   const [busy, setBusy] = useState<Busy>("idle");
   const [error, setError] = useState<string | null>(null);
   const [oauthReady, setOauthReady] = useState<boolean | null>(null);
+  const [gitlabOauthReady, setGitlabOauthReady] = useState<boolean | null>(null);
 
   useEffect(() => {
     api
       .isOAuthConfigured()
       .then(setOauthReady)
       .catch(() => setOauthReady(false));
+    api
+      .isGitlabOAuthConfigured()
+      .then(setGitlabOauthReady)
+      .catch(() => setGitlabOauthReady(false));
   }, []);
 
   // Esc backs out of "add account" — only when there's an inbox to go back to.
@@ -76,6 +81,19 @@ export function TokenGate() {
     setError(null);
     try {
       await api.loginWithGithub();
+      finish();
+    } catch (e) {
+      setError(String(e));
+      setBusy("idle");
+    }
+  }
+
+  async function signInWithGitlab() {
+    if (busy !== "idle") return;
+    setBusy("oauth");
+    setError(null);
+    try {
+      await api.loginWithGitlab();
       finish();
     } catch (e) {
       setError(String(e));
@@ -205,7 +223,38 @@ export function TokenGate() {
 
         {provider === "gitlab" && (
           <>
-            <p className="mt-5 text-sm text-muted">
+            {gitlabOauthReady && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void signInWithGitlab()}
+                  disabled={disabled}
+                  className="q-btn q-btn-primary q-focus mt-5 w-full py-2.5"
+                >
+                  {busy === "oauth" ? (
+                    <>
+                      <Spinner /> Waiting for GitLab…
+                    </>
+                  ) : (
+                    <>
+                      <GitLabMark /> Sign in with GitLab
+                    </>
+                  )}
+                </button>
+                {busy === "oauth" && (
+                  <p className="mt-2 text-center text-xs text-muted">
+                    Complete the sign-in in your browser — the app comes back on
+                    its own.
+                  </p>
+                )}
+                <div className="my-5 flex items-center gap-3 text-xs text-faint">
+                  <span className="h-px flex-1 bg-line" />
+                  or self-managed / token
+                  <span className="h-px flex-1 bg-line" />
+                </div>
+              </>
+            )}
+            <p className={gitlabOauthReady ? "text-sm text-muted" : "mt-5 text-sm text-muted"}>
               GitLab host — leave empty for gitlab.com.
             </p>
             <input

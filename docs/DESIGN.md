@@ -42,6 +42,16 @@ fully keyboard-drivable.
    flow. Freshness is automatic (polling + focus refetch), not a button.
 5. **Honest states.** Every async surface has a deliberate loading, empty, and
    error state — not an implicit infinite spinner.
+6. **No loading states — optimistic everywhere.** The user's action is always
+   right until the network proves otherwise: comments, replies, and review
+   submissions apply to the UI instantly and reconcile in the background; a
+   failure rolls back and says so (flash toast), it never blocks up front.
+   Buttons never enter a "Submitting…" mode. The only acceptable "loading" is
+   a cold cache, and even then we paint the shell with whatever we already
+   know (inbox metadata) plus a quiet skeleton — full-screen spinners are a
+   design bug. Corollary: drafts (pending comments) are never lost to
+   navigation or restarts; they persist until explicitly submitted or
+   discarded.
 
 ---
 

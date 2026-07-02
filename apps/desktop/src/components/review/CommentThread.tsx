@@ -22,8 +22,10 @@ export function CommentThread({
   if (comments.length === 0) return null;
   const rootId = comments[0].id;
 
-  async function submitReply(body: string) {
-    await onReply({ inReplyTo: rootId, body });
+  function submitReply(body: string) {
+    // Optimistic — the reply is inserted into the cache by the mutation's
+    // onMutate; close the composer immediately.
+    void onReply({ inReplyTo: rootId, body });
     setReplying(false);
   }
 

@@ -802,6 +802,21 @@ textarea.q-input { resize: none; line-height: 1.5; }
 
 .dir-quiet .qf-empty { padding: 40px; text-align: center; color: var(--faint); font-family: var(--font-ui); }
 
+/* skeleton shimmer — cold-cache placeholders (never spinners) */
+.qf-skel {
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-hi) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: qf-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes qf-shimmer {
+  from { background-position: 180% 0; }
+  to { background-position: -20% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qf-skel { animation: none; background: var(--surface-2); }
+}
+
 /* ============ COMMENT THREADS ============ */
 .dir-quiet .qf-comment-wrap { background: var(--bg); padding: 0 16px 6px 70px; }
 .dir-quiet .qf-thread {
