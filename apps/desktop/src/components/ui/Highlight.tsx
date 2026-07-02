@@ -2,24 +2,7 @@ import { Fragment, type ReactNode } from "react";
 
 // Matched-text emphasis for the search surfaces. Both variants wrap the
 // matching characters in `.q-hl` (see quiet.css) and leave the rest untouched.
-
-/**
- * Char indices of a subsequence (fuzzy) match of `query` in `text`, or null
- * when `text` doesn't match. Comparison is done on the strings as given —
- * lowercase both sides for case-insensitive matching.
- */
-export function fuzzyIndices(query: string, text: string): number[] | null {
-  if (!query) return [];
-  const out: number[] = [];
-  let i = 0;
-  for (let j = 0; j < text.length && i < query.length; j++) {
-    if (text[j] === query[i]) {
-      out.push(j);
-      i += 1;
-    }
-  }
-  return i === query.length ? out : null;
-}
+// Match computation lives in lib/fuzzy.ts.
 
 /** Render `text` with the given character indices highlighted. */
 export function HighlightIndices({

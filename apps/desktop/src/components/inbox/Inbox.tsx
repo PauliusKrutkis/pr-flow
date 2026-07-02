@@ -74,14 +74,25 @@ export function Inbox() {
   }, []);
 
   const inbox = data ?? EMPTY;
+  const isHidden = (pr: PullRequest, at: string | undefined) =>
+    !!at && new Date(pr.updatedAt).getTime() <= new Date(at).getTime();
   const filtered = useMemo(
-    () =>
-      inbox[tab].prs.filter((pr) => {
-        const at = dismissed[keyFor(pr)];
-        return !at || new Date(pr.updatedAt).getTime() > new Date(at).getTime();
-      }),
+    () => inbox[tab].prs.filter((pr) => !isHidden(pr, dismissed[keyFor(pr)])),
     [inbox, tab, dismissed],
   );
+  // Tab counters reflect archives: server count minus the archived-and-quiet
+  // PRs among the fetched page.
+  const visibleCounts = useMemo(() => {
+    const m = {} as Record<InboxTabKey, number>;
+    for (const t of TABS) {
+      const bucket = inbox[t.key];
+      const hidden = bucket.prs.filter((pr) =>
+        isHidden(pr, dismissed[keyFor(pr)]),
+      ).length;
+      m[t.key] = Math.max(0, bucket.count - hidden);
+    }
+    return m;
+  }, [inbox, dismissed]);
 
   // Resolve the selected PR key to a position in the current list (follows the
   // PR through reorders/filtering; falls back to the top if it's gone).
@@ -218,7 +229,7 @@ export function Inbox() {
               data-state={active ? "active" : "inactive"}
             >
               {t.label}
-              <span className="qi-tab-count">{inbox[t.key].count}</span>
+              <span className="qi-tab-count">{visibleCounts[t.key]}</span>
             </button>
           );
         })}
@@ -292,9 +303,9 @@ export function Inbox() {
             )}
           </div>
 
-          {/* Archive-undo toast, anchored over the list (not the reading pane). */}
+          {/* Archive-undo toast — bottom-right of the PR list column. */}
           {archiveToast && (
-            <div className="absolute bottom-4 left-1/2 z-40 w-[340px] max-w-[calc(100%-32px)] -translate-x-1/2">
+            <div className="absolute bottom-4 right-4 z-40 w-[340px] max-w-[calc(100%-32px)]">
               <div className="qb-toast" role="status">
                 <span className="qb-toast-rail" aria-hidden />
                 <div className="qb-toast-body">

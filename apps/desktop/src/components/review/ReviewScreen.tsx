@@ -56,9 +56,6 @@ interface ReviewScreenProps {
 const EMPTY_COMMENTS: ReviewComment[] = [];
 const EMPTY_PENDING: PendingComment[] = [];
 
-/** A section counts as "current" once its header crosses this offset. */
-const ACTIVE_OFFSET = 48;
-
 export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const keyValue = prKey({ owner, name: repo, number });
 
@@ -73,7 +70,11 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const [initialMem] = useState(() => getReviewMemory(keyValue));
 
   // The "current" file: what the keyboard talks to and the sidebar highlights.
-  // Driven by scrolling (topmost visible section), hover, and file navigation.
+  // The CURSOR is the source of truth — it moves via j/k, hover, file
+  // navigation, and search. Plain wheel-scrolling deliberately does NOT move
+  // it: a scroll-derived highlight flaps at section boundaries, and you
+  // haven't committed to a file until you touch it (the sticky section header
+  // always names what's on screen).
   const [activeIndex, setActiveIndex] = useState(initialMem?.fileIndex ?? 0);
   // Windowing: sections whose diff bodies are rendered. Grows as you approach
   // sections; never shrinks, so scrolling back is always instant.
@@ -104,7 +105,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const mountShaRef = useRef("");
   const jumpNonceRef = useRef(0);
   const seedNonceRef = useRef(0);
-  const scrollRafRef = useRef<number | null>(null);
 
   const goInbox = useAppStore((s) => s.goInbox);
   const toggleViewed = useAppStore((s) => s.toggleViewed);
@@ -237,51 +237,14 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   useEffect(() => {
     return () => {
-      if (scrollRafRef.current != null) cancelAnimationFrame(scrollRafRef.current);
       if (fileRafRef.current != null) cancelAnimationFrame(fileRafRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The topmost section whose header has crossed the active line is "current".
-  function lastCrossedIndex(threshold: number): number {
-    const c = scrollRef.current;
-    if (!c) return 0;
-    const top = c.getBoundingClientRect().top;
-    let cur = 0;
-    for (let i = 0; i < fileCountRef.current; i++) {
-      const el = sectionEls.current.get(i);
-      if (!el) continue;
-      if (el.getBoundingClientRect().top - top <= threshold) cur = i;
-      else break;
-    }
-    return cur;
-  }
-
-  // Hysteresis: advancing (scrolling down) switches as soon as the next header
-  // crosses the line; retreating (scrolling up) waits until the current header
-  // is clearly below it. The dead zone in between stops the sidebar highlight
-  // from flapping between two files on small scrolls.
-  function computeActive() {
-    const current = activeIndexRef.current;
-    const ahead = lastCrossedIndex(ACTIVE_OFFSET);
-    if (ahead > current) {
-      setActiveIndex(ahead);
-      return;
-    }
-    const behind = lastCrossedIndex(ACTIVE_OFFSET + 40);
-    if (behind < current) setActiveIndex(behind);
-  }
-
   function handleScroll() {
     if (scrollRef.current) {
       updateReviewMemory(keyValue, { scrollTop: scrollRef.current.scrollTop });
-    }
-    if (scrollRafRef.current == null) {
-      scrollRafRef.current = requestAnimationFrame(() => {
-        scrollRafRef.current = null;
-        computeActive();
-      });
     }
   }
 
@@ -812,9 +775,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
             />
           ))}
           {fileCount === 0 && <div className="qf-empty">No files changed.</div>}
-          {/* Scroll-past-end room so the last file can reach the top and
-              become the current file for keyboard navigation. */}
-          {fileCount > 1 && <div style={{ height: "55vh" }} aria-hidden />}
         </div>
       </main>
 

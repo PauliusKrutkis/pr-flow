@@ -296,14 +296,34 @@ export function DiffViewer({
 
   // Scroll the cursor row into view when the user moves it (j/k). Seed, hover
   // sync, and auto-correction don't scroll, so the mouse never fights the view
-  // and resume's restored scroll position holds.
+  // and resume's restored scroll position holds. The manual math (instead of
+  // scrollIntoView nearest) keeps the row clear of the sticky file header,
+  // which would otherwise cover the cursor when moving upward.
   useEffect(() => {
     if (!cursorAnchor || !userMovedCursorRef.current) return;
     userMovedCursorRef.current = false;
     const el = containerRef.current?.querySelector<HTMLElement>(
       `[data-anchor="${cursorAnchor}"]`,
     );
-    el?.scrollIntoView({ block: "nearest" });
+    if (!el) return;
+    const host = containerRef.current?.closest<HTMLElement>(".qf-scrollhost");
+    if (!host) {
+      el.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    const headerH =
+      containerRef.current
+        ?.closest(".qf-fsec")
+        ?.querySelector<HTMLElement>(".qf-fsec-head")?.offsetHeight ?? 40;
+    const hostRect = host.getBoundingClientRect();
+    const rowRect = el.getBoundingClientRect();
+    const topEdge = hostRect.top + headerH + 4;
+    const bottomEdge = hostRect.bottom - 4;
+    if (rowRect.top < topEdge) {
+      host.scrollBy({ top: rowRect.top - topEdge });
+    } else if (rowRect.bottom > bottomEdge) {
+      host.scrollBy({ top: rowRect.bottom - bottomEdge });
+    }
   }, [cursorAnchor]);
 
   // Land a search jump: move the cursor there, scroll it to center, flash it.
@@ -474,10 +494,17 @@ export function DiffViewer({
     return null;
   }
 
-  function moveCursor(delta: number) {
+  // Holding j/k accelerates: after ~1s of key-repeat the cursor moves 3 lines
+  // per repeat, after ~2.5s six — long diffs stay traversable without paging.
+  const heldRepeatsRef = useRef(0);
+
+  function moveCursor(delta: number, isRepeat = false) {
     keyboardHoldRef.current = true;
     if (inputMode !== "keyboard") setInputMode("keyboard");
-    pendingDeltaRef.current += delta;
+    heldRepeatsRef.current = isRepeat ? heldRepeatsRef.current + 1 : 0;
+    const held = heldRepeatsRef.current;
+    const multiplier = held >= 40 ? 6 : held >= 15 ? 3 : 1;
+    pendingDeltaRef.current += delta * multiplier;
     if (rafRef.current == null) {
       rafRef.current = requestAnimationFrame(flushCursor);
     }
@@ -500,14 +527,14 @@ export function DiffViewer({
         description: "Next line",
         group: "Navigation",
         icon: ArrowDown,
-        run: () => moveCursor(1),
+        run: (e) => moveCursor(1, e.repeat),
       },
       {
         keys: ["k", "up"],
         description: "Previous line",
         group: "Navigation",
         icon: ArrowUp,
-        run: () => moveCursor(-1),
+        run: (e) => moveCursor(-1, e.repeat),
       },
       {
         keys: "c",
