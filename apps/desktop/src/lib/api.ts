@@ -3,6 +3,7 @@ import type {
   AccountInfo,
   AccountsInfo,
   FileBlob,
+  InboxBucket,
   GitHubUser,
   InboxData,
   PullRequestDetail,
@@ -42,6 +43,12 @@ export const api = {
   // ---- inbox (all tabs in one GraphQL request) ----
   listInbox: () => invoke<InboxData>("list_inbox"),
   getCachedInbox: () => invoke<InboxData | null>("get_cached_inbox"),
+
+  // ---- watched repositories ("Watching" tab) ----
+  getWatchedRepos: () => invoke<string[]>("get_watched_repos"),
+  setWatchedRepos: (repos: string[]) => invoke<void>("set_watched_repos", { repos }),
+  listSubscribed: () => invoke<InboxBucket>("list_subscribed"),
+  getCachedSubscribed: () => invoke<InboxBucket | null>("get_cached_subscribed"),
 
   // ---- pull request detail ----
   getPullRequestDetail: (owner: string, repo: string, number: number) =>

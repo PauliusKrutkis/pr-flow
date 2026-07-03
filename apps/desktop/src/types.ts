@@ -106,7 +106,8 @@ export interface InboxData {
   involved: InboxBucket;
 }
 
-export type InboxTabKey = keyof InboxData;
+/** Inbox tabs: the four involvement buckets plus the watched-repos tab. */
+export type InboxTabKey = keyof InboxData | "subscribed";
 
 export type ReviewEvent = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
 

@@ -286,6 +286,31 @@ impl GitLabPlatform {
         })
     }
 
+    /// Open MRs across watched projects. GitLab has no cross-project search
+    /// by list, so this fans out one request per project; a missing/private
+    /// project is skipped (logged) rather than failing the whole tab.
+    pub async fn subscribed_prs(&self, repos: &[String]) -> Result<InboxBucket, String> {
+        let mut prs: Vec<PullRequest> = Vec::new();
+        for repo in repos {
+            let Some((owner, name)) = repo.rsplit_once('/') else { continue };
+            let url = format!(
+                "{}/projects/{}/merge_requests?state=opened&order_by=updated_at&sort=desc&per_page=30",
+                self.api,
+                project(owner, name)
+            );
+            match get_json(&self.client, &url).await {
+                Ok(v) => {
+                    if let Some(arr) = v.as_array() {
+                        prs.extend(arr.iter().map(mr_to_pr));
+                    }
+                }
+                Err(e) => log(&format!("watching: skipping {repo}: {e}")),
+            }
+        }
+        prs.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        Ok(InboxBucket { count: prs.len() as u64, prs })
+    }
+
     pub async fn pr_detail(
         &self,
         owner: &str,

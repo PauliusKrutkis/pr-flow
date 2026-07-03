@@ -1242,6 +1242,20 @@ textarea.q-input { resize: none; line-height: 1.5; }
   [data-route="inbox"] .qb-stack-host { right: 18px; }
 }
 
+/* watched-repos dialog */
+.qw-panel { width: min(480px, calc(100vw - 32px)); padding: 0; }
+.qw-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
 /* ---- inbox zero — a calm full-bleed moment ---- */
 .qz-wrap {
   position: relative;

@@ -302,6 +302,13 @@ pub(crate) async fn fetch_user(client: &reqwest::Client) -> Result<GitHubUser, S
 // GitHub mappers: GitHub JSON -> our structs
 // ---------------------------------------------------------------------------
 
+const FRAGMENT_P: &str = r#"fragment P on PullRequest {
+  databaseId number title url state isDraft createdAt updatedAt
+  author { login avatarUrl }
+  repository { name owner { login } }
+  comments { totalCount }
+}"#;
+
 /// One GraphQL document fetching all four inbox tabs (and their counts) via
 /// aliased `search` fields — a single request for the whole inbox.
 const INBOX_QUERY: &str = r#"{
@@ -510,6 +517,28 @@ impl GitHubPlatform {
             inbox.involved.count
         ));
         Ok(inbox)
+    }
+
+    /// Open PRs across an explicit set of watched repositories, newest first.
+    /// One search request; multiple `repo:` qualifiers OR together.
+    pub async fn subscribed_prs(&self, repos: &[String]) -> Result<InboxBucket, String> {
+        if repos.is_empty() {
+            return Ok(InboxBucket { count: 0, prs: Vec::new() });
+        }
+        let quals: String = repos
+            .iter()
+            .map(|r| format!("repo:{r}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let search = format!("is:open is:pr archived:false sort:updated-desc {quals}");
+        let query = format!(
+            "{{ watching: search(query: \"{search}\", type: ISSUE, first: 50) {{ issueCount nodes {{ ...P }} }} }}\n{FRAGMENT_P}"
+        );
+        let v = self.graphql(&query).await?;
+        let data = v
+            .get("data")
+            .ok_or_else(|| "GraphQL response missing `data`".to_string())?;
+        Ok(bucket_from(data, "watching"))
     }
 
     pub async fn pr_detail(
