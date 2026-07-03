@@ -143,6 +143,14 @@ pub struct FileBlob {
     pub size: u64,
 }
 
+/// A repository search hit (the watch-repos picker).
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RepoHit {
+    pub full_name: String,
+    pub description: String,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReviewCommentInput {
@@ -517,6 +525,34 @@ impl GitHubPlatform {
             inbox.involved.count
         ));
         Ok(inbox)
+    }
+
+    /// Repository search for the watch picker — GitHub's search includes
+    /// private repos the token can see.
+    pub async fn search_repos(&self, query: &str) -> Result<Vec<RepoHit>, String> {
+        if query.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+        let resp = self
+            .client
+            .get(format!("{API}/search/repositories"))
+            .query(&[("q", query), ("per_page", "8")])
+            .send()
+            .await
+            .map_err(net_err)?;
+        let v = read_body(resp).await?;
+        Ok(v.get("items")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .map(|r| RepoHit {
+                        full_name: fstr(r, "full_name"),
+                        description: fstr(r, "description"),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default())
     }
 
     /// Open PRs across an explicit set of watched repositories, newest first.

@@ -4,7 +4,7 @@
 //! directly — adding a host means adding a variant + impl, nothing else.
 
 use crate::github::{
-    FileBlob, GitHubPlatform, GitHubUser, InboxBucket, InboxData, PullRequestDetail,
+    FileBlob, GitHubPlatform, GitHubUser, InboxBucket, InboxData, PullRequestDetail, RepoHit,
     ReviewComment, ReviewCommentInput,
 };
 use crate::gitlab::GitLabPlatform;
@@ -30,6 +30,10 @@ impl AnyPlatform {
 
     pub async fn inbox(&self) -> Result<InboxData, String> {
         dispatch!(self, p => p.inbox().await)
+    }
+
+    pub async fn search_repos(&self, query: &str) -> Result<Vec<RepoHit>, String> {
+        dispatch!(self, p => p.search_repos(query).await)
     }
 
     pub async fn subscribed_prs(&self, repos: &[String]) -> Result<InboxBucket, String> {

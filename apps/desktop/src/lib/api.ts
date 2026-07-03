@@ -7,6 +7,7 @@ import type {
   GitHubUser,
   InboxData,
   PullRequestDetail,
+  RepoHit,
   ReviewComment,
   ReviewEvent,
   UpdateInfo,
@@ -45,6 +46,7 @@ export const api = {
   getCachedInbox: () => invoke<InboxData | null>("get_cached_inbox"),
 
   // ---- watched repositories ("Watching" tab) ----
+  searchRepos: (query: string) => invoke<RepoHit[]>("search_repos", { query }),
   getWatchedRepos: () => invoke<string[]>("get_watched_repos"),
   setWatchedRepos: (repos: string[]) => invoke<void>("set_watched_repos", { repos }),
   listSubscribed: () => invoke<InboxBucket>("list_subscribed"),

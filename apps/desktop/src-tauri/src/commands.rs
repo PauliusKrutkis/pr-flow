@@ -7,7 +7,7 @@ use tauri::AppHandle;
 
 use crate::accounts;
 use crate::github::{
-    FileBlob, GitHubUser, InboxBucket, InboxData, PullRequestDetail, ReviewComment,
+    FileBlob, GitHubUser, InboxBucket, InboxData, PullRequestDetail, RepoHit, ReviewComment,
     ReviewCommentInput,
 };
 use crate::storage;
@@ -107,6 +107,12 @@ pub async fn set_watched_repos(app: AppHandle, repos: Vec<String>) -> Result<(),
         .filter(|r| r.contains('/') && !r.is_empty())
         .collect();
     storage::write_json(&app, &watched_name(&account.id), &cleaned)
+}
+
+#[tauri::command]
+pub async fn search_repos(app: AppHandle, query: String) -> Result<Vec<RepoHit>, String> {
+    let (_, platform) = accounts::active_platform(&app).await?;
+    platform.search_repos(&query).await
 }
 
 #[tauri::command]

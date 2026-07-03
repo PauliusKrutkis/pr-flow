@@ -17,7 +17,7 @@ use serde_json::{json, Value};
 use crate::github::{
     fbool, fopt_u64, fstr, fu64, get_all_pages, get_json, log, net_err, now_millis, nstr,
     read_body, ChangedFile, FileBlob, GitHubUser, InboxBucket, InboxData, IssueComment,
-    PullRequest, PullRequestDetail, ReviewComment, ReviewCommentInput, MAX_BLOB_BYTES,
+    PullRequest, PullRequestDetail, RepoHit, ReviewComment, ReviewCommentInput, MAX_BLOB_BYTES,
 };
 
 pub struct GitLabPlatform {
@@ -284,6 +284,30 @@ impl GitLabPlatform {
             created,
             involved,
         })
+    }
+
+    /// Project search for the watch picker — visible projects only.
+    pub async fn search_repos(&self, query: &str) -> Result<Vec<RepoHit>, String> {
+        if query.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+        let url = format!(
+            "{}/projects?search={}&per_page=8&simple=true&order_by=last_activity_at",
+            self.api,
+            enc(query)
+        );
+        let v = get_json(&self.client, &url).await?;
+        Ok(v.as_array()
+            .map(|items| {
+                items
+                    .iter()
+                    .map(|r| RepoHit {
+                        full_name: fstr(r, "path_with_namespace"),
+                        description: fstr(r, "description"),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default())
     }
 
     /// Open MRs across watched projects. GitLab has no cross-project search

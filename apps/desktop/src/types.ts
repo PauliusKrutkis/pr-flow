@@ -123,6 +123,12 @@ export interface PendingComment {
 /** prKey -> list of filenames marked viewed */
 export type ViewedMap = Record<string, string[]>;
 
+/** A repository search hit (the watch-repos picker). */
+export interface RepoHit {
+  fullName: string;
+  description: string;
+}
+
 /** Raw file bytes at a ref, base64-encoded (image diffs). */
 export interface FileBlob {
   base64: string;

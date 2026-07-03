@@ -1256,6 +1256,44 @@ textarea.q-input { resize: none; line-height: 1.5; }
   color: var(--fg);
 }
 
+/* watch-picker search results */
+.qw-hit {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px 7px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+}
+.qw-hit::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+}
+.qw-hit-on { background: var(--accent-soft); }
+.qw-hit-on::before { background: var(--accent); box-shadow: 0 0 10px 0 var(--accent-line); }
+.qw-hit:disabled { opacity: 0.55; cursor: default; }
+.qw-hit-desc {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
 /* ---- inbox zero — a calm full-bleed moment ---- */
 .qz-wrap {
   position: relative;

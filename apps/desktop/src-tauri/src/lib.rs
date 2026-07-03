@@ -32,6 +32,7 @@ pub fn run() {
             commands::get_current_user,
             commands::list_inbox,
             commands::get_cached_inbox,
+            commands::search_repos,
             commands::get_watched_repos,
             commands::set_watched_repos,
             commands::list_subscribed,
