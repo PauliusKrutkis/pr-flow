@@ -51,6 +51,15 @@
 .q-dot { color: var(--faint); }
 .q-mono { font-family: var(--font-mono); }
 
+/* ---- issue-tracker ticket link inside titles ---- */
+.q-ticket {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid var(--accent-line);
+  cursor: pointer;
+}
+.q-ticket:hover { border-bottom-color: var(--accent); }
+
 /* ---- eyebrow / section micro-label ---- */
 .q-eyebrow {
   font-size: 11px;

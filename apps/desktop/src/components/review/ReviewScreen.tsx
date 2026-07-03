@@ -36,6 +36,7 @@ import { getReviewMemory, updateReviewMemory } from "../../lib/reviewMemory";
 import { usePerfStore } from "../../lib/perf";
 import { cn } from "../../lib/cn";
 import { Kbd } from "../ui/Kbd";
+import { TicketTitle } from "../ui/TicketTitle";
 import { Avatar } from "../ui/Avatar";
 import { FileSidebar } from "./FileSidebar";
 import { FileSection } from "./FileSection";
@@ -119,6 +120,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const setFlash = useAppStore((s) => s.setFlash);
   const activeLogin = useAppStore(
     (s) => s.accounts.find((a) => a.id === s.activeAccountId)?.login,
+  );
+  const trackerBase = useAppStore((s) =>
+    s.activeAccountId ? s.issueTrackers[s.activeAccountId] : undefined,
   );
   const viewedFiles = viewed[keyValue];
   const viewedSet = useMemo(() => new Set(viewedFiles ?? []), [viewedFiles]);
@@ -570,11 +574,14 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     },
     {
       keys: "o",
-      description: "Open files on GitHub",
+      description: "Open files in the browser",
       group: "General",
       icon: ExternalLink,
       run: () => {
-        if (pr) void openUrl(pr.url + "/files");
+        if (!pr) return;
+        // GitHub's files tab is /files; GitLab's is /diffs.
+        const files = pr.url.includes("/-/merge_requests/") ? "/diffs" : "/files";
+        void openUrl(pr.url + files);
       },
     },
     {
@@ -760,7 +767,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
                 {stateLabel}
               </span>
               <h1 className="qf-pr-title truncate" title={pr.title}>
-                {pr.title}
+                <TicketTitle title={pr.title} trackerBase={trackerBase} />
               </h1>
             </div>
             <div className="qf-pr-sub mt-1 flex items-center gap-2">
