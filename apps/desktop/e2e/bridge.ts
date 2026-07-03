@@ -14,6 +14,14 @@ export interface AppOptions {
    * side" across a reload — e.g. the auto-unview-on-content-change flow. TESTING
    */
   detailByLoad?: unknown[];
+  /**
+   * PR-detail payload per pr_detail CALL within one page load (the last entry
+   * repeats) — lets the "server" move mid-session without a reload, e.g. the
+   * inbox-heartbeat refresh flow. Takes precedence over detailByLoad.
+   */
+  detailByCall?: unknown[];
+  /** Inbox payload per list_inbox call (the last entry repeats). */
+  inboxByCall?: unknown[];
 }
 
 export async function setupApp(page: Page, opts: AppOptions = {}) {
@@ -22,6 +30,8 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
     inbox: INBOX,
     detail: DETAIL,
     detailByLoad: opts.detailByLoad ?? null,
+    detailByCall: opts.detailByCall ?? null,
+    inboxByCall: opts.inboxByCall ?? null,
     account: ACCOUNT,
   };
 
@@ -34,6 +44,11 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
     const detail = byLoad
       ? byLoad[Math.min(load, byLoad.length - 1)]
       : cfg.detail;
+    // Per-call sequences (clamped to their last entry).
+    let detailCalls = 0;
+    let inboxCalls = 0;
+    const seq = (arr: unknown[] | null, n: number, fallback: unknown) =>
+      arr ? arr[Math.min(n, arr.length - 1)] : fallback;
 
     const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
       has_token: () => cfg.hasToken,
@@ -44,7 +59,7 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
           ? { accounts: [cfg.account], activeId: cfg.account.id }
           : { accounts: [], activeId: null },
       get_cached_inbox: () => null,
-      list_inbox: () => cfg.inbox,
+      list_inbox: () => seq(cfg.inboxByCall, inboxCalls++, cfg.inbox),
       get_cached_subscribed: () => null,
       list_subscribed: () => ({ count: 0, prs: [] }),
       get_watched_repos: () => [],
@@ -58,7 +73,7 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
         return null;
       },
       get_cached_pull_request_detail: () => null,
-      get_pull_request_detail: () => detail,
+      get_pull_request_detail: () => seq(cfg.detailByCall, detailCalls++, detail),
       create_review_comment: (args) => ({
         id: 900,
         path: args.path,

@@ -22,6 +22,7 @@ import {
 import { prKey } from "../../types";
 import type {
   ChangedFile,
+  InboxBucket,
   InboxData,
   PendingComment,
   PullRequest,
@@ -32,6 +33,7 @@ import { useAppStore } from "../../store/appStore";
 import { useHotkeys } from "../../keyboard";
 import type { Binding } from "../../keyboard/types";
 import { usePullRequestDetail } from "../../hooks/usePullRequestDetail";
+import { useInbox } from "../../hooks/useInbox";
 import { useCommentMutations } from "../../hooks/useComments";
 import { queryClient, queryKeys } from "../../lib/queryClient";
 import { getReviewMemory, updateReviewMemory } from "../../lib/reviewMemory";
@@ -46,7 +48,6 @@ import { FileSection } from "./FileSection";
 import { isImageFile } from "./ImageDiff";
 import type { CursorSeed, JumpTarget } from "./DiffViewer";
 import { RightPanel } from "./RightPanel";
-import { OrientBanner } from "./OrientBanner";
 import { SubmitReviewModal } from "./SubmitReviewModal";
 import { PrSearch } from "./PrSearch";
 
@@ -91,8 +92,13 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const [commentIndex, setCommentIndex] = useState(0);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [prSearch, setPrSearch] = useState<null | "files" | "text">(null);
-  // Only shown when the PR's head moves mid-review (never on open).
-  const [banner, setBanner] = useState<string | null>(null);
+  // Files whose content moved out from under a viewed mark. Feeds the quiet
+  // per-file "updated" affordances (sidebar dot, section chip) instead of a
+  // sticky banner — the signal lives ON the files it's about, and marking a
+  // file viewed again acknowledges it away.
+  const [changedSinceViewed, setChangedSinceViewed] = useState<Set<string>>(
+    () => new Set(),
+  );
   // A pending "land on this line" request from in-PR text search.
   const [jump, setJump] = useState<(JumpTarget & { filename: string }) | null>(
     null,
@@ -193,9 +199,53 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     if (pr.headSha && pr.headSha !== seen) {
       mountShaRef.current = pr.headSha;
       updateReviewMemory(keyValue, { headSha: pr.headSha });
-      setBanner("This PR changed while you were reviewing — showing the latest.");
+      // Transient by design: "new code arrived" is an event, not a state —
+      // the durable signal is the per-file "updated" marks (which the
+      // reconcile effect below may immediately make more specific).
+      setToast({
+        title: "Pull request updated",
+        message: "Showing the latest changes.",
+      });
     }
-  }, [pr, keyValue]);
+  }, [pr, keyValue, setToast]);
+
+  // When the inbox heartbeat (60s poll / window focus — it keeps running on
+  // this screen via ReviewNotifier) sees this PR move past what the detail
+  // payload knows, refetch the detail right away instead of waiting out its
+  // own poll. The ref gates one nudge per observed updatedAt, so a provider
+  // whose detail timestamp lags its list can't put us in a refetch loop.
+  const { data: inboxHeartbeat } = useInbox();
+  const nudgedForRef = useRef("");
+  useEffect(() => {
+    if (!pr) return;
+    const buckets = inboxHeartbeat
+      ? [
+          inboxHeartbeat.reviewRequested,
+          inboxHeartbeat.assigned,
+          inboxHeartbeat.created,
+          inboxHeartbeat.involved,
+        ]
+      : [];
+    const subscribed = queryClient.getQueryData<InboxBucket>(
+      queryKeys.subscribed,
+    );
+    if (subscribed) buckets.push(subscribed);
+    const hit = buckets
+      .flatMap((b) => b.prs)
+      .find(
+        (p) => p.owner === owner && p.name === repo && p.number === number,
+      );
+    if (
+      hit &&
+      hit.updatedAt > pr.updatedAt &&
+      nudgedForRef.current !== hit.updatedAt
+    ) {
+      nudgedForRef.current = hit.updatedAt;
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.prDetail(owner, repo, number),
+      });
+    }
+  }, [inboxHeartbeat, pr, owner, repo, number]);
 
   // Auto-unview: a viewed mark vouches for the content you saw, so whenever
   // detail data lands (open or background refetch) each mark's stored
@@ -204,16 +254,26 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   // viewed map is a dependency because its persisted load can race detail on
   // a resume-into-review boot — the pass is idempotent, so re-runs (including
   // the one this effect's own write triggers) settle immediately. Declared
-  // after the head-move effect so the more specific message wins the banner.
+  // after the head-move effect so the more specific toast wins the (single)
+  // slot; the lasting record is the per-file "updated" marks.
   useEffect(() => {
     if (!pr || files.length === 0) return;
     const unviewed = reconcileViewed(keyValue, files, pr.headSha);
     if (unviewed.length > 0) {
-      setBanner(
-        `${unviewed.length} viewed file${unviewed.length === 1 ? "" : "s"} changed — marked unviewed.`,
-      );
+      setChangedSinceViewed((prev) => {
+        const next = new Set(prev);
+        for (const f of unviewed) next.add(f);
+        return next;
+      });
+      setToast({
+        title: "Pull request updated",
+        message:
+          unviewed.length === 1
+            ? `${unviewed[0]} changed since you viewed it — marked unviewed.`
+            : `${unviewed.length} files changed since you viewed them — marked unviewed.`,
+      });
     }
-  }, [pr, files, viewedFiles, keyValue, reconcileViewed]);
+  }, [pr, files, viewedFiles, keyValue, reconcileViewed, setToast]);
 
   // Resume: scroll back to the file you were on. Anchoring to the file section
   // (not a raw scrollTop) stays correct even though placeholder heights above
@@ -378,9 +438,17 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   // Marks are stamped with the file's current content fingerprint, so a later
   // push that touches the file can drop the mark (see the reconcile effect).
+  // Toggling also retires the file's "updated" mark — touching the viewed
+  // state is the acknowledgement the mark was asking for.
   const toggleViewedWithFp = useCallback(
     (f: ChangedFile) => {
       toggleViewed(keyValue, f.filename, fingerprintFile(f, headShaRef.current));
+      setChangedSinceViewed((prev) => {
+        if (!prev.has(f.filename)) return prev;
+        const next = new Set(prev);
+        next.delete(f.filename);
+        return next;
+      });
     },
     [toggleViewed, keyValue],
   );
@@ -807,6 +875,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
           prKeyValue={keyValue}
           comments={detail.comments}
           pending={pending}
+          changed={changedSinceViewed}
         />
       </aside>
 
@@ -887,14 +956,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
           </div>
         </header>
 
-        {banner && (
-          <OrientBanner
-            message={banner}
-            tone="update"
-            onDismiss={() => setBanner(null)}
-          />
-        )}
-
         <div
           ref={scrollRef}
           onScroll={handleScroll}
@@ -918,6 +979,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
               pending={pendingByFile.get(file.filename) ?? EMPTY_PENDING}
               jump={jump && jump.filename === file.filename ? jump : null}
               seed={seed && seed.index === i ? seed : null}
+              changed={changedSinceViewed.has(file.filename)}
               addPending={false}
               onActivate={handleActivate}
               onCursorExit={handleCursorExit}

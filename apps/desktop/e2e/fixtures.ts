@@ -131,6 +131,22 @@ export const DETAIL_CHANGED = {
   fetchedAt: 1_750_000_100_000,
 };
 
+/**
+ * INBOX after the push behind DETAIL_CHANGED: only PR #1's updatedAt moves
+ * (matching DETAIL_CHANGED.pr.updatedAt). Serve it on a later list_inbox call
+ * (bridge inboxByCall) to exercise the heartbeat-driven detail refresh.
+ */
+export const INBOX_UPDATED = {
+  ...INBOX,
+  reviewRequested: {
+    ...INBOX.reviewRequested,
+    prs: [
+      { ...INBOX.reviewRequested.prs[0], updatedAt: "2026-07-02T11:00:00Z" },
+      ...INBOX.reviewRequested.prs.slice(1),
+    ],
+  },
+};
+
 export const ACCOUNT = {
   id: "github-com-me",
   provider: "github",

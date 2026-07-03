@@ -16,6 +16,8 @@ interface FileSidebarProps {
   prKeyValue: string;
   comments: ReviewComment[];
   pending: PendingComment[];
+  /** Files whose content changed since they were marked viewed. */
+  changed: Set<string>;
 }
 
 interface Glyph {
@@ -58,6 +60,7 @@ export function FileSidebar({
   prKeyValue,
   comments,
   pending,
+  changed,
 }: FileSidebarProps) {
   // Subscribe to THIS PR's viewed map so the rail + rows re-render on toggle.
   const viewedFiles = useAppStore((s) => s.viewed[prKeyValue]);
@@ -154,6 +157,12 @@ export function FileSidebar({
                   <span className="qf-file-base">{base}</span>
                 </span>
                 <span className="qf-file-meta">
+                  {changed.has(file.filename) && (
+                    <span
+                      className="qf-file-dot"
+                      title="Changed since you viewed it"
+                    />
+                  )}
                   {threads > 0 && (
                     <span
                       className="qf-file-badge qf-file-badge-comment"

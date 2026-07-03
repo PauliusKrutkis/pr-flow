@@ -631,6 +631,47 @@ textarea.q-input { resize: none; line-height: 1.5; }
   white-space: nowrap;
 }
 .dir-quiet .qf-fsec-base { color: var(--fg); font-weight: 500; }
+/* The path doubles as a copy target: plain text at rest, underline on hover
+   (mouse mirror of mod+shift+c), a small inline check while copied. */
+.dir-quiet button.qf-fsec-copy {
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.dir-quiet .qf-fsec-copy:hover .qf-fsec-base { text-decoration: underline; text-underline-offset: 3px; }
+.dir-quiet .qf-fsec-copied {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  color: var(--add);
+  font-size: 11px;
+}
+/* Changed-since-viewed: the mark was auto-dropped because the content moved.
+   A quiet amber presence on the file itself (sidebar dot + header chip) —
+   persistent until the reviewer marks the file viewed again. */
+.dir-quiet .qf-updated-chip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--warn);
+  background: var(--warn-bg);
+  padding: 3px 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.dir-quiet .qf-file-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--warn);
+  box-shadow: 0 0 8px -1px var(--warn);
+  flex-shrink: 0;
+}
 .dir-quiet .qf-filebar-prev { color: var(--faint); }
 .dir-quiet .qf-filebar-stat { font-family: var(--font-mono); font-size: 11px; display: flex; gap: 6px; }
 .dir-quiet .qf-viewed-btn {
