@@ -3,6 +3,7 @@ import { Check } from "lucide-react";
 import type { ChangedFile, PendingComment, ReviewComment } from "../../types";
 import { cn } from "../../lib/cn";
 import { DiffViewer, type CursorSeed, type JumpTarget } from "./DiffViewer";
+import type { ReplyRequest } from "./CommentThread";
 import { ImageDiff, isImageFile } from "./ImageDiff";
 
 export interface FileSectionCallbacks {
@@ -16,6 +17,8 @@ export interface FileSectionCallbacks {
     body: string;
   }) => Promise<void>;
   onReply: (a: { inReplyTo: number; body: string }) => Promise<void>;
+  onResolveThread: (a: { threadId: string; resolved: boolean }) => void;
+  onThreadHover: (t: { rootId: number; path: string } | null) => void;
   onAddPending: (c: {
     path: string;
     line: number;
@@ -43,6 +46,8 @@ interface FileSectionProps extends FileSectionCallbacks {
   pending: PendingComment[];
   jump: JumpTarget | null;
   seed: CursorSeed | null;
+  /** `r`-key reply request, routed here only when it targets this file. */
+  replyRequest: (ReplyRequest & { path: string }) | null;
   addPending: boolean;
 }
 
@@ -84,12 +89,15 @@ export const FileSection = memo(function FileSection({
   pending,
   jump,
   seed,
+  replyRequest,
   addPending,
   onActivate,
   onCursorExit,
   onToggleViewed,
   onAddComment,
   onReply,
+  onResolveThread,
+  onThreadHover,
   onAddPending,
   onRemovePending,
 }: FileSectionProps) {
@@ -151,6 +159,9 @@ export const FileSection = memo(function FileSection({
             onCursorExit={(dir) => onCursorExit(index, dir)}
             onAddComment={onAddComment}
             onReply={onReply}
+            onResolve={onResolveThread}
+            onThreadHover={onThreadHover}
+            replyRequest={replyRequest}
             onAddPending={onAddPending}
             onRemovePending={onRemovePending}
             addPending={addPending}

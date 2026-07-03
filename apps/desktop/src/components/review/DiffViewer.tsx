@@ -15,7 +15,7 @@ import { cn } from "../../lib/cn";
 import { useHotkeys } from "../../keyboard";
 import { useAppStore } from "../../store/appStore";
 import { Avatar } from "../ui/Avatar";
-import { CommentThread } from "./CommentThread";
+import { CommentThread, type ReplyRequest } from "./CommentThread";
 import { AddCommentBox } from "./AddCommentBox";
 
 /** A request to land on a specific line (from in-PR text search). */
@@ -42,6 +42,15 @@ interface DiffViewerProps {
     body: string;
   }) => Promise<void>;
   onReply: (a: { inReplyTo: number; body: string }) => Promise<void>;
+  /** Flip a thread's resolved state (optimistic upstream). */
+  onResolve?: (a: { threadId: string; resolved: boolean }) => void;
+  /**
+   * The pointer entered (or left, null) one of this file's threads — the
+   * screen keeps it in a ref as the target for the `r` reply shortcut.
+   */
+  onThreadHover?: (t: { rootId: number; path: string } | null) => void;
+  /** Open the reply composer on the matching thread (from the `r` key). */
+  replyRequest?: (ReplyRequest & { path: string }) | null;
   addPending: boolean;
   pending: PendingComment[];
   onAddPending: (c: {
@@ -212,6 +221,9 @@ export function DiffViewer({
   commitId: _commitId,
   onAddComment,
   onReply,
+  onResolve,
+  onThreadHover,
+  replyRequest,
   addPending,
   pending,
   onAddPending,
@@ -616,13 +628,28 @@ export function DiffViewer({
             />
 
             {hasAnchored || boxOpen ? (
-              <div className="js-comment qf-comment-wrap">
+              <div
+                className="js-comment qf-comment-wrap"
+                // ]c/[c stop on these nodes; the stamps below tell the screen
+                // which thread the stop landed on so `r` can aim its reply.
+                data-thread-root={threads?.[0]?.[0].id}
+                data-thread-path={threads?.length ? file.filename : undefined}
+              >
                 {threads?.map((thread) => (
                   <CommentThread
                     key={thread[0].id}
                     comments={thread}
                     onReply={onReply}
                     replyPending={addPending}
+                    onResolve={onResolve}
+                    onHoverChange={(hovering) =>
+                      onThreadHover?.(
+                        hovering
+                          ? { rootId: thread[0].id, path: file.filename }
+                          : null,
+                      )
+                    }
+                    replyRequest={replyRequest}
                   />
                 ))}
                 {pendingHere?.map((p) => (
@@ -661,6 +688,13 @@ export function DiffViewer({
                         placeholder="Add a review comment…"
                         submitLabel="Add to review"
                         secondaryLabel="Comment now"
+                        // ```suggestion blocks replace the line as it exists on
+                        // the head side, so only RIGHT-side rows (add/context)
+                        // offer the insert — you can't suggest onto a deleted
+                        // line, and hosts reject it.
+                        suggestionText={
+                          target.side === "RIGHT" ? row.content : undefined
+                        }
                         onCancel={() => closeBox(key!)}
                         onSubmit={(body) => {
                           onAddPending({

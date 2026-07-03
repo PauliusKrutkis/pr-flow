@@ -18,6 +18,9 @@ function optimisticComment(c: {
   side: string;
   body: string;
   inReplyToId: number | null;
+  /** Replies inherit their thread's handle/state so grouping stays intact. */
+  threadId?: string | null;
+  resolved?: boolean;
 }): ReviewComment {
   const s = useAppStore.getState();
   const account = s.accounts.find((a) => a.id === s.activeAccountId);
@@ -33,6 +36,8 @@ function optimisticComment(c: {
     userAvatarUrl: account?.avatarUrl ?? "",
     createdAt: new Date().toISOString(),
     inReplyToId: c.inReplyToId,
+    threadId: c.threadId ?? null,
+    resolved: c.resolved ?? false,
   };
 }
 
@@ -97,6 +102,8 @@ export function useCommentMutations(
           side: root?.side ?? "RIGHT",
           body: args.body,
           inReplyToId: args.inReplyTo,
+          threadId: root?.threadId,
+          resolved: root?.resolved,
         }),
       );
     },
@@ -135,6 +142,34 @@ export function useCommentMutations(
     onSettled: invalidate,
   });
 
+  // Optimistic thread resolution: every comment carrying the thread's handle
+  // flips at once (the state is mirrored across the thread), so the collapsed
+  // card appears instantly; failure rolls the flip back with a flash.
+  const resolveThread = useMutation({
+    mutationFn: (args: { threadId: string; resolved: boolean }) =>
+      api.resolveThread({ owner, repo, number, ...args }),
+    onMutate: async (args) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const before = queryClient.getQueryData<PullRequestDetail>(detailKey);
+      queryClient.setQueryData<PullRequestDetail>(detailKey, (cur) =>
+        cur
+          ? {
+              ...cur,
+              comments: cur.comments.map((c) =>
+                c.threadId === args.threadId
+                  ? { ...c, resolved: args.resolved }
+                  : c,
+              ),
+            }
+          : cur,
+      );
+      return before;
+    },
+    onError: (e, args, before) =>
+      rollback(before, args.resolved ? "Resolve" : "Unresolve", e),
+    onSettled: invalidate,
+  });
+
   const submitReview = useMutation({
     mutationFn: (args: {
       event: ReviewEvent;
@@ -145,5 +180,5 @@ export function useCommentMutations(
     onSettled: invalidate,
   });
 
-  return { addReviewComment, reply, addIssueComment, submitReview };
+  return { addReviewComment, reply, addIssueComment, resolveThread, submitReview };
 }

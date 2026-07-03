@@ -309,6 +309,53 @@ textarea.q-input { resize: none; line-height: 1.5; }
 .md hr { border: none; border-top: 1px solid var(--line); margin: 16px 0; }
 .md img { max-width: 100%; border-radius: 8px; }
 
+/* ```suggestion fences render as a proposed change, not a code sample: the
+   suggested lines wear the diff's "added" tokens. */
+.md-suggestion { margin: 10px 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.md-suggestion-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 10px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--surface-hi);
+  border-bottom: 1px solid var(--line);
+}
+.md-suggestion-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.md-suggestion-copy:hover { color: var(--fg); }
+.md-suggestion-copied { color: var(--add); border-color: var(--add); }
+.md-suggestion-body { font-family: var(--font-mono); font-size: 11.5px; background: var(--bg); }
+.md-suggestion-line {
+  padding: 1.5px 10px 1.5px 24px;
+  background: var(--add-bg);
+  color: var(--fg);
+  white-space: pre-wrap;
+  word-break: break-word;
+  position: relative;
+  min-height: 1.6em;
+}
+.md-suggestion-line::before {
+  content: "+";
+  position: absolute;
+  left: 9px;
+  color: var(--add);
+}
+
 /* ---- syntax tokens (lab tokenizer; harmless if unused by hljs) ---- */
 .tk-kw { color: #c4b6ff; }
 .tk-str { color: #8fe3b0; }
@@ -876,6 +923,63 @@ textarea.q-input { resize: none; line-height: 1.5; }
 }
 .dir-quiet .qf-reply-btn:hover { color: var(--fg); background: var(--surface-2); }
 
+/* thread footer: Reply + Resolve/Unresolve share one bordered strip */
+.dir-quiet .qf-thread-actions { display: flex; border-top: 1px solid var(--line); }
+.dir-quiet .qf-thread-actions .qf-reply-btn { border-top: none; width: auto; flex: 1; }
+.dir-quiet .qf-resolve-btn { flex: 0 0 auto; justify-content: flex-end; }
+.dir-quiet .qf-resolve-btn:hover { color: var(--add); }
+
+/* resolved threads — collapsed to one quiet row until clicked open */
+.dir-quiet .qf-thread-collapsed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 14px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.dir-quiet .qf-thread-collapsed:hover { background: var(--surface-2); }
+.dir-quiet .qf-thread-collapsed svg { color: var(--add); flex-shrink: 0; }
+.dir-quiet .qf-resolved-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--add);
+}
+.dir-quiet .qf-resolved-snip {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--faint);
+}
+/* the "Resolved" strip atop an expanded resolved thread */
+.dir-quiet .qf-thread-resolved-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.dir-quiet .qf-thread-resolved-bar svg { color: var(--add); }
+.dir-quiet .qf-resolved-collapse {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.dir-quiet .qf-resolved-collapse:hover { color: var(--fg); border-color: var(--line-2); }
+
 /* pending */
 .dir-quiet .qf-pending {
   border-color: var(--accent-line);
@@ -945,6 +1049,22 @@ textarea.qa-textarea {
 .qa-seg-on { color: var(--fg); background: var(--surface-hi); box-shadow: inset 0 0 0 1px var(--line-2); }
 .qa-seg-on svg { color: var(--accent); }
 .qa-actions { display: flex; align-items: center; gap: 8px; }
+/* "Insert suggestion" — a quiet utility next to the composer's actions */
+.qa-suggest-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  padding: 4px 9px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.qa-suggest-btn:hover { color: var(--fg); border-color: var(--line-2); }
+.qa-suggest-btn svg { color: var(--accent); }
 .qa-explain { margin-top: 10px; font-size: 11.5px; color: var(--faint); line-height: 1.5; }
 
 /* ============ INFO DRAWER ============ */
@@ -1073,6 +1193,7 @@ textarea.qa-textarea {
   text-align: left;
 }
 .dir-quiet .qf-thread-line { flex-shrink: 0; color: var(--faint); }
+.dir-quiet .qf-thread-check { flex-shrink: 0; color: var(--add); }
 .dir-quiet .qf-thread-replies { flex-shrink: 0; margin-left: auto; color: var(--accent); }
 .dir-quiet .qf-thread-snip {
   font-size: 12.5px;

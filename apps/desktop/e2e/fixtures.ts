@@ -89,6 +89,25 @@ export const DETAIL = {
       userAvatarUrl: "",
       createdAt: "2026-07-02T09:30:00Z",
       inReplyToId: null,
+      threadId: "T100",
+      resolved: false,
+    },
+    // A reply carrying a ```suggestion fence — renders as the suggestion card.
+    // (Same thread: keeps the drawer's thread count stable for other tests.)
+    {
+      id: 101,
+      path: "src/lib/fuzzy.ts",
+      line: null,
+      originalLine: null,
+      side: "RIGHT",
+      diffHunk: "",
+      body: "How about:\n```suggestion\n  return 3;\n```",
+      user: "carol",
+      userAvatarUrl: "",
+      createdAt: "2026-07-02T09:45:00Z",
+      inReplyToId: 100,
+      threadId: "T100",
+      resolved: false,
     },
   ],
   issueComments: [

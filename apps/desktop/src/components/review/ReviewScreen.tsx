@@ -60,7 +60,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const keyValue = prKey({ owner, name: repo, number });
 
   const { data, isError, error } = usePullRequestDetail(owner, repo, number);
-  const { addReviewComment, reply, addIssueComment, submitReview } =
+  const { addReviewComment, reply, addIssueComment, resolveThread, submitReview } =
     useCommentMutations(owner, repo, number);
 
   const detail = data;
@@ -98,6 +98,12 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const [seed, setSeed] = useState<(CursorSeed & { index: number }) | null>(
     null,
   );
+  // A pending "open this thread's reply composer" request (the `r` key),
+  // mirroring the jump/seed nonce pattern so repeats on the same thread
+  // re-fire. Routed to the FileSection whose file matches `path`.
+  const [replyReq, setReplyReq] = useState<
+    { rootId: number; path: string; nonce: number } | null
+  >(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const sectionEls = useRef(new Map<number, HTMLElement>());
@@ -105,6 +111,10 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const mountShaRef = useRef("");
   const jumpNonceRef = useRef(0);
   const seedNonceRef = useRef(0);
+  const replyNonceRef = useRef(0);
+  // The thread `r` replies to: whatever the pointer is over, or the last stop
+  // of ]c/[c. A ref (not state) — hover must never re-render the screen.
+  const activeThreadRef = useRef<{ rootId: number; path: string } | null>(null);
 
   const goInbox = useAppStore((s) => s.goInbox);
   const toggleViewed = useAppStore((s) => s.toggleViewed);
@@ -139,6 +149,14 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   fileCountRef.current = fileCount;
   const filesRef = useRef(files);
   filesRef.current = files;
+  const commentsRef = useRef<ReviewComment[]>(EMPTY_COMMENTS);
+  commentsRef.current = detail?.comments ?? EMPTY_COMMENTS;
+
+  // A changed file list can re-anchor or drop threads — stale reply targets
+  // must not survive it.
+  useEffect(() => {
+    activeThreadRef.current = null;
+  }, [files]);
 
   // Per-file buckets, memoized so FileSection memoization holds across the
   // frequent active-index re-renders.
@@ -441,6 +459,36 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     const next = (commentIndex + delta + nodes.length) % nodes.length;
     setCommentIndex(next);
     nodes[next].scrollIntoView({ block: "center" });
+    // The stop becomes the `r` reply target (DiffViewer stamps thread root +
+    // path on each wrap; pending-only wraps carry none and clear the target).
+    const rootAttr = nodes[next].dataset.threadRoot;
+    const pathAttr = nodes[next].dataset.threadPath;
+    activeThreadRef.current =
+      rootAttr && pathAttr
+        ? { rootId: Number(rootAttr), path: pathAttr }
+        : null;
+  }
+
+  // Hover reporting from every thread, kept in a ref — moving the mouse over
+  // comments must not re-render 100-file reviews.
+  const handleThreadHover = useCallback(
+    (t: { rootId: number; path: string } | null) => {
+      activeThreadRef.current = t;
+    },
+    [],
+  );
+
+  // `r`: reply to the hovered/]c-focused thread when there is one (and its
+  // root still exists in the cache — it may have vanished on a refetch);
+  // otherwise keep its historical meaning, next file.
+  function replyToActiveThreadOrNextFile() {
+    const t = activeThreadRef.current;
+    if (t && commentsRef.current.some((c) => c.id === t.rootId)) {
+      replyNonceRef.current += 1;
+      setReplyReq({ ...t, nonce: replyNonceRef.current });
+      return;
+    }
+    nextFile();
   }
 
   const addPendingComment = useCallback(
@@ -475,6 +523,12 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       await reply.mutateAsync(a);
     },
     [reply.mutateAsync],
+  );
+  const handleResolveThread = useCallback(
+    (a: { threadId: string; resolved: boolean }) => {
+      resolveThread.mutate(a);
+    },
+    [resolveThread.mutate],
   );
 
   function openSubmit() {
@@ -536,10 +590,10 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     ...cursorFallbacks,
     {
       keys: ["r"],
-      description: "Next file",
+      description: "Reply to comment / next file",
       group: "Files",
       icon: ChevronRight,
-      run: nextFile,
+      run: replyToActiveThreadOrNextFile,
     },
     {
       keys: ["t"],
@@ -915,12 +969,17 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
               pending={pendingByFile.get(file.filename) ?? EMPTY_PENDING}
               jump={jump && jump.filename === file.filename ? jump : null}
               seed={seed && seed.index === i ? seed : null}
+              replyRequest={
+                replyReq && replyReq.path === file.filename ? replyReq : null
+              }
               addPending={false}
               onActivate={handleActivate}
               onCursorExit={handleCursorExit}
               onToggleViewed={handleToggleViewedAt}
               onAddComment={handleAddComment}
               onReply={handleReply}
+              onResolveThread={handleResolveThread}
+              onThreadHover={handleThreadHover}
               onAddPending={addPendingComment}
               onRemovePending={removePendingComment}
             />

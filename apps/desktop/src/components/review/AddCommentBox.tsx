@@ -1,5 +1,5 @@
-import { useState, type KeyboardEvent } from "react";
-import { Layers, Send } from "lucide-react";
+import { useRef, useState, type KeyboardEvent } from "react";
+import { Diff, Layers, Send } from "lucide-react";
 import { Kbd } from "../ui/Kbd";
 
 interface AddCommentBoxProps {
@@ -13,6 +13,13 @@ interface AddCommentBoxProps {
   /** Optional secondary action (e.g. post immediately vs. add to a review). */
   onSecondary?: (body: string) => Promise<void> | void;
   secondaryLabel?: string;
+  /**
+   * The commented line's current (head-side) text. When set, the footer gains
+   * an "Insert suggestion" button that drops a ```suggestion fence prefilled
+   * with it — only line composers pass this; replies don't know their line's
+   * current content, so they don't offer it.
+   */
+  suggestionText?: string;
 }
 
 /**
@@ -30,9 +37,11 @@ export function AddCommentBox({
   submitLabel = "Comment",
   onSecondary,
   secondaryLabel = "Comment now",
+  suggestionText,
 }: AddCommentBoxProps) {
   const [text, setText] = useState("");
   const [mode, setMode] = useState<"batch" | "now">("batch");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const trimmed = text.trim();
   const canSubmit = !pending && trimmed.length > 0;
 
@@ -44,6 +53,29 @@ export function AddCommentBox({
     if (!canSubmit) return;
     await action(trimmed);
     setText("");
+  }
+
+  // Drop a ```suggestion fence at the caret, prefilled with the target line's
+  // current text — then select that line so typing replaces it immediately.
+  // Both hosts render/apply the fence natively once the comment posts.
+  function insertSuggestion() {
+    const line = suggestionText ?? "";
+    const ta = textareaRef.current;
+    const selStart = ta?.selectionStart ?? text.length;
+    const selEnd = ta?.selectionEnd ?? text.length;
+    const before = text.slice(0, selStart);
+    const after = text.slice(selEnd);
+    // The fence must open at column 0 — pad with a newline mid-text.
+    const lead = before.length > 0 && !before.endsWith("\n") ? "\n" : "";
+    const block = `${lead}\`\`\`suggestion\n${line}\n\`\`\`\n`;
+    setText(before + block + after);
+    const lineStart = selStart + lead.length + "```suggestion\n".length;
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(lineStart, lineStart + line.length);
+    });
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -64,6 +96,7 @@ export function AddCommentBox({
   return (
     <div className="qa-inline">
       <textarea
+        ref={textareaRef}
         autoFocus={autoFocus}
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -102,6 +135,17 @@ export function AddCommentBox({
         )}
 
         <div className="qa-actions">
+          {suggestionText != null && (
+            <button
+              type="button"
+              onClick={insertSuggestion}
+              className="qa-suggest-btn q-focus"
+              title="Insert a code suggestion prefilled with this line"
+            >
+              <Diff size={13} aria-hidden />
+              Insert suggestion
+            </button>
+          )}
           <button type="button" onClick={onCancel} className="q-btn q-btn-ghost">
             Cancel
           </button>

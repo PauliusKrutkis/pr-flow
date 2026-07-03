@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { CheckCircle2 } from "lucide-react";
 import type {
   IssueComment,
   PullRequest,
@@ -230,6 +231,13 @@ export function RightPanel({
                     title="Jump to this thread in the diff"
                   >
                     <span className="qf-thread-loc">
+                      {root.resolved && (
+                        <CheckCircle2
+                          size={12}
+                          className="qf-thread-check"
+                          aria-label="Resolved"
+                        />
+                      )}
                       <span className="qf-thread-path">{root.path}</span>
                       <span className="qf-thread-line">
                         {root.line != null ? `:${root.line}` : " · outdated"}
