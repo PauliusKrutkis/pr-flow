@@ -1,8 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   Command,
   HelpCircle,
   Search,
+  Ticket,
   User,
   UserPlus,
   X,
@@ -25,6 +26,7 @@ import { UpdatePrompt } from "./components/UpdatePrompt";
 import { Spinner } from "./components/ui/Spinner";
 import { Kbd } from "./components/ui/Kbd";
 import { applyZoom, clampZoom, loadZoom, ZOOM_STEP } from "./lib/zoom";
+import { IssueTrackerDialog } from "./components/IssueTrackerDialog";
 
 export default function App() {
   const route = useAppStore((s) => s.route);
@@ -38,6 +40,7 @@ export default function App() {
   const switchAccount = useAppStore((s) => s.switchAccount);
   const toast = useAppStore((s) => s.toast);
   const setToast = useAppStore((s) => s.setToast);
+  const [trackerOpen, setTrackerOpen] = useState(false);
 
   // Toasts self-dismiss (archive undo, failed optimistic actions, …).
   useEffect(() => {
@@ -162,6 +165,14 @@ export default function App() {
         run: () => void applyZoom(1),
         global: true,
       },
+      {
+        keys: [],
+        description: "Issue tracker links (Jira)…",
+        group: "General",
+        icon: Ticket,
+        run: () => setTrackerOpen(true),
+        global: true,
+      },
       ...accountBindings,
     ],
     { activate: false },
@@ -240,6 +251,7 @@ export default function App() {
         )}
       </div>
 
+      <IssueTrackerDialog open={trackerOpen} onClose={() => setTrackerOpen(false)} />
       <CommandPalette baseScope={baseScope} />
       <HelpOverlay baseScope={baseScope} />
       {(route.name === "inbox" || route.name === "review") && <GlobalSearch />}

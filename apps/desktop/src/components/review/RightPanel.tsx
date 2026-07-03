@@ -2,6 +2,8 @@ import type { IssueComment, PullRequest } from "../../types";
 import { formatRelativeTime, formatAbsolute } from "../../lib/time";
 import { Markdown } from "../Markdown";
 import { Avatar } from "../ui/Avatar";
+import { TicketTitle } from "../ui/TicketTitle";
+import { useAppStore } from "../../store/appStore";
 import { AddCommentBox } from "./AddCommentBox";
 
 interface RightPanelProps {
@@ -27,6 +29,9 @@ export function RightPanel({
   onAddIssueComment,
 }: RightPanelProps) {
   const body = pr.body?.trim() ?? "";
+  const trackerBase = useAppStore((s) =>
+    s.activeAccountId ? s.issueTrackers[s.activeAccountId] : undefined,
+  );
 
   return (
     <>
@@ -56,7 +61,9 @@ export function RightPanel({
           <section className="qf-drawer-section">
             <div className="qf-drawer-pr">
               <span className="qf-pr-num">#{pr.number}</span>
-              <span className="qf-drawer-pr-title">{pr.title}</span>
+              <span className="qf-drawer-pr-title">
+                <TicketTitle title={pr.title} trackerBase={trackerBase} />
+              </span>
             </div>
             <div className="qf-drawer-meta">
               <Avatar url={pr.authorAvatarUrl} name={pr.author} size={15} />

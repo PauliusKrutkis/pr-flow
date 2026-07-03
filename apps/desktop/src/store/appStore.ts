@@ -133,6 +133,24 @@ function savePending(map: Record<string, PendingComment[]>) {
 }
 let pendingIdCounter = 0;
 
+// ---- issue tracker bases (per account) ---------------------------------------
+const TRACKERS_KEY = "pr-flow:issueTrackers";
+function loadTrackers(): Record<string, string> {
+  try {
+    const v = JSON.parse(localStorage.getItem(TRACKERS_KEY) ?? "{}");
+    return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  } catch {
+    return {};
+  }
+}
+function saveTrackers(map: Record<string, string>) {
+  try {
+    localStorage.setItem(TRACKERS_KEY, JSON.stringify(map));
+  } catch {
+    /* ignore quota / private-mode errors */
+  }
+}
+
 interface AppState {
   route: Route;
   paletteOpen: boolean;
@@ -203,6 +221,13 @@ interface AppState {
    */
   toast: AppToast | null;
   setToast: (toast: AppToast | null) => void;
+
+  /**
+   * Issue-tracker linking (e.g. Jira): ticket IDs like SCR-2891 in titles
+   * become links to the configured base URL. Keyed per account.
+   */
+  issueTrackers: Record<string, string>;
+  setIssueTracker: (accountId: string, url: string | null) => void;
   /** Convenience for failure messages. */
   setFlash: (message: string | null) => void;
 }
@@ -323,6 +348,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     delete map[prKey];
     set({ pendingComments: map });
     savePending(map);
+  },
+
+  issueTrackers: loadTrackers(),
+  setIssueTracker: (accountId, url) => {
+    const map = { ...get().issueTrackers };
+    const cleaned = url?.trim();
+    if (cleaned) map[accountId] = cleaned;
+    else delete map[accountId];
+    set({ issueTrackers: map });
+    saveTrackers(map);
   },
 
   toast: null,

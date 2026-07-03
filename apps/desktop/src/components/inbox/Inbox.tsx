@@ -19,6 +19,7 @@ import { Spinner } from "../ui/Spinner";
 import { Avatar } from "../ui/Avatar";
 import { Markdown } from "../Markdown";
 import { PRListItem } from "./PRListItem";
+import { TicketTitle } from "../ui/TicketTitle";
 
 const TABS: { key: InboxTabKey; label: string; hint: string }[] = [
   {
@@ -337,6 +338,9 @@ function InboxZero({ title, hint }: { title: string; hint: string }) {
  */
 function InboxDetail({ pr }: { pr: PullRequest }) {
   const body = pr.body?.trim() ?? "";
+  const trackerBase = useAppStore((s) =>
+    s.activeAccountId ? s.issueTrackers[s.activeAccountId] : undefined,
+  );
   const stateCls = pr.draft
     ? "q-pill-draft"
     : pr.merged
@@ -363,7 +367,7 @@ function InboxDetail({ pr }: { pr: PullRequest }) {
             </span>
           </div>
           <h2 className="mt-2.5 text-[17px] font-semibold leading-snug tracking-tight text-fg">
-            {pr.title}
+            <TicketTitle title={pr.title} trackerBase={trackerBase} />
           </h2>
           <div className="mt-3 flex items-center gap-2.5">
             <Avatar url={pr.authorAvatarUrl} name={pr.author} size={22} />
