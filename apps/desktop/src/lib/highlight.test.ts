@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { highlightLine, highlightLineWithMatch, isHighlightable } from "./highlight";
+import {
+  highlightLine,
+  highlightLineWithFind,
+  highlightLineWithMatch,
+  isHighlightable,
+} from "./highlight";
 
 describe("language resolution", () => {
   it("resolves by extension and special basenames", () => {
@@ -60,5 +65,41 @@ describe("highlightLineWithMatch", () => {
   it("no marks when the query misses", () => {
     const html = highlightLineWithMatch("const x = 1;", "a.ts", "zzz");
     expect(html).not.toContain("<mark");
+  });
+});
+
+describe("highlightLineWithFind", () => {
+  it("marks every occurrence and singles out the current one", () => {
+    const html = highlightLineWithFind("foo(foo, foo)", "a.ts", "foo", false, 1);
+    expect((html.match(/qf-find-mark/g) ?? []).length).toBe(3);
+    expect((html.match(/qf-find-current/g) ?? []).length).toBe(1);
+    // The current class lands on the SECOND occurrence.
+    const idx = html.split("qf-find-current")[0];
+    expect((idx.match(/<mark/g) ?? []).length).toBe(2);
+  });
+
+  it("no current mark when the current match is on another line", () => {
+    const html = highlightLineWithFind("foo bar", "a.ts", "foo", false, null);
+    expect(html).toContain("qf-find-mark");
+    expect(html).not.toContain("qf-find-current");
+  });
+
+  it("respects the case toggle", () => {
+    expect(
+      highlightLineWithFind("Value value", "a.ts", "value", true, null).match(
+        /<mark/g,
+      ),
+    ).toHaveLength(1);
+    expect(
+      highlightLineWithFind("Value value", "a.ts", "value", false, null).match(
+        /<mark/g,
+      ),
+    ).toHaveLength(2);
+  });
+
+  it("keeps the rendered text byte-identical to the code", () => {
+    const code = "const value = compute(value) + 1;";
+    const html = highlightLineWithFind(code, "a.ts", "value", false, 0);
+    expect(html.replace(/<[^>]+>/g, "")).toBe(code);
   });
 });

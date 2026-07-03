@@ -47,8 +47,8 @@ test("pending drafts survive leaving and reopening the PR", async ({ page }) => 
   await expect(page.getByText("Draft to keep")).toBeVisible();
 });
 
-test("text search lands on the line and seeds the comment cursor", async ({ page }) => {
-  await page.keyboard.press("Control+f");
+test("text search (mod+r) lands on the line and seeds the comment cursor", async ({ page }) => {
+  await page.keyboard.press("Control+r");
   const input = page.getByPlaceholder("Search code in this PR…");
   await expect(input).toBeFocused();
   await input.fill("gamma");
@@ -58,6 +58,69 @@ test("text search lands on the line and seeds the comment cursor", async ({ page
   // The cursor landed there — c comments on that exact line.
   await page.keyboard.press("c");
   await expect(page.getByPlaceholder("Add a review comment…")).toBeVisible();
+});
+
+test("find bar: mod+f opens it, typing counts, Enter steps and wraps", async ({ page }) => {
+  await page.keyboard.press("Control+f");
+  const input = page.getByPlaceholder("Find in diff");
+  await expect(input).toBeFocused();
+
+  // "return" hits twice in fuzzy.ts (the -/+ pair) and once in search.ts.
+  await input.fill("return");
+  const count = page.locator(".qf-findbar-count");
+  await expect(count).toHaveText("1/3");
+  await expect(page.locator("mark.qf-find-mark")).toHaveCount(3);
+
+  // First Enter jumps to the CURRENT match (1/3, in the first file) — the row
+  // flashes and the current mark singles out that occurrence.
+  await page.keyboard.press("Enter");
+  await expect(count).toHaveText("1/3");
+  await expect(page.locator(".qf-fsec").nth(0).locator(".qf-row-flash")).toHaveCount(1);
+  await expect(page.locator("mark.qf-find-current")).toHaveCount(1);
+  await expect(page.locator(".qf-fsec").nth(0).locator("mark.qf-find-current")).toHaveCount(1);
+
+  // Subsequent Enters advance; the third match lives in the second file.
+  await page.keyboard.press("Enter");
+  await expect(count).toHaveText("2/3");
+  await page.keyboard.press("Enter");
+  await expect(count).toHaveText("3/3");
+  await expect(page.locator(".qf-fsec").nth(1).locator("mark.qf-find-current")).toHaveCount(1);
+
+  // Wraps forward past the end, and Shift+Enter wraps backward.
+  await page.keyboard.press("Enter");
+  await expect(count).toHaveText("1/3");
+  await page.keyboard.press("Shift+Enter");
+  await expect(count).toHaveText("3/3");
+});
+
+test("find bar: Esc closes, clears marks, and j moves the cursor immediately", async ({ page }) => {
+  await page.keyboard.press("Control+f");
+  const input = page.getByPlaceholder("Find in diff");
+  await input.fill("gamma");
+  await expect(page.locator(".qf-findbar-count")).toHaveText("1/2");
+
+  // The jump lands in search.ts (the only file mentioning gamma).
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".qf-fsec").nth(1).locator(".qf-row-flash")).toHaveCount(1);
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".qf-findbar")).toHaveCount(0);
+  await expect(page.locator("mark.qf-find-mark")).toHaveCount(0);
+  // Focus fell back to the document — j drives the line cursor right away.
+  await page.keyboard.press("j");
+  await expect(page.locator(".qf-row-active")).toHaveCount(1);
+});
+
+test("find bar: reopening keeps the query selected; typing replaces it", async ({ page }) => {
+  await page.keyboard.press("Control+f");
+  const input = page.getByPlaceholder("Find in diff");
+  await input.fill("gamma");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Control+f");
+  // The kept query is preselected, so typing replaces it wholesale.
+  await expect(page.getByPlaceholder("Find in diff")).toBeFocused();
+  await page.keyboard.type("beta");
+  await expect(page.locator(".qf-findbar-count")).toHaveText("1/1");
 });
 
 test("info drawer: i opens with the conversation, esc closes drawer first", async ({ page }) => {

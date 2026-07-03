@@ -826,6 +826,88 @@ textarea.q-input { resize: none; line-height: 1.5; }
   .qf-skel { animation: none; background: var(--surface-2); }
 }
 
+/* ============ FIND IN DIFF (mod+f) ============ */
+/* A compact editor-style bar floated over the diff's top-right corner. No
+   scrim and no focus trap — the diff stays live underneath: this is a lens on
+   the text, not a mode. */
+.dir-quiet .qf-findbar {
+  position: absolute;
+  top: 8px;
+  right: 20px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 5px 4px 11px;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(139, 128, 255, 0.05);
+  font-family: var(--font-ui);
+  animation: q-fade 120ms ease;
+}
+.dir-quiet .qf-findbar-input {
+  width: 200px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--fg);
+  font-size: 12.5px;
+  font-family: var(--font-ui);
+}
+.dir-quiet .qf-findbar-input::placeholder { color: var(--faint); }
+/* the "3/17" counter — mono so it doesn't wobble while stepping */
+.dir-quiet .qf-findbar-count {
+  min-width: 42px;
+  padding-right: 6px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.dir-quiet .qf-findbar-none { color: var(--del); }
+.dir-quiet .qf-findbar-sep { width: 1px; height: 16px; margin: 0 3px; background: var(--line); }
+.dir-quiet .qf-findbar-btn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+}
+.dir-quiet .qf-findbar-btn:hover:not(:disabled) { background: var(--surface-hi); color: var(--fg); }
+.dir-quiet .qf-findbar-btn:disabled { color: var(--faint); opacity: 0.55; cursor: default; }
+.dir-quiet .qf-findbar-btn-on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+
+/* Match marks, layered over the syntax highlighting (they wrap text nodes
+   inside hljs token spans, so colours show through). Zero padding/margin —
+   the mark must sit seamlessly in the mono text flow, like .q-hl. The current
+   match flips to solid iris so it reads at a glance among its siblings. */
+.dir-quiet mark.qf-find-mark {
+  color: inherit;
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+  border-radius: 2px;
+  padding: 0;
+  margin: 0;
+}
+.dir-quiet mark.qf-find-current {
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: none;
+}
+
 /* ============ COMMENT THREADS ============ */
 .dir-quiet .qf-comment-wrap { background: var(--bg); padding: 0 16px 6px 70px; }
 .dir-quiet .qf-thread {

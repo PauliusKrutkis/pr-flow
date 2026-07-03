@@ -10,7 +10,7 @@ import {
 import { ArrowDown, ArrowUp, MessageSquarePlus } from "lucide-react";
 import type { ChangedFile, PendingComment, ReviewComment } from "../../types";
 import { parsePatch, type DiffRow } from "../../lib/diff";
-import { highlightLine } from "../../lib/highlight";
+import { highlightLine, highlightLineWithFind } from "../../lib/highlight";
 import { cn } from "../../lib/cn";
 import { useHotkeys } from "../../keyboard";
 import { useAppStore } from "../../store/appStore";
@@ -29,6 +29,19 @@ export interface JumpTarget {
 export interface CursorSeed {
   edge: "first" | "last";
   nonce: number;
+}
+
+/** The live find-in-diff query (mod+f) — marks every occurrence on a row. */
+export interface FindSpec {
+  query: string;
+  caseSensitive: boolean;
+}
+
+/** The current find match, when it's in this file: which row, which occurrence. */
+export interface FindCurrent {
+  anchor: string;
+  /** 0-based occurrence index within the row (multiple hits per line). */
+  ordinal: number;
 }
 
 interface DiffViewerProps {
@@ -63,6 +76,10 @@ interface DiffViewerProps {
   onCursorExit?: (dir: 1 | -1) => void;
   /** Place the cursor on this file's first/last line (cross-file j/k). */
   seed?: CursorSeed | null;
+  /** Find-in-diff (mod+f): highlight every occurrence on rendered rows. */
+  find?: FindSpec | null;
+  /** The current find match when it lives in this file. */
+  findCurrent?: FindCurrent | null;
 }
 
 /** A stable key for anchoring comments/boxes to a (side, line) location. */
@@ -148,6 +165,9 @@ const DiffLine = memo(function DiffLine({
   isFlash,
   hasAnchored,
   canComment,
+  findQuery,
+  findCase,
+  findOrdinal,
   onEnter,
   onOpenBox,
 }: {
@@ -158,6 +178,11 @@ const DiffLine = memo(function DiffLine({
   isFlash: boolean;
   hasAnchored: boolean;
   canComment: boolean;
+  /** Find-in-diff, as primitives so memoization only breaks when they change. */
+  findQuery: string | null;
+  findCase: boolean;
+  /** Which occurrence on THIS row is the current match, if any. */
+  findOrdinal: number | null;
   onEnter: (anchor: string, x: number, y: number) => void;
   onOpenBox: (anchor: string) => void;
 }) {
@@ -198,7 +223,17 @@ const DiffLine = memo(function DiffLine({
         <span
           className="hljs"
           dangerouslySetInnerHTML={{
-            __html: highlightLine(row.content, filename),
+            // Find marks are layered onto the SAME highlighted HTML (by
+            // wrapping text nodes), so syntax colours stay intact under them.
+            __html: findQuery
+              ? highlightLineWithFind(
+                  row.content,
+                  filename,
+                  findQuery,
+                  findCase,
+                  findOrdinal,
+                )
+              : highlightLine(row.content, filename),
           }}
         />
       </code>
@@ -221,6 +256,8 @@ export function DiffViewer({
   onActivate,
   onCursorExit,
   seed,
+  find,
+  findCurrent,
 }: DiffViewerProps) {
   const hunks = useMemo(() => parsePatch(file.patch), [file.patch]);
   const threadsByAnchor = useMemo(() => buildThreads(comments), [comments]);
@@ -611,6 +648,13 @@ export function DiffViewer({
               isFlash={key != null && key === flashAnchor}
               hasAnchored={!!hasAnchored}
               canComment={target != null}
+              findQuery={find ? find.query : null}
+              findCase={find ? find.caseSensitive : false}
+              findOrdinal={
+                findCurrent && key != null && findCurrent.anchor === key
+                  ? findCurrent.ordinal
+                  : null
+              }
               onEnter={handleRowEnter}
               onOpenBox={openBox}
             />

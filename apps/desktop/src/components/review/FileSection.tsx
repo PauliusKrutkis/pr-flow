@@ -2,7 +2,13 @@ import { memo } from "react";
 import { Check } from "lucide-react";
 import type { ChangedFile, PendingComment, ReviewComment } from "../../types";
 import { cn } from "../../lib/cn";
-import { DiffViewer, type CursorSeed, type JumpTarget } from "./DiffViewer";
+import {
+  DiffViewer,
+  type CursorSeed,
+  type FindCurrent,
+  type FindSpec,
+  type JumpTarget,
+} from "./DiffViewer";
 import { ImageDiff, isImageFile } from "./ImageDiff";
 
 export interface FileSectionCallbacks {
@@ -43,6 +49,14 @@ interface FileSectionProps extends FileSectionCallbacks {
   pending: PendingComment[];
   jump: JumpTarget | null;
   seed: CursorSeed | null;
+  /**
+   * Find-in-diff (mod+f). `find` shares one identity across all sections (it
+   * only changes with the query), and `findCurrent` is non-null for exactly
+   * one section — so stepping through matches re-renders at most two sections
+   * and this memo contract holds.
+   */
+  find: FindSpec | null;
+  findCurrent: FindCurrent | null;
   addPending: boolean;
 }
 
@@ -84,6 +98,8 @@ export const FileSection = memo(function FileSection({
   pending,
   jump,
   seed,
+  find,
+  findCurrent,
   addPending,
   onActivate,
   onCursorExit,
@@ -146,6 +162,8 @@ export const FileSection = memo(function FileSection({
             pending={pending}
             jumpTo={jump}
             seed={seed}
+            find={find}
+            findCurrent={findCurrent}
             active={active}
             onActivate={() => onActivate(index)}
             onCursorExit={(dir) => onCursorExit(index, dir)}

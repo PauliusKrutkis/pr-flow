@@ -17,6 +17,7 @@ import {
   MessageSquare,
   Search,
   Send,
+  TextSearch,
 } from "lucide-react";
 import { prKey } from "../../types";
 import type {
@@ -34,6 +35,7 @@ import { useCommentMutations } from "../../hooks/useComments";
 import { queryClient, queryKeys } from "../../lib/queryClient";
 import { getReviewMemory, updateReviewMemory } from "../../lib/reviewMemory";
 import { usePerfStore } from "../../lib/perf";
+import { findInDiff, type FindMatch } from "../../lib/findInDiff";
 import { cn } from "../../lib/cn";
 import { Kbd } from "../ui/Kbd";
 import { TicketTitle } from "../ui/TicketTitle";
@@ -41,11 +43,12 @@ import { Avatar } from "../ui/Avatar";
 import { FileSidebar } from "./FileSidebar";
 import { FileSection } from "./FileSection";
 import { isImageFile } from "./ImageDiff";
-import type { CursorSeed, JumpTarget } from "./DiffViewer";
+import type { CursorSeed, FindCurrent, JumpTarget } from "./DiffViewer";
 import { RightPanel } from "./RightPanel";
 import { OrientBanner } from "./OrientBanner";
 import { SubmitReviewModal } from "./SubmitReviewModal";
 import { PrSearch } from "./PrSearch";
+import { FindBar } from "./FindBar";
 
 interface ReviewScreenProps {
   owner: string;
@@ -55,6 +58,7 @@ interface ReviewScreenProps {
 
 const EMPTY_COMMENTS: ReviewComment[] = [];
 const EMPTY_PENDING: PendingComment[] = [];
+const EMPTY_MATCHES: FindMatch[] = [];
 
 export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const keyValue = prKey({ owner, name: repo, number });
@@ -98,6 +102,20 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const [seed, setSeed] = useState<(CursorSeed & { index: number }) | null>(
     null,
   );
+  // Find-in-diff (mod+f): an editor-style bar over the diff, not a modal. The
+  // state lives here (not in the bar) because the query has to flow down to
+  // every FileSection for highlighting, and navigation reuses selectLine.
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findCase, setFindCase] = useState(false);
+  const [findIndex, setFindIndex] = useState(0);
+  // Bumped when mod+f fires while the bar is already open → refocus/select.
+  const [findFocusSeq, setFindFocusSeq] = useState(0);
+  // The first Enter lands on the match already counted as current ("1/17");
+  // only subsequent presses advance. Reset whenever the match list changes.
+  const findJumpedRef = useRef(false);
+  const findOpenRef = useRef(false);
+  findOpenRef.current = findOpen;
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const sectionEls = useRef(new Map<number, HTMLElement>());
@@ -329,6 +347,84 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     setCommentIndex(0);
     jumpNonceRef.current += 1;
     setJump({ filename: target.filename, anchor, nonce: jumpNonceRef.current });
+  }
+
+  // ---- find in diff (mod+f) -------------------------------------------------
+
+  // Matches come from the PATCH TEXT (lib/findInDiff), so unmounted sections
+  // count too; only rendered rows pay for highlighting.
+  const findMatches = useMemo(
+    () =>
+      findOpen && findQuery
+        ? findInDiff(files, findQuery, { caseSensitive: findCase })
+        : EMPTY_MATCHES,
+    [findOpen, findQuery, findCase, files],
+  );
+  // The file list can change under an open bar (PR head moved) — stay valid.
+  const findSafeIndex =
+    findMatches.length > 0 ? Math.min(findIndex, findMatches.length - 1) : 0;
+
+  // One shared identity for all sections, changing only with the query — so
+  // typing repaints highlights once and FileSection memoization holds
+  // otherwise.
+  const findSpec = useMemo(
+    () =>
+      findOpen && findQuery
+        ? { query: findQuery, caseSensitive: findCase }
+        : null,
+    [findOpen, findQuery, findCase],
+  );
+  // The current match as (row anchor, occurrence ordinal). Matches on one line
+  // are adjacent in the list, so the ordinal is the run-length behind us.
+  const findCurrent = useMemo<(FindCurrent & { fileIndex: number }) | null>(() => {
+    const m = findMatches[findSafeIndex];
+    if (!m) return null;
+    let ordinal = 0;
+    for (let i = findSafeIndex - 1; i >= 0; i--) {
+      const p = findMatches[i];
+      if (p.fileIndex !== m.fileIndex || p.anchor !== m.anchor) break;
+      ordinal += 1;
+    }
+    return { fileIndex: m.fileIndex, anchor: m.anchor, ordinal };
+  }, [findMatches, findSafeIndex]);
+
+  function changeFindQuery(q: string) {
+    setFindQuery(q);
+    setFindIndex(0);
+    findJumpedRef.current = false;
+  }
+  function toggleFindCase() {
+    setFindCase((c) => !c);
+    setFindIndex(0);
+    findJumpedRef.current = false;
+  }
+  function openFind() {
+    if (!findOpenRef.current) {
+      setFindOpen(true);
+      // Browser convention: selected diff text seeds the query on open.
+      const selected =
+        window.getSelection()?.toString().split("\n")[0].trim() ?? "";
+      if (selected) changeFindQuery(selected);
+    }
+    // Already open: just refocus and select the input (FindBar effect).
+    setFindFocusSeq((s) => s + 1);
+  }
+  // Closing clears the highlights (findSpec goes null) and, because the input
+  // unmounts, focus falls back to the document — j/k works immediately.
+  function closeFind() {
+    setFindOpen(false);
+  }
+  // Enter/next/prev: the first press jumps to the CURRENT match, later ones
+  // step (with wrap-around). Every jump rides the selectLine machinery, which
+  // mounts the section, scrolls the row into view, and flashes it.
+  function findStep(dir: 1 | -1) {
+    const n = findMatches.length;
+    if (n === 0) return;
+    const next = findJumpedRef.current ? (findSafeIndex + dir + n) % n : findSafeIndex;
+    findJumpedRef.current = true;
+    setFindIndex(next);
+    const m = findMatches[next];
+    selectLine(m.fileIndex, m.anchor);
   }
 
   // j/k crossing a file edge: activate the neighbour and seed its cursor.
@@ -606,20 +702,49 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       run: () => setPrSearch("files"),
     },
     {
-      keys: "mod+f",
+      keys: "mod+r",
       description: "Search code",
       group: "Navigation",
       icon: Search,
       run: () => setPrSearch("text"),
     },
     {
-      // Esc walks out one layer at a time: info drawer first, then the inbox.
+      keys: "mod+f",
+      description: "Find in diff",
+      group: "Navigation",
+      icon: TextSearch,
+      run: openFind,
+    },
+    // While the find bar is open, Enter / F3 / mod+g step through matches even
+    // after focus has returned to the diff. (With focus IN the bar's input,
+    // the dispatcher defers to it and the input handles these keys itself, so
+    // nothing fires twice.)
+    ...(findOpen
+      ? ([
+          {
+            keys: ["enter", "f3"],
+            description: "Next find match",
+            hidden: true,
+            run: (e) => findStep(e.shiftKey ? -1 : 1),
+          },
+          {
+            keys: "mod+g",
+            description: "Next find match",
+            hidden: true,
+            run: (e) => findStep(e.shiftKey ? -1 : 1),
+          },
+        ] satisfies Binding[])
+      : []),
+    {
+      // Esc walks out one layer at a time: find bar, then the info drawer,
+      // then the inbox.
       keys: "esc",
       description: "Close panel / back to inbox",
       group: "Navigation",
       icon: Inbox,
       run: () => {
-        if (rightOpenRef.current) setRightOpen(false);
+        if (findOpenRef.current) closeFind();
+        else if (rightOpenRef.current) setRightOpen(false);
         else goInbox();
       },
     },
@@ -843,40 +968,61 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
           />
         )}
 
-        <div
-          ref={scrollRef}
-          onScroll={handleScroll}
-          className="qf-scrollhost min-w-0 flex-1 overflow-y-auto"
-        >
-          {files.map((file, i) => (
-            <FileSection
-              key={file.filename}
-              file={file}
-              index={i}
-              active={i === clampedIndex}
-              mountedBody={mounted.has(i)}
-              estimatedHeight={estimates[i]}
-              registerEl={registerEl}
-              viewed={viewedSet.has(file.filename)}
-              owner={owner}
-              repo={repo}
-              baseSha={pr.baseSha}
-              headSha={pr.headSha}
-              comments={commentsByFile.get(file.filename) ?? EMPTY_COMMENTS}
-              pending={pendingByFile.get(file.filename) ?? EMPTY_PENDING}
-              jump={jump && jump.filename === file.filename ? jump : null}
-              seed={seed && seed.index === i ? seed : null}
-              addPending={false}
-              onActivate={handleActivate}
-              onCursorExit={handleCursorExit}
-              onToggleViewed={handleToggleViewedAt}
-              onAddComment={handleAddComment}
-              onReply={handleReply}
-              onAddPending={addPendingComment}
-              onRemovePending={removePendingComment}
-            />
-          ))}
-          {fileCount === 0 && <div className="qf-empty">No files changed.</div>}
+        {/* The find bar floats over the diff's top-right corner — anchored to
+            this wrapper (not the scroll host) so it never scrolls away. */}
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <FindBar
+            open={findOpen}
+            query={findQuery}
+            caseSensitive={findCase}
+            current={findMatches.length > 0 ? findSafeIndex + 1 : 0}
+            total={findMatches.length}
+            focusSeq={findFocusSeq}
+            onQueryChange={changeFindQuery}
+            onToggleCase={toggleFindCase}
+            onNext={() => findStep(1)}
+            onPrev={() => findStep(-1)}
+            onClose={closeFind}
+          />
+          <div
+            ref={scrollRef}
+            onScroll={handleScroll}
+            className="qf-scrollhost min-w-0 flex-1 overflow-y-auto"
+          >
+            {files.map((file, i) => (
+              <FileSection
+                key={file.filename}
+                file={file}
+                index={i}
+                active={i === clampedIndex}
+                mountedBody={mounted.has(i)}
+                estimatedHeight={estimates[i]}
+                registerEl={registerEl}
+                viewed={viewedSet.has(file.filename)}
+                owner={owner}
+                repo={repo}
+                baseSha={pr.baseSha}
+                headSha={pr.headSha}
+                comments={commentsByFile.get(file.filename) ?? EMPTY_COMMENTS}
+                pending={pendingByFile.get(file.filename) ?? EMPTY_PENDING}
+                jump={jump && jump.filename === file.filename ? jump : null}
+                seed={seed && seed.index === i ? seed : null}
+                find={findSpec}
+                findCurrent={
+                  findCurrent && findCurrent.fileIndex === i ? findCurrent : null
+                }
+                addPending={false}
+                onActivate={handleActivate}
+                onCursorExit={handleCursorExit}
+                onToggleViewed={handleToggleViewedAt}
+                onAddComment={handleAddComment}
+                onReply={handleReply}
+                onAddPending={addPendingComment}
+                onRemovePending={removePendingComment}
+              />
+            ))}
+            {fileCount === 0 && <div className="qf-empty">No files changed.</div>}
+          </div>
         </div>
       </main>
 
