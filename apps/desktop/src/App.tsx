@@ -1,5 +1,14 @@
 import { useEffect } from "react";
-import { Command, HelpCircle, Search, User, UserPlus, X } from "lucide-react";
+import {
+  Command,
+  HelpCircle,
+  Search,
+  User,
+  UserPlus,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import { useAppStore, loadLastRoute } from "./store/appStore";
 import type { Binding } from "./keyboard/types";
 import { useHotkeys } from "./keyboard";
@@ -15,6 +24,7 @@ import { ReviewNotifier } from "./components/ReviewNotifier";
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { Spinner } from "./components/ui/Spinner";
 import { Kbd } from "./components/ui/Kbd";
+import { applyZoom, clampZoom, loadZoom, ZOOM_STEP } from "./lib/zoom";
 
 export default function App() {
   const route = useAppStore((s) => s.route);
@@ -37,6 +47,12 @@ export default function App() {
   }, [toast, setToast]);
 
   useLoadViewed();
+
+  // Re-apply the persisted zoom factor on boot.
+  useEffect(() => {
+    const z = loadZoom();
+    if (z !== 1) void applyZoom(z);
+  }, []);
 
   // Overlay scrollbars: thumbs are invisible until their container actually
   // scrolls (see index.css). Capture-phase so every scroll container reports.
@@ -120,6 +136,30 @@ export default function App() {
         group: "General",
         icon: Search,
         run: () => setSearchOpen(true),
+        global: true,
+      },
+      {
+        keys: ["mod+=", "mod++"],
+        description: "Zoom in",
+        group: "View",
+        icon: ZoomIn,
+        run: () => void applyZoom(clampZoom(loadZoom() + ZOOM_STEP)),
+        global: true,
+      },
+      {
+        keys: "mod+-",
+        description: "Zoom out",
+        group: "View",
+        icon: ZoomOut,
+        run: () => void applyZoom(clampZoom(loadZoom() - ZOOM_STEP)),
+        global: true,
+      },
+      {
+        keys: "mod+0",
+        description: "Reset zoom",
+        group: "View",
+        icon: Search,
+        run: () => void applyZoom(1),
         global: true,
       },
       ...accountBindings,
