@@ -20,6 +20,8 @@ export const queryClient = new QueryClient({
 export const queryKeys = {
   currentUser: ["currentUser"] as const,
   inbox: ["inbox"] as const,
+  subscribed: ["subscribed"] as const,
+  watchedRepos: ["watchedRepos"] as const,
   prDetail: (owner: string, repo: string, number: number) =>
     ["pr", owner, repo, number] as const,
 };

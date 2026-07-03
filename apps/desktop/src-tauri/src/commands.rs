@@ -7,7 +7,8 @@ use tauri::AppHandle;
 
 use crate::accounts;
 use crate::github::{
-    FileBlob, GitHubUser, InboxData, PullRequestDetail, ReviewComment, ReviewCommentInput,
+    FileBlob, GitHubUser, InboxBucket, InboxData, PullRequestDetail, RepoHit, ReviewComment,
+    ReviewCommentInput,
 };
 use crate::storage;
 
@@ -78,6 +79,56 @@ pub async fn list_inbox(app: AppHandle) -> Result<InboxData, String> {
 pub async fn get_cached_inbox(app: AppHandle) -> Result<Option<InboxData>, String> {
     let account = accounts::active_account(&app).await?;
     storage::read_json::<InboxData>(&app, &inbox_cache_name(&account.id))
+}
+
+// ---------------------------------------------------------------------------
+// Watched repositories ("Watching" tab)
+// ---------------------------------------------------------------------------
+
+fn watched_name(account_id: &str) -> String {
+    format!("watched_{account_id}.json")
+}
+fn subscribed_cache_name(account_id: &str) -> String {
+    format!("subscribed_{account_id}.json")
+}
+
+#[tauri::command]
+pub async fn get_watched_repos(app: AppHandle) -> Result<Vec<String>, String> {
+    let account = accounts::active_account(&app).await?;
+    Ok(storage::read_json::<Vec<String>>(&app, &watched_name(&account.id))?.unwrap_or_default())
+}
+
+#[tauri::command]
+pub async fn set_watched_repos(app: AppHandle, repos: Vec<String>) -> Result<(), String> {
+    let account = accounts::active_account(&app).await?;
+    let cleaned: Vec<String> = repos
+        .into_iter()
+        .map(|r| r.trim().trim_matches('/').to_string())
+        .filter(|r| r.contains('/') && !r.is_empty())
+        .collect();
+    storage::write_json(&app, &watched_name(&account.id), &cleaned)
+}
+
+#[tauri::command]
+pub async fn search_repos(app: AppHandle, query: String) -> Result<Vec<RepoHit>, String> {
+    let (_, platform) = accounts::active_platform(&app).await?;
+    platform.search_repos(&query).await
+}
+
+#[tauri::command]
+pub async fn list_subscribed(app: AppHandle) -> Result<InboxBucket, String> {
+    let (account, platform) = accounts::active_platform(&app).await?;
+    let repos =
+        storage::read_json::<Vec<String>>(&app, &watched_name(&account.id))?.unwrap_or_default();
+    let bucket = platform.subscribed_prs(&repos).await?;
+    storage::write_json(&app, &subscribed_cache_name(&account.id), &bucket)?;
+    Ok(bucket)
+}
+
+#[tauri::command]
+pub async fn get_cached_subscribed(app: AppHandle) -> Result<Option<InboxBucket>, String> {
+    let account = accounts::active_account(&app).await?;
+    storage::read_json::<InboxBucket>(&app, &subscribed_cache_name(&account.id))
 }
 
 // ---------------------------------------------------------------------------

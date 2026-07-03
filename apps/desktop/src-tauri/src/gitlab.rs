@@ -17,7 +17,7 @@ use serde_json::{json, Value};
 use crate::github::{
     fbool, fopt_u64, fstr, fu64, get_all_pages, get_json, log, net_err, now_millis, nstr,
     read_body, ChangedFile, FileBlob, GitHubUser, InboxBucket, InboxData, IssueComment,
-    PullRequest, PullRequestDetail, ReviewComment, ReviewCommentInput, MAX_BLOB_BYTES,
+    PullRequest, PullRequestDetail, RepoHit, ReviewComment, ReviewCommentInput, MAX_BLOB_BYTES,
 };
 
 pub struct GitLabPlatform {
@@ -284,6 +284,55 @@ impl GitLabPlatform {
             created,
             involved,
         })
+    }
+
+    /// Project search for the watch picker — visible projects only.
+    pub async fn search_repos(&self, query: &str) -> Result<Vec<RepoHit>, String> {
+        if query.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+        let url = format!(
+            "{}/projects?search={}&per_page=8&simple=true&order_by=last_activity_at",
+            self.api,
+            enc(query)
+        );
+        let v = get_json(&self.client, &url).await?;
+        Ok(v.as_array()
+            .map(|items| {
+                items
+                    .iter()
+                    .map(|r| RepoHit {
+                        full_name: fstr(r, "path_with_namespace"),
+                        description: fstr(r, "description"),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
+
+    /// Open MRs across watched projects. GitLab has no cross-project search
+    /// by list, so this fans out one request per project; a missing/private
+    /// project is skipped (logged) rather than failing the whole tab.
+    pub async fn subscribed_prs(&self, repos: &[String]) -> Result<InboxBucket, String> {
+        let mut prs: Vec<PullRequest> = Vec::new();
+        for repo in repos {
+            let Some((owner, name)) = repo.rsplit_once('/') else { continue };
+            let url = format!(
+                "{}/projects/{}/merge_requests?state=opened&order_by=updated_at&sort=desc&per_page=30",
+                self.api,
+                project(owner, name)
+            );
+            match get_json(&self.client, &url).await {
+                Ok(v) => {
+                    if let Some(arr) = v.as_array() {
+                        prs.extend(arr.iter().map(mr_to_pr));
+                    }
+                }
+                Err(e) => log(&format!("watching: skipping {repo}: {e}")),
+            }
+        }
+        prs.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        Ok(InboxBucket { count: prs.len() as u64, prs })
     }
 
     pub async fn pr_detail(

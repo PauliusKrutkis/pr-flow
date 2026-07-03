@@ -143,6 +143,14 @@ pub struct FileBlob {
     pub size: u64,
 }
 
+/// A repository search hit (the watch-repos picker).
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RepoHit {
+    pub full_name: String,
+    pub description: String,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReviewCommentInput {
@@ -301,6 +309,13 @@ pub(crate) async fn fetch_user(client: &reqwest::Client) -> Result<GitHubUser, S
 // ---------------------------------------------------------------------------
 // GitHub mappers: GitHub JSON -> our structs
 // ---------------------------------------------------------------------------
+
+const FRAGMENT_P: &str = r#"fragment P on PullRequest {
+  databaseId number title url state isDraft createdAt updatedAt
+  author { login avatarUrl }
+  repository { name owner { login } }
+  comments { totalCount }
+}"#;
 
 /// One GraphQL document fetching all four inbox tabs (and their counts) via
 /// aliased `search` fields — a single request for the whole inbox.
@@ -510,6 +525,56 @@ impl GitHubPlatform {
             inbox.involved.count
         ));
         Ok(inbox)
+    }
+
+    /// Repository search for the watch picker — GitHub's search includes
+    /// private repos the token can see.
+    pub async fn search_repos(&self, query: &str) -> Result<Vec<RepoHit>, String> {
+        if query.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+        let resp = self
+            .client
+            .get(format!("{API}/search/repositories"))
+            .query(&[("q", query), ("per_page", "8")])
+            .send()
+            .await
+            .map_err(net_err)?;
+        let v = read_body(resp).await?;
+        Ok(v.get("items")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .map(|r| RepoHit {
+                        full_name: fstr(r, "full_name"),
+                        description: fstr(r, "description"),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
+
+    /// Open PRs across an explicit set of watched repositories, newest first.
+    /// One search request; multiple `repo:` qualifiers OR together.
+    pub async fn subscribed_prs(&self, repos: &[String]) -> Result<InboxBucket, String> {
+        if repos.is_empty() {
+            return Ok(InboxBucket { count: 0, prs: Vec::new() });
+        }
+        let quals: String = repos
+            .iter()
+            .map(|r| format!("repo:{r}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let search = format!("is:open is:pr archived:false sort:updated-desc {quals}");
+        let query = format!(
+            "{{ watching: search(query: \"{search}\", type: ISSUE, first: 50) {{ issueCount nodes {{ ...P }} }} }}\n{FRAGMENT_P}"
+        );
+        let v = self.graphql(&query).await?;
+        let data = v
+            .get("data")
+            .ok_or_else(|| "GraphQL response missing `data`".to_string())?;
+        Ok(bucket_from(data, "watching"))
     }
 
     pub async fn pr_detail(

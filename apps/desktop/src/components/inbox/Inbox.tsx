@@ -5,21 +5,24 @@ import {
   ArrowLeftRight,
   ArrowUp,
   CornerDownLeft,
+  Eye,
   Undo2,
 } from "lucide-react";
 import { useHotkeys } from "../../keyboard";
 import { Kbd } from "../ui/Kbd";
 import { useAppStore } from "../../store/appStore";
 import { useInbox } from "../../hooks/useInbox";
+import { useSubscribed } from "../../hooks/useSubscribed";
 import { prefetchPullRequest } from "../../hooks/usePullRequestDetail";
 import { prKey } from "../../types";
-import type { InboxData, InboxTabKey, PullRequest } from "../../types";
+import type { InboxBucket, InboxData, InboxTabKey, PullRequest } from "../../types";
 import { formatRelativeTime, formatAbsolute } from "../../lib/time";
 import { Spinner } from "../ui/Spinner";
 import { Avatar } from "../ui/Avatar";
 import { Markdown } from "../Markdown";
 import { PRListItem } from "./PRListItem";
 import { TicketTitle } from "../ui/TicketTitle";
+import { WatchReposDialog } from "./WatchReposDialog";
 
 const TABS: { key: InboxTabKey; label: string; hint: string }[] = [
   {
@@ -30,6 +33,11 @@ const TABS: { key: InboxTabKey; label: string; hint: string }[] = [
   { key: "assigned", label: "Assigned", hint: "PRs assigned to you." },
   { key: "created", label: "Created", hint: "PRs you opened." },
   { key: "involved", label: "Involved", hint: "PRs that involve or mention you." },
+  {
+    key: "subscribed",
+    label: "Watching",
+    hint: "Every open PR in the repositories you watch — involved or not.",
+  },
 ];
 
 const EMPTY: InboxData = {
@@ -64,26 +72,35 @@ export function Inbox() {
   const undoDismiss = useAppStore((s) => s.undoDismiss);
   const setToast = useAppStore((s) => s.setToast);
 
+  const { data: subscribedData } = useSubscribed();
+  const [watchOpen, setWatchOpen] = useState(false);
+
   const inbox = data ?? EMPTY;
+  const buckets: Record<InboxTabKey, InboxBucket> = {
+    ...inbox,
+    subscribed: subscribedData ?? { count: 0, prs: [] },
+  };
   const isHidden = (pr: PullRequest, at: string | undefined) =>
     !!at && new Date(pr.updatedAt).getTime() <= new Date(at).getTime();
   const filtered = useMemo(
-    () => inbox[tab].prs.filter((pr) => !isHidden(pr, dismissed[keyFor(pr)])),
-    [inbox, tab, dismissed],
+    () => buckets[tab].prs.filter((pr) => !isHidden(pr, dismissed[keyFor(pr)])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [inbox, subscribedData, tab, dismissed],
   );
   // Tab counters reflect archives: server count minus the archived-and-quiet
   // PRs among the fetched page.
   const visibleCounts = useMemo(() => {
     const m = {} as Record<InboxTabKey, number>;
     for (const t of TABS) {
-      const bucket = inbox[t.key];
+      const bucket = buckets[t.key];
       const hidden = bucket.prs.filter((pr) =>
         isHidden(pr, dismissed[keyFor(pr)]),
       ).length;
       m[t.key] = Math.max(0, bucket.count - hidden);
     }
     return m;
-  }, [inbox, dismissed]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inbox, subscribedData, dismissed]);
 
   // Resolve the selected PR key to a position in the current list (follows the
   // PR through reorders/filtering; falls back to the top if it's gone).
@@ -202,6 +219,14 @@ export function Inbox() {
     { keys: "2", description: "Tab: Assigned", group: "Tabs", run: () => selectTab("assigned") },
     { keys: "3", description: "Tab: Created", group: "Tabs", run: () => selectTab("created") },
     { keys: "4", description: "Tab: Involved", group: "Tabs", run: () => selectTab("involved") },
+    { keys: "5", description: "Tab: Watching", group: "Tabs", run: () => selectTab("subscribed") },
+    {
+      keys: "w",
+      description: "Watch repositories…",
+      group: "Tabs",
+      icon: Eye,
+      run: () => setWatchOpen(true),
+    },
   ]);
 
   const activeTab = TABS.find((t) => t.key === tab) ?? TABS[0];
@@ -255,12 +280,19 @@ export function Inbox() {
           title={
             tab === "reviewRequested"
               ? "All clear"
-              : `Nothing in “${activeTab.label}”`
+              : tab === "subscribed"
+                ? "Not watching anything yet"
+                : `Nothing in “${activeTab.label}”`
           }
           hint={
             tab === "reviewRequested"
               ? "Nothing is waiting on your review. New requests land here and pop a toast."
               : activeTab.hint
+          }
+          action={
+            tab === "subscribed"
+              ? { label: "Watch a repository", kbd: "w", onClick: () => setWatchOpen(true) }
+              : undefined
           }
         />
       ) : (
@@ -296,6 +328,8 @@ export function Inbox() {
           {selectedPR && <InboxDetail pr={selectedPR} />}
         </div>
       )}
+
+      <WatchReposDialog open={watchOpen} onClose={() => setWatchOpen(false)} />
     </div>
   );
 }
@@ -304,7 +338,15 @@ export function Inbox() {
  * The empty inbox — a quiet full-bleed moment instead of an empty two-pane
  * layout. The return-key mark nods back at the app icon.
  */
-function InboxZero({ title, hint }: { title: string; hint: string }) {
+function InboxZero({
+  title,
+  hint,
+  action,
+}: {
+  title: string;
+  hint: string;
+  action?: { label: string; kbd: string; onClick: () => void };
+}) {
   return (
     <div className="qz-wrap flex flex-1 flex-col items-center justify-center px-6 text-center">
       <div className="qz-glyph" aria-hidden>
@@ -327,6 +369,15 @@ function InboxZero({ title, hint }: { title: string; hint: string }) {
       </div>
       <p className="qz-title">{title}</p>
       <p className="qz-hint">{hint}</p>
+      {action && (
+        <button
+          type="button"
+          onClick={action.onClick}
+          className="q-btn q-btn-quiet q-focus mt-5"
+        >
+          {action.label} <Kbd combo={action.kbd} />
+        </button>
+      )}
     </div>
   );
 }

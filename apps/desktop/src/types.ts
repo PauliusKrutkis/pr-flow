@@ -106,7 +106,8 @@ export interface InboxData {
   involved: InboxBucket;
 }
 
-export type InboxTabKey = keyof InboxData;
+/** Inbox tabs: the four involvement buckets plus the watched-repos tab. */
+export type InboxTabKey = keyof InboxData | "subscribed";
 
 export type ReviewEvent = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
 
@@ -121,6 +122,12 @@ export interface PendingComment {
 
 /** prKey -> list of filenames marked viewed */
 export type ViewedMap = Record<string, string[]>;
+
+/** A repository search hit (the watch-repos picker). */
+export interface RepoHit {
+  fullName: string;
+  description: string;
+}
 
 /** Raw file bytes at a ref, base64-encoded (image diffs). */
 export interface FileBlob {
