@@ -303,6 +303,9 @@ export function TokenGate() {
                   if (e.key === "Enter" && !probedHost) {
                     e.preventDefault();
                     void probe();
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    reset("identity");
                   }
                 }}
                 placeholder="gitlab.yourcompany.com"
@@ -368,6 +371,9 @@ export function TokenGate() {
                     if (e.key === "Enter") {
                       e.preventDefault();
                       void connectToken("gitlab", probedHost);
+                    } else if (e.key === "Escape") {
+                      e.preventDefault();
+                      reset("identity");
                     }
                   }}
                   placeholder="glpat-…  (api scope)"
@@ -458,6 +464,9 @@ export function TokenGate() {
                     tokenProvider,
                     tokenProvider === "gitlab" ? tokenHost.trim() || null : null,
                   );
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  reset("identity");
                 }
               }}
               placeholder={tokenProvider === "github" ? "ghp_…" : "glpat-…"}

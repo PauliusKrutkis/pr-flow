@@ -74,7 +74,6 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
   const sourcesRef = useRef<Source[]>([]);
   const scopeStackRef = useRef<ScopeEntry[]>([]);
   const idRef = useRef(0);
-  const [activeScope, setActiveScope] = useState("global");
   const [version, setVersion] = useState(0);
 
   // Sequence buffer for vim-style two-key bindings ("]c", "gg").
@@ -103,11 +102,8 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
     (scope: string) => {
       const id = nextId();
       scopeStackRef.current = [...scopeStackRef.current, { id, scope }];
-      setActiveScope(scope);
       return () => {
         scopeStackRef.current = scopeStackRef.current.filter((s) => s.id !== id);
-        const top = scopeStackRef.current[scopeStackRef.current.length - 1];
-        setActiveScope(top ? top.scope : "global");
       };
     },
     [nextId],
@@ -131,12 +127,16 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
   );
 
   // Collect bindings eligible to fire right now: those in the active scope, or
-  // marked global. (`version` keeps this fresh as sources mount/unmount.)
+  // marked global. Reads the scope from the STACK REF, not state — the keydown
+  // listener is bound once, and closured state can lag a screen switch (the
+  // e2e suite caught Escape being dropped right after inbox → review).
   const eligibleBindings = useCallback((): RegisteredBinding[] => {
+    const stack = scopeStackRef.current;
+    const active = stack.length ? stack[stack.length - 1].scope : "global";
     const out: RegisteredBinding[] = [];
     let i = 0;
     for (const src of sourcesRef.current) {
-      if (src.scope === activeScope || src.scope === "global") {
+      if (src.scope === active || src.scope === "global") {
         for (const b of src.get()) {
           out.push({ ...b, id: `${src.id}-${i}`, scope: src.scope });
           i += 1;
@@ -144,7 +144,7 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
       }
     }
     return out;
-  }, [activeScope]);
+  }, []);
 
   const clearSeq = useCallback(() => {
     seqRef.current = "";

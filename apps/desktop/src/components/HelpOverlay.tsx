@@ -4,7 +4,7 @@ import { useKeyboard, useHotkeys } from "../keyboard";
 import { useAppStore } from "../store/appStore";
 import { Kbd } from "./ui/Kbd";
 
-function firstKey(keys: string | string[]): string {
+function firstKey(keys: string | string[]): string | undefined {
   return Array.isArray(keys) ? keys[0] : keys;
 }
 
@@ -53,7 +53,10 @@ export function HelpOverlay({ baseScope }: { baseScope: string }) {
     for (const b of getBindings(baseScope)) {
       if (b.hidden) continue;
       const list = byScope.get(b.scope) ?? [];
-      list.push({ combo: firstKey(b.keys), description: b.description });
+      const combo = firstKey(b.keys);
+      // Palette-only actions (no keybinding) don't belong on a cheatsheet.
+      if (!combo) continue;
+      list.push({ combo, description: b.description });
       byScope.set(b.scope, list);
     }
     const out: ScopeSection[] = [];
