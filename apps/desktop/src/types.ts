@@ -120,8 +120,15 @@ export interface PendingComment {
   body: string;
 }
 
-/** prKey -> list of filenames marked viewed */
-export type ViewedMap = Record<string, string[]>;
+/**
+ * filename -> content fingerprint captured when the file was marked viewed
+ * (see lib/viewedFingerprint.ts; "?" = migrated legacy mark, fingerprint
+ * unknown until the PR's detail is next loaded).
+ */
+export type ViewedFileMap = Record<string, string>;
+
+/** prKey -> the files marked viewed, with their content fingerprints. */
+export type ViewedMap = Record<string, ViewedFileMap>;
 
 /** A repository search hit (the watch-repos picker). */
 export interface RepoHit {

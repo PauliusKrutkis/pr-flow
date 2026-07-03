@@ -1,9 +1,14 @@
 import { create } from "zustand";
 import { api } from "../lib/api";
 import { usePerfStore } from "../lib/perf";
+import {
+  UNKNOWN_FINGERPRINT,
+  reconcileViewedEntry,
+} from "../lib/viewedFingerprint";
 import type {
   AccountInfo,
   AccountsInfo,
+  ChangedFile,
   InboxTabKey,
   PendingComment,
   ViewedMap,
@@ -183,7 +188,22 @@ interface AppState {
   // viewed-file state
   setViewed: (map: ViewedMap) => void;
   isViewed: (prKey: string, file: string) => boolean;
-  toggleViewed: (prKey: string, file: string) => void;
+  /**
+   * `fingerprint` is the file's current content fingerprint, stamped onto the
+   * mark so a later content change can be detected. Callers without one (none
+   * today) fall back to UNKNOWN, which reconciliation upgrades in place.
+   */
+  toggleViewed: (prKey: string, file: string, fingerprint?: string) => void;
+  /**
+   * Checks every viewed mark of a PR against its current files: content
+   * mismatches are unviewed (returned), migrated legacy marks silently adopt
+   * the current fingerprint. Persists only when something actually changed.
+   */
+  reconcileViewed: (
+    prKey: string,
+    files: readonly ChangedFile[],
+    headSha: string,
+  ) => string[];
   viewedCount: (prKey: string) => number;
 
   // unread tracking
@@ -279,17 +299,24 @@ export const useAppStore = create<AppState>((set, get) => ({
   toggleSearch: () => set((s) => ({ searchOpen: !s.searchOpen })),
 
   setViewed: (map) => set({ viewed: map }),
-  isViewed: (prKey, file) => (get().viewed[prKey] ?? []).includes(file),
-  toggleViewed: (prKey, file) => {
-    const current = get().viewed[prKey] ?? [];
-    const next = current.includes(file)
-      ? current.filter((f) => f !== file)
-      : [...current, file];
+  isViewed: (prKey, file) => file in (get().viewed[prKey] ?? {}),
+  toggleViewed: (prKey, file, fingerprint = UNKNOWN_FINGERPRINT) => {
+    const next = { ...(get().viewed[prKey] ?? {}) };
+    if (file in next) delete next[file];
+    else next[file] = fingerprint;
     const map = { ...get().viewed, [prKey]: next };
     set({ viewed: map });
     schedulePersistViewed(map);
   },
-  viewedCount: (prKey) => (get().viewed[prKey] ?? []).length,
+  reconcileViewed: (prKey, files, headSha) => {
+    const res = reconcileViewedEntry(get().viewed[prKey], files, headSha);
+    if (!res.changed) return [];
+    const map = { ...get().viewed, [prKey]: res.entry };
+    set({ viewed: map });
+    schedulePersistViewed(map);
+    return res.unviewed;
+  },
+  viewedCount: (prKey) => Object.keys(get().viewed[prKey] ?? {}).length,
 
   markSeen: (prKey, updatedAt) => {
     const map = { ...get().lastSeen, [prKey]: updatedAt };

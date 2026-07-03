@@ -6,6 +6,7 @@ import {
   ArrowUp,
   CornerDownLeft,
   Eye,
+  Link,
   Undo2,
 } from "lucide-react";
 import { useHotkeys } from "../../keyboard";
@@ -184,6 +185,15 @@ export function Inbox() {
     setToast(null);
   };
 
+  // `y` — copy the selected PR's URL, mirroring the review screen's `y`. The
+  // toast is the proof-of-copy; a silent shortcut reads as "does nothing".
+  const copySelectedLink = () => {
+    const pr = filtered[selectedIndex];
+    if (!pr) return;
+    void navigator.clipboard?.writeText(pr.url).catch(() => {});
+    setToast({ title: "Copied PR link", message: pr.url });
+  };
+
   useHotkeys("inbox", [
     { keys: ["j", "down"], description: "Next PR", group: "Navigation", icon: ArrowDown, run: next },
     { keys: ["k", "up"], description: "Previous PR", group: "Navigation", icon: ArrowUp, run: prev },
@@ -207,6 +217,13 @@ export function Inbox() {
       group: "Navigation",
       icon: Undo2,
       run: undoArchive,
+    },
+    {
+      keys: "y",
+      description: "Copy PR link",
+      group: "Navigation",
+      icon: Link,
+      run: copySelectedLink,
     },
     {
       keys: "tab",

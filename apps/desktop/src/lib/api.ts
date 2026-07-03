@@ -101,7 +101,9 @@ export const api = {
     invoke<FileBlob>("get_file_blob", { owner, repo, path, ref }),
 
   // ---- viewed-file state (local only) ----
-  getViewedMap: () => invoke<ViewedMap>("get_viewed_map"),
+  /** Raw persisted JSON — may still be the legacy `prKey -> string[]` shape
+   *  on older installs; callers run it through normalizeViewedMap. */
+  getViewedMap: () => invoke<unknown>("get_viewed_map"),
   setViewedMap: (map: ViewedMap) => invoke<void>("set_viewed_map", { map }),
 
   // ---- auto-update ----

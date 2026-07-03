@@ -103,6 +103,50 @@ export const DETAIL = {
   fetchedAt: 1_750_000_000_000,
 };
 
+/**
+ * The same PR after a push that reworks fuzzy.ts: new head sha, changed patch
+ * for the first file, second file untouched. Serve it on a later load (see
+ * bridge detailByLoad) to exercise the auto-unview-on-content-change flow.
+ */
+export const DETAIL_CHANGED = {
+  ...DETAIL,
+  pr: { ...DETAIL.pr, headSha: "headsha2", updatedAt: "2026-07-02T11:00:00Z" },
+  files: [
+    {
+      ...DETAIL.files[0],
+      additions: 3,
+      changes: 4,
+      patch: `@@ -1,5 +1,7 @@
+ export function alpha() {
+-  return 1;
++  // tuned again
++  const two = 2;
++  return two;
+ }
+ export const beta = true;`,
+      sha: "f1b",
+    },
+    DETAIL.files[1],
+  ],
+  fetchedAt: 1_750_000_100_000,
+};
+
+/**
+ * INBOX after the push behind DETAIL_CHANGED: only PR #1's updatedAt moves
+ * (matching DETAIL_CHANGED.pr.updatedAt). Serve it on a later list_inbox call
+ * (bridge inboxByCall) to exercise the heartbeat-driven detail refresh.
+ */
+export const INBOX_UPDATED = {
+  ...INBOX,
+  reviewRequested: {
+    ...INBOX.reviewRequested,
+    prs: [
+      { ...INBOX.reviewRequested.prs[0], updatedAt: "2026-07-02T11:00:00Z" },
+      ...INBOX.reviewRequested.prs.slice(1),
+    ],
+  },
+};
+
 export const ACCOUNT = {
   id: "github-com-me",
   provider: "github",
