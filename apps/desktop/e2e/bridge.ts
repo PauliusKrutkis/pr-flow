@@ -11,7 +11,7 @@ export interface AppOptions {
   /**
    * PR-detail payload per document load: index 0 serves the first load, 1 the
    * first reload, … (the last entry repeats). Lets a test change a PR "server
-   * side" across a reload — e.g. the auto-unview-on-content-change flow.
+   * side" across a reload — e.g. the auto-unview-on-content-change flow. TESTING
    */
   detailByLoad?: unknown[];
 }
