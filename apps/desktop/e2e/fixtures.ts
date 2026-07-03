@@ -1,6 +1,11 @@
 // Deterministic backend fixtures for the mocked Tauri bridge.
 
-const pr = (n: number, title: string, author: string, updatedAt: string) => ({
+export const makePr = (
+  n: number,
+  title: string,
+  author: string,
+  updatedAt: string,
+) => ({
   id: n,
   number: n,
   title,
@@ -26,18 +31,42 @@ const pr = (n: number, title: string, author: string, updatedAt: string) => ({
   body: "A **fixture** pull request.",
 });
 
-export const INBOX = {
+export type PrFixture = ReturnType<typeof makePr>;
+export type BucketFixture = { count: number; prs: PrFixture[] };
+export type InboxFixture = Record<
+  "reviewRequested" | "assigned" | "created" | "involved",
+  BucketFixture
+>;
+
+export const INBOX: InboxFixture = {
   reviewRequested: {
     count: 3,
     prs: [
-      pr(1, "Add fuzzy matching to search", "alice", "2026-07-02T10:00:00Z"),
-      pr(2, "Fix cursor drift in diff viewer", "bob", "2026-07-02T09:00:00Z"),
-      pr(3, "Rework the token gate", "carol", "2026-07-01T18:00:00Z"),
+      makePr(1, "Add fuzzy matching to search", "alice", "2026-07-02T10:00:00Z"),
+      makePr(2, "Fix cursor drift in diff viewer", "bob", "2026-07-02T09:00:00Z"),
+      makePr(3, "Rework the token gate", "carol", "2026-07-01T18:00:00Z"),
     ],
   },
   assigned: { count: 0, prs: [] },
-  created: { count: 1, prs: [pr(4, "My own PR", "me", "2026-07-01T12:00:00Z")] },
+  created: { count: 1, prs: [makePr(4, "My own PR", "me", "2026-07-01T12:00:00Z")] },
   involved: { count: 0, prs: [] },
+};
+
+/* The watched-repos ("Watching") bucket: one PR that ALSO lives in the inbox
+   (dedup coverage) and one that exists ONLY here, in a different repo. */
+export const SUBSCRIBED: BucketFixture = {
+  count: 2,
+  prs: [
+    makePr(1, "Add fuzzy matching to search", "alice", "2026-07-02T10:00:00Z"),
+    {
+      ...makePr(77, "Watched-only satellite uplink", "dave", "2026-07-01T15:00:00Z"),
+      id: 9077,
+      repo: "acme/comet",
+      owner: "acme",
+      name: "comet",
+      url: "https://github.com/acme/comet/pull/77",
+    },
+  ],
 };
 
 const PATCH = `@@ -1,5 +1,6 @@
@@ -50,7 +79,7 @@ const PATCH = `@@ -1,5 +1,6 @@
 
 export const DETAIL = {
   pr: {
-    ...pr(1, "Add fuzzy matching to search", "alice", "2026-07-02T10:00:00Z"),
+    ...makePr(1, "Add fuzzy matching to search", "alice", "2026-07-02T10:00:00Z"),
   },
   files: [
     {

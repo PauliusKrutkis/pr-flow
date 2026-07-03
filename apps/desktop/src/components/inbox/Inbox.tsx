@@ -249,6 +249,19 @@ export function Inbox() {
   const activeTab = TABS.find((t) => t.key === tab) ?? TABS[0];
   const selectedPR = filtered[selectedIndex];
 
+  // Report whether the reading pane is actually rendered (not just "we're on
+  // the inbox route") so the toast host only dodges a pane that exists.
+  const setInboxPaneVisible = useAppStore((s) => s.setInboxPaneVisible);
+  const paneVisible =
+    !!selectedPR && !(isLoading && !data) && !(isError && !data);
+  useEffect(() => {
+    setInboxPaneVisible(paneVisible);
+  }, [paneVisible, setInboxPaneVisible]);
+  useEffect(
+    () => () => setInboxPaneVisible(false),
+    [setInboxPaneVisible],
+  );
+
   return (
     <div className="flex h-full flex-col">
       {/* Tabs (also serve as the header) */}
@@ -418,65 +431,67 @@ function InboxDetail({ pr }: { pr: PullRequest }) {
 
   return (
     <aside
-      className="hidden min-h-0 flex-col bg-surface min-[900px]:flex"
+      className="qi-detail hidden bg-surface min-[900px]:flex"
       aria-label="Pull request detail"
     >
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <header className="border-b border-line px-5 pb-4 pt-5">
-          <div className="flex flex-wrap items-center gap-2 font-mono text-xs text-faint">
-            <span className={"q-pill " + stateCls}>
-              <span className="q-pill-dot" />
-              {stateLabel}
-            </span>
-            <span>#{pr.number}</span>
-            <span className="q-dot">·</span>
-            <span className="truncate" title={pr.repo}>
-              {pr.repo}
-            </span>
-          </div>
-          <h2 className="mt-2.5 text-[17px] font-semibold leading-snug tracking-tight text-fg">
-            <TicketTitle title={pr.title} trackerBase={trackerBase} />
-          </h2>
-          <div className="mt-3 flex items-center gap-2.5">
-            <Avatar url={pr.authorAvatarUrl} name={pr.author} size={22} />
-            <span className="text-[13px] font-medium text-fg">{pr.author}</span>
-            <span
-              className="font-mono text-[11px] text-faint"
-              title={formatAbsolute(pr.updatedAt)}
-            >
-              updated {formatRelativeTime(pr.updatedAt)}
-            </span>
-          </div>
-          <div className="mt-3.5 flex items-center gap-2 font-mono text-xs text-muted">
-            <span>
-              {pr.changedFiles} file{pr.changedFiles === 1 ? "" : "s"}
-            </span>
-            <span className="q-dot">·</span>
-            <span>
-              <span className="text-success">+{pr.additions}</span>{" "}
-              <span className="text-danger">−{pr.deletions}</span>
-            </span>
-            <span className="q-dot">·</span>
-            <span>
-              {pr.commentsCount} comment{pr.commentsCount === 1 ? "" : "s"}
-            </span>
-          </div>
-        </header>
-
-        <div className="flex-1 px-5 py-4">
-          {body ? (
-            <Markdown>{body}</Markdown>
-          ) : (
-            <p className="text-sm text-faint">No description.</p>
-          )}
-        </div>
-
-        <footer className="flex items-center gap-2 border-t border-line px-5 py-2.5 text-xs text-faint">
-          <Kbd combo="enter" /> open review
+      <header className="qi-detail-head">
+        <div className="qi-detail-meta">
+          <span className={"q-pill " + stateCls}>
+            <span className="q-pill-dot" />
+            {stateLabel}
+          </span>
+          <span className="qi-detail-num">#{pr.number}</span>
           <span className="q-dot">·</span>
-          <Kbd combo="e" /> archive
-        </footer>
+          <span className="qi-detail-repo" title={pr.repo}>
+            {pr.repo}
+          </span>
+        </div>
+        <h2 className="qi-detail-title">
+          <TicketTitle title={pr.title} trackerBase={trackerBase} />
+        </h2>
+        <div className="qi-detail-author">
+          <Avatar url={pr.authorAvatarUrl} name={pr.author} size={20} />
+          <span className="qi-detail-author-name">{pr.author}</span>
+          <span className="qi-detail-time" title={formatAbsolute(pr.updatedAt)}>
+            updated {formatRelativeTime(pr.updatedAt)}
+          </span>
+        </div>
+        <div className="qi-detail-stats">
+          <span>
+            {pr.changedFiles} file{pr.changedFiles === 1 ? "" : "s"}
+          </span>
+          <span className="q-dot">·</span>
+          <span>
+            <span className="qi-add">+{pr.additions}</span>{" "}
+            <span className="qi-del">−{pr.deletions}</span>
+          </span>
+          <span className="q-dot">·</span>
+          <span>
+            {pr.commentsCount} comment{pr.commentsCount === 1 ? "" : "s"}
+          </span>
+        </div>
+      </header>
+
+      <div className="qi-detail-body">
+        {body ? (
+          <>
+            <div className="qi-detail-kicker">Description</div>
+            <Markdown>{body}</Markdown>
+          </>
+        ) : (
+          <p className="qi-detail-none">No description provided.</p>
+        )}
       </div>
+
+      <footer className="qi-detail-foot">
+        <span className="qi-detail-hint">
+          <Kbd combo="enter" /> open review
+        </span>
+        <span className="q-dot">·</span>
+        <span className="qi-detail-hint">
+          <Kbd combo="e" /> archive
+        </span>
+      </footer>
     </aside>
   );
 }

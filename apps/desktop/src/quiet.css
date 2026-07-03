@@ -1222,6 +1222,103 @@ textarea.q-input { resize: none; line-height: 1.5; }
   background-color: transparent !important;
 }
 
+/* Inbox reading pane — the selected PR at a glance. Calm hierarchy: one faint
+   mono meta line, the title carrying the weight, an author row, a stat strip,
+   then the description scrolling on its own under a pinned footer of hints. */
+.qi-detail {
+  min-height: 0;
+  flex-direction: column;
+}
+.qi-detail-head {
+  flex-shrink: 0;
+  padding: 18px 20px 15px;
+  border-bottom: 1px solid var(--line);
+}
+.qi-detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--faint);
+}
+.qi-detail-num { color: var(--muted); }
+.qi-detail-repo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qi-detail-title {
+  margin: 11px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.011em;
+  color: var(--fg);
+  text-wrap: balance;
+}
+.qi-detail-author {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  margin-top: 13px;
+}
+.qi-detail-author-name {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--fg);
+}
+.qi-detail-time {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+.qi-detail-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 13px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.qi-detail-stats .qi-add { color: var(--add); }
+.qi-detail-stats .qi-del { color: var(--del); }
+.qi-detail-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 20px 22px;
+}
+.qi-detail-kicker {
+  margin-bottom: 10px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.qi-detail-none { margin: 0; font-size: 13px; color: var(--faint); }
+.qi-detail-foot {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 20px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--faint);
+}
+.qi-detail-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* ===========================================================================
    4. TRANSIENT CHROME (from views/ChromeSurfaces.tsx) — global, unscoped.
    Orient banner, new-review toast, update prompt. "No nags": each is
@@ -1275,12 +1372,14 @@ textarea.q-input { resize: none; line-height: 1.5; }
 .qb-stack-tr { right: 18px; top: 18px; }
 
 /* THE alert host — every transient surface stacks here, anchored to the
-   bottom-right of the content column. On the inbox the reading pane (380px)
-   is chrome, not content, so alerts sit just left of it. */
+   bottom-right of the content column. The inbox reading pane (380px) is
+   chrome, not content, so alerts sit just left of it — keyed on the pane
+   actually rendering (`data-pane` on the app root, set by Inbox), not the
+   route, so an empty inbox keeps alerts in the corner. */
 .qb-stack-host { right: 18px; bottom: 18px; }
-[data-route="inbox"] .qb-stack-host { right: calc(380px + 30px); }
+[data-pane="detail"] .qb-stack-host { right: calc(380px + 30px); }
 @media (max-width: 900px) {
-  [data-route="inbox"] .qb-stack-host { right: 18px; }
+  [data-pane="detail"] .qb-stack-host { right: 18px; }
 }
 
 /* watched-repos dialog */
