@@ -17,7 +17,8 @@ use serde_json::{json, Value};
 use crate::github::{
     fbool, fopt_u64, fstr, fu64, get_all_pages, get_json, log, net_err, now_millis, nstr,
     read_body, ChangedFile, FileBlob, GitHubUser, InboxBucket, InboxData, IssueComment,
-    PullRequest, PullRequestDetail, RepoHit, ReviewComment, ReviewCommentInput, MAX_BLOB_BYTES,
+    PullRequest, PullRequestDetail, RepoHit, ReviewComment, ReviewCommentInput, ReviewSummary,
+    MAX_BLOB_BYTES,
 };
 
 pub struct GitLabPlatform {
@@ -368,6 +369,7 @@ impl GitLabPlatform {
         .await?;
         let mut comments: Vec<ReviewComment> = Vec::new();
         let mut issue_comments: Vec<IssueComment> = Vec::new();
+        let mut reviews: Vec<ReviewSummary> = Vec::new();
         for disc in &discussions {
             let notes = disc
                 .get("notes")
@@ -376,6 +378,28 @@ impl GitLabPlatform {
                 .unwrap_or_default();
             let Some(root) = notes.first() else { continue };
             if fbool(root, "system") {
+                // System notes are host chatter (pushes, labels, …) and stay
+                // hidden — except approval events, which ARE the review verdict
+                // on GitLab. Map them onto the shared ReviewSummary shape.
+                // "unapproved" is checked first: it contains "approved".
+                let body = fstr(root, "body");
+                let state = if body.starts_with("unapproved this merge request") {
+                    Some("DISMISSED")
+                } else if body.starts_with("approved this merge request") {
+                    Some("APPROVED")
+                } else {
+                    None
+                };
+                if let Some(state) = state {
+                    reviews.push(ReviewSummary {
+                        id: fu64(root, "id"),
+                        user: nstr(root, "author", "username"),
+                        user_avatar_url: nstr(root, "author", "avatar_url"),
+                        state: state.to_string(),
+                        body: String::new(),
+                        submitted_at: fstr(root, "created_at"),
+                    });
+                }
                 continue;
             }
             // Positionless human threads are MR-level conversation.
@@ -404,12 +428,14 @@ impl GitLabPlatform {
             }
         }
         issue_comments.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+        reviews.sort_by(|a, b| a.submitted_at.cmp(&b.submitted_at));
 
         let detail = PullRequestDetail {
             pr,
             files,
             comments,
             issue_comments,
+            reviews,
             fetched_at: now_millis(),
         };
         log(&format!(

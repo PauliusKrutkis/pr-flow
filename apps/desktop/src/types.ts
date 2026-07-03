@@ -83,12 +83,25 @@ export interface IssueComment {
   createdAt: string;
 }
 
+/** A submitted review: an approval / change request / review summary body. */
+export interface ReviewSummary {
+  id: number;
+  user: string;
+  userAvatarUrl: string;
+  /** "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED" | "DISMISSED" */
+  state: string;
+  body: string;
+  submittedAt: string;
+}
+
 export interface PullRequestDetail {
   pr: PullRequest;
   files: ChangedFile[];
   comments: ReviewComment[];
   /** PR-level conversation, oldest first. */
   issueComments: IssueComment[];
+  /** Submitted review verdicts/summaries, oldest first. */
+  reviews: ReviewSummary[];
   /** unix epoch millis */
   fetchedAt: number;
 }

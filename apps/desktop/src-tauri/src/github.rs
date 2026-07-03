@@ -101,6 +101,22 @@ pub struct IssueComment {
     pub created_at: String,
 }
 
+/// A submitted review: an approval / change request / review with a summary
+/// body. These are the "LGTM" moments the conversation view would otherwise
+/// silently drop — inline comments live in `ReviewComment`, but the verdict
+/// itself only exists here.
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewSummary {
+    pub id: u64,
+    pub user: String,
+    pub user_avatar_url: String,
+    /// "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED" | "DISMISSED"
+    pub state: String,
+    pub body: String,
+    pub submitted_at: String,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PullRequestDetail {
@@ -110,6 +126,9 @@ pub struct PullRequestDetail {
     /// PR-level conversation, oldest first (default keeps old caches readable).
     #[serde(default)]
     pub issue_comments: Vec<IssueComment>,
+    /// Submitted review verdicts/summaries, oldest first (default: old caches).
+    #[serde(default)]
+    pub reviews: Vec<ReviewSummary>,
     pub fetched_at: u64,
 }
 
@@ -620,11 +639,46 @@ impl GitHubPlatform {
             })
             .collect();
 
+        let reviews_v = get_all_pages(
+            &self.client,
+            &format!("{API}/repos/{owner}/{repo}/pulls/{number}/reviews"),
+        )
+        .await?;
+        let reviews: Vec<ReviewSummary> = reviews_v
+            .iter()
+            .filter_map(|v| {
+                let state = fstr(v, "state");
+                let body = fstr(v, "body");
+                // PENDING is the viewer's own unsubmitted draft — not conversation.
+                if state == "PENDING" {
+                    return None;
+                }
+                // A body-less COMMENTED review is just the container GitHub wraps
+                // around inline comments (which we fetch separately) — showing it
+                // would be an empty row. Body-less verdicts (approve / request
+                // changes / dismissed) still carry meaning on their own.
+                if body.trim().is_empty()
+                    && !matches!(state.as_str(), "APPROVED" | "CHANGES_REQUESTED" | "DISMISSED")
+                {
+                    return None;
+                }
+                Some(ReviewSummary {
+                    id: fu64(v, "id"),
+                    user: nstr(v, "user", "login"),
+                    user_avatar_url: nstr(v, "user", "avatar_url"),
+                    state,
+                    body,
+                    submitted_at: fstr(v, "submitted_at"),
+                })
+            })
+            .collect();
+
         let detail = PullRequestDetail {
             pr,
             files,
             comments,
             issue_comments,
+            reviews,
             fetched_at: now_millis(),
         };
         log(&format!(
