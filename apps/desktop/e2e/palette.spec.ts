@@ -30,5 +30,9 @@ test("running a command acts on the app", async ({ page }) => {
 
 test("? shows the scope-aware cheatsheet", async ({ page }) => {
   await page.keyboard.press("Shift+Slash");
-  await expect(page.getByText("Keyboard shortcuts", { exact: false })).toBeVisible();
+  await expect(page.locator(".qh-panel")).toBeVisible();
+  // The overlay lists the live bindings of the active (inbox) scope.
+  await expect(page.getByText("Archive until it updates")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".qh-panel")).not.toBeVisible();
 });

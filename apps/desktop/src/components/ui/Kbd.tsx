@@ -47,9 +47,10 @@ export function Kbd({
   combo,
   className,
 }: {
-  combo: string;
+  combo?: string;
   className?: string;
 }) {
+  if (!combo) return null;
   const caps = toCaps(combo);
   return (
     <span className={cn("inline-flex items-center gap-0.5", className)}>
