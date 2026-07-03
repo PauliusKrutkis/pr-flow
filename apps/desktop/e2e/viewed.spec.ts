@@ -39,8 +39,14 @@ test("an unchanged viewed file keeps its mark across reopen", async ({ page }) =
   await page.keyboard.press("Enter");
   await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
 
-  // Mark the SECOND file (untouched by the "push") viewed.
+  // Mark the SECOND file (untouched by the "push") viewed. The file switch is
+  // rAF-coalesced, so wait for it to land — a too-quick `v` would mark the
+  // FIRST file (the one the push changes) and legitimately get unviewed.
   await page.keyboard.press("r"); // next file
+  await expect(page.locator(".qf-file-active")).toHaveAttribute(
+    "data-file-index",
+    "1",
+  );
   await page.keyboard.press("v");
   await expect(page.locator(".qf-side-count")).toHaveText("1/2 viewed");
   await page.waitForTimeout(600);
