@@ -10,7 +10,11 @@ import {
 import { ArrowDown, ArrowUp, MessageSquarePlus } from "lucide-react";
 import type { ChangedFile, PendingComment, ReviewComment } from "../../types";
 import { parsePatch, type DiffRow } from "../../lib/diff";
-import { highlightLine, highlightLineWithFind } from "../../lib/highlight";
+import {
+  highlightLine,
+  highlightLineWithFind,
+  highlightLineWithOccurrences,
+} from "../../lib/highlight";
 import { cn } from "../../lib/cn";
 import { useHotkeys } from "../../keyboard";
 import { useAppStore } from "../../store/appStore";
@@ -31,11 +35,16 @@ export interface CursorSeed {
   nonce: number;
 }
 
-/** The live find-in-diff query (mod+f) — marks every occurrence on a row. */
-export interface FindSpec {
-  query: string;
-  caseSensitive: boolean;
-}
+/**
+ * What to mark on every rendered row. One prop serves both mark systems — the
+ * find bar (mod+f) and selection occurrences — rather than two parallel prop
+ * sets, because at most one is ever active (find wins while its bar is open)
+ * and a single identity keeps the memo contract simple: rows repaint exactly
+ * when the query/mode changes, and never while stepping through matches.
+ */
+export type MarkSpec =
+  | { kind: "find"; query: string; caseSensitive: boolean }
+  | { kind: "occurrence"; query: string; wholeWord: boolean };
 
 /** The current find match, when it's in this file: which row, which occurrence. */
 export interface FindCurrent {
@@ -76,9 +85,9 @@ interface DiffViewerProps {
   onCursorExit?: (dir: 1 | -1) => void;
   /** Place the cursor on this file's first/last line (cross-file j/k). */
   seed?: CursorSeed | null;
-  /** Find-in-diff (mod+f): highlight every occurrence on rendered rows. */
-  find?: FindSpec | null;
-  /** The current find match when it lives in this file. */
+  /** Highlight every occurrence of a query on rendered rows (find/selection). */
+  marks?: MarkSpec | null;
+  /** The current find match when it lives in this file (find mode only). */
   findCurrent?: FindCurrent | null;
 }
 
@@ -165,8 +174,9 @@ const DiffLine = memo(function DiffLine({
   isFlash,
   hasAnchored,
   canComment,
-  findQuery,
-  findCase,
+  markKind,
+  markQuery,
+  markFlag,
   findOrdinal,
   onEnter,
   onOpenBox,
@@ -178,10 +188,12 @@ const DiffLine = memo(function DiffLine({
   isFlash: boolean;
   hasAnchored: boolean;
   canComment: boolean;
-  /** Find-in-diff, as primitives so memoization only breaks when they change. */
-  findQuery: string | null;
-  findCase: boolean;
-  /** Which occurrence on THIS row is the current match, if any. */
+  /** The MarkSpec, as primitives so memoization only breaks when they change. */
+  markKind: "find" | "occurrence" | null;
+  markQuery: string | null;
+  /** Mode-dependent: caseSensitive for find, wholeWord for occurrences. */
+  markFlag: boolean;
+  /** Which occurrence on THIS row is the current find match, if any. */
   findOrdinal: number | null;
   onEnter: (anchor: string, x: number, y: number) => void;
   onOpenBox: (anchor: string) => void;
@@ -223,17 +235,25 @@ const DiffLine = memo(function DiffLine({
         <span
           className="hljs"
           dangerouslySetInnerHTML={{
-            // Find marks are layered onto the SAME highlighted HTML (by
-            // wrapping text nodes), so syntax colours stay intact under them.
-            __html: findQuery
-              ? highlightLineWithFind(
-                  row.content,
-                  filename,
-                  findQuery,
-                  findCase,
-                  findOrdinal,
-                )
-              : highlightLine(row.content, filename),
+            // Marks are layered onto the SAME highlighted HTML (by wrapping
+            // text nodes), so syntax colours stay intact under them.
+            __html:
+              markQuery == null
+                ? highlightLine(row.content, filename)
+                : markKind === "find"
+                  ? highlightLineWithFind(
+                      row.content,
+                      filename,
+                      markQuery,
+                      markFlag,
+                      findOrdinal,
+                    )
+                  : highlightLineWithOccurrences(
+                      row.content,
+                      filename,
+                      markQuery,
+                      markFlag,
+                    ),
           }}
         />
       </code>
@@ -256,7 +276,7 @@ export function DiffViewer({
   onActivate,
   onCursorExit,
   seed,
-  find,
+  marks,
   findCurrent,
 }: DiffViewerProps) {
   const hunks = useMemo(() => parsePatch(file.patch), [file.patch]);
@@ -648,10 +668,20 @@ export function DiffViewer({
               isFlash={key != null && key === flashAnchor}
               hasAnchored={!!hasAnchored}
               canComment={target != null}
-              findQuery={find ? find.query : null}
-              findCase={find ? find.caseSensitive : false}
+              markKind={marks ? marks.kind : null}
+              markQuery={marks ? marks.query : null}
+              markFlag={
+                marks
+                  ? marks.kind === "find"
+                    ? marks.caseSensitive
+                    : marks.wholeWord
+                  : false
+              }
               findOrdinal={
-                findCurrent && key != null && findCurrent.anchor === key
+                marks?.kind === "find" &&
+                findCurrent &&
+                key != null &&
+                findCurrent.anchor === key
                   ? findCurrent.ordinal
                   : null
               }

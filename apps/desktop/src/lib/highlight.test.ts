@@ -4,6 +4,7 @@ import {
   highlightLine,
   highlightLineWithFind,
   highlightLineWithMatch,
+  highlightLineWithOccurrences,
   isHighlightable,
 } from "./highlight";
 
@@ -100,6 +101,31 @@ describe("highlightLineWithFind", () => {
   it("keeps the rendered text byte-identical to the code", () => {
     const code = "const value = compute(value) + 1;";
     const html = highlightLineWithFind(code, "a.ts", "value", false, 0);
+    expect(html.replace(/<[^>]+>/g, "")).toBe(code);
+  });
+});
+
+describe("highlightLineWithOccurrences", () => {
+  it("marks whole-word occurrences with the quiet occurrence class", () => {
+    const html = highlightLineWithOccurrences(
+      "const id = width(id);",
+      "a.ts",
+      "id",
+      true,
+    );
+    // Two whole-word hits; the `id` buried in `width` stays unmarked.
+    expect((html.match(/qf-occ-mark/g) ?? []).length).toBe(2);
+    expect(html).not.toContain("qf-find-mark");
+  });
+
+  it("substring mode marks hits inside identifiers", () => {
+    const html = highlightLineWithOccurrences("width widen", "a.ts", "wid", false);
+    expect((html.match(/qf-occ-mark/g) ?? []).length).toBe(2);
+  });
+
+  it("keeps the rendered text byte-identical to the code", () => {
+    const code = "const value = compute(value) + 1;";
+    const html = highlightLineWithOccurrences(code, "a.ts", "value", true);
     expect(html.replace(/<[^>]+>/g, "")).toBe(code);
   });
 });

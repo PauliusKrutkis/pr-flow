@@ -6,7 +6,7 @@ import {
   DiffViewer,
   type CursorSeed,
   type FindCurrent,
-  type FindSpec,
+  type MarkSpec,
   type JumpTarget,
 } from "./DiffViewer";
 import { ImageDiff, isImageFile } from "./ImageDiff";
@@ -50,12 +50,13 @@ interface FileSectionProps extends FileSectionCallbacks {
   jump: JumpTarget | null;
   seed: CursorSeed | null;
   /**
-   * Find-in-diff (mod+f). `find` shares one identity across all sections (it
-   * only changes with the query), and `findCurrent` is non-null for exactly
-   * one section — so stepping through matches re-renders at most two sections
-   * and this memo contract holds.
+   * Occurrence marks — the find bar's (mod+f) or the selection's. `marks`
+   * shares one identity across all sections (it only changes with the query),
+   * and `findCurrent` is non-null for exactly one section — so stepping
+   * through find matches re-renders at most two sections and this memo
+   * contract holds.
    */
-  find: FindSpec | null;
+  marks: MarkSpec | null;
   findCurrent: FindCurrent | null;
   addPending: boolean;
 }
@@ -98,7 +99,7 @@ export const FileSection = memo(function FileSection({
   pending,
   jump,
   seed,
-  find,
+  marks,
   findCurrent,
   addPending,
   onActivate,
@@ -162,7 +163,7 @@ export const FileSection = memo(function FileSection({
             pending={pending}
             jumpTo={jump}
             seed={seed}
-            find={find}
+            marks={marks}
             findCurrent={findCurrent}
             active={active}
             onActivate={() => onActivate(index)}
