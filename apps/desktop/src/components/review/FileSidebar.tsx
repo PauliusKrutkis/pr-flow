@@ -59,9 +59,12 @@ export function FileSidebar({
   comments,
   pending,
 }: FileSidebarProps) {
-  // Subscribe to THIS PR's viewed list so the rail + rows re-render on toggle.
+  // Subscribe to THIS PR's viewed map so the rail + rows re-render on toggle.
   const viewedFiles = useAppStore((s) => s.viewed[prKeyValue]);
-  const viewedSet = useMemo(() => new Set(viewedFiles ?? []), [viewedFiles]);
+  const viewedSet = useMemo(
+    () => new Set(Object.keys(viewedFiles ?? {})),
+    [viewedFiles],
+  );
 
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -86,8 +89,10 @@ export function FileSidebar({
   );
 
   // Keep the selected file visible — but only scroll when it actually leaves
-  // the visible band, and glide there. Scrolling the diff retargets the
-  // selection continuously; snapping the sidebar on every change reads jumpy.
+  // the visible band (scrolling the diff retargets the selection continuously;
+  // snapping the sidebar on every change reads jumpy). The jump is instant:
+  // a smooth glide added ~300ms of perceived lag to every keyboard file
+  // change, and `nearest` already keeps the movement minimal.
   useEffect(() => {
     const list = listRef.current;
     const el = list?.querySelector<HTMLElement>(
@@ -98,7 +103,7 @@ export function FileSidebar({
     const elRect = el.getBoundingClientRect();
     const pad = 8;
     if (elRect.top < listRect.top + pad || elRect.bottom > listRect.bottom - pad) {
-      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      el.scrollIntoView({ block: "nearest" });
     }
   }, [selectedIndex]);
 

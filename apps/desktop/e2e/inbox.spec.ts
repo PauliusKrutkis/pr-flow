@@ -55,6 +55,14 @@ test("e archives with an undo toast; z restores", async ({ page }) => {
   await expect(page.getByRole("option")).toHaveCount(3);
 });
 
+test("y copies the selected PR's link and confirms with a toast", async ({ page }) => {
+  await page.keyboard.press("j"); // select the second PR
+  await page.keyboard.press("y");
+  const toast = page.getByRole("alert");
+  await expect(toast).toContainText("Copied PR link");
+  await expect(toast).toContainText("https://github.com/acme/rocket/pull/2");
+});
+
 test("enter opens the selected PR's review", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(

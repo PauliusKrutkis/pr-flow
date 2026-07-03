@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ChevronsDown,
   ChevronsUp,
+  Copy,
   ExternalLink,
   FileSearch,
   GitBranch,
@@ -20,6 +21,7 @@ import {
 } from "lucide-react";
 import { prKey } from "../../types";
 import type {
+  ChangedFile,
   InboxData,
   PendingComment,
   PullRequest,
@@ -33,6 +35,7 @@ import { usePullRequestDetail } from "../../hooks/usePullRequestDetail";
 import { useCommentMutations } from "../../hooks/useComments";
 import { queryClient, queryKeys } from "../../lib/queryClient";
 import { getReviewMemory, updateReviewMemory } from "../../lib/reviewMemory";
+import { fingerprintFile } from "../../lib/viewedFingerprint";
 import { usePerfStore } from "../../lib/perf";
 import { cn } from "../../lib/cn";
 import { Kbd } from "../ui/Kbd";
@@ -108,6 +111,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   const goInbox = useAppStore((s) => s.goInbox);
   const toggleViewed = useAppStore((s) => s.toggleViewed);
+  const reconcileViewed = useAppStore((s) => s.reconcileViewed);
   // Subscribe to the viewed map so the sidebar and headers stay reactive.
   const viewed = useAppStore((s) => s.viewed);
   // Pending review comments live in the store, so leaving the screen (or the
@@ -118,6 +122,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const removePendingStore = useAppStore((s) => s.removePendingComment);
   const clearPendingComments = useAppStore((s) => s.clearPendingComments);
   const setFlash = useAppStore((s) => s.setFlash);
+  const setToast = useAppStore((s) => s.setToast);
   const activeLogin = useAppStore(
     (s) => s.accounts.find((a) => a.id === s.activeAccountId)?.login,
   );
@@ -125,7 +130,10 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     s.activeAccountId ? s.issueTrackers[s.activeAccountId] : undefined,
   );
   const viewedFiles = viewed[keyValue];
-  const viewedSet = useMemo(() => new Set(viewedFiles ?? []), [viewedFiles]);
+  const viewedSet = useMemo(
+    () => new Set(Object.keys(viewedFiles ?? {})),
+    [viewedFiles],
+  );
 
   const files = useMemo(() => detail?.files ?? [], [detail]);
   const fileCount = files.length;
@@ -188,6 +196,24 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       setBanner("This PR changed while you were reviewing — showing the latest.");
     }
   }, [pr, keyValue]);
+
+  // Auto-unview: a viewed mark vouches for the content you saw, so whenever
+  // detail data lands (open or background refetch) each mark's stored
+  // fingerprint is checked against the current diff. Mismatches are unviewed
+  // and announced; migrated legacy marks silently adopt a fingerprint. The
+  // viewed map is a dependency because its persisted load can race detail on
+  // a resume-into-review boot — the pass is idempotent, so re-runs (including
+  // the one this effect's own write triggers) settle immediately. Declared
+  // after the head-move effect so the more specific message wins the banner.
+  useEffect(() => {
+    if (!pr || files.length === 0) return;
+    const unviewed = reconcileViewed(keyValue, files, pr.headSha);
+    if (unviewed.length > 0) {
+      setBanner(
+        `${unviewed.length} viewed file${unviewed.length === 1 ? "" : "s"} changed — marked unviewed.`,
+      );
+    }
+  }, [pr, files, viewedFiles, keyValue, reconcileViewed]);
 
   // Resume: scroll back to the file you were on. Anchoring to the file section
   // (not a raw scrollTop) stays correct even though placeholder heights above
@@ -350,28 +376,44 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     setActiveIndex((cur) => (cur === index ? cur : index));
   }, []);
 
-  const handleToggleViewedAt = useCallback(
-    (index: number) => {
-      const f = filesRef.current[index];
-      if (f) toggleViewed(keyValue, f.filename);
+  // Marks are stamped with the file's current content fingerprint, so a later
+  // push that touches the file can drop the mark (see the reconcile effect).
+  const toggleViewedWithFp = useCallback(
+    (f: ChangedFile) => {
+      toggleViewed(keyValue, f.filename, fingerprintFile(f, headShaRef.current));
     },
     [toggleViewed, keyValue],
   );
+  const handleToggleViewedAt = useCallback(
+    (index: number) => {
+      const f = filesRef.current[index];
+      if (f) toggleViewedWithFp(f);
+    },
+    [toggleViewedWithFp],
+  );
 
   function toggleViewedFile() {
-    if (activeFile) toggleViewed(keyValue, activeFile.filename);
+    if (activeFile) toggleViewedWithFp(activeFile);
   }
   // `e`: toggle the current file's viewed state. Marking advances to the next
   // file; UNmarking stays put (you're revisiting, not moving on).
   function markViewedAndNext() {
     if (!activeFile) return;
     const wasViewed = viewedSet.has(activeFile.filename);
-    toggleViewed(keyValue, activeFile.filename);
+    toggleViewedWithFp(activeFile);
     if (!wasViewed) scrollToFile(activeIndexRef.current + 1);
   }
+  // Both copies confirm through the shared toast host — `y` used to be silent
+  // and read as "does nothing".
   function copyLink() {
     if (!pr?.url) return;
     void navigator.clipboard?.writeText(pr.url).catch(() => {});
+    setToast({ title: "Copied PR link", message: pr.url });
+  }
+  function copyFilePath() {
+    if (!activeFile) return;
+    void navigator.clipboard?.writeText(activeFile.filename).catch(() => {});
+    setToast({ title: "Copied file path", message: activeFile.filename });
   }
 
   // After submitting, jump to the next review-requested PR (or back to inbox).
@@ -590,6 +632,16 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       group: "General",
       icon: Link,
       run: copyLink,
+    },
+    {
+      // The editor convention (VS Code's "copy path" chord family). Plain
+      // shift+letter can't be its own binding (the dispatcher lowercases),
+      // hence the mod combo.
+      keys: "mod+shift+c",
+      description: "Copy file path",
+      group: "Files",
+      icon: Copy,
+      run: copyFilePath,
     },
     {
       keys: "i",
