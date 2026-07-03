@@ -30,7 +30,9 @@ export function CommentThread({
   }
 
   return (
-    <div className="qf-thread">
+    // data-comment-root lets the info drawer's "Code discussion" index find
+    // and flash this thread when jumping to it.
+    <div className="qf-thread" data-comment-root={rootId}>
       {comments.map((c, i) => (
         <div key={c.id} className={i > 0 ? "qf-comment qf-comment-reply" : "qf-comment"}>
           <div className="qf-comment-head">

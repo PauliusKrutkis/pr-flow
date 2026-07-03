@@ -8,11 +8,14 @@ import { ACCOUNT, DETAIL, INBOX } from "./fixtures";
 export interface AppOptions {
   /** false boots into the sign-in gate. */
   hasToken?: boolean;
+  /** create_issue_comment never resolves — proves optimistic UI. */
+  hangIssueComment?: boolean;
 }
 
 export async function setupApp(page: Page, opts: AppOptions = {}) {
   const config = {
     hasToken: opts.hasToken ?? true,
+    hangIssueComment: opts.hangIssueComment ?? false,
     inbox: INBOX,
     detail: DETAIL,
     account: ACCOUNT,
@@ -50,14 +53,18 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
         createdAt: new Date().toISOString(),
         inReplyToId: null,
       }),
-      create_issue_comment: () => null,
+      create_issue_comment: () =>
+        cfg.hangIssueComment ? new Promise(() => {}) : null,
       submit_review: () => null,
       check_for_update: () => null,
       "plugin:opener|open_url": () => null,
       "plugin:opener|open": () => null,
     };
 
+    // configurable: a test may call setupApp again with different options —
+    // the later init script's bridge must be able to replace this one.
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
+      configurable: true,
       value: {
         invoke: (cmd: string, args?: Record<string, unknown>) => {
           const handler = handlers[cmd];

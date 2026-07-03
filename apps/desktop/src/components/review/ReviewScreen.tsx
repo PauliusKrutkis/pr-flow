@@ -396,6 +396,41 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     }
   }
 
+  // From the drawer's "Code discussion" index: close it, reveal the thread's
+  // file, then land on the thread itself once its section has mounted (the
+  // windowed section may need a few frames to render a large diff). Outdated
+  // threads whose file isn't in this diff have nowhere to go — no-op.
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function jumpToThread(path: string, rootId: number) {
+    const idx = filesRef.current.findIndex((f) => f.filename === path);
+    if (idx < 0) return;
+    setRightOpen(false);
+    scrollToFile(idx);
+    let tries = 0;
+    const land = () => {
+      const el = scrollRef.current?.querySelector<HTMLElement>(
+        `[data-comment-root="${rootId}"]`,
+      );
+      if (!el) {
+        if (tries++ < 20) requestAnimationFrame(land);
+        return;
+      }
+      el.scrollIntoView({ block: "center" });
+      el.classList.add("qf-row-flash");
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+      flashTimerRef.current = setTimeout(
+        () => el.classList.remove("qf-row-flash"),
+        1600,
+      );
+    };
+    requestAnimationFrame(land);
+  }
+  useEffect(() => {
+    return () => {
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    };
+  }, []);
+
   function goToComment(delta: number) {
     const container = scrollRef.current;
     if (!container) return;
@@ -742,6 +777,14 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   const viewedNow = viewedSet.size;
   const isOwnPr = !!activeLogin && pr.author === activeLogin;
+  const reviews = detail.reviews ?? [];
+  // The i-button badge counts everything the drawer can show: PR-level
+  // comments, review verdicts that said something, and inline thread roots —
+  // so a "quiet-looking" PR still advertises its conversation.
+  const convoCount =
+    (detail.issueComments?.length ?? 0) +
+    reviews.filter((r) => r.body.trim().length > 0).length +
+    detail.comments.filter((c) => c.inReplyToId == null).length;
   // Design principle: no loading states — mutations are optimistic, so the
   // composers never enter a busy mode.
 
@@ -817,9 +860,12 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
               className="qf-info-btn qf-focusable"
               onClick={() => setRightOpen((o) => !o)}
               aria-pressed={rightOpen}
-              title="PR description & comment (i)"
+              title="PR description & conversation (i)"
             >
               i
+              {convoCount > 0 && (
+                <span className="qf-info-count">{convoCount}</span>
+              )}
             </button>
             <button
               type="button"
@@ -846,6 +892,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         <div
           ref={scrollRef}
           onScroll={handleScroll}
+          // Programmatically focusable so the drawer can hand focus back here
+          // on close (never in the Tab order — Tab is bound to file cycling).
+          tabIndex={-1}
           className="qf-scrollhost min-w-0 flex-1 overflow-y-auto"
         >
           {files.map((file, i) => (
@@ -884,11 +933,14 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         pr={pr}
         fileCount={fileCount}
         conversation={detail.issueComments ?? []}
+        reviews={reviews}
+        inlineComments={detail.comments}
         open={rightOpen}
         onClose={() => setRightOpen(false)}
         onAddIssueComment={async (body) => {
           await addIssueComment.mutateAsync({ body });
         }}
+        onJumpToThread={jumpToThread}
       />
 
       <SubmitReviewModal

@@ -541,6 +541,7 @@ textarea.q-input { resize: none; line-height: 1.5; }
 .dir-quiet .qf-stat-group { font-family: var(--font-mono); font-size: 12px; display: flex; gap: 7px; }
 
 .dir-quiet .qf-info-btn {
+  position: relative;
   width: 28px;
   height: 28px;
   border-radius: 7px;
@@ -558,6 +559,22 @@ textarea.q-input { resize: none; line-height: 1.5; }
   color: var(--accent);
   border-color: var(--accent-line);
   background: var(--accent-soft);
+}
+/* how much conversation the drawer holds — a quiet PR still advertises it */
+.dir-quiet .qf-info-count {
+  position: absolute;
+  top: -7px;
+  right: -8px;
+  font-family: var(--font-mono);
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--accent-line);
+  border-radius: 999px;
+  padding: 2px 5px;
 }
 
 .dir-quiet .qf-submit {
@@ -897,7 +914,17 @@ textarea.q-input { resize: none; line-height: 1.5; }
 /* segmented "batch vs now" composer (from views/AddCommentBox.tsx) — unscoped
    so replies/issue composers reuse it too. */
 .qa-inline { font-family: var(--font-ui); }
-.qa-textarea { background: var(--bg); min-height: 64px; }
+/* The textarea may grow taller, never wider: a flex/drawer column must not
+   gain a horizontal scrollbar because a composer was dragged or overflowed.
+   (element selector included to out-rank textarea.q-input's resize: none) */
+textarea.qa-textarea {
+  background: var(--bg);
+  min-height: 64px;
+  max-width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  overflow-x: hidden;
+}
 .qa-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 11px; flex-wrap: wrap; }
 .qa-seg { display: inline-flex; padding: 3px; border-radius: 9px; background: var(--bg); border: 1px solid var(--line); }
 .qa-seg-btn {
@@ -948,6 +975,9 @@ textarea.q-input { resize: none; line-height: 1.5; }
   flex-direction: column;
 }
 .dir-quiet .qf-drawer.qf-drawer-open { transform: translateX(0); }
+/* the drawer container takes focus on open (Esc target) — no ring for that */
+.dir-quiet .qf-drawer:focus { outline: none; }
+.dir-quiet .qf-scrollhost:focus { outline: none; }
 .dir-quiet .qf-drawer-head {
   display: flex;
   align-items: center;
@@ -976,7 +1006,12 @@ textarea.q-input { resize: none; line-height: 1.5; }
 .dir-quiet .qf-drawer-body {
   padding: 18px;
   overflow-y: auto;
+  /* Never sideways: long unbroken content (inline code, URLs) wraps instead
+     of widening the column, and <pre> blocks scroll internally (.md pre). */
+  overflow-x: hidden;
+  min-width: 0;
 }
+.dir-quiet .qf-drawer-body .md { overflow-wrap: anywhere; }
 .dir-quiet .qf-drawer-section { margin-bottom: 24px; }
 .dir-quiet .qf-drawer-pr { display: flex; gap: 8px; align-items: baseline; margin-bottom: 6px; }
 .dir-quiet .qf-drawer-pr-title { font-size: 14px; font-weight: 600; color: var(--fg); }
@@ -997,6 +1032,54 @@ textarea.q-input { resize: none; line-height: 1.5; }
   border-radius: 999px;
   padding: 1px 7px;
   margin-left: 7px;
+}
+
+/* Inline-thread index inside the drawer — each row jumps to the diff. Rows
+   for outdated threads still list (the conversation exists) even when there's
+   nowhere to jump. */
+.dir-quiet .qf-drawer-threads { display: flex; flex-direction: column; gap: 8px; }
+.dir-quiet .qf-thread-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 11px;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.dir-quiet .qf-thread-row:hover {
+  border-color: var(--accent-line);
+  background: var(--surface-hi);
+}
+.dir-quiet .qf-thread-loc {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.dir-quiet .qf-thread-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl; /* keep the filename (tail) visible when the path truncates */
+  text-align: left;
+}
+.dir-quiet .qf-thread-line { flex-shrink: 0; color: var(--faint); }
+.dir-quiet .qf-thread-replies { flex-shrink: 0; margin-left: auto; color: var(--accent); }
+.dir-quiet .qf-thread-snip {
+  font-size: 12.5px;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* PR-level conversation inside the drawer */

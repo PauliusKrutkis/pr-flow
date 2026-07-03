@@ -100,6 +100,16 @@ export const DETAIL = {
       createdAt: "2026-07-02T08:00:00Z",
     },
   ],
+  reviews: [
+    {
+      id: 300,
+      user: "dave",
+      userAvatarUrl: "",
+      state: "APPROVED",
+      body: "LGTM, ship it.",
+      submittedAt: "2026-07-02T09:00:00Z",
+    },
+  ],
   fetchedAt: 1_750_000_000_000,
 };
 
