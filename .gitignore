@@ -27,3 +27,5 @@ apps/design-lab/public/designs/
 *.sln
 *.sw?
 .playwright-mcp/
+test-results/
+playwright-report/
