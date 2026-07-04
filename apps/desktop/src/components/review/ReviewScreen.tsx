@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ArrowLeftRight,
@@ -36,6 +43,12 @@ import { queryClient, queryKeys } from "../../lib/queryClient";
 import { getReviewMemory, updateReviewMemory } from "../../lib/reviewMemory";
 import { usePerfStore } from "../../lib/perf";
 import { findInDiff, type FindMatch } from "../../lib/findInDiff";
+import {
+  occurrenceMatches,
+  occurrenceSpecFromSelection,
+  type OccurrenceMatch,
+  type OccurrenceSpec,
+} from "../../lib/occurrences";
 import { cn } from "../../lib/cn";
 import { Kbd } from "../ui/Kbd";
 import { TicketTitle } from "../ui/TicketTitle";
@@ -43,12 +56,18 @@ import { Avatar } from "../ui/Avatar";
 import { FileSidebar } from "./FileSidebar";
 import { FileSection } from "./FileSection";
 import { isImageFile } from "./ImageDiff";
-import type { CursorSeed, FindCurrent, JumpTarget } from "./DiffViewer";
+import type {
+  CursorSeed,
+  FindCurrent,
+  JumpTarget,
+  MarkSpec,
+} from "./DiffViewer";
 import { RightPanel } from "./RightPanel";
 import { OrientBanner } from "./OrientBanner";
 import { SubmitReviewModal } from "./SubmitReviewModal";
 import { PrSearch } from "./PrSearch";
 import { FindBar } from "./FindBar";
+import { OverviewRuler, type RulerMatch } from "./OverviewRuler";
 
 interface ReviewScreenProps {
   owner: string;
@@ -56,9 +75,14 @@ interface ReviewScreenProps {
   number: number;
 }
 
+/** An occurrence query plus the file section it lights up. */
+type OccState = OccurrenceSpec & { fileIndex: number };
+
 const EMPTY_COMMENTS: ReviewComment[] = [];
 const EMPTY_PENDING: PendingComment[] = [];
 const EMPTY_MATCHES: FindMatch[] = [];
+const EMPTY_OCC: OccurrenceMatch[] = [];
+const EMPTY_RULER: RulerMatch[] = [];
 
 export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const keyValue = prKey({ owner, name: repo, number });
@@ -116,6 +140,27 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const findJumpedRef = useRef(false);
   const findOpenRef = useRef(false);
   findOpenRef.current = findOpen;
+  // Selection-occurrence highlighting: click or select a token in the diff
+  // and its other occurrences in THAT FILE light up (editor convention).
+  // Scoped to one file both for meaning (a click asks "where else here?" —
+  // ⌘F answers the cross-file question) and for speed: repainting one section
+  // keeps a click instant on huge PRs. Cleared by clicks on blank code, Esc,
+  // and file navigation.
+  const [occSpec, setOccSpec] = useState<OccState | null>(null);
+  const occSpecRef = useRef(occSpec);
+  occSpecRef.current = occSpec;
+  // Repainting rows with marks replaces their text nodes, which would kill
+  // the very selection that triggered the marks (and collapse → clear them
+  // right back — a loop). So the selection's position is captured before the
+  // spec is applied and restored over the fresh nodes after the repaint.
+  const occRestoreRef = useRef<CapturedSelection | null>(null);
+  // Occurrence navigation (mark clicks, n/p): the last-jumped position in the
+  // memoized occurrence-match list (-1 = not yet navigated), and the
+  // occurrence the spec came from — the caret/selection position at commit —
+  // so the first n/p step walks from THERE, not from the top of the file.
+  // Both (re)seat in commit().
+  const occNavRef = useRef(-1);
+  const occOriginRef = useRef<{ anchor: string; column: number } | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const sectionEls = useRef(new Map<number, HTMLElement>());
@@ -294,6 +339,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     setActiveIndex(target);
     setCommentIndex(0);
     setJump(null);
+    // Navigating away is moving on — stale occurrence marks would just be
+    // mystery highlights with their selection off-screen.
+    setOccSpec(null);
     requestAnimationFrame(() => {
       sectionEls.current.get(target)?.scrollIntoView({ block: "start" });
     });
@@ -336,7 +384,11 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   }
 
   // From text search: reveal the file AND land on the matched line.
-  function selectLine(fileIndex: number, anchor: string) {
+  function selectLine(
+    fileIndex: number,
+    anchor: string,
+    opts: { keepOccurrences?: boolean } = {},
+  ) {
     const target = files[fileIndex];
     if (!target) return;
     usePerfStore.getState().markFileStart();
@@ -345,9 +397,20 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     );
     setActiveIndex(fileIndex);
     setCommentIndex(0);
+    // A search jump is navigation too — drop stale occurrence marks. Two
+    // exceptions: with the find bar open the occurrence state is frozen (and
+    // suppressed), so leave it for the bar's close to restore; and occurrence
+    // NAVIGATION (clicking a mark, n/p) rides selectLine to move BETWEEN the
+    // marks — clearing the spec would tear the marks down mid-walk, so those
+    // jumps opt out explicitly.
+    if (!findOpenRef.current && !opts.keepOccurrences) setOccSpec(null);
     jumpNonceRef.current += 1;
     setJump({ filename: target.filename, anchor, nonce: jumpNonceRef.current });
   }
+  // Ref'd so the mount-once click handler (occurrence-mark jumps) never calls
+  // a stale closure over `files`.
+  const selectLineRef = useRef(selectLine);
+  selectLineRef.current = selectLine;
 
   // ---- find in diff (mod+f) -------------------------------------------------
 
@@ -364,16 +427,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const findSafeIndex =
     findMatches.length > 0 ? Math.min(findIndex, findMatches.length - 1) : 0;
 
-  // One shared identity for all sections, changing only with the query — so
-  // typing repaints highlights once and FileSection memoization holds
-  // otherwise.
-  const findSpec = useMemo(
-    () =>
-      findOpen && findQuery
-        ? { query: findQuery, caseSensitive: findCase }
-        : null,
-    [findOpen, findQuery, findCase],
-  );
   // The current match as (row anchor, occurrence ordinal). Matches on one line
   // are adjacent in the list, so the ordinal is the run-length behind us.
   const findCurrent = useMemo<(FindCurrent & { fileIndex: number }) | null>(() => {
@@ -409,8 +462,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     // Already open: just refocus and select the input (FindBar effect).
     setFindFocusSeq((s) => s + 1);
   }
-  // Closing clears the highlights (findSpec goes null) and, because the input
-  // unmounts, focus falls back to the document — j/k works immediately.
+  // Closing clears the find highlights (marks fall back to the selection's
+  // occurrences, if any) and, because the input unmounts, focus falls back to
+  // the document — j/k works immediately.
   function closeFind() {
     setFindOpen(false);
   }
@@ -426,6 +480,287 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     const m = findMatches[next];
     selectLine(m.fileIndex, m.anchor);
   }
+
+  // ---- selection → occurrence highlights ------------------------------------
+
+  // Two ways in, VS Code-style: a single CLICK on a token marks its other
+  // occurrences (like resting the caret in a word — the common case), and a
+  // drag/double-click SELECTION marks arbitrary selected text. The
+  // selectionchange listener is debounced (drag-selecting fires a burst) and
+  // only ever SETS marks — clearing belongs to clicks on non-word code, Esc,
+  // and file navigation, so the marks a click just placed aren't torn down by
+  // the selection collapse that same click causes.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    // Skip identity-preserving updates entirely: no repaint on selection
+    // noise, and no pointless selection restore. Capture even when clearing:
+    // un-marking repaints rows too, and a fresh (non-qualifying) drag
+    // selection shouldn't be eaten by that repaint.
+    function commit(next: OccState | null) {
+      const prev = occSpecRef.current;
+      // (Re)seat occurrence navigation: n/p start walking from the occurrence
+      // the spec came from (the caret / selection start). Updated even on
+      // identity-preserving re-clicks — clicking the same token in another
+      // spot moves the walk's starting point there.
+      occOriginRef.current = next ? occurrenceOriginFromDom() : null;
+      occNavRef.current = -1;
+      if (
+        prev &&
+        next &&
+        prev.query === next.query &&
+        prev.wholeWord === next.wholeWord &&
+        prev.fileIndex === next.fileIndex
+      ) {
+        return;
+      }
+      if (prev === next) return;
+      occRestoreRef.current = captureCodeSelection();
+      setOccSpec(next);
+    }
+
+    /** The code element around `el`, or null off the diff / on hunk headers
+     *  (they share .qf-code but are metadata, not code). */
+    function codeAround(el: Element | null | undefined): Element | null {
+      const code = el?.closest(".qf-code") ?? null;
+      return code && !el?.closest(".qf-row-hunk") ? code : null;
+    }
+
+    /** The file-section index a code element belongs to. */
+    function sectionIndexOf(el: Element): number | null {
+      const v = el.closest(".qf-fsec")?.getAttribute("data-file-index");
+      const n = v == null ? NaN : Number(v);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function specFromDomSelection(): OccState | null {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+      const container = sel.getRangeAt(0).commonAncestorContainer;
+      const el =
+        container instanceof Element ? container : container.parentElement;
+      // Only selections inside ONE diff code line qualify: the range's common
+      // ancestor sits inside a .qf-code exactly when the selection doesn't
+      // cross rows, touch gutters, or leave the diff.
+      const code = codeAround(el);
+      if (!code) return null;
+      const fileIndex = sectionIndexOf(code);
+      if (fileIndex == null) return null;
+      const spec = occurrenceSpecFromSelection(sel.toString());
+      return spec && { ...spec, fileIndex };
+    }
+
+    /** The \w+ word around the caret position at (x, y), expanded within its
+     *  text node (hljs keeps identifiers whole, so one node suffices). */
+    function wordAtPoint(x: number, y: number): OccState | null {
+      // caretPositionFromPoint is the standard; Chromium/WebKit still ship
+      // the older caretRangeFromPoint — take whichever exists.
+      const doc = document as Document & {
+        caretPositionFromPoint?: (
+          x: number,
+          y: number,
+        ) => { offsetNode: Node; offset: number } | null;
+        caretRangeFromPoint?: (x: number, y: number) => Range | null;
+      };
+      let node: Node | null = null;
+      let offset = 0;
+      if (doc.caretPositionFromPoint) {
+        const pos = doc.caretPositionFromPoint(x, y);
+        if (pos) {
+          node = pos.offsetNode;
+          offset = pos.offset;
+        }
+      } else if (doc.caretRangeFromPoint) {
+        const r = doc.caretRangeFromPoint(x, y);
+        if (r) {
+          node = r.startContainer;
+          offset = r.startOffset;
+        }
+      }
+      if (!node || node.nodeType !== Node.TEXT_NODE) return null;
+      const parent = node.parentElement;
+      if (!parent) return null;
+      const code = codeAround(parent);
+      if (!code) return null;
+      const fileIndex = sectionIndexOf(code);
+      if (fileIndex == null) return null;
+      // Expand over the WHOLE LINE's text, not the caret's text node: marks
+      // (intraline emphasis, find/occurrence highlights) fragment a line into
+      // many text nodes, and expanding within one fragment would turn a click
+      // on the emphasized `Limit` of `retryLimit` into the sub-word "Limit".
+      const text = code.textContent ?? "";
+      const nodeStart = codeColumnOf(code, node);
+      if (nodeStart == null) return null;
+      const col = nodeStart + offset;
+      let s = col;
+      let e = col;
+      while (s > 0 && /\w/.test(text[s - 1])) s -= 1;
+      while (e < text.length && /\w/.test(text[e])) e += 1;
+      if (s === e) return null;
+      // The word's glyph box must actually contain the click point:
+      // caret-from-point snaps to the NEAREST text position, so a click in
+      // the blank area right of a line would otherwise "find" the line's
+      // last word instead of reading as blank (which clears).
+      const start = codePositionAt(code, s);
+      const end = codePositionAt(code, e);
+      if (!start || !end) return null;
+      const range = document.createRange();
+      range.setStart(start.node, start.offset);
+      range.setEnd(end.node, end.offset);
+      const hit = Array.from(range.getClientRects()).some(
+        (r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom,
+      );
+      if (!hit) return null;
+      const spec = occurrenceSpecFromSelection(text.slice(s, e));
+      return spec && { ...spec, fileIndex };
+    }
+
+    function apply() {
+      timer = null;
+      // While the find bar is open its marks own the diff — freeze occurrence
+      // state instead of updating it, so closing the bar restores the
+      // selection's highlights untouched.
+      if (findOpenRef.current) return;
+      const sel = window.getSelection();
+      // A collapsed selection is silence, not a clear: the click that
+      // collapsed it decides what happens (word → new marks, blank → clear).
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+      commit(specFromDomSelection());
+    }
+
+    function onSelectionChange() {
+      if (timer != null) clearTimeout(timer);
+      timer = setTimeout(apply, 150);
+    }
+
+    function onClick(e: MouseEvent) {
+      if (findOpenRef.current) return;
+      // The later clicks of a double-click ride the selection path instead.
+      if (e.detail > 1) return;
+      const target = e.target instanceof Element ? e.target : null;
+      // Clicks outside code lines (gutters, sidebar, buttons) leave the marks
+      // alone — Esc and navigation are their exits.
+      if (!codeAround(target)) return;
+      // A click that ends a drag-select carries the selection — that path owns it.
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) return;
+      // Clicking an EXISTING occurrence mark navigates instead of
+      // re-committing the same spec: jump to the occurrence after the clicked
+      // one (wrapping). The clicked occurrence is located by row anchor +
+      // code column, which stays correct even when one occurrence renders as
+      // several mark fragments (marks wrap per text node).
+      const mark = target?.closest("mark.qf-occ-mark");
+      if (mark && occSpecRef.current) {
+        const code = codeAround(mark);
+        const anchor = mark.closest("[data-anchor]")?.getAttribute("data-anchor");
+        const textNode = mark.firstChild;
+        if (code && anchor && textNode) {
+          const column = codeColumnOf(code, textNode);
+          const at = column == null ? -1 : occIndexAt(anchor, column);
+          occJumpTo((at >= 0 ? at : occNavRef.current) + 1);
+          return;
+        }
+      }
+      commit(wordAtPoint(e.clientX, e.clientY));
+    }
+
+    document.addEventListener("selectionchange", onSelectionChange);
+    document.addEventListener("click", onClick);
+    return () => {
+      document.removeEventListener("selectionchange", onSelectionChange);
+      document.removeEventListener("click", onClick);
+      if (timer != null) clearTimeout(timer);
+    };
+  }, []);
+
+  // Re-select what the user had selected, over the row's freshly-painted text
+  // nodes, before the browser paints — so the selection appears to simply
+  // survive the marks appearing under it. The restore fires selectionchange
+  // again, but it resolves to the same spec and the identity guard above
+  // makes that a no-op instead of a loop.
+  useLayoutEffect(() => {
+    const captured = occRestoreRef.current;
+    occRestoreRef.current = null;
+    if (captured) restoreCodeSelection(captured);
+  }, [occSpec]);
+
+  // One marks identity, changing only with the query — so typing repaints
+  // highlights once and FileSection memoization holds otherwise. Find wins
+  // while its bar is open (even with an empty query): two mark systems at
+  // once is noise. Occurrence marks come back when the bar closes, if the
+  // selection survived. Find marks go to every section (the bar counts
+  // across files); occurrence marks only to their own file (see occSpec).
+  const marks = useMemo<MarkSpec | null>(() => {
+    if (findOpen) {
+      return findQuery
+        ? { kind: "find", query: findQuery, caseSensitive: findCase }
+        : null;
+    }
+    return occSpec
+      ? { kind: "occurrence", query: occSpec.query, wholeWord: occSpec.wholeWord }
+      : null;
+  }, [findOpen, findQuery, findCase, occSpec]);
+  const marksFor = (i: number): MarkSpec | null =>
+    marks && (marks.kind === "find" || occSpec?.fileIndex === i) ? marks : null;
+
+  // The occurrence spec's matches across its WHOLE file, from the patch text
+  // (off-screen rows count). Feeds the overview ruler's ticks and, in occ
+  // mode, click/n/p navigation between occurrences.
+  const occMatchList = useMemo(
+    () =>
+      occSpec
+        ? occurrenceMatches(files[occSpec.fileIndex] ?? {}, occSpec)
+        : EMPTY_OCC,
+    [occSpec, files],
+  );
+  const occMatchListRef = useRef(occMatchList);
+  occMatchListRef.current = occMatchList;
+
+  // ---- occurrence navigation (clicking a mark, n/p) --------------------------
+  // These read only refs, so the mount-once click handler can call them
+  // without going stale.
+
+  /** Index in the match list of the occurrence covering (anchor, column). */
+  function occIndexAt(anchor: string, column: number): number {
+    return occMatchListRef.current.findIndex(
+      (m) => m.anchor === anchor && m.start <= column && column <= m.end,
+    );
+  }
+
+  /** Jump to match `index` (wrapping), keeping the marks alive. */
+  function occJumpTo(index: number) {
+    const spec = occSpecRef.current;
+    const n = occMatchListRef.current.length;
+    if (!spec || n === 0) return;
+    const next = ((index % n) + n) % n;
+    occNavRef.current = next;
+    selectLineRef.current(spec.fileIndex, occMatchListRef.current[next].anchor, {
+      keepOccurrences: true,
+    });
+  }
+
+  /** n/p: step through the occurrences relative to the last-jumped position
+   *  (or the origin occurrence — the clicked/selected one — before any jump). */
+  function occStep(dir: 1 | -1) {
+    if (occMatchListRef.current.length === 0) return;
+    let at = occNavRef.current;
+    if (at < 0) {
+      const origin = occOriginRef.current;
+      const found = origin ? occIndexAt(origin.anchor, origin.column) : -1;
+      // No resolvable origin: n starts at the first match, p at the last.
+      at = found >= 0 ? found : dir > 0 ? -1 : 0;
+    }
+    occJumpTo(at + dir);
+  }
+
+  // What the overview ruler ticks: mirrors the marks precedence above — find
+  // owns the diff while its bar is open, else the selection's occurrences.
+  const rulerMatches = useMemo<ReadonlyArray<RulerMatch>>(() => {
+    if (findOpen) return findQuery ? findMatches : EMPTY_RULER;
+    if (!occSpec) return EMPTY_RULER;
+    const fileIndex = occSpec.fileIndex;
+    return occMatchList.map((m) => ({ fileIndex, anchor: m.anchor }));
+  }, [findOpen, findQuery, findMatches, occSpec, occMatchList]);
 
   // j/k crossing a file edge: activate the neighbour and seed its cursor.
   const handleCursorExit = useCallback((index: number, dir: 1 | -1) => {
@@ -735,9 +1070,31 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
           },
         ] satisfies Binding[])
       : []),
+    // While a token's occurrences are marked, n/p walk between them with
+    // wrap-around, riding the same selectLine jump machinery as find (and
+    // explicitly NOT clearing the marks — see selectLine). Registered only
+    // while a spec is active; n/p are otherwise unbound in this scope.
+    ...(occSpec
+      ? ([
+          {
+            keys: "n",
+            description: "Next occurrence",
+            hidden: true,
+            run: () => occStep(1),
+          },
+          {
+            keys: "p",
+            description: "Previous occurrence",
+            hidden: true,
+            run: () => occStep(-1),
+          },
+        ] satisfies Binding[])
+      : []),
     {
       // Esc walks out one layer at a time: find bar, then the info drawer,
-      // then the inbox.
+      // then the inbox. Occurrence marks deliberately DON'T consume an Esc —
+      // they're passive furniture (a blank click or clicking elsewhere clears
+      // them), and spending a keypress on them makes "Esc → inbox" feel broken.
       keys: "esc",
       description: "Close panel / back to inbox",
       group: "Navigation",
@@ -1007,7 +1364,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
                 pending={pendingByFile.get(file.filename) ?? EMPTY_PENDING}
                 jump={jump && jump.filename === file.filename ? jump : null}
                 seed={seed && seed.index === i ? seed : null}
-                find={findSpec}
+                marks={marksFor(i)}
                 findCurrent={
                   findCurrent && findCurrent.fileIndex === i ? findCurrent : null
                 }
@@ -1023,6 +1380,19 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
             ))}
             {fileCount === 0 && <div className="qf-empty">No files changed.</div>}
           </div>
+          {/* Overview ruler: match ticks along the scroll range. Anchored to
+              the same relative wrapper as the find bar so it hugs the scroll
+              host's edge without scrolling away. */}
+          <OverviewRuler
+            hostRef={scrollRef}
+            sectionEls={sectionEls}
+            files={files}
+            kind={findOpen ? "find" : "occurrence"}
+            matches={rulerMatches}
+            currentIndex={
+              findOpen && findMatches.length > 0 ? findSafeIndex : null
+            }
+          />
         </div>
       </main>
 
@@ -1057,6 +1427,129 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       />
     </div>
   );
+}
+
+/**
+ * A document selection pinned to a diff code line as character offsets — the
+ * form that survives the line's text nodes being replaced by a marks repaint.
+ * (hljs spans and marks never add or drop characters, so text offsets within
+ * a .qf-code element are stable across repaints.)
+ */
+interface CapturedSelection {
+  code: Element;
+  start: number;
+  end: number;
+}
+
+/**
+ * Text offset of `target`'s start within its .qf-code element. hljs spans and
+ * marks never add or drop characters, so this offset IS the code column.
+ */
+function codeColumnOf(code: Element, target: Node): number | null {
+  let offset = 0;
+  const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text;
+    if (node === target) return offset;
+    offset += node.data.length;
+  }
+  return null;
+}
+
+/** The (text node, local offset) at a line-level code column — the inverse of
+ *  codeColumnOf, for building Ranges across mark-fragmented lines. */
+function codePositionAt(
+  code: Element,
+  column: number,
+): { node: Text; offset: number } | null {
+  let offset = 0;
+  const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text;
+    if (column <= offset + node.data.length) {
+      return { node, offset: column - offset };
+    }
+    offset += node.data.length;
+  }
+  return null;
+}
+
+/**
+ * The occurrence an occ-spec commit came from: the row anchor and code column
+ * of the caret / selection start, when it sits inside a diff code line. Both
+ * commit paths leave the DOM selection there (a click collapses the caret
+ * into the word; a drag/double-click IS the selection), so this is readable
+ * at commit time without threading positions through the spec.
+ */
+function occurrenceOriginFromDom(): { anchor: string; column: number } | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+  const node = range.startContainer;
+  if (node.nodeType !== Node.TEXT_NODE) return null;
+  const el = node.parentElement;
+  const code = el?.closest(".qf-code");
+  const anchor = el?.closest("[data-anchor]")?.getAttribute("data-anchor");
+  if (!code || !anchor) return null;
+  const base = codeColumnOf(code, node);
+  return base == null ? null : { anchor, column: base + range.startOffset };
+}
+
+/** The current selection as offsets within its diff code line, if it has one. */
+function captureCodeSelection(): CapturedSelection | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+  const range = sel.getRangeAt(0);
+  const container = range.commonAncestorContainer;
+  const el = container instanceof Element ? container : container.parentElement;
+  const code = el?.closest(".qf-code");
+  if (!code) return null;
+  let offset = 0;
+  let start = -1;
+  let end = -1;
+  const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text;
+    if (node === range.startContainer) start = offset + range.startOffset;
+    if (node === range.endContainer) end = offset + range.endOffset;
+    offset += node.data.length;
+  }
+  // Boundaries on elements (not text nodes) don't happen for text selections
+  // we care about — bail rather than guess.
+  if (start < 0 || end < 0 || start >= end) return null;
+  return { code, start, end };
+}
+
+/** Re-selects the captured offsets over the element's current text nodes. */
+function restoreCodeSelection({ code, start, end }: CapturedSelection): void {
+  if (!code.isConnected) return;
+  let offset = 0;
+  let startNode: Text | null = null;
+  let startOffset = 0;
+  let endNode: Text | null = null;
+  let endOffset = 0;
+  const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text;
+    const len = node.data.length;
+    if (!startNode && start < offset + len) {
+      startNode = node;
+      startOffset = start - offset;
+    }
+    if (!endNode && end <= offset + len) {
+      endNode = node;
+      endOffset = end - offset;
+    }
+    offset += len;
+  }
+  if (!startNode || !endNode) return;
+  const range = document.createRange();
+  range.setStart(startNode, startOffset);
+  range.setEnd(endNode, endOffset);
+  const sel = window.getSelection();
+  if (!sel) return;
+  sel.removeAllRanges();
+  sel.addRange(range);
 }
 
 /** The inbox cache's view of a PR, for painting the shell before detail loads. */

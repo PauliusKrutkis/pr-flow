@@ -4,7 +4,7 @@
 // match carries the same "SIDE:line" anchor the diff viewer keys its rows by,
 // so navigation can reuse the existing selectLine/jump machinery unchanged.
 
-import { parsePatch } from "./diff";
+import { parsePatch, rowAnchor } from "./diff";
 
 export interface FindMatch {
   fileIndex: number;
@@ -67,14 +67,7 @@ export function findInDiff(
     for (const hunk of parsePatch(patch)) {
       for (const row of hunk.rows) {
         if (row.type === "hunk") continue;
-        const anchor =
-          row.type === "del"
-            ? row.oldLine != null
-              ? `LEFT:${row.oldLine}`
-              : null
-            : row.newLine != null
-              ? `RIGHT:${row.newLine}`
-              : null;
+        const anchor = rowAnchor(row);
         if (anchor == null) continue;
         for (const [start, end] of findMatchRangesInLine(
           row.content,

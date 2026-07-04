@@ -10,10 +10,11 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
 });
 
-test("continuous scroll: both files render with sticky headers", async ({ page }) => {
-  await expect(page.locator(".qf-fsec")).toHaveCount(2);
+test("continuous scroll: all files render with sticky headers", async ({ page }) => {
+  await expect(page.locator(".qf-fsec")).toHaveCount(3);
   await expect(page.locator(".qf-fsec-head").nth(0)).toContainText("fuzzy.ts");
   await expect(page.locator(".qf-fsec-head").nth(1)).toContainText("search.ts");
+  await expect(page.locator(".qf-fsec-head").nth(2)).toContainText("retry.ts");
 });
 
 test("j moves the line cursor; sidebar follows the cursor's file", async ({ page }) => {
