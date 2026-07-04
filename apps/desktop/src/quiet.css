@@ -604,10 +604,19 @@ textarea.q-input { resize: none; line-height: 1.5; }
 
 /* ============ FILE SECTIONS (continuous scroll) ============ */
 /* One section per changed file; the header stays stuck while its diff scrolls. */
+.dir-quiet {
+  /* The file header's height, pinned so the sticky hunk headers (which stack
+     right under it via `top:`) can never drift from the real edge. 39px is
+     the measured natural height (7px padding ×2 + 24px viewed-button + 1px
+     border) — setting it explicitly makes it a contract instead of a
+     coincidence. */
+  --qf-fsec-head-h: 39px;
+}
 .dir-quiet .qf-fsec { border-bottom: 1px solid var(--line); }
 .dir-quiet .qf-fsec-head {
   position: sticky;
   top: 0;
+  height: var(--qf-fsec-head-h);
   z-index: 5;
   display: flex;
   align-items: center;
@@ -728,9 +737,21 @@ textarea.q-input { resize: none; line-height: 1.5; }
   /* the "+" affordance positions against the whole row (see .qf-add-btn) */
   position: relative;
 }
+/* Hunk headers pin under the file header: inside a long hunk the `@@` line
+   (with the enclosing function git puts after the second `@@`) stays visible,
+   so you always know where you are. Pure CSS — each header sticks at the file
+   header's bottom edge until its section ends; the next hunk's header simply
+   paints over it (same top, later sibling), which reads as a swap. The
+   background is an opaque composite (surface over bg) because the header
+   floats over code rows — a transparent tint would let them bleed through.
+   z-index sits above the rows' own stacking contexts but below the file
+   header (5). Still the same <button>, so hunk-collapse clicks keep working. */
 .dir-quiet .qf-row-hunk {
+  position: sticky;
+  top: var(--qf-fsec-head-h);
+  z-index: 3;
   width: 100%;
-  background: var(--surface);
+  background: linear-gradient(var(--surface), var(--surface)) var(--bg);
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   padding-top: 4px;
@@ -739,7 +760,9 @@ textarea.q-input { resize: none; line-height: 1.5; }
   cursor: pointer;
   text-align: left;
 }
-.dir-quiet .qf-row-hunk:hover { background: var(--surface-hi); }
+.dir-quiet .qf-row-hunk:hover {
+  background: linear-gradient(var(--surface-hi), var(--surface-hi)) var(--bg);
+}
 .dir-quiet .qf-row-hunk .qf-code { color: var(--accent); opacity: 0.85; font-size: 11px; }
 .dir-quiet .qf-row-add { background: var(--add-bg); }
 .dir-quiet .qf-row-del { background: var(--del-bg); }

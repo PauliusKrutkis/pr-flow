@@ -392,9 +392,15 @@ export function DiffViewer({
       containerRef.current
         ?.closest(".qf-fsec")
         ?.querySelector<HTMLElement>(".qf-fsec-head")?.offsetHeight ?? 40;
+    // Hunk headers pin under the file header (quiet.css) — moving the cursor
+    // upward must clear that second sticky band too, or the row lands hidden
+    // behind the pinned `@@` line.
+    const hunkH =
+      containerRef.current?.querySelector<HTMLElement>(".qf-row-hunk")
+        ?.offsetHeight ?? 0;
     const hostRect = host.getBoundingClientRect();
     const rowRect = el.getBoundingClientRect();
-    const topEdge = hostRect.top + headerH + 4;
+    const topEdge = hostRect.top + headerH + hunkH + 4;
     const bottomEdge = hostRect.bottom - 4;
     if (rowRect.top < topEdge) {
       host.scrollBy({ top: rowRect.top - topEdge });
