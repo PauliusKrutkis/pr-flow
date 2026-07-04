@@ -454,37 +454,21 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   // ---- selection → occurrence highlights ------------------------------------
 
-  // Watch the document selection (debounced — drag-selecting fires a burst of
-  // selectionchange events) and turn a qualifying selection inside a single
-  // diff code line into an occurrence query. Double-click word selection
-  // arrives through this same event, so it needs no extra handling.
+  // Two ways in, VS Code-style: a single CLICK on a token marks its other
+  // occurrences (like resting the caret in a word — the common case), and a
+  // drag/double-click SELECTION marks arbitrary selected text. The
+  // selectionchange listener is debounced (drag-selecting fires a burst) and
+  // only ever SETS marks — clearing belongs to clicks on non-word code, Esc,
+  // and file navigation, so the marks a click just placed aren't torn down by
+  // the selection collapse that same click causes.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
 
-    function specFromDomSelection(): OccurrenceSpec | null {
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
-      const container = sel.getRangeAt(0).commonAncestorContainer;
-      const el =
-        container instanceof Element ? container : container.parentElement;
-      // Only selections inside ONE diff code line qualify: the range's common
-      // ancestor sits inside a .qf-code exactly when the selection doesn't
-      // cross rows, touch gutters, or leave the diff. Hunk headers share the
-      // .qf-code class but are metadata, not code — skip them.
-      const code = el?.closest(".qf-code");
-      if (!code || el?.closest(".qf-row-hunk")) return null;
-      return occurrenceSpecFromSelection(sel.toString());
-    }
-
-    function apply() {
-      timer = null;
-      // While the find bar is open its marks own the diff — freeze occurrence
-      // state instead of updating it, so closing the bar restores the
-      // selection's highlights untouched.
-      if (findOpenRef.current) return;
-      const next = specFromDomSelection();
-      // Skip identity-preserving updates entirely: no repaint on selection
-      // noise, and no pointless selection restore.
+    // Skip identity-preserving updates entirely: no repaint on selection
+    // noise, and no pointless selection restore. Capture even when clearing:
+    // un-marking repaints rows too, and a fresh (non-qualifying) drag
+    // selection shouldn't be eaten by that repaint.
+    function commit(next: OccurrenceSpec | null) {
       const prev = occSpecRef.current;
       if (
         prev &&
@@ -495,10 +479,78 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         return;
       }
       if (prev === next) return;
-      // Capture even when clearing: un-marking repaints rows too, and a fresh
-      // (non-qualifying) drag selection shouldn't be eaten by that repaint.
       occRestoreRef.current = captureCodeSelection();
       setOccSpec(next);
+    }
+
+    /** The code element around `el`, or null off the diff / on hunk headers
+     *  (they share .qf-code but are metadata, not code). */
+    function codeAround(el: Element | null | undefined): Element | null {
+      const code = el?.closest(".qf-code") ?? null;
+      return code && !el?.closest(".qf-row-hunk") ? code : null;
+    }
+
+    function specFromDomSelection(): OccurrenceSpec | null {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+      const container = sel.getRangeAt(0).commonAncestorContainer;
+      const el =
+        container instanceof Element ? container : container.parentElement;
+      // Only selections inside ONE diff code line qualify: the range's common
+      // ancestor sits inside a .qf-code exactly when the selection doesn't
+      // cross rows, touch gutters, or leave the diff.
+      if (!codeAround(el)) return null;
+      return occurrenceSpecFromSelection(sel.toString());
+    }
+
+    /** The \w+ word around the caret position at (x, y), expanded within its
+     *  text node (hljs keeps identifiers whole, so one node suffices). */
+    function wordAtPoint(x: number, y: number): OccurrenceSpec | null {
+      // caretPositionFromPoint is the standard; Chromium/WebKit still ship
+      // the older caretRangeFromPoint — take whichever exists.
+      const doc = document as Document & {
+        caretPositionFromPoint?: (
+          x: number,
+          y: number,
+        ) => { offsetNode: Node; offset: number } | null;
+        caretRangeFromPoint?: (x: number, y: number) => Range | null;
+      };
+      let node: Node | null = null;
+      let offset = 0;
+      if (doc.caretPositionFromPoint) {
+        const pos = doc.caretPositionFromPoint(x, y);
+        if (pos) {
+          node = pos.offsetNode;
+          offset = pos.offset;
+        }
+      } else if (doc.caretRangeFromPoint) {
+        const r = doc.caretRangeFromPoint(x, y);
+        if (r) {
+          node = r.startContainer;
+          offset = r.startOffset;
+        }
+      }
+      if (!node || node.nodeType !== Node.TEXT_NODE) return null;
+      const text = node.textContent ?? "";
+      let s = offset;
+      let e = offset;
+      while (s > 0 && /\w/.test(text[s - 1])) s -= 1;
+      while (e < text.length && /\w/.test(text[e])) e += 1;
+      if (s === e) return null;
+      return occurrenceSpecFromSelection(text.slice(s, e));
+    }
+
+    function apply() {
+      timer = null;
+      // While the find bar is open its marks own the diff — freeze occurrence
+      // state instead of updating it, so closing the bar restores the
+      // selection's highlights untouched.
+      if (findOpenRef.current) return;
+      const sel = window.getSelection();
+      // A collapsed selection is silence, not a clear: the click that
+      // collapsed it decides what happens (word → new marks, blank → clear).
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+      commit(specFromDomSelection());
     }
 
     function onSelectionChange() {
@@ -506,9 +558,25 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       timer = setTimeout(apply, 150);
     }
 
+    function onClick(e: MouseEvent) {
+      if (findOpenRef.current) return;
+      // The later clicks of a double-click ride the selection path instead.
+      if (e.detail > 1) return;
+      const target = e.target instanceof Element ? e.target : null;
+      // Clicks outside code lines (gutters, sidebar, buttons) leave the marks
+      // alone — Esc and navigation are their exits.
+      if (!codeAround(target)) return;
+      // A click that ends a drag-select carries the selection — that path owns it.
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) return;
+      commit(wordAtPoint(e.clientX, e.clientY));
+    }
+
     document.addEventListener("selectionchange", onSelectionChange);
+    document.addEventListener("click", onClick);
     return () => {
       document.removeEventListener("selectionchange", onSelectionChange);
+      document.removeEventListener("click", onClick);
       if (timer != null) clearTimeout(timer);
     };
   }, []);

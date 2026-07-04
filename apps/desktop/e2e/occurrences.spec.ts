@@ -1,10 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 import { setupApp } from "./bridge";
 
-// Selection-occurrence highlighting: selecting a token in the diff quietly
-// marks its other occurrences (editor convention). The positive path drives a
-// real double-click — the feature listens to selectionchange, and double-click
-// word selection must arrive through that same path; negative cases build the
+// Selection-occurrence highlighting: click a token (or select text) in the
+// diff and its other occurrences light up (editor convention, VS Code-style).
+// Single click goes through a caret-from-point word lookup; double-click and
+// drags arrive as selections via selectionchange. Negative cases build the
 // selection programmatically (Playwright can't drag-select "two spaces").
 
 test.beforeEach(async ({ page }) => {
@@ -86,10 +86,13 @@ async function selectInCode(page: Page, section: number, text: string) {
 
 const occMarks = (page: Page) => page.locator("mark.qf-occ-mark");
 
-test("double-clicking a token marks every whole-word occurrence across files", async ({ page }) => {
+test("single-clicking a token marks every whole-word occurrence across files", async ({ page }) => {
   // "return" sits on three rendered rows: the -/+ pair in fuzzy.ts and one
   // line in search.ts — cross-file, and the deleted (LEFT) row counts too.
-  await dblclickToken(page, 0, "return");
+  const { x, y } = await tokenCenter(page, 0, "return");
+  await page.mouse.move(x, y);
+  await page.waitForTimeout(100); // settle the hover-driven row re-render
+  await page.mouse.click(x, y);
   await expect(occMarks(page)).toHaveCount(3);
   expect(await occMarks(page).allTextContents()).toEqual([
     "return",
@@ -97,10 +100,46 @@ test("double-clicking a token marks every whole-word occurrence across files", a
     "return",
   ]);
 
-  // A plain click collapses the selection — the marks follow it out.
-  const { x, y } = await tokenCenter(page, 0, "alpha");
-  await page.mouse.click(x, y);
+  // Clicking another token retargets the marks to it.
+  const alpha = await tokenCenter(page, 0, "alpha");
+  await page.mouse.click(alpha.x, alpha.y);
+  await expect(occMarks(page).first()).toHaveText("alpha");
+
+  // Clicking blank code (not a word) clears them.
+  const row = await page
+    .locator(".qf-fsec")
+    .first()
+    .locator(".qf-row:not(.qf-row-hunk) .qf-code")
+    .first()
+    .boundingBox();
+  await page.mouse.click(row!.x + row!.width - 8, row!.y + row!.height / 2);
   await expect(occMarks(page)).toHaveCount(0);
+});
+
+test("double-clicking a token marks its occurrences", async ({ page }) => {
+  await dblclickToken(page, 0, "return");
+  await expect(occMarks(page)).toHaveCount(3);
+});
+
+test("marks are paint-only — the line's geometry does not move", async ({ page }) => {
+  const codeLine = page
+    .locator(".qf-fsec")
+    .nth(1)
+    .locator(".qf-row:not(.qf-row-hunk) .qf-code")
+    .first();
+  const before = await codeLine.boundingBox();
+
+  await dblclickToken(page, 1, "gamma");
+  await expect(occMarks(page)).toHaveCount(2);
+
+  const after = await codeLine.boundingBox();
+  expect(after).toEqual(before);
+  // The mark itself must not introduce box spacing.
+  const style = await occMarks(page).first().evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { padding: s.padding, margin: s.margin, border: s.borderWidth };
+  });
+  expect(style).toEqual({ padding: "0px", margin: "0px", border: "0px" });
 });
 
 test("whitespace or single-character selections mark nothing", async ({ page }) => {

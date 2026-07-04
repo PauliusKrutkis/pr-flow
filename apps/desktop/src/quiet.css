@@ -908,16 +908,15 @@ textarea.q-input { resize: none; line-height: 1.5; }
   box-shadow: none;
 }
 
-/* Selection-occurrence marks (select a token → its other occurrences light
-   up). Deliberately quieter than the find marks: no fill, just a hairline
-   ring and underline tint — the native selection already paints the one you
-   grabbed, these only point at its siblings without shouting over the diff. */
+/* Selection-occurrence marks (click/select a token → its other occurrences
+   light up). VS Code's word-highlight shape: a solid neutral fill, no ring or
+   underline — a ring reads as a box AROUND the token (as if space were added)
+   and was easy to miss. Neutral (not accent) keeps it distinct from the find
+   marks, and paint-only properties guarantee zero layout shift in the mono
+   grid. */
 .dir-quiet mark.qf-occ-mark {
   color: inherit;
-  background: transparent;
-  box-shadow:
-    inset 0 0 0 1px var(--line-2),
-    inset 0 -1.5px 0 var(--accent-line);
+  background: color-mix(in srgb, var(--fg) 15%, transparent);
   border-radius: 2px;
   padding: 0;
   margin: 0;
