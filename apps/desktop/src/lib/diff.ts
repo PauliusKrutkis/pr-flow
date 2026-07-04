@@ -69,6 +69,47 @@ export function parsePatch(patch: string | null | undefined): DiffHunk[] {
   return hunks;
 }
 
+/** The DiffViewer's row anchor ("LEFT:12" / "RIGHT:34"), or null for rows
+ *  that can't be anchored. Deletions anchor to their old-side line, everything
+ *  else to the new side — the same convention findInDiff and DiffViewer use. */
+export function rowAnchor(row: DiffRow): string | null {
+  if (row.type === "hunk") return null;
+  if (row.type === "del") {
+    return row.oldLine != null ? `LEFT:${row.oldLine}` : null;
+  }
+  return row.newLine != null ? `RIGHT:${row.newLine}` : null;
+}
+
+/**
+ * Each row anchor's fractional vertical position (0..1, at the row's center)
+ * within its patch, in render order. For the overview ruler: unmounted
+ * (windowed) sections have no row pixel positions to measure, so a row's
+ * share of the patch's total rows stands in for its share of the section's
+ * height. Hunk headers count in the denominator but comment threads and
+ * collapsed hunks don't exist here — the result is an approximation, which is
+ * exactly good enough to place a 2px tick.
+ */
+export function anchorFractions(
+  patch: string | null | undefined,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  const hunks = parsePatch(patch);
+  let total = 0;
+  for (const h of hunks) total += h.rows.length;
+  if (total === 0) return out;
+  let i = 0;
+  for (const h of hunks) {
+    for (const row of h.rows) {
+      const anchor = rowAnchor(row);
+      if (anchor != null && !out.has(anchor)) {
+        out.set(anchor, (i + 0.5) / total);
+      }
+      i += 1;
+    }
+  }
+  return out;
+}
+
 /** Total number of changed (added + removed) rows across a patch. */
 export function changedRowCount(patch: string | null | undefined): number {
   const hunks = parsePatch(patch);

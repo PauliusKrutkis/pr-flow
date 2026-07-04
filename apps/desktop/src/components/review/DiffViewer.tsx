@@ -3,18 +3,22 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
 } from "react";
 import { ArrowDown, ArrowUp, MessageSquarePlus } from "lucide-react";
 import type { ChangedFile, PendingComment, ReviewComment } from "../../types";
 import { parsePatch, type DiffRow } from "../../lib/diff";
 import {
-  highlightLine,
   highlightLineWithFind,
+  highlightLineWithIntra,
   highlightLineWithOccurrences,
 } from "../../lib/highlight";
+import { intralinePairs, type IntralineRanges } from "../../lib/intraline";
+import { detectIndentUnit, guideLevelsForHunk } from "../../lib/indent";
 import { cn } from "../../lib/cn";
 import { useHotkeys } from "../../keyboard";
 import { useAppStore } from "../../store/appStore";
@@ -174,6 +178,8 @@ const DiffLine = memo(function DiffLine({
   isFlash,
   hasAnchored,
   canComment,
+  intra,
+  guideLvl,
   markKind,
   markQuery,
   markFlag,
@@ -188,6 +194,14 @@ const DiffLine = memo(function DiffLine({
   isFlash: boolean;
   hasAnchored: boolean;
   canComment: boolean;
+  /**
+   * Intraline word-diff emphasis ranges for this row. Identity is stable —
+   * the arrays live in a Map memoized alongside the parsed rows — so this
+   * prop never breaks the memo on unrelated re-renders.
+   */
+  intra: IntralineRanges | null;
+  /** Indent-guide levels for this row (blank rows arrive bridged), or null. */
+  guideLvl: number | null;
   /** The MarkSpec, as primitives so memoization only breaks when they change. */
   markKind: "find" | "occurrence" | null;
   markQuery: string | null;
@@ -231,15 +245,25 @@ const DiffLine = memo(function DiffLine({
       </span>
       <span className="qf-gutter qf-gutter-new">{row.newLine ?? ""}</span>
       <span className="qf-marker">{marker}</span>
-      <code className="qf-code">
+      <code
+        className="qf-code"
+        // Indent guides paint as this element's ::before, sized by the line's
+        // levels — they never enter the text flow (see .qf-code::before).
+        style={
+          guideLvl != null
+            ? ({ "--qf-lvl": guideLvl } as CSSProperties)
+            : undefined
+        }
+      >
         <span
           className="hljs"
           dangerouslySetInnerHTML={{
             // Marks are layered onto the SAME highlighted HTML (by wrapping
-            // text nodes), so syntax colours stay intact under them.
+            // text nodes), so syntax colours stay intact under them. Intraline
+            // emphasis goes on first; find/occurrence marks nest inside it.
             __html:
               markQuery == null
-                ? highlightLine(row.content, filename)
+                ? highlightLineWithIntra(row.content, filename, intra)
                 : markKind === "find"
                   ? highlightLineWithFind(
                       row.content,
@@ -247,12 +271,14 @@ const DiffLine = memo(function DiffLine({
                       markQuery,
                       markFlag,
                       findOrdinal,
+                      intra,
                     )
                   : highlightLineWithOccurrences(
                       row.content,
                       filename,
                       markQuery,
                       markFlag,
+                      intra,
                     ),
           }}
         />
@@ -280,6 +306,25 @@ export function DiffViewer({
   findCurrent,
 }: DiffViewerProps) {
   const hunks = useMemo(() => parsePatch(file.patch), [file.patch]);
+  // Word-level diff emphasis, computed once per patch (same memo level as the
+  // parsed rows — never per render) and looked up per row by object identity.
+  const intraByRow = useMemo(() => intralinePairs(hunks), [hunks]);
+  // The file's indent unit — one detection per patch; rows and the CSS
+  // gradient period (--qf-indent below) share the same object.
+  const indentUnit = useMemo(() => detectIndentUnit(hunks), [hunks]);
+  // Guide levels per row, blanks bridged per hunk so the columns run straight
+  // (see guideLevelsForHunk). Keyed by row identity, like the intraline map.
+  const guideByRow = useMemo(() => {
+    const m = new Map<DiffRow, number>();
+    for (const hunk of hunks) {
+      const levels = guideLevelsForHunk(hunk.rows, indentUnit);
+      hunk.rows.forEach((row, i) => {
+        const lvl = levels[i];
+        if (lvl != null) m.set(row, lvl);
+      });
+    }
+    return m;
+  }, [hunks, indentUnit]);
   const threadsByAnchor = useMemo(() => buildThreads(comments), [comments]);
   // Pending comments render with the signed-in identity, like the lab design.
   const activeAccount = useAppStore((s) =>
@@ -309,6 +354,26 @@ export function DiffViewer({
   const [flashAnchor, setFlashAnchor] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  // The REAL width of one mono column, measured from rendered spaces. The
+  // indent-guide gradient can't use `ch`: that unit is the "0" glyph's
+  // advance, which some fonts (JetBrains Mono) render a fraction wider than
+  // the space advance — a per-level drift that visibly walks the guides off
+  // the text columns by three or four levels deep. Null until measured
+  // (guides fall back to ch for the first paint).
+  const [pxPerCol, setPxPerCol] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const host = containerRef.current;
+    if (!host) return;
+    const probe = document.createElement("span");
+    probe.className = "qf-code";
+    probe.style.cssText =
+      "position:absolute;visibility:hidden;white-space:pre;pointer-events:none";
+    probe.textContent = " ".repeat(100);
+    host.appendChild(probe);
+    const w = probe.getBoundingClientRect().width / 100;
+    probe.remove();
+    if (w > 0) setPxPerCol(w);
+  }, []);
   // Only auto-scroll the cursor into view for explicit user moves — not for the
   // initial seed / collapse-driven re-placement, which would otherwise yank a
   // freshly-restored scroll position (resume) back to the top of the file.
@@ -378,9 +443,15 @@ export function DiffViewer({
       containerRef.current
         ?.closest(".qf-fsec")
         ?.querySelector<HTMLElement>(".qf-fsec-head")?.offsetHeight ?? 40;
+    // Hunk headers pin under the file header (quiet.css) — moving the cursor
+    // upward must clear that second sticky band too, or the row lands hidden
+    // behind the pinned `@@` line.
+    const hunkH =
+      containerRef.current?.querySelector<HTMLElement>(".qf-row-hunk")
+        ?.offsetHeight ?? 0;
     const hostRect = host.getBoundingClientRect();
     const rowRect = el.getBoundingClientRect();
-    const topEdge = hostRect.top + headerH + 4;
+    const topEdge = hostRect.top + headerH + hunkH + 4;
     const bottomEdge = hostRect.bottom - 4;
     if (rowRect.top < topEdge) {
       host.scrollBy({ top: rowRect.top - topEdge });
@@ -625,6 +696,16 @@ export function DiffViewer({
       ref={containerRef}
       className="qf-diff"
       data-mode={inputMode}
+      // The indent-guide gradient period, per file: guides land on every
+      // indent level of THIS file's unit (see mark.qf-indent in quiet.css).
+      style={
+        {
+          "--qf-indent":
+            pxPerCol != null
+              ? `${(indentUnit.ch * pxPerCol).toFixed(3)}px`
+              : `${indentUnit.ch}ch`,
+        } as CSSProperties
+      }
       onMouseMove={(e) => {
         if (!isRealPointer(e.clientX, e.clientY)) return;
         if (inputMode !== "mouse") setInputMode("mouse");
@@ -668,6 +749,8 @@ export function DiffViewer({
               isFlash={key != null && key === flashAnchor}
               hasAnchored={!!hasAnchored}
               canComment={target != null}
+              intra={intraByRow.get(row) ?? null}
+              guideLvl={guideByRow.get(row) ?? null}
               markKind={marks ? marks.kind : null}
               markQuery={marks ? marks.query : null}
               markFlag={

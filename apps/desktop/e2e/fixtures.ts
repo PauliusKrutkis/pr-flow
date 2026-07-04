@@ -79,6 +79,68 @@ export const DETAIL = {
 +export default search`,
       sha: "f2",
     },
+    {
+      filename: "src/lib/retry.ts",
+      status: "modified",
+      additions: 36,
+      deletions: 1,
+      changes: 37,
+      // Hunk 1 is a clean one-token rename: the −/+ pair passes the intraline
+      // noise guard, so exactly "Count"/"Limit" carry word-diff emphasis.
+      // (fuzzy.ts above pairs "return 1;" with a comment — that pair must
+      // FAIL the guard and render without emphasis.) Hunk 2 is a long pure-add
+      // run (no del run → no intraline pairs) that exercises the sticky hunk
+      // header, and its `@@` line carries the enclosing function the way git
+      // emits it. Keep this file free of the tokens other tests count across
+      // files: return/gamma/beta/alpha/search.
+      patch: `@@ -1,4 +1,4 @@
+ export function withRetry(fn: () => Promise<void>) {
+-  const retryCount = 3;
++  const retryLimit = 3;
+   let delay = 100;
+ }
+@@ -10,4 +10,39 @@ export function retryLoop(base: number) {
+   let delay = base;
+   let attempt = 0;
++  const history: number[] = [];
++  const jitter = () => Math.random() * 10;
++  while (attempt < 8) {
++    attempt += 1;
++    delay = delay * 2 + jitter();
++    history.push(delay);
++    if (delay > 5_000) {
++      delay = 5_000;
++    }
++    if (attempt === 3) {
++      log("still trying", {
++        attempt,
++        delay,
++      });
++    }
++    if (attempt === 5) {
++      log("backing off", {
++        attempt,
++        delay,
++      });
++    }
++  }
++  const total = history.reduce((sum, d) => sum + d, 0);
++  const longest = history.reduce((max, d) => (d > max ? d : max), 0);
++  const shortest = history.reduce((min, d) => (d < min ? d : min), total);
++  log("settled", {
++    attempts: attempt,
++    total,
++    longest,
++    shortest,
++  });
++  if (total > 20_000) {
++    warnSlow(total);
++  }
++  history.length = 0;
+   done(delay);
+ }`,
+      sha: "f3",
+    },
   ],
   comments: [
     {

@@ -784,12 +784,47 @@ textarea.q-input { resize: none; line-height: 1.5; }
 /* Ligatures stay OFF in diff code (VS Code's default too): a reviewer should
    see the literal characters, and fonts with contextual ligatures (JetBrains
    Mono, Fira Code) re-shape when a <mark> boundary splits a sequence — the
-   glyphs around a highlight would visibly shift as marks come and go. */
+   glyphs around a highlight would visibly shift as marks come and go.
+   geometricPrecision serves the same contract in WebKit, which otherwise
+   rounds text-run advances PER INLINE BOX: splitting a line's text nodes
+   with marks would nudge every glyph after them by accumulated subpixels. */
 .dir-quiet .qf-code {
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--fg);
   font-variant-ligatures: none;
+  text-rendering: geometricPrecision;
+  /* Pinned (it's also the browser default) because the indent guides assume
+     one tab = one 8ch stop — see lib/indent.ts. */
+  tab-size: 8;
+  /* anchors the indent-guide ::before below */
+  position: relative;
+}
+
+/* Indent guides: a hairline at each indent level, painted as a ::before
+   layer sized by the line's levels (--qf-lvl, set by DiffLine from bridged
+   per-hunk levels — blank lines inherit their neighbours', so a column runs
+   STRAIGHT through a block instead of reading as a dashed fence; --qf-indent
+   is the file's unit, set per diff). Painted OUTSIDE the text flow — no
+   wrapper elements in the code, so guides can't fragment text nodes or
+   interact with selection, clicks, or the mark layers. The layer overshoots
+   the row's 1.5px vertical padding so consecutive rows' columns touch. At
+   8% fg they're furniture: visible when you look for them, silent when you
+   don't. The 1px inset keeps the innermost boundary (where the text starts)
+   unpainted. */
+.dir-quiet .qf-code::before {
+  content: "";
+  position: absolute;
+  top: -1.5px;
+  bottom: -1.5px;
+  left: 0;
+  width: calc(var(--qf-lvl, 0) * var(--qf-indent, 2ch) - 1px);
+  background: repeating-linear-gradient(
+    to right,
+    color-mix(in srgb, var(--fg) 8%, transparent) 0 1px,
+    transparent 1px var(--qf-indent, 2ch)
+  );
+  pointer-events: none;
 }
 
 /* inline "add comment" affordance in the gutter — absolutely positioned against
@@ -926,11 +961,66 @@ textarea.q-input { resize: none; line-height: 1.5; }
 .dir-quiet mark.qf-occ-mark {
   color: inherit;
   /* 26% ≈ VS Code's dark-theme word-highlight weight — 15% disappeared into
-     the add/del row tints. */
+     the add/del row tints. Square corners on purpose: rounding makes the
+     fill read as a padded chip around the word ("something added space"). */
   background: color-mix(in srgb, var(--fg) 26%, transparent);
+  padding: 0;
+  margin: 0;
+}
+
+/* Intraline word-diff emphasis (GitHub's "darker span inside the tinted row"):
+   on a −/+ pair only the tokens that differ get a stronger add/del fill, so
+   the eye lands on WHAT changed instead of re-reading both lines. Paint-only
+   (no padding/border) — the mono grid must not shift as diffs render. Scoped
+   to add/del rows: a stray mark anywhere else stays invisible by design. */
+.dir-quiet mark.qf-intra-mark {
+  color: inherit;
+  background: transparent;
   border-radius: 2px;
   padding: 0;
   margin: 0;
+}
+.dir-quiet .qf-row-del mark.qf-intra-mark {
+  background: color-mix(in srgb, var(--del) 30%, transparent);
+}
+.dir-quiet .qf-row-add mark.qf-intra-mark {
+  background: color-mix(in srgb, var(--add) 30%, transparent);
+}
+
+/* ============ OVERVIEW RULER ============ */
+/* A slim column of ticks along the diff's right edge marking where the find /
+   occurrence matches live in the whole scroll range. It sits just LEFT of the
+   9px overlay scrollbar (which owns the very edge) and never intercepts the
+   pointer — it's a read-only instrument, the scrollbar stays the control. */
+.dir-quiet .qf-ruler {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  right: 9px;
+  width: 6px;
+  z-index: 20; /* over the sticky headers (5), under the find bar (30) */
+  pointer-events: none;
+}
+.dir-quiet .qf-ruler-tick {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  height: 2px;
+  border-radius: 1px;
+}
+.dir-quiet .qf-ruler-find {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+/* the current find match — slightly wider and full-strength */
+.dir-quiet .qf-ruler-find.qf-ruler-current {
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--accent);
+}
+/* occurrence ticks are neutral, like their marks — quieter than find */
+.dir-quiet .qf-ruler-occ {
+  background: color-mix(in srgb, var(--fg) 40%, transparent);
 }
 
 /* ============ COMMENT THREADS ============ */
