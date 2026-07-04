@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { ACCOUNT, DETAIL, INBOX } from "./fixtures";
+import type { BucketFixture, InboxFixture } from "./fixtures";
 
 // The mocked Tauri bridge. @tauri-apps/api routes every call through
 // `window.__TAURI_INTERNALS__.invoke`, so defining it before the app loads
@@ -22,16 +23,28 @@ export interface AppOptions {
   detailByCall?: unknown[];
   /** Inbox payload per list_inbox call (the last entry repeats). */
   inboxByCall?: unknown[];
+  /** Override the four inbox buckets. */
+  inbox?: InboxFixture;
+  /** Override the watched-repos ("Watching") bucket. */
+  subscribed?: BucketFixture;
+  /** Repositories pre-listed in the watch dialog. */
+  watchedRepos?: string[];
+  /** Results the watch dialog's provider search returns (after ~200ms, so
+   *  the in-flight state is observable). */
+  repoHits?: { fullName: string; description: string }[];
 }
 
 export async function setupApp(page: Page, opts: AppOptions = {}) {
   const config = {
     hasToken: opts.hasToken ?? true,
-    inbox: INBOX,
+    inbox: opts.inbox ?? INBOX,
+    subscribed: opts.subscribed ?? { count: 0, prs: [] },
     detail: DETAIL,
     detailByLoad: opts.detailByLoad ?? null,
     detailByCall: opts.detailByCall ?? null,
     inboxByCall: opts.inboxByCall ?? null,
+    watchedRepos: opts.watchedRepos ?? [],
+    repoHits: opts.repoHits ?? [],
     account: ACCOUNT,
   };
 
@@ -61,9 +74,11 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
       get_cached_inbox: () => null,
       list_inbox: () => seq(cfg.inboxByCall, inboxCalls++, cfg.inbox),
       get_cached_subscribed: () => null,
-      list_subscribed: () => ({ count: 0, prs: [] }),
-      get_watched_repos: () => [],
+      list_subscribed: () => cfg.subscribed,
+      get_watched_repos: () => cfg.watchedRepos,
       set_watched_repos: () => null,
+      search_repos: () =>
+        new Promise((resolve) => setTimeout(() => resolve(cfg.repoHits), 200)),
       // Viewed marks persist in localStorage so they survive a reload, like
       // the real Rust JSON file survives an app restart.
       get_viewed_map: () =>

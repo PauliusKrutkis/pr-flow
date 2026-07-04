@@ -168,6 +168,13 @@ interface AppState {
   inboxTab: InboxTabKey;
   /** prKey of the highlighted PR, so the cursor follows the PR (not an index). */
   inboxSelectedKey: string | null;
+  /**
+   * Whether the inbox reading pane is actually on screen. Keys the toast-host
+   * offset (`data-pane` on the app root): alerts dodge the pane only when it
+   * exists — an empty inbox keeps them in the corner.
+   */
+  inboxPaneVisible: boolean;
+  setInboxPaneVisible: (visible: boolean) => void;
 
   // navigation
   setRoute: (route: Route) => void;
@@ -270,6 +277,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   lastSeen: loadLastSeen(),
   inboxTab: "reviewRequested",
   inboxSelectedKey: null,
+  inboxPaneVisible: false,
+  setInboxPaneVisible: (inboxPaneVisible) => set({ inboxPaneVisible }),
 
   setRoute: (route) => {
     saveLastRoute(route);

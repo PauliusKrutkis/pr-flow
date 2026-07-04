@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Clock, CornerDownLeft } from "lucide-react";
-import type { PullRequest } from "../../types";
+import { prKey, type PullRequest } from "../../types";
 import { formatRelativeTime } from "../../lib/time";
 import { Avatar } from "../ui/Avatar";
 import { Kbd } from "../ui/Kbd";
@@ -126,7 +126,7 @@ export function SearchPane({
           )}
           {results.map(({ pr, hl }, i) => (
             <div
-              key={pr.id}
+              key={prKey(pr)}
               role="option"
               aria-selected={i === sel}
               data-active={i === sel}

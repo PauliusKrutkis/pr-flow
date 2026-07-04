@@ -1,16 +1,19 @@
 import { useMemo } from "react";
 import { useInbox } from "../hooks/useInbox";
+import { useSubscribed } from "../hooks/useSubscribed";
 import { useAppStore } from "../store/appStore";
 import { prKey, type PullRequest } from "../types";
 import { SearchPane } from "./inbox/SearchPane";
 
 /**
  * The global "/" PR search — jump to any pull request from any screen. Reads the
- * cached inbox (deduped across tabs) and opens the chosen PR. Mounted once at the
- * app root so it works on the inbox and inside a review alike.
+ * cached inbox plus the watched-repos bucket (deduped across tabs) and opens the
+ * chosen PR. Mounted once at the app root so it works on the inbox and inside a
+ * review alike.
  */
 export function GlobalSearch() {
   const { data } = useInbox();
+  const { data: subscribed } = useSubscribed();
   const searchOpen = useAppStore((s) => s.searchOpen);
   const setSearchOpen = useAppStore((s) => s.setSearchOpen);
   const openReview = useAppStore((s) => s.openReview);
@@ -18,8 +21,17 @@ export function GlobalSearch() {
   const setSelectedKey = useAppStore((s) => s.setInboxSelectedKey);
 
   const allPrs = useMemo(() => {
-    const seen = new Set<number>();
+    // Dedup on owner/name#number — the same PR can sit in an inbox bucket AND
+    // the watched bucket, and numeric ids aren't comparable across sources.
+    const seen = new Set<string>();
     const out: PullRequest[] = [];
+    const add = (pr: PullRequest) => {
+      const key = prKey(pr);
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(pr);
+      }
+    };
     if (data) {
       for (const key of [
         "reviewRequested",
@@ -27,16 +39,12 @@ export function GlobalSearch() {
         "created",
         "involved",
       ] as const) {
-        for (const pr of data[key].prs) {
-          if (!seen.has(pr.id)) {
-            seen.add(pr.id);
-            out.push(pr);
-          }
-        }
+        for (const pr of data[key].prs) add(pr);
       }
     }
+    for (const pr of subscribed?.prs ?? []) add(pr);
     return out;
-  }, [data]);
+  }, [data, subscribed]);
 
   const openPR = (pr: PullRequest) => {
     const key = prKey({ owner: pr.owner, name: pr.name, number: pr.number });

@@ -36,6 +36,17 @@ export interface PullRequest {
   deletions: number;
   changedFiles: number;
   body: string;
+  /** Newest comment, for the inbox reading pane (list fetch only; absent on
+   *  detail fetches and providers that can't supply it cheaply). */
+  lastComment?: LastComment;
+}
+
+export interface LastComment {
+  author: string;
+  authorAvatarUrl: string;
+  /** Plain text — a teaser, not Markdown. */
+  body: string;
+  createdAt: string;
 }
 
 export type FileStatus =

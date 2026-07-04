@@ -1033,15 +1033,19 @@ function findCachedInboxPr(
   repo: string,
   number: number,
 ): PullRequest | undefined {
+  const match = (p: PullRequest) =>
+    p.owner === owner && p.name === repo && p.number === number;
   const inbox = queryClient.getQueryData<InboxData>(queryKeys.inbox);
-  if (!inbox) return undefined;
-  for (const key of ["reviewRequested", "assigned", "created", "involved"] as const) {
-    const hit = inbox[key].prs.find(
-      (p) => p.owner === owner && p.name === repo && p.number === number,
-    );
-    if (hit) return hit;
+  if (inbox) {
+    for (const key of ["reviewRequested", "assigned", "created", "involved"] as const) {
+      const hit = inbox[key].prs.find(match);
+      if (hit) return hit;
+    }
   }
-  return undefined;
+  // PRs from watched repos live in their own bucket, not the inbox payload.
+  return queryClient
+    .getQueryData<InboxBucket>(queryKeys.subscribed)
+    ?.prs.find(match);
 }
 
 /** A branch name as a copyable chip: click copies the name, the icon confirms. */
