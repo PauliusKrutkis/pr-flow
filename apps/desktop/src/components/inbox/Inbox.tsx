@@ -456,16 +456,27 @@ function InboxDetail({ pr }: { pr: PullRequest }) {
             updated {formatRelativeTime(pr.updatedAt)}
           </span>
         </div>
+        {/* Zero-valued stats mean "the provider's list API doesn't carry
+            this" (GitLab lists have no +/- totals) — hide them rather than
+            show a wrong 0. */}
         <div className="qi-detail-stats">
-          <span>
-            {pr.changedFiles} file{pr.changedFiles === 1 ? "" : "s"}
-          </span>
-          <span className="q-dot">·</span>
-          <span>
-            <span className="qi-add">+{pr.additions}</span>{" "}
-            <span className="qi-del">−{pr.deletions}</span>
-          </span>
-          <span className="q-dot">·</span>
+          {pr.changedFiles > 0 && (
+            <span>
+              {pr.changedFiles} file{pr.changedFiles === 1 ? "" : "s"}
+            </span>
+          )}
+          {pr.additions + pr.deletions > 0 && (
+            <>
+              {pr.changedFiles > 0 && <span className="q-dot">·</span>}
+              <span>
+                <span className="qi-add">+{pr.additions}</span>{" "}
+                <span className="qi-del">−{pr.deletions}</span>
+              </span>
+            </>
+          )}
+          {(pr.changedFiles > 0 || pr.additions + pr.deletions > 0) && (
+            <span className="q-dot">·</span>
+          )}
           <span>
             {pr.commentsCount} comment{pr.commentsCount === 1 ? "" : "s"}
           </span>
@@ -480,6 +491,29 @@ function InboxDetail({ pr }: { pr: PullRequest }) {
           </>
         ) : (
           <p className="qi-detail-none">No description provided.</p>
+        )}
+
+        {pr.lastComment && (
+          <div className="qi-detail-comment">
+            <div className="qi-detail-kicker">Latest comment</div>
+            <div className="qi-detail-comment-meta">
+              <Avatar
+                url={pr.lastComment.authorAvatarUrl}
+                name={pr.lastComment.author}
+                size={16}
+              />
+              <span className="qi-detail-author-name">
+                {pr.lastComment.author}
+              </span>
+              <span
+                className="qi-detail-time"
+                title={formatAbsolute(pr.lastComment.createdAt)}
+              >
+                {formatRelativeTime(pr.lastComment.createdAt)}
+              </span>
+            </div>
+            <p className="qi-detail-comment-body">{pr.lastComment.body}</p>
+          </div>
         )}
       </div>
 

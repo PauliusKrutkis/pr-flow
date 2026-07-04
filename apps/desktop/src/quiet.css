@@ -186,6 +186,9 @@
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 .q-input::placeholder { color: var(--faint); }
+/* Variant for inputs with a leading icon. Tailwind pl-* can't override
+   .q-input: utilities live in a cascade layer, unlayered rules here win. */
+.q-input-icon { padding-left: 34px; }
 .q-input:focus {
   outline: none;
   border-color: var(--accent-line);
@@ -1303,6 +1306,28 @@ textarea.q-input { resize: none; line-height: 1.5; }
   color: var(--faint);
 }
 .qi-detail-none { margin: 0; font-size: 13px; color: var(--faint); }
+.qi-detail-comment {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.qi-detail-comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 6px;
+}
+.qi-detail-comment-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--muted);
+  white-space: pre-line;
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .qi-detail-foot {
   display: flex;
   flex-shrink: 0;
@@ -1394,6 +1419,18 @@ textarea.q-input { resize: none; line-height: 1.5; }
   border-radius: 8px;
   background: var(--surface-2);
   color: var(--fg);
+}
+/* Tab-armed action targets — the comment-form treatment: the control takes
+   its hover/active look while focus stays in the input, no ring. */
+.qw-row-armed {
+  border-color: var(--line-2);
+  background: var(--surface-hi);
+}
+.qw-row-armed .qb-x { color: var(--del); background: var(--del-bg); }
+.qw-done-armed {
+  color: var(--fg);
+  background: var(--surface-hi);
+  box-shadow: inset 0 0 0 1px var(--line-2);
 }
 
 /* watch-picker search results */

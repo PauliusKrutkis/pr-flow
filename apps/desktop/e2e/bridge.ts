@@ -27,6 +27,8 @@ export interface AppOptions {
   inbox?: InboxFixture;
   /** Override the watched-repos ("Watching") bucket. */
   subscribed?: BucketFixture;
+  /** Repositories pre-listed in the watch dialog. */
+  watchedRepos?: string[];
 }
 
 export async function setupApp(page: Page, opts: AppOptions = {}) {
@@ -38,6 +40,7 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
     detailByLoad: opts.detailByLoad ?? null,
     detailByCall: opts.detailByCall ?? null,
     inboxByCall: opts.inboxByCall ?? null,
+    watchedRepos: opts.watchedRepos ?? [],
     account: ACCOUNT,
   };
 
@@ -68,7 +71,7 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
       list_inbox: () => seq(cfg.inboxByCall, inboxCalls++, cfg.inbox),
       get_cached_subscribed: () => null,
       list_subscribed: () => cfg.subscribed,
-      get_watched_repos: () => [],
+      get_watched_repos: () => cfg.watchedRepos,
       set_watched_repos: () => null,
       // Viewed marks persist in localStorage so they survive a reload, like
       // the real Rust JSON file survives an app restart.

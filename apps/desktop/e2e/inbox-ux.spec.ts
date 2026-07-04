@@ -91,6 +91,97 @@ test("toast host returns to the corner when the inbox is empty", async ({
     .toBe("18px");
 });
 
+test("reading pane shows description, diff stats and the latest comment", async ({
+  page,
+}) => {
+  await setupApp(page);
+  await expect(page.getByRole("option").first()).toBeVisible();
+
+  const pane = page.getByRole("complementary", { name: "Pull request detail" });
+  // Description renders as Markdown (the fixture body bolds "fixture").
+  await expect(pane.getByText("Description")).toBeVisible();
+  await expect(pane.locator("strong", { hasText: "fixture" })).toBeVisible();
+  // Diff stats come straight from the list payload now.
+  await expect(pane.locator(".qi-detail-stats")).toContainText("2 files");
+  await expect(pane.locator(".qi-add")).toHaveText("+12");
+  await expect(pane.locator(".qi-del")).toHaveText("−3");
+  // The newest comment teaser: author + plain-text body.
+  await expect(pane.getByText("Latest comment")).toBeVisible();
+  await expect(pane.locator(".qi-detail-comment")).toContainText("bob");
+  await expect(pane.locator(".qi-detail-comment-body")).toContainText(
+    "one nit on the debounce timing",
+  );
+});
+
+test("reading pane hides diff stats the provider didn't send", async ({
+  page,
+}) => {
+  // GitLab list payloads have no +/- totals — zeros mean "unknown", and the
+  // pane must not present them as facts.
+  const sparse = {
+    ...makePr(9, "MR from a list payload", "erin", "2026-07-02T08:00:00Z"),
+    additions: 0,
+    deletions: 0,
+    changedFiles: 0,
+    lastComment: undefined,
+  };
+  const inbox: InboxFixture = {
+    reviewRequested: { count: 1, prs: [sparse] },
+    assigned: { count: 0, prs: [] },
+    created: { count: 0, prs: [] },
+    involved: { count: 0, prs: [] },
+  };
+  await setupApp(page, { inbox });
+  await expect(page.getByRole("option").first()).toBeVisible();
+
+  const stats = page.locator(".qi-detail-stats");
+  await expect(stats).toContainText("0 comments");
+  await expect(stats).not.toContainText("file");
+  await expect(stats).not.toContainText("+0");
+});
+
+test("watch dialog: Tab arms remove and Done without moving focus", async ({
+  page,
+}) => {
+  await setupApp(page, { watchedRepos: ["acme/rocket", "acme/comet"] });
+  await expect(page.getByRole("option").first()).toBeVisible();
+
+  await page.keyboard.press("w");
+  const input = page.getByPlaceholder(/Search repositories/);
+  await expect(input).toBeFocused();
+  await expect(page.locator(".qw-row")).toHaveCount(2);
+
+  // Tab arms the first row's remove action — active styling, focus stays put.
+  await page.keyboard.press("Tab");
+  await expect(page.locator(".qw-row-armed")).toContainText("acme/rocket");
+  await expect(input).toBeFocused();
+
+  // Enter fires it: the repo is gone and the cursor lands on the next row.
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".qw-row")).toHaveCount(1);
+  await expect(page.locator(".qw-row-armed")).toContainText("acme/comet");
+  await expect(input).toBeFocused();
+
+  // Tab past the last row arms Done; Enter closes the dialog.
+  await page.keyboard.press("Tab");
+  await expect(page.locator(".qw-done-armed")).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog", { name: "Watched repositories" })).toHaveCount(0);
+});
+
+test("watch dialog input clears its leading icon", async ({ page }) => {
+  await setupApp(page);
+  await expect(page.getByRole("option").first()).toBeVisible();
+
+  await page.keyboard.press("w");
+  const input = page.getByPlaceholder(/Search repositories/);
+  // .q-input's unlayered padding beats Tailwind's pl-* utility; the dedicated
+  // .q-input-icon variant is what actually clears the 14px icon at x=12.
+  await expect
+    .poll(async () => input.evaluate((el) => getComputedStyle(el).paddingLeft))
+    .toBe("34px");
+});
+
 test("scrollbar thumb is invisible at rest and themed while scrolling", async ({
   page,
 }) => {

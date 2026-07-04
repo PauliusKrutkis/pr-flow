@@ -29,6 +29,16 @@ export const makePr = (
   deletions: 3,
   changedFiles: 2,
   body: "A **fixture** pull request.",
+  // PRs with comments also carry a reading-pane teaser, like the live list.
+  lastComment:
+    n === 1
+      ? {
+          author: "bob",
+          authorAvatarUrl: "",
+          body: "Looks good — one nit on the debounce timing.",
+          createdAt: "2026-07-02T09:30:00Z",
+        }
+      : undefined,
 });
 
 export type PrFixture = ReturnType<typeof makePr>;
