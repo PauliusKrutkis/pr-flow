@@ -86,6 +86,27 @@ test("a pinned hunk header still collapses its hunk on click", async ({ page }) 
   await expect(rows).toHaveCount(openCount);
 });
 
+test("indent guides wrap deep lines' leading whitespace, and nothing else", async ({ page }) => {
+  const section = page.locator(".qf-fsec").nth(2);
+  // retry.ts is 2-space indented; "        attempt," sits four levels deep.
+  const deep = section
+    .locator(".qf-row:not(.qf-row-hunk)", { hasText: "attempt," })
+    .first()
+    .locator("mark.qf-indent");
+  await expect(deep).toHaveText("        ");
+  const gradient = await deep.evaluate(
+    (el) => getComputedStyle(el).backgroundImage,
+  );
+  expect(gradient).toContain("repeating-linear-gradient");
+
+  // One level deep (< 2 units) carries no guide — no value, less DOM.
+  await expect(
+    section
+      .locator(".qf-row:not(.qf-row-hunk)", { hasText: "let delay = 100;" })
+      .locator("mark.qf-indent"),
+  ).toHaveCount(0);
+});
+
 test("intraline emphasis is paint-only and survives find marks on top", async ({ page }) => {
   const row = page.locator(".qf-fsec").nth(2).locator(".qf-row-add").first();
   const before = await row.boundingBox();

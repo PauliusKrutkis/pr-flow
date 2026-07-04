@@ -813,6 +813,27 @@ textarea.q-input { resize: none; line-height: 1.5; }
   word-break: break-word;
   color: var(--fg);
   font-variant-ligatures: none;
+  /* Pinned (it's also the browser default) because the indent guides assume
+     one tab = one 8ch stop — see lib/indent.ts. */
+  tab-size: 8;
+}
+
+/* Indent guides: a hairline at each indent level, painted by a repeating
+   gradient over the line's LEADING WHITESPACE only (the span is wrapped in
+   this mark by the highlight pipeline; --qf-indent is the file's detected
+   unit, set per diff). They're furniture, not content — var(--line-2) on the
+   dark canvas is barely-there by design, and everything is paint-only so the
+   mono grid never shifts. */
+.dir-quiet mark.qf-indent {
+  color: inherit;
+  background-color: transparent;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--line-2) 0 1px,
+    transparent 1px var(--qf-indent, 2ch)
+  );
+  padding: 0;
+  margin: 0;
 }
 
 /* inline "add comment" affordance in the gutter — absolutely positioned against

@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
 } from "react";
 import { ArrowDown, ArrowUp, MessageSquarePlus } from "lucide-react";
 import type { ChangedFile, PendingComment, ReviewComment } from "../../types";
@@ -16,6 +17,7 @@ import {
   highlightLineWithOccurrences,
 } from "../../lib/highlight";
 import { intralinePairs, type IntralineRanges } from "../../lib/intraline";
+import { detectIndentUnit, type IndentUnit } from "../../lib/indent";
 import { cn } from "../../lib/cn";
 import { useHotkeys } from "../../keyboard";
 import { useAppStore } from "../../store/appStore";
@@ -176,6 +178,7 @@ const DiffLine = memo(function DiffLine({
   hasAnchored,
   canComment,
   intra,
+  indent,
   markKind,
   markQuery,
   markFlag,
@@ -196,6 +199,8 @@ const DiffLine = memo(function DiffLine({
    * prop never breaks the memo on unrelated re-renders.
    */
   intra: IntralineRanges | null;
+  /** The file's indent unit (one memoized object per file) for the guides. */
+  indent: IndentUnit;
   /** The MarkSpec, as primitives so memoization only breaks when they change. */
   markKind: "find" | "occurrence" | null;
   markQuery: string | null;
@@ -248,7 +253,7 @@ const DiffLine = memo(function DiffLine({
             // emphasis goes on first; find/occurrence marks nest inside it.
             __html:
               markQuery == null
-                ? highlightLineWithIntra(row.content, filename, intra)
+                ? highlightLineWithIntra(row.content, filename, intra, indent)
                 : markKind === "find"
                   ? highlightLineWithFind(
                       row.content,
@@ -257,6 +262,7 @@ const DiffLine = memo(function DiffLine({
                       markFlag,
                       findOrdinal,
                       intra,
+                      indent,
                     )
                   : highlightLineWithOccurrences(
                       row.content,
@@ -264,6 +270,7 @@ const DiffLine = memo(function DiffLine({
                       markQuery,
                       markFlag,
                       intra,
+                      indent,
                     ),
           }}
         />
@@ -294,6 +301,9 @@ export function DiffViewer({
   // Word-level diff emphasis, computed once per patch (same memo level as the
   // parsed rows — never per render) and looked up per row by object identity.
   const intraByRow = useMemo(() => intralinePairs(hunks), [hunks]);
+  // The file's indent unit — one detection per patch; rows and the CSS
+  // gradient period (--qf-indent below) share the same object.
+  const indentUnit = useMemo(() => detectIndentUnit(hunks), [hunks]);
   const threadsByAnchor = useMemo(() => buildThreads(comments), [comments]);
   // Pending comments render with the signed-in identity, like the lab design.
   const activeAccount = useAppStore((s) =>
@@ -645,6 +655,9 @@ export function DiffViewer({
       ref={containerRef}
       className="qf-diff"
       data-mode={inputMode}
+      // The indent-guide gradient period, per file: guides land on every
+      // indent level of THIS file's unit (see mark.qf-indent in quiet.css).
+      style={{ "--qf-indent": `${indentUnit.ch}ch` } as CSSProperties}
       onMouseMove={(e) => {
         if (!isRealPointer(e.clientX, e.clientY)) return;
         if (inputMode !== "mouse") setInputMode("mouse");
@@ -689,6 +702,7 @@ export function DiffViewer({
               hasAnchored={!!hasAnchored}
               canComment={target != null}
               intra={intraByRow.get(row) ?? null}
+              indent={indentUnit}
               markKind={marks ? marks.kind : null}
               markQuery={marks ? marks.query : null}
               markFlag={
