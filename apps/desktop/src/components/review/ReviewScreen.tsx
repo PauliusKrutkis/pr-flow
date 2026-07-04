@@ -954,15 +954,16 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         ] satisfies Binding[])
       : []),
     {
-      // Esc walks out one layer at a time: find bar, then occurrence marks,
-      // then the info drawer, then the inbox.
+      // Esc walks out one layer at a time: find bar, then the info drawer,
+      // then the inbox. Occurrence marks deliberately DON'T consume an Esc —
+      // they're passive furniture (a blank click or clicking elsewhere clears
+      // them), and spending a keypress on them makes "Esc → inbox" feel broken.
       keys: "esc",
       description: "Close panel / back to inbox",
       group: "Navigation",
       icon: Inbox,
       run: () => {
         if (findOpenRef.current) closeFind();
-        else if (occSpecRef.current) setOccSpec(null);
         else if (rightOpenRef.current) setRightOpen(false);
         else goInbox();
       },

@@ -205,12 +205,11 @@ test("the find bar suppresses occurrence marks; closing it restores them", async
   await expect(occMarks(page)).toHaveCount(2);
 });
 
-test("Esc clears occurrence marks and stays on the review", async ({ page }) => {
+test("Esc goes straight to the inbox — occurrence marks don't consume it", async ({ page }) => {
   await dblclickToken(page, 1, "gamma");
   await expect(occMarks(page)).toHaveCount(2);
 
+  // Marks are passive furniture: Esc must not spend a press on them.
   await page.keyboard.press("Escape");
-  await expect(occMarks(page)).toHaveCount(0);
-  // Esc consumed the marks layer — not bounced back to the inbox.
-  await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /Review requests/ })).toBeVisible();
 });
