@@ -781,7 +781,16 @@ textarea.q-input { resize: none; line-height: 1.5; }
   -webkit-user-select: none;
 }
 .dir-quiet .qf-marker { text-align: center; color: var(--faint); user-select: none; -webkit-user-select: none; }
-.dir-quiet .qf-code { white-space: pre-wrap; word-break: break-word; color: var(--fg); }
+/* Ligatures stay OFF in diff code (VS Code's default too): a reviewer should
+   see the literal characters, and fonts with contextual ligatures (JetBrains
+   Mono, Fira Code) re-shape when a <mark> boundary splits a sequence — the
+   glyphs around a highlight would visibly shift as marks come and go. */
+.dir-quiet .qf-code {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--fg);
+  font-variant-ligatures: none;
+}
 
 /* inline "add comment" affordance in the gutter — absolutely positioned against
    the ROW (not the gutter's one-line text box), so it stays vertically centered

@@ -65,14 +65,18 @@ export const DETAIL = {
     {
       filename: "src/lib/search.ts",
       status: "added",
-      additions: 4,
+      additions: 5,
       deletions: 0,
-      changes: 4,
-      patch: `@@ -0,0 +1,4 @@
+      changes: 5,
+      // The last line deliberately ends in a WORD character (no semicolon):
+      // clicking the blank space right of it exercises the caret-snap guard
+      // in the occurrence-highlight click handler.
+      patch: `@@ -0,0 +1,5 @@
 +export function search(q: string) {
 +  const gamma = q.trim();
 +  return gamma.length > 0;
-+}`,
++}
++export default search`,
       sha: "f2",
     },
   ],

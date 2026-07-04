@@ -86,19 +86,19 @@ async function selectInCode(page: Page, section: number, text: string) {
 
 const occMarks = (page: Page) => page.locator("mark.qf-occ-mark");
 
-test("single-clicking a token marks every whole-word occurrence across files", async ({ page }) => {
-  // "return" sits on three rendered rows: the -/+ pair in fuzzy.ts and one
-  // line in search.ts — cross-file, and the deleted (LEFT) row counts too.
+test("single-clicking a token marks its occurrences within that file", async ({ page }) => {
+  // "return" sits on the -/+ pair in fuzzy.ts AND once in search.ts — but
+  // marks are scoped to the clicked file: repainting one section keeps a
+  // click instant on huge PRs, and cross-file search is the find bar's job.
   const { x, y } = await tokenCenter(page, 0, "return");
   await page.mouse.move(x, y);
   await page.waitForTimeout(100); // settle the hover-driven row re-render
   await page.mouse.click(x, y);
-  await expect(occMarks(page)).toHaveCount(3);
-  expect(await occMarks(page).allTextContents()).toEqual([
-    "return",
-    "return",
-    "return",
-  ]);
+  await expect(occMarks(page)).toHaveCount(2);
+  expect(await occMarks(page).allTextContents()).toEqual(["return", "return"]);
+  await expect(
+    page.locator(".qf-fsec").nth(1).locator("mark.qf-occ-mark"),
+  ).toHaveCount(0);
 
   // Clicking another token retargets the marks to it.
   const alpha = await tokenCenter(page, 0, "alpha");
@@ -118,7 +118,36 @@ test("single-clicking a token marks every whole-word occurrence across files", a
 
 test("double-clicking a token marks its occurrences", async ({ page }) => {
   await dblclickToken(page, 0, "return");
-  await expect(occMarks(page)).toHaveCount(3);
+  await expect(occMarks(page)).toHaveCount(2);
+});
+
+test("clicking blank space right of a line ending in a word clears, not highlights", async ({ page }) => {
+  // Arm some marks first so the clear is observable.
+  await dblclickToken(page, 1, "gamma");
+  await expect(occMarks(page)).toHaveCount(2);
+
+  // "export default search" ends in a WORD character. Caret-from-point snaps
+  // a click in the blank area to the nearest text position — the end of
+  // "search" — and without the glyph-box guard that would highlight "search"
+  // instead of reading as blank.
+  const lineEnd = await page.evaluate(() => {
+    const codes = document
+      .querySelectorAll(".qf-fsec")[1]
+      .querySelectorAll(".qf-row:not(.qf-row-hunk) .qf-code");
+    for (const code of codes) {
+      if (!code.textContent?.includes("export default search")) continue;
+      const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+      let last: Text | null = null;
+      while (walker.nextNode()) last = walker.currentNode as Text;
+      const range = document.createRange();
+      range.selectNodeContents(last!);
+      const r = range.getBoundingClientRect();
+      return { x: r.right, y: r.y + r.height / 2 };
+    }
+    return null;
+  });
+  await page.mouse.click(lineEnd!.x + 60, lineEnd!.y);
+  await expect(occMarks(page)).toHaveCount(0);
 });
 
 test("marks are paint-only — the line's geometry does not move", async ({ page }) => {

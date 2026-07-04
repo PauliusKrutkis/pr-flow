@@ -72,6 +72,9 @@ interface ReviewScreenProps {
   number: number;
 }
 
+/** An occurrence query plus the file section it lights up. */
+type OccState = OccurrenceSpec & { fileIndex: number };
+
 const EMPTY_COMMENTS: ReviewComment[] = [];
 const EMPTY_PENDING: PendingComment[] = [];
 const EMPTY_MATCHES: FindMatch[] = [];
@@ -132,10 +135,13 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const findJumpedRef = useRef(false);
   const findOpenRef = useRef(false);
   findOpenRef.current = findOpen;
-  // Selection-occurrence highlighting: select a token in the diff and its
-  // other occurrences light up (editor convention). Set from selectionchange,
-  // cleared by Esc / file navigation / the selection collapsing.
-  const [occSpec, setOccSpec] = useState<OccurrenceSpec | null>(null);
+  // Selection-occurrence highlighting: click or select a token in the diff
+  // and its other occurrences in THAT FILE light up (editor convention).
+  // Scoped to one file both for meaning (a click asks "where else here?" —
+  // ⌘F answers the cross-file question) and for speed: repainting one section
+  // keeps a click instant on huge PRs. Cleared by clicks on blank code, Esc,
+  // and file navigation.
+  const [occSpec, setOccSpec] = useState<OccState | null>(null);
   const occSpecRef = useRef(occSpec);
   occSpecRef.current = occSpec;
   // Repainting rows with marks replaces their text nodes, which would kill
@@ -468,13 +474,14 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     // noise, and no pointless selection restore. Capture even when clearing:
     // un-marking repaints rows too, and a fresh (non-qualifying) drag
     // selection shouldn't be eaten by that repaint.
-    function commit(next: OccurrenceSpec | null) {
+    function commit(next: OccState | null) {
       const prev = occSpecRef.current;
       if (
         prev &&
         next &&
         prev.query === next.query &&
-        prev.wholeWord === next.wholeWord
+        prev.wholeWord === next.wholeWord &&
+        prev.fileIndex === next.fileIndex
       ) {
         return;
       }
@@ -490,7 +497,14 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       return code && !el?.closest(".qf-row-hunk") ? code : null;
     }
 
-    function specFromDomSelection(): OccurrenceSpec | null {
+    /** The file-section index a code element belongs to. */
+    function sectionIndexOf(el: Element): number | null {
+      const v = el.closest(".qf-fsec")?.getAttribute("data-file-index");
+      const n = v == null ? NaN : Number(v);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function specFromDomSelection(): OccState | null {
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
       const container = sel.getRangeAt(0).commonAncestorContainer;
@@ -499,13 +513,17 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       // Only selections inside ONE diff code line qualify: the range's common
       // ancestor sits inside a .qf-code exactly when the selection doesn't
       // cross rows, touch gutters, or leave the diff.
-      if (!codeAround(el)) return null;
-      return occurrenceSpecFromSelection(sel.toString());
+      const code = codeAround(el);
+      if (!code) return null;
+      const fileIndex = sectionIndexOf(code);
+      if (fileIndex == null) return null;
+      const spec = occurrenceSpecFromSelection(sel.toString());
+      return spec && { ...spec, fileIndex };
     }
 
     /** The \w+ word around the caret position at (x, y), expanded within its
      *  text node (hljs keeps identifiers whole, so one node suffices). */
-    function wordAtPoint(x: number, y: number): OccurrenceSpec | null {
+    function wordAtPoint(x: number, y: number): OccState | null {
       // caretPositionFromPoint is the standard; Chromium/WebKit still ship
       // the older caretRangeFromPoint — take whichever exists.
       const doc = document as Document & {
@@ -531,13 +549,29 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         }
       }
       if (!node || node.nodeType !== Node.TEXT_NODE) return null;
+      const parent = node.parentElement;
+      if (!parent) return null;
+      const fileIndex = sectionIndexOf(parent);
+      if (fileIndex == null) return null;
       const text = node.textContent ?? "";
       let s = offset;
       let e = offset;
       while (s > 0 && /\w/.test(text[s - 1])) s -= 1;
       while (e < text.length && /\w/.test(text[e])) e += 1;
       if (s === e) return null;
-      return occurrenceSpecFromSelection(text.slice(s, e));
+      // The word's glyph box must actually contain the click point:
+      // caret-from-point snaps to the NEAREST text position, so a click in
+      // the blank area right of a line would otherwise "find" the line's
+      // last word instead of reading as blank (which clears).
+      const range = document.createRange();
+      range.setStart(node, s);
+      range.setEnd(node, e);
+      const hit = Array.from(range.getClientRects()).some(
+        (r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom,
+      );
+      if (!hit) return null;
+      const spec = occurrenceSpecFromSelection(text.slice(s, e));
+      return spec && { ...spec, fileIndex };
     }
 
     function apply() {
@@ -592,11 +626,12 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     if (captured) restoreCodeSelection(captured);
   }, [occSpec]);
 
-  // One shared marks identity for all sections, changing only with the query
-  // — so typing repaints highlights once and FileSection memoization holds
-  // otherwise. Find wins while its bar is open (even with an empty query):
-  // two mark systems at once is noise. Occurrence marks come back when the
-  // bar closes, if the selection survived.
+  // One marks identity, changing only with the query — so typing repaints
+  // highlights once and FileSection memoization holds otherwise. Find wins
+  // while its bar is open (even with an empty query): two mark systems at
+  // once is noise. Occurrence marks come back when the bar closes, if the
+  // selection survived. Find marks go to every section (the bar counts
+  // across files); occurrence marks only to their own file (see occSpec).
   const marks = useMemo<MarkSpec | null>(() => {
     if (findOpen) {
       return findQuery
@@ -607,6 +642,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       ? { kind: "occurrence", query: occSpec.query, wholeWord: occSpec.wholeWord }
       : null;
   }, [findOpen, findQuery, findCase, occSpec]);
+  const marksFor = (i: number): MarkSpec | null =>
+    marks && (marks.kind === "find" || occSpec?.fileIndex === i) ? marks : null;
 
   // j/k crossing a file edge: activate the neighbour and seed its cursor.
   const handleCursorExit = useCallback((index: number, dir: 1 | -1) => {
@@ -1189,7 +1226,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
                 pending={pendingByFile.get(file.filename) ?? EMPTY_PENDING}
                 jump={jump && jump.filename === file.filename ? jump : null}
                 seed={seed && seed.index === i ? seed : null}
-                marks={marks}
+                marks={marksFor(i)}
                 findCurrent={
                   findCurrent && findCurrent.fileIndex === i ? findCurrent : null
                 }
