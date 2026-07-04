@@ -996,6 +996,42 @@ textarea.q-input { resize: none; line-height: 1.5; }
   background: color-mix(in srgb, var(--add) 30%, transparent);
 }
 
+/* ============ OVERVIEW RULER ============ */
+/* A slim column of ticks along the diff's right edge marking where the find /
+   occurrence matches live in the whole scroll range. It sits just LEFT of the
+   9px overlay scrollbar (which owns the very edge) and never intercepts the
+   pointer — it's a read-only instrument, the scrollbar stays the control. */
+.dir-quiet .qf-ruler {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  right: 9px;
+  width: 6px;
+  z-index: 20; /* over the sticky headers (5), under the find bar (30) */
+  pointer-events: none;
+}
+.dir-quiet .qf-ruler-tick {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  height: 2px;
+  border-radius: 1px;
+}
+.dir-quiet .qf-ruler-find {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+/* the current find match — slightly wider and full-strength */
+.dir-quiet .qf-ruler-find.qf-ruler-current {
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--accent);
+}
+/* occurrence ticks are neutral, like their marks — quieter than find */
+.dir-quiet .qf-ruler-occ {
+  background: color-mix(in srgb, var(--fg) 40%, transparent);
+}
+
 /* ============ COMMENT THREADS ============ */
 .dir-quiet .qf-comment-wrap { background: var(--bg); padding: 0 16px 6px 70px; }
 .dir-quiet .qf-thread {

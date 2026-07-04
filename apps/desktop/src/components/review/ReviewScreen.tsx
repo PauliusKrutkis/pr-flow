@@ -44,7 +44,9 @@ import { getReviewMemory, updateReviewMemory } from "../../lib/reviewMemory";
 import { usePerfStore } from "../../lib/perf";
 import { findInDiff, type FindMatch } from "../../lib/findInDiff";
 import {
+  occurrenceMatches,
   occurrenceSpecFromSelection,
+  type OccurrenceMatch,
   type OccurrenceSpec,
 } from "../../lib/occurrences";
 import { cn } from "../../lib/cn";
@@ -65,6 +67,7 @@ import { OrientBanner } from "./OrientBanner";
 import { SubmitReviewModal } from "./SubmitReviewModal";
 import { PrSearch } from "./PrSearch";
 import { FindBar } from "./FindBar";
+import { OverviewRuler, type RulerMatch } from "./OverviewRuler";
 
 interface ReviewScreenProps {
   owner: string;
@@ -78,6 +81,8 @@ type OccState = OccurrenceSpec & { fileIndex: number };
 const EMPTY_COMMENTS: ReviewComment[] = [];
 const EMPTY_PENDING: PendingComment[] = [];
 const EMPTY_MATCHES: FindMatch[] = [];
+const EMPTY_OCC: OccurrenceMatch[] = [];
+const EMPTY_RULER: RulerMatch[] = [];
 
 export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const keyValue = prKey({ owner, name: repo, number });
@@ -644,6 +649,26 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   }, [findOpen, findQuery, findCase, occSpec]);
   const marksFor = (i: number): MarkSpec | null =>
     marks && (marks.kind === "find" || occSpec?.fileIndex === i) ? marks : null;
+
+  // The occurrence spec's matches across its WHOLE file, from the patch text
+  // (off-screen rows count). Feeds the overview ruler's ticks and, in occ
+  // mode, click/n/p navigation between occurrences.
+  const occMatchList = useMemo(
+    () =>
+      occSpec
+        ? occurrenceMatches(files[occSpec.fileIndex] ?? {}, occSpec)
+        : EMPTY_OCC,
+    [occSpec, files],
+  );
+
+  // What the overview ruler ticks: mirrors the marks precedence above — find
+  // owns the diff while its bar is open, else the selection's occurrences.
+  const rulerMatches = useMemo<ReadonlyArray<RulerMatch>>(() => {
+    if (findOpen) return findQuery ? findMatches : EMPTY_RULER;
+    if (!occSpec) return EMPTY_RULER;
+    const fileIndex = occSpec.fileIndex;
+    return occMatchList.map((m) => ({ fileIndex, anchor: m.anchor }));
+  }, [findOpen, findQuery, findMatches, occSpec, occMatchList]);
 
   // j/k crossing a file edge: activate the neighbour and seed its cursor.
   const handleCursorExit = useCallback((index: number, dir: 1 | -1) => {
@@ -1243,6 +1268,19 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
             ))}
             {fileCount === 0 && <div className="qf-empty">No files changed.</div>}
           </div>
+          {/* Overview ruler: match ticks along the scroll range. Anchored to
+              the same relative wrapper as the find bar so it hugs the scroll
+              host's edge without scrolling away. */}
+          <OverviewRuler
+            hostRef={scrollRef}
+            sectionEls={sectionEls}
+            files={files}
+            kind={findOpen ? "find" : "occurrence"}
+            matches={rulerMatches}
+            currentIndex={
+              findOpen && findMatches.length > 0 ? findSafeIndex : null
+            }
+          />
         </div>
       </main>
 

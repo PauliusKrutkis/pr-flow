@@ -5,6 +5,7 @@
 // ReviewScreen owns the DOM half (selectionchange listening + "is the
 // selection inside a single diff code line" gating).
 
+import { parsePatch, rowAnchor } from "./diff";
 import { findMatchRangesInLine } from "./findInDiff";
 
 export interface OccurrenceSpec {
@@ -63,4 +64,36 @@ export function occurrenceRangesInLine(
       (start === 0 || !WORD_CHAR.test(text[start - 1])) &&
       (end === text.length || !WORD_CHAR.test(text[end])),
   );
+}
+
+export interface OccurrenceMatch {
+  /** Diff row anchor ("LEFT:12" / "RIGHT:34") — the DiffViewer scroll target. */
+  anchor: string;
+  /** Column range of the occurrence within the row's content. */
+  start: number;
+  end: number;
+}
+
+/**
+ * Every occurrence of the spec's query across ONE file's patch, in document
+ * order (rows top to bottom, hits left to right). Scanned from the patch
+ * text — like findInDiff — so the overview ruler's ticks and n/p navigation
+ * see the whole file, including rows scrolled far off-screen. Hunk headers
+ * are metadata, not code, and never match.
+ */
+export function occurrenceMatches(
+  file: { patch?: string | null },
+  spec: OccurrenceSpec,
+): OccurrenceMatch[] {
+  const out: OccurrenceMatch[] = [];
+  for (const hunk of parsePatch(file.patch)) {
+    for (const row of hunk.rows) {
+      const anchor = rowAnchor(row);
+      if (anchor == null) continue;
+      for (const [start, end] of occurrenceRangesInLine(row.content, spec)) {
+        out.push({ anchor, start, end });
+      }
+    }
+  }
+  return out;
 }

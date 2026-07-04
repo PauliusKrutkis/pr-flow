@@ -1,5 +1,44 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { setupApp } from "./bridge";
+
+/**
+ * Viewport-centre of `token`'s first occurrence within a real (non-hunk) diff
+ * code line of file section `section` (same helper as occurrences.spec.ts).
+ */
+async function tokenCenter(page: Page, section: number, token: string) {
+  const rect = await page.evaluate(
+    ({ section, token }) => {
+      const sec = document.querySelectorAll(".qf-fsec")[section];
+      const codes =
+        sec?.querySelectorAll(".qf-row:not(.qf-row-hunk) .qf-code") ?? [];
+      for (const code of codes) {
+        const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) {
+          const node = walker.currentNode as Text;
+          const i = node.data.indexOf(token);
+          if (i === -1) continue;
+          const range = document.createRange();
+          range.setStart(node, i);
+          range.setEnd(node, i + token.length);
+          const r = range.getBoundingClientRect();
+          return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+        }
+      }
+      return null;
+    },
+    { section, token },
+  );
+  if (!rect) throw new Error(`token not found in diff: ${token}`);
+  return rect;
+}
+
+/** Single-click a token (settling the hover first, like a real pointer). */
+async function clickToken(page: Page, section: number, token: string) {
+  const { x, y } = await tokenCenter(page, section, token);
+  await page.mouse.move(x, y);
+  await page.waitForTimeout(100);
+  await page.mouse.click(x, y);
+}
 
 // Diff scanability: intraline word-diff emphasis (and friends — sticky hunk
 // context, indent guides, the overview ruler — as they land).
@@ -135,4 +174,49 @@ test("intraline emphasis is paint-only and survives find marks on top", async ({
   expect(style).toEqual({ padding: "0px", margin: "0px", border: "0px" });
 
   await page.keyboard.press("Escape");
+});
+
+test("overview ruler: find ticks map matches across the whole PR", async ({ page }) => {
+  // No active marks → no ruler at all.
+  await expect(page.locator(".qf-ruler")).toHaveCount(0);
+
+  await page.keyboard.press("Control+f");
+  await page.getByPlaceholder("Find in diff").fill("const");
+  // "const" hits all three files: 1 in fuzzy.ts, 1 in search.ts, 7 in
+  // retry.ts (whose section sits far below the viewport — ticks come from
+  // the patch text plus section geometry, not from rendered rows).
+  await expect(page.locator(".qf-findbar-count")).toHaveText("1/9");
+  const ticks = page.locator(".qf-ruler-tick");
+  await expect(ticks).toHaveCount(9);
+  await expect(page.locator(".qf-ruler-current")).toHaveCount(1);
+
+  // Document order top to bottom: later files' ticks sit strictly lower.
+  const ys = await ticks.evaluateAll((els) =>
+    els.map((el) => el.getBoundingClientRect().y),
+  );
+  expect([...ys]).toEqual([...ys].sort((a, b) => a - b));
+  expect(ys[ys.length - 1] - ys[0]).toBeGreaterThan(50);
+
+  // Esc closes the bar; the find ticks go with it.
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".qf-ruler")).toHaveCount(0);
+});
+
+test("overview ruler: occurrence ticks on click, cleared by a blank click", async ({ page }) => {
+  await clickToken(page, 1, "gamma");
+  await expect(page.locator("mark.qf-occ-mark")).toHaveCount(2);
+  await expect(page.locator(".qf-ruler-tick.qf-ruler-occ")).toHaveCount(2);
+  // No "current" among occurrence ticks — that's a find-mode concept.
+  await expect(page.locator(".qf-ruler-current")).toHaveCount(0);
+
+  // A click on blank code clears the marks — and their ticks.
+  const row = await page
+    .locator(".qf-fsec")
+    .nth(1)
+    .locator(".qf-row:not(.qf-row-hunk) .qf-code")
+    .first()
+    .boundingBox();
+  await page.mouse.click(row!.x + row!.width - 8, row!.y + row!.height / 2);
+  await expect(page.locator("mark.qf-occ-mark")).toHaveCount(0);
+  await expect(page.locator(".qf-ruler")).toHaveCount(0);
 });

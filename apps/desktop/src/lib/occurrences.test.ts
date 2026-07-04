@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  occurrenceMatches,
   occurrenceRangesInLine,
   occurrenceSpecFromSelection,
 } from "./occurrences";
@@ -98,5 +99,39 @@ describe("occurrenceRangesInLine", () => {
     expect(
       occurrenceRangesInLine("foo foo foo", { query: "foo", wholeWord: true }),
     ).toHaveLength(3);
+  });
+});
+
+describe("occurrenceMatches", () => {
+  const file = {
+    patch: [
+      "@@ -1,3 +1,4 @@",
+      " const gamma = 1;",
+      "-use(gamma);",
+      "+use(gamma, gamma);",
+      " done();",
+    ].join("\n"),
+  };
+
+  it("walks the whole patch in document order with row anchors", () => {
+    const matches = occurrenceMatches(file, { query: "gamma", wholeWord: true });
+    expect(matches).toEqual([
+      { anchor: "RIGHT:1", start: 6, end: 11 },
+      { anchor: "LEFT:2", start: 4, end: 9 },
+      { anchor: "RIGHT:2", start: 4, end: 9 },
+      { anchor: "RIGHT:2", start: 11, end: 16 },
+    ]);
+  });
+
+  it("respects whole-word mode and never matches hunk headers", () => {
+    const noisy = {
+      patch: "@@ -1,1 +1,1 @@ fn gamma() {\n+gammaray(gamma);",
+    };
+    const matches = occurrenceMatches(noisy, { query: "gamma", wholeWord: true });
+    expect(matches).toEqual([{ anchor: "RIGHT:1", start: 9, end: 14 }]);
+  });
+
+  it("handles missing patches", () => {
+    expect(occurrenceMatches({}, { query: "xy", wholeWord: false })).toEqual([]);
   });
 });
