@@ -580,11 +580,20 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       if (!node || node.nodeType !== Node.TEXT_NODE) return null;
       const parent = node.parentElement;
       if (!parent) return null;
-      const fileIndex = sectionIndexOf(parent);
+      const code = codeAround(parent);
+      if (!code) return null;
+      const fileIndex = sectionIndexOf(code);
       if (fileIndex == null) return null;
-      const text = node.textContent ?? "";
-      let s = offset;
-      let e = offset;
+      // Expand over the WHOLE LINE's text, not the caret's text node: marks
+      // (intraline emphasis, find/occurrence highlights) fragment a line into
+      // many text nodes, and expanding within one fragment would turn a click
+      // on the emphasized `Limit` of `retryLimit` into the sub-word "Limit".
+      const text = code.textContent ?? "";
+      const nodeStart = codeColumnOf(code, node);
+      if (nodeStart == null) return null;
+      const col = nodeStart + offset;
+      let s = col;
+      let e = col;
       while (s > 0 && /\w/.test(text[s - 1])) s -= 1;
       while (e < text.length && /\w/.test(text[e])) e += 1;
       if (s === e) return null;
@@ -592,9 +601,12 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       // caret-from-point snaps to the NEAREST text position, so a click in
       // the blank area right of a line would otherwise "find" the line's
       // last word instead of reading as blank (which clears).
+      const start = codePositionAt(code, s);
+      const end = codePositionAt(code, e);
+      if (!start || !end) return null;
       const range = document.createRange();
-      range.setStart(node, s);
-      range.setEnd(node, e);
+      range.setStart(start.node, start.offset);
+      range.setEnd(end.node, end.offset);
       const hit = Array.from(range.getClientRects()).some(
         (r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom,
       );
@@ -1439,6 +1451,24 @@ function codeColumnOf(code: Element, target: Node): number | null {
   while (walker.nextNode()) {
     const node = walker.currentNode as Text;
     if (node === target) return offset;
+    offset += node.data.length;
+  }
+  return null;
+}
+
+/** The (text node, local offset) at a line-level code column — the inverse of
+ *  codeColumnOf, for building Ranges across mark-fragmented lines. */
+function codePositionAt(
+  code: Element,
+  column: number,
+): { node: Text; offset: number } | null {
+  let offset = 0;
+  const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text;
+    if (column <= offset + node.data.length) {
+      return { node, offset: column - offset };
+    }
     offset += node.data.length;
   }
   return null;

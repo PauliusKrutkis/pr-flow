@@ -604,19 +604,10 @@ textarea.q-input { resize: none; line-height: 1.5; }
 
 /* ============ FILE SECTIONS (continuous scroll) ============ */
 /* One section per changed file; the header stays stuck while its diff scrolls. */
-.dir-quiet {
-  /* The file header's height, pinned so the sticky hunk headers (which stack
-     right under it via `top:`) can never drift from the real edge. 39px is
-     the measured natural height (7px padding ×2 + 24px viewed-button + 1px
-     border) — setting it explicitly makes it a contract instead of a
-     coincidence. */
-  --qf-fsec-head-h: 39px;
-}
 .dir-quiet .qf-fsec { border-bottom: 1px solid var(--line); }
 .dir-quiet .qf-fsec-head {
   position: sticky;
   top: 0;
-  height: var(--qf-fsec-head-h);
   z-index: 5;
   display: flex;
   align-items: center;
@@ -737,21 +728,9 @@ textarea.q-input { resize: none; line-height: 1.5; }
   /* the "+" affordance positions against the whole row (see .qf-add-btn) */
   position: relative;
 }
-/* Hunk headers pin under the file header: inside a long hunk the `@@` line
-   (with the enclosing function git puts after the second `@@`) stays visible,
-   so you always know where you are. Pure CSS — each header sticks at the file
-   header's bottom edge until its section ends; the next hunk's header simply
-   paints over it (same top, later sibling), which reads as a swap. The
-   background is an opaque composite (surface over bg) because the header
-   floats over code rows — a transparent tint would let them bleed through.
-   z-index sits above the rows' own stacking contexts but below the file
-   header (5). Still the same <button>, so hunk-collapse clicks keep working. */
 .dir-quiet .qf-row-hunk {
-  position: sticky;
-  top: var(--qf-fsec-head-h);
-  z-index: 3;
   width: 100%;
-  background: linear-gradient(var(--surface), var(--surface)) var(--bg);
+  background: var(--surface);
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   padding-top: 4px;
@@ -760,9 +739,7 @@ textarea.q-input { resize: none; line-height: 1.5; }
   cursor: pointer;
   text-align: left;
 }
-.dir-quiet .qf-row-hunk:hover {
-  background: linear-gradient(var(--surface-hi), var(--surface-hi)) var(--bg);
-}
+.dir-quiet .qf-row-hunk:hover { background: var(--surface-hi); }
 .dir-quiet .qf-row-hunk .qf-code { color: var(--accent); opacity: 0.85; font-size: 11px; }
 .dir-quiet .qf-row-add { background: var(--add-bg); }
 .dir-quiet .qf-row-del { background: var(--del-bg); }
@@ -807,33 +784,45 @@ textarea.q-input { resize: none; line-height: 1.5; }
 /* Ligatures stay OFF in diff code (VS Code's default too): a reviewer should
    see the literal characters, and fonts with contextual ligatures (JetBrains
    Mono, Fira Code) re-shape when a <mark> boundary splits a sequence — the
-   glyphs around a highlight would visibly shift as marks come and go. */
+   glyphs around a highlight would visibly shift as marks come and go.
+   geometricPrecision serves the same contract in WebKit, which otherwise
+   rounds text-run advances PER INLINE BOX: splitting a line's text nodes
+   with marks would nudge every glyph after them by accumulated subpixels. */
 .dir-quiet .qf-code {
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--fg);
   font-variant-ligatures: none;
+  text-rendering: geometricPrecision;
   /* Pinned (it's also the browser default) because the indent guides assume
      one tab = one 8ch stop — see lib/indent.ts. */
   tab-size: 8;
+  /* anchors the indent-guide ::before below */
+  position: relative;
 }
 
-/* Indent guides: a hairline at each indent level, painted by a repeating
-   gradient over the line's LEADING WHITESPACE only (the span is wrapped in
-   this mark by the highlight pipeline; --qf-indent is the file's detected
-   unit, set per diff). They're furniture, not content — var(--line-2) on the
-   dark canvas is barely-there by design, and everything is paint-only so the
-   mono grid never shifts. */
-.dir-quiet mark.qf-indent {
-  color: inherit;
-  background-color: transparent;
-  background-image: repeating-linear-gradient(
+/* Indent guides: a hairline at each indent level, painted as a ::before
+   layer sized by the line's levels (--qf-lvl, set by DiffLine; --qf-indent
+   is the file's unit, set per diff). Painted OUTSIDE the text flow — no
+   wrapper elements in the code, so guides can't fragment text nodes or
+   interact with selection, clicks, or the mark layers — and spanning the
+   row's full height so consecutive lines read as continuous columns instead
+   of a picket fence. At 8% fg they're furniture: visible when you look for
+   them, silent when you don't. The 1px inset keeps the innermost boundary
+   (where the text starts) unpainted. */
+.dir-quiet .qf-code::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--qf-lvl, 0) * var(--qf-indent, 2ch) - 1px);
+  background: repeating-linear-gradient(
     to right,
-    var(--line-2) 0 1px,
+    color-mix(in srgb, var(--fg) 8%, transparent) 0 1px,
     transparent 1px var(--qf-indent, 2ch)
   );
-  padding: 0;
-  margin: 0;
+  pointer-events: none;
 }
 
 /* inline "add comment" affordance in the gutter — absolutely positioned against
@@ -970,9 +959,9 @@ textarea.q-input { resize: none; line-height: 1.5; }
 .dir-quiet mark.qf-occ-mark {
   color: inherit;
   /* 26% ≈ VS Code's dark-theme word-highlight weight — 15% disappeared into
-     the add/del row tints. */
+     the add/del row tints. Square corners on purpose: rounding makes the
+     fill read as a padded chip around the word ("something added space"). */
   background: color-mix(in srgb, var(--fg) 26%, transparent);
-  border-radius: 2px;
   padding: 0;
   margin: 0;
 }

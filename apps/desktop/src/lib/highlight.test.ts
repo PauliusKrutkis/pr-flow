@@ -150,37 +150,11 @@ describe("highlightLineWithIntra", () => {
   });
 });
 
-describe("indent guides in the highlight pipeline", () => {
-  const unit = { ch: 2, chars: 2 };
-
-  it("wraps only the leading whitespace in qf-indent", () => {
-    const html = highlightLineWithIntra("    call();", "a.ts", null, unit);
-    expect(html).toContain('<mark class="qf-indent">    </mark>');
-    expect(html.replace(/<[^>]+>/g, "")).toBe("    call();");
-  });
-
-  it("skips lines under two indent levels", () => {
-    expect(highlightLineWithIntra("  x();", "a.ts", null, unit)).not.toContain(
-      "qf-indent",
-    );
-    expect(highlightLineWithIntra("x();", "a.ts", null, unit)).not.toContain(
-      "qf-indent",
-    );
-  });
-
-  it("layers under intraline and find marks with the text intact", () => {
+describe("mark layering", () => {
+  it("layers find marks over intraline emphasis with the text intact", () => {
     const code = "    const retryLimit = 3;";
     // "Limit" spans columns [15, 20).
-    const html = highlightLineWithFind(
-      code,
-      "a.ts",
-      "Lim",
-      false,
-      0,
-      [[15, 20]],
-      unit,
-    );
-    expect(html).toContain("qf-indent");
+    const html = highlightLineWithFind(code, "a.ts", "Lim", false, 0, [[15, 20]]);
     expect(html).toContain("qf-intra-mark");
     expect(html).toContain("qf-find-mark");
     expect(html.replace(/<[^>]+>/g, "")).toBe(code);

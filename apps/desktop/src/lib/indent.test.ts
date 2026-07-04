@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parsePatch } from "./diff";
-import { detectIndentUnit, guideRange } from "./indent";
+import { detectIndentUnit, guideLevels } from "./indent";
 
 function unitOf(lines: string[]) {
   const patch = ["@@ -1,9 +1,9 @@", ...lines.map((l) => ` ${l}`)].join("\n");
@@ -44,24 +44,28 @@ describe("detectIndentUnit", () => {
   });
 });
 
-describe("guideRange", () => {
+describe("guideLevels", () => {
   const two = { ch: 2, chars: 2 };
   const tab = { ch: 8, chars: 1 };
 
-  it("spans the leading whitespace from column 0", () => {
-    expect(guideRange("    x = 1;", two)).toEqual([0, 4]);
-    expect(guideRange("      deep();", two)).toEqual([0, 6]);
-    expect(guideRange("\t\tx();", tab)).toEqual([0, 2]);
+  it("counts full levels for lines indented two+ units", () => {
+    expect(guideLevels("    x = 1;", two)).toBe(2);
+    expect(guideLevels("      deep();", two)).toBe(3);
+    expect(guideLevels("\t\tx();", tab)).toBe(2);
   });
 
-  it("skips lines with less than two levels (no value, less DOM)", () => {
-    expect(guideRange("  x = 1;", two)).toBeNull();
-    expect(guideRange("top();", two)).toBeNull();
-    expect(guideRange("\tx();", tab)).toBeNull();
+  it("returns null under two levels — a lone guide hugs the text", () => {
+    expect(guideLevels("  x = 1;", two)).toBeNull();
+    expect(guideLevels("top();", two)).toBeNull();
+    expect(guideLevels("\tx();", tab)).toBeNull();
   });
 
-  it("skips blank and whitespace-only lines", () => {
-    expect(guideRange("", two)).toBeNull();
-    expect(guideRange("        ", two)).toBeNull();
+  it("returns null for empty and whitespace-only lines", () => {
+    expect(guideLevels("", two)).toBeNull();
+    expect(guideLevels("        ", two)).toBeNull();
+  });
+
+  it("floors partial units — a continuation line keeps its block's guides", () => {
+    expect(guideLevels("     odd();", two)).toBe(2);
   });
 });

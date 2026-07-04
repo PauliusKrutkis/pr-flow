@@ -1,10 +1,11 @@
 // Indent guides for the diff viewer — faint vertical lines at each indent
 // level, the honest substitute for bracket matching when all you have is a
 // patch fragment. This module is the pure half: detecting a file's indent
-// unit from its patch rows, and deciding which leading-whitespace span of a
-// line should carry the guide mark. The render side wraps that span in a
-// <mark class="qf-indent"> whose repeating background gradient paints one
-// hairline per unit (see highlight.ts / quiet.css).
+// unit from its patch rows, and counting a line's indent levels. The render
+// side paints the guides as a row-level ::before gradient sized by those
+// levels (see .qf-code::before in quiet.css) — guides never enter the text
+// flow, so they can't fragment text nodes or interact with selection,
+// clicks, or the mark layers.
 
 import type { DiffHunk } from "./diff";
 
@@ -48,17 +49,14 @@ export function detectIndentUnit(hunks: DiffHunk[]): IndentUnit {
 }
 
 /**
- * The [0, n) column span of `code`'s leading whitespace when it should carry
- * an indent-guide mark, or null for lines indented less than TWO levels —
- * a single level's guide hugs the text and adds DOM for no orientation value.
- * Whitespace-only lines get no guide either (nothing to guide the eye to).
+ * How many indent levels of guides `code` should show, or null for lines
+ * indented less than TWO levels — a single level's guide hugs the text and
+ * paints for no orientation value. Whitespace-only lines get no guides
+ * either (nothing to guide the eye to).
  */
-export function guideRange(
-  code: string,
-  unit: IndentUnit,
-): [number, number] | null {
+export function guideLevels(code: string, unit: IndentUnit): number | null {
   const ws = LEADING_WS.exec(code)![0];
   if (ws.length === code.length) return null;
-  if (ws.length < 2 * unit.chars) return null;
-  return [0, ws.length];
+  const levels = Math.floor(ws.length / unit.chars);
+  return levels >= 2 ? levels : null;
 }

@@ -17,7 +17,7 @@ import {
   highlightLineWithOccurrences,
 } from "../../lib/highlight";
 import { intralinePairs, type IntralineRanges } from "../../lib/intraline";
-import { detectIndentUnit, type IndentUnit } from "../../lib/indent";
+import { detectIndentUnit, guideLevels, type IndentUnit } from "../../lib/indent";
 import { cn } from "../../lib/cn";
 import { useHotkeys } from "../../keyboard";
 import { useAppStore } from "../../store/appStore";
@@ -212,6 +212,7 @@ const DiffLine = memo(function DiffLine({
   onOpenBox: (anchor: string) => void;
 }) {
   const marker = row.type === "add" ? "+" : row.type === "del" ? "-" : " ";
+  const guideLvl = guideLevels(row.content, indent);
   return (
     <div
       data-anchor={anchor ?? undefined}
@@ -244,7 +245,16 @@ const DiffLine = memo(function DiffLine({
       </span>
       <span className="qf-gutter qf-gutter-new">{row.newLine ?? ""}</span>
       <span className="qf-marker">{marker}</span>
-      <code className="qf-code">
+      <code
+        className="qf-code"
+        // Indent guides paint as this element's ::before, sized by the line's
+        // levels — they never enter the text flow (see .qf-code::before).
+        style={
+          guideLvl != null
+            ? ({ "--qf-lvl": guideLvl } as CSSProperties)
+            : undefined
+        }
+      >
         <span
           className="hljs"
           dangerouslySetInnerHTML={{
@@ -253,7 +263,7 @@ const DiffLine = memo(function DiffLine({
             // emphasis goes on first; find/occurrence marks nest inside it.
             __html:
               markQuery == null
-                ? highlightLineWithIntra(row.content, filename, intra, indent)
+                ? highlightLineWithIntra(row.content, filename, intra)
                 : markKind === "find"
                   ? highlightLineWithFind(
                       row.content,
@@ -262,7 +272,6 @@ const DiffLine = memo(function DiffLine({
                       markFlag,
                       findOrdinal,
                       intra,
-                      indent,
                     )
                   : highlightLineWithOccurrences(
                       row.content,
@@ -270,7 +279,6 @@ const DiffLine = memo(function DiffLine({
                       markQuery,
                       markFlag,
                       intra,
-                      indent,
                     ),
           }}
         />
