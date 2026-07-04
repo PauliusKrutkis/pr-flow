@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import type { ChangedFile, PendingComment, ReviewComment } from "../../types";
 import { cn } from "../../lib/cn";
@@ -58,6 +58,8 @@ interface FileSectionProps extends FileSectionCallbacks {
    */
   marks: MarkSpec | null;
   findCurrent: FindCurrent | null;
+  /** Content changed since the reviewer marked it viewed (auto-unviewed). */
+  changed: boolean;
   addPending: boolean;
 }
 
@@ -101,6 +103,7 @@ export const FileSection = memo(function FileSection({
   seed,
   marks,
   findCurrent,
+  changed,
   addPending,
   onActivate,
   onCursorExit,
@@ -115,6 +118,22 @@ export const FileSection = memo(function FileSection({
   const dir = slash === -1 ? "" : file.filename.slice(0, slash + 1);
   const basename = slash === -1 ? file.filename : file.filename.slice(slash + 1);
 
+  // The header path is a copy target (like the branch chips): click copies,
+  // a check confirms in place. Mirrors the mod+shift+c binding for the mouse.
+  const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
+  function copyPath() {
+    void navigator.clipboard?.writeText(file.filename).catch(() => {});
+    setCopied(true);
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => setCopied(false), 1200);
+  }
+
   return (
     <section
       ref={(el) => registerEl(index, el)}
@@ -123,13 +142,31 @@ export const FileSection = memo(function FileSection({
     >
       <header className="qf-fsec-head">
         <span className={cn("qf-file-glyph", glyph.cls)}>{glyph.letter}</span>
-        <span className="qf-fsec-name" title={file.filename}>
+        <button
+          type="button"
+          className="qf-fsec-name qf-fsec-copy"
+          title={copied ? "Copied" : `${file.filename} — click to copy path`}
+          onClick={copyPath}
+        >
           {file.previousFilename && file.status === "renamed" && (
             <span className="qf-filebar-prev">{file.previousFilename} → </span>
           )}
           <span className="qf-file-dir">{dir}</span>
           <span className="qf-fsec-base">{basename}</span>
-        </span>
+          {copied && (
+            <span className="qf-fsec-copied" aria-live="polite">
+              <Check size={11} aria-hidden /> copied
+            </span>
+          )}
+        </button>
+        {changed && (
+          <span
+            className="qf-updated-chip"
+            title="Changed since you marked it viewed"
+          >
+            updated
+          </span>
+        )}
         <span className="qf-filebar-stat">
           <span className="qf-add">+{file.additions}</span>
           <span className="qf-del">−{file.deletions}</span>

@@ -4,6 +4,7 @@
 #
 # Install:
 #   brew tap pauliuskrutkis/tap
+#   brew trust --tap pauliuskrutkis/tap   (one-time, newer Homebrew versions)
 #   brew install --cask nod
 #   xattr -dr com.apple.quarantine /Applications/Nod.app
 #

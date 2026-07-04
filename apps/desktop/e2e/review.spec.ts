@@ -137,6 +137,24 @@ test("info drawer: i opens with the conversation, esc closes drawer first", asyn
   ).toBeVisible();
 });
 
+test("y and mod+shift+c copy with toast confirmations", async ({ page }) => {
+  await page.keyboard.press("y");
+  const toast = page.getByRole("alert");
+  await expect(toast).toContainText("Copied PR link");
+  await expect(toast).toContainText("https://github.com/acme/rocket/pull/1");
+
+  await page.keyboard.press("Control+Shift+C");
+  await expect(toast).toContainText("Copied file path");
+  await expect(toast).toContainText("src/lib/fuzzy.ts");
+});
+
+test("the palette lists the copy actions in review scope", async ({ page }) => {
+  await page.keyboard.press("Control+k");
+  await page.getByPlaceholder("Run a command…").fill("copy");
+  await expect(page.getByRole("button", { name: /Copy file path/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Copy PR link/ })).toBeVisible();
+});
+
 test("esc returns to the inbox", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: /Review requests/ })).toBeVisible();

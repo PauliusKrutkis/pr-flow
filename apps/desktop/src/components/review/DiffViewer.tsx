@@ -628,8 +628,10 @@ export function DiffViewer({
     return null;
   }
 
-  // Holding j/k accelerates: after ~1s of key-repeat the cursor moves 3 lines
-  // per repeat, after ~2.5s six — long diffs stay traversable without paging.
+  // Holding j/k accelerates: after ~¼s of key-repeat (8 repeats at a typical
+  // ~30/s rate) the cursor moves 3 lines per repeat, after ~¾s (24) six —
+  // long diffs stay traversable without paging, and the gear shifts arrive
+  // while you're still leaning on the key rather than after you've overshot.
   const heldRepeatsRef = useRef(0);
 
   function moveCursor(delta: number, isRepeat = false) {
@@ -637,7 +639,7 @@ export function DiffViewer({
     if (inputMode !== "keyboard") setInputMode("keyboard");
     heldRepeatsRef.current = isRepeat ? heldRepeatsRef.current + 1 : 0;
     const held = heldRepeatsRef.current;
-    const multiplier = held >= 40 ? 6 : held >= 15 ? 3 : 1;
+    const multiplier = held >= 24 ? 6 : held >= 8 ? 3 : 1;
     pendingDeltaRef.current += delta * multiplier;
     if (rafRef.current == null) {
       rafRef.current = requestAnimationFrame(flushCursor);

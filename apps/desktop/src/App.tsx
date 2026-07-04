@@ -40,6 +40,7 @@ export default function App() {
   const switchAccount = useAppStore((s) => s.switchAccount);
   const toast = useAppStore((s) => s.toast);
   const setToast = useAppStore((s) => s.setToast);
+  const inboxPaneVisible = useAppStore((s) => s.inboxPaneVisible);
   const [trackerOpen, setTrackerOpen] = useState(false);
 
   // Toasts self-dismiss (archive undo, failed optimistic actions, …).
@@ -185,7 +186,11 @@ export default function App() {
   const isMac = navigator.userAgent.includes("Macintosh");
 
   return (
-    <div className="q-canvas flex h-full flex-col" data-route={route.name}>
+    <div
+      className="q-canvas flex h-full flex-col"
+      data-route={route.name}
+      data-pane={inboxPaneVisible ? "detail" : "none"}
+    >
       {isMac && <div data-tauri-drag-region className="q-titlebar shrink-0" />}
       <div className="min-h-0 flex-1">
         {route.name === "loading" && (

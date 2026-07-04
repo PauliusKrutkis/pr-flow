@@ -107,8 +107,14 @@ fn mr_to_pr(v: &Value) -> PullRequest {
         base_ref: fstr(v, "target_branch"),
         additions: 0,
         deletions: 0,
-        changed_files: 0,
+        // List responses carry `changes_count` as a string ("12", capped
+        // "1000+"); +/- line totals only exist on the detail fetch.
+        changed_files: fstr(v, "changes_count")
+            .trim_end_matches('+')
+            .parse()
+            .unwrap_or(0),
         body: fstr(v, "description"),
+        last_comment: None,
     }
 }
 

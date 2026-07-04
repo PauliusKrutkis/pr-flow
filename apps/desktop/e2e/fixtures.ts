@@ -1,6 +1,11 @@
 // Deterministic backend fixtures for the mocked Tauri bridge.
 
-const pr = (n: number, title: string, author: string, updatedAt: string) => ({
+export const makePr = (
+  n: number,
+  title: string,
+  author: string,
+  updatedAt: string,
+) => ({
   id: n,
   number: n,
   title,
@@ -24,20 +29,54 @@ const pr = (n: number, title: string, author: string, updatedAt: string) => ({
   deletions: 3,
   changedFiles: 2,
   body: "A **fixture** pull request.",
+  // PRs with comments also carry a reading-pane teaser, like the live list.
+  lastComment:
+    n === 1
+      ? {
+          author: "bob",
+          authorAvatarUrl: "",
+          body: "Looks good — one nit on the debounce timing.",
+          createdAt: "2026-07-02T09:30:00Z",
+        }
+      : undefined,
 });
 
-export const INBOX = {
+export type PrFixture = ReturnType<typeof makePr>;
+export type BucketFixture = { count: number; prs: PrFixture[] };
+export type InboxFixture = Record<
+  "reviewRequested" | "assigned" | "created" | "involved",
+  BucketFixture
+>;
+
+export const INBOX: InboxFixture = {
   reviewRequested: {
     count: 3,
     prs: [
-      pr(1, "Add fuzzy matching to search", "alice", "2026-07-02T10:00:00Z"),
-      pr(2, "Fix cursor drift in diff viewer", "bob", "2026-07-02T09:00:00Z"),
-      pr(3, "Rework the token gate", "carol", "2026-07-01T18:00:00Z"),
+      makePr(1, "Add fuzzy matching to search", "alice", "2026-07-02T10:00:00Z"),
+      makePr(2, "Fix cursor drift in diff viewer", "bob", "2026-07-02T09:00:00Z"),
+      makePr(3, "Rework the token gate", "carol", "2026-07-01T18:00:00Z"),
     ],
   },
   assigned: { count: 0, prs: [] },
-  created: { count: 1, prs: [pr(4, "My own PR", "me", "2026-07-01T12:00:00Z")] },
+  created: { count: 1, prs: [makePr(4, "My own PR", "me", "2026-07-01T12:00:00Z")] },
   involved: { count: 0, prs: [] },
+};
+
+/* The watched-repos ("Watching") bucket: one PR that ALSO lives in the inbox
+   (dedup coverage) and one that exists ONLY here, in a different repo. */
+export const SUBSCRIBED: BucketFixture = {
+  count: 2,
+  prs: [
+    makePr(1, "Add fuzzy matching to search", "alice", "2026-07-02T10:00:00Z"),
+    {
+      ...makePr(77, "Watched-only satellite uplink", "dave", "2026-07-01T15:00:00Z"),
+      id: 9077,
+      repo: "acme/comet",
+      owner: "acme",
+      name: "comet",
+      url: "https://github.com/acme/comet/pull/77",
+    },
+  ],
 };
 
 const PATCH = `@@ -1,5 +1,6 @@
@@ -50,7 +89,7 @@ const PATCH = `@@ -1,5 +1,6 @@
 
 export const DETAIL = {
   pr: {
-    ...pr(1, "Add fuzzy matching to search", "alice", "2026-07-02T10:00:00Z"),
+    ...makePr(1, "Add fuzzy matching to search", "alice", "2026-07-02T10:00:00Z"),
   },
   files: [
     {
@@ -167,6 +206,53 @@ export const DETAIL = {
     },
   ],
   fetchedAt: 1_750_000_000_000,
+};
+
+/**
+ * The same PR after a push that reworks fuzzy.ts: new head sha, changed patch
+ * for the first file, second file untouched. Serve it on a later load (see
+ * bridge detailByLoad) to exercise the auto-unview-on-content-change flow.
+ */
+export const DETAIL_CHANGED = {
+  ...DETAIL,
+  pr: { ...DETAIL.pr, headSha: "headsha2", updatedAt: "2026-07-02T11:00:00Z" },
+  files: [
+    {
+      ...DETAIL.files[0],
+      additions: 3,
+      changes: 4,
+      patch: `@@ -1,5 +1,7 @@
+ export function alpha() {
+-  return 1;
++  // tuned again
++  const two = 2;
++  return two;
+ }
+ export const beta = true;`,
+      sha: "f1b",
+    },
+    // The push only reworks fuzzy.ts — search.ts and retry.ts are untouched,
+    // so their viewed marks must survive the reconcile.
+    DETAIL.files[1],
+    DETAIL.files[2],
+  ],
+  fetchedAt: 1_750_000_100_000,
+};
+
+/**
+ * INBOX after the push behind DETAIL_CHANGED: only PR #1's updatedAt moves
+ * (matching DETAIL_CHANGED.pr.updatedAt). Serve it on a later list_inbox call
+ * (bridge inboxByCall) to exercise the heartbeat-driven detail refresh.
+ */
+export const INBOX_UPDATED = {
+  ...INBOX,
+  reviewRequested: {
+    ...INBOX.reviewRequested,
+    prs: [
+      { ...INBOX.reviewRequested.prs[0], updatedAt: "2026-07-02T11:00:00Z" },
+      ...INBOX.reviewRequested.prs.slice(1),
+    ],
+  },
 };
 
 export const ACCOUNT = {

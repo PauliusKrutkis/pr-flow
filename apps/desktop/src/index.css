@@ -86,11 +86,15 @@ body {
 
 /* Overlay scrollbars: invisible at rest, a slim themed thumb while the
    container is actually scrolling (the `is-scrolling` class is applied by a
-   capture-phase listener in App.tsx) or while hovering it. */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
+   capture-phase listener in App.tsx) or while hovering it.
+
+   IMPORTANT: never set the standard `scrollbar-width`/`scrollbar-color` on the
+   same elements — in modern Blink/WebKit either standard property makes the
+   engine ignore `::-webkit-scrollbar*` styling entirely, so the custom design
+   (5px rounded thumb, hover states) would silently never apply. The webkit
+   pseudos cover every engine Nod ships in (WebView2/Chromium, WKWebView,
+   WebKitGTK); the @supports block approximates the design for engines without
+   them (e.g. Firefox during web dev). */
 *::-webkit-scrollbar {
   width: 9px;
   height: 9px;
@@ -99,15 +103,12 @@ body {
 *::-webkit-scrollbar-thumb {
   background-color: transparent;
   border-radius: 9999px;
-  border: 2px solid transparent;
+  border: 2px solid transparent; /* 9px lane − 2×2px inset = 5px thumb */
   background-clip: content-box;
 }
 *::-webkit-scrollbar-track,
 *::-webkit-scrollbar-corner {
   background: transparent;
-}
-.is-scrolling {
-  scrollbar-color: var(--color-line-strong) transparent;
 }
 .is-scrolling::-webkit-scrollbar-thumb,
 *:hover::-webkit-scrollbar-thumb {
@@ -115,6 +116,16 @@ body {
 }
 .is-scrolling::-webkit-scrollbar-thumb:hover {
   background-color: var(--color-faint);
+}
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .is-scrolling,
+  *:hover {
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
 }
 
 /* macOS overlay titlebar: room for the traffic lights + a window drag handle.
