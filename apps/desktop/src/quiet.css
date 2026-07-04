@@ -916,7 +916,9 @@ textarea.q-input { resize: none; line-height: 1.5; }
    grid. */
 .dir-quiet mark.qf-occ-mark {
   color: inherit;
-  background: color-mix(in srgb, var(--fg) 15%, transparent);
+  /* 26% ≈ VS Code's dark-theme word-highlight weight — 15% disappeared into
+     the add/del row tints. */
+  background: color-mix(in srgb, var(--fg) 26%, transparent);
   border-radius: 2px;
   padding: 0;
   margin: 0;
