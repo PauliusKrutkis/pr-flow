@@ -79,6 +79,25 @@ export const DETAIL = {
 +export default search`,
       sha: "f2",
     },
+    {
+      filename: "src/lib/retry.ts",
+      status: "modified",
+      additions: 1,
+      deletions: 1,
+      changes: 2,
+      // A clean one-token rename: the −/+ pair passes the intraline noise
+      // guard, so exactly "Count"/"Limit" carry word-diff emphasis. (fuzzy.ts
+      // above pairs "return 1;" with a comment — that pair must FAIL the
+      // guard and render without emphasis.) Keep this file free of the tokens
+      // other tests count across files: return/gamma/beta/alpha/search.
+      patch: `@@ -1,4 +1,4 @@
+ export function withRetry(fn: () => Promise<void>) {
+-  const retryCount = 3;
++  const retryLimit = 3;
+   let delay = 100;
+ }`,
+      sha: "f3",
+    },
   ],
   comments: [
     {

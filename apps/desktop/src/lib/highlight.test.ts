@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   highlightLine,
   highlightLineWithFind,
+  highlightLineWithIntra,
   highlightLineWithMatch,
   highlightLineWithOccurrences,
   isHighlightable,
@@ -101,6 +102,50 @@ describe("highlightLineWithFind", () => {
   it("keeps the rendered text byte-identical to the code", () => {
     const code = "const value = compute(value) + 1;";
     const html = highlightLineWithFind(code, "a.ts", "value", false, 0);
+    expect(html.replace(/<[^>]+>/g, "")).toBe(code);
+  });
+});
+
+describe("highlightLineWithIntra", () => {
+  const code = "const retryLimit = 3;";
+
+  it("wraps the given ranges in qf-intra-mark", () => {
+    // Columns of "Limit" in the code above.
+    const html = highlightLineWithIntra(code, "a.ts", [[11, 16]]);
+    expect(html).toContain('<mark class="qf-intra-mark">Limit</mark>');
+    expect(html.replace(/<[^>]+>/g, "")).toBe(code);
+  });
+
+  it("null or empty ranges leave the highlighted line untouched", () => {
+    expect(highlightLineWithIntra(code, "a.ts", null)).toBe(
+      highlightLine(code, "a.ts"),
+    );
+    expect(highlightLineWithIntra(code, "a.ts", [])).toBe(
+      highlightLine(code, "a.ts"),
+    );
+  });
+
+  it("find marks nest inside intraline marks (intra is layered first)", () => {
+    // The find hit ("Lim") lies inside the intraline span ("Limit") — the
+    // second pass walks text nodes inside the first pass's mark, so both
+    // marks coexist and the text stays byte-identical.
+    const html = highlightLineWithFind(code, "a.ts", "Lim", false, 0, [
+      [11, 16],
+    ]);
+    expect(html).toContain("qf-intra-mark");
+    expect(html).toContain("qf-find-mark");
+    expect(html.indexOf("qf-intra-mark")).toBeLessThan(
+      html.indexOf("qf-find-mark"),
+    );
+    expect(html.replace(/<[^>]+>/g, "")).toBe(code);
+  });
+
+  it("occurrence marks nest inside intraline marks too", () => {
+    const html = highlightLineWithOccurrences(code, "a.ts", "retryLimit", true, [
+      [11, 16],
+    ]);
+    expect(html).toContain("qf-intra-mark");
+    expect(html).toContain("qf-occ-mark");
     expect(html.replace(/<[^>]+>/g, "")).toBe(code);
   });
 });

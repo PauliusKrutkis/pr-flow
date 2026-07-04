@@ -933,6 +933,25 @@ textarea.q-input { resize: none; line-height: 1.5; }
   margin: 0;
 }
 
+/* Intraline word-diff emphasis (GitHub's "darker span inside the tinted row"):
+   on a −/+ pair only the tokens that differ get a stronger add/del fill, so
+   the eye lands on WHAT changed instead of re-reading both lines. Paint-only
+   (no padding/border) — the mono grid must not shift as diffs render. Scoped
+   to add/del rows: a stray mark anywhere else stays invisible by design. */
+.dir-quiet mark.qf-intra-mark {
+  color: inherit;
+  background: transparent;
+  border-radius: 2px;
+  padding: 0;
+  margin: 0;
+}
+.dir-quiet .qf-row-del mark.qf-intra-mark {
+  background: color-mix(in srgb, var(--del) 30%, transparent);
+}
+.dir-quiet .qf-row-add mark.qf-intra-mark {
+  background: color-mix(in srgb, var(--add) 30%, transparent);
+}
+
 /* ============ COMMENT THREADS ============ */
 .dir-quiet .qf-comment-wrap { background: var(--bg); padding: 0 16px 6px 70px; }
 .dir-quiet .qf-thread {

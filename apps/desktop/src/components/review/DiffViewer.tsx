@@ -11,10 +11,11 @@ import { ArrowDown, ArrowUp, MessageSquarePlus } from "lucide-react";
 import type { ChangedFile, PendingComment, ReviewComment } from "../../types";
 import { parsePatch, type DiffRow } from "../../lib/diff";
 import {
-  highlightLine,
   highlightLineWithFind,
+  highlightLineWithIntra,
   highlightLineWithOccurrences,
 } from "../../lib/highlight";
+import { intralinePairs, type IntralineRanges } from "../../lib/intraline";
 import { cn } from "../../lib/cn";
 import { useHotkeys } from "../../keyboard";
 import { useAppStore } from "../../store/appStore";
@@ -174,6 +175,7 @@ const DiffLine = memo(function DiffLine({
   isFlash,
   hasAnchored,
   canComment,
+  intra,
   markKind,
   markQuery,
   markFlag,
@@ -188,6 +190,12 @@ const DiffLine = memo(function DiffLine({
   isFlash: boolean;
   hasAnchored: boolean;
   canComment: boolean;
+  /**
+   * Intraline word-diff emphasis ranges for this row. Identity is stable —
+   * the arrays live in a Map memoized alongside the parsed rows — so this
+   * prop never breaks the memo on unrelated re-renders.
+   */
+  intra: IntralineRanges | null;
   /** The MarkSpec, as primitives so memoization only breaks when they change. */
   markKind: "find" | "occurrence" | null;
   markQuery: string | null;
@@ -236,10 +244,11 @@ const DiffLine = memo(function DiffLine({
           className="hljs"
           dangerouslySetInnerHTML={{
             // Marks are layered onto the SAME highlighted HTML (by wrapping
-            // text nodes), so syntax colours stay intact under them.
+            // text nodes), so syntax colours stay intact under them. Intraline
+            // emphasis goes on first; find/occurrence marks nest inside it.
             __html:
               markQuery == null
-                ? highlightLine(row.content, filename)
+                ? highlightLineWithIntra(row.content, filename, intra)
                 : markKind === "find"
                   ? highlightLineWithFind(
                       row.content,
@@ -247,12 +256,14 @@ const DiffLine = memo(function DiffLine({
                       markQuery,
                       markFlag,
                       findOrdinal,
+                      intra,
                     )
                   : highlightLineWithOccurrences(
                       row.content,
                       filename,
                       markQuery,
                       markFlag,
+                      intra,
                     ),
           }}
         />
@@ -280,6 +291,9 @@ export function DiffViewer({
   findCurrent,
 }: DiffViewerProps) {
   const hunks = useMemo(() => parsePatch(file.patch), [file.patch]);
+  // Word-level diff emphasis, computed once per patch (same memo level as the
+  // parsed rows — never per render) and looked up per row by object identity.
+  const intraByRow = useMemo(() => intralinePairs(hunks), [hunks]);
   const threadsByAnchor = useMemo(() => buildThreads(comments), [comments]);
   // Pending comments render with the signed-in identity, like the lab design.
   const activeAccount = useAppStore((s) =>
@@ -668,6 +682,7 @@ export function DiffViewer({
               isFlash={key != null && key === flashAnchor}
               hasAnchored={!!hasAnchored}
               canComment={target != null}
+              intra={intraByRow.get(row) ?? null}
               markKind={marks ? marks.kind : null}
               markQuery={marks ? marks.query : null}
               markFlag={
