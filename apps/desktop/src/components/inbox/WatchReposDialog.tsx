@@ -224,10 +224,14 @@ export function WatchReposDialog({
               role="combobox"
               aria-expanded={hits.length > 0}
             />
+            {/* Search-in-flight: the input's bottom edge becomes a 1px accent
+                sweep — no spinner, no reserved space below. */}
+            {searching && <span className="qw-scan" aria-hidden />}
           </div>
 
-          {/* live results */}
-          {input.trim().length >= 2 && (
+          {/* live results — only once there's something to say; an empty box
+              while the first search resolves is just a weird gap */}
+          {input.trim().length >= 2 && (hits.length > 0 || !searching) && (
             <div className="mt-2 flex flex-col gap-0.5" role="listbox">
               {hits.map((hit, i) => {
                 const watched = repos.includes(hit.fullName);

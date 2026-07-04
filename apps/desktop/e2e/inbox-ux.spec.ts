@@ -169,6 +169,29 @@ test("watch dialog: Tab arms remove and Done without moving focus", async ({
   await expect(page.getByRole("dialog", { name: "Watched repositories" })).toHaveCount(0);
 });
 
+test("watch dialog search shows a border sweep in flight, no empty box", async ({
+  page,
+}) => {
+  await setupApp(page, {
+    repoHits: [{ fullName: "acme/rocket", description: "Main repo" }],
+  });
+  await expect(page.getByRole("option").first()).toBeVisible();
+
+  await page.keyboard.press("w");
+  const input = page.getByPlaceholder(/Search repositories/);
+  await expect(input).toBeFocused();
+  await input.fill("roc");
+
+  // In flight: the input's bottom-edge sweep is the only indicator — the
+  // results container must not render as an empty gap below the field.
+  await expect(page.locator(".qw-scan")).toBeVisible();
+  await expect(page.locator(".qw-panel [role='listbox']")).toHaveCount(0);
+
+  // Settled: results replace the sweep.
+  await expect(page.locator(".qw-hit")).toContainText("acme/rocket");
+  await expect(page.locator(".qw-scan")).toHaveCount(0);
+});
+
 test("watch dialog input clears its leading icon", async ({ page }) => {
   await setupApp(page);
   await expect(page.getByRole("option").first()).toBeVisible();

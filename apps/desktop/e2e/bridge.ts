@@ -29,6 +29,9 @@ export interface AppOptions {
   subscribed?: BucketFixture;
   /** Repositories pre-listed in the watch dialog. */
   watchedRepos?: string[];
+  /** Results the watch dialog's provider search returns (after ~200ms, so
+   *  the in-flight state is observable). */
+  repoHits?: { fullName: string; description: string }[];
 }
 
 export async function setupApp(page: Page, opts: AppOptions = {}) {
@@ -41,6 +44,7 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
     detailByCall: opts.detailByCall ?? null,
     inboxByCall: opts.inboxByCall ?? null,
     watchedRepos: opts.watchedRepos ?? [],
+    repoHits: opts.repoHits ?? [],
     account: ACCOUNT,
   };
 
@@ -73,6 +77,8 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
       list_subscribed: () => cfg.subscribed,
       get_watched_repos: () => cfg.watchedRepos,
       set_watched_repos: () => null,
+      search_repos: () =>
+        new Promise((resolve) => setTimeout(() => resolve(cfg.repoHits), 200)),
       // Viewed marks persist in localStorage so they survive a reload, like
       // the real Rust JSON file survives an app restart.
       get_viewed_map: () =>

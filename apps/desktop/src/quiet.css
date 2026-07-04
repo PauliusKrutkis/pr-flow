@@ -1420,6 +1420,42 @@ textarea.q-input { resize: none; line-height: 1.5; }
   background: var(--surface-2);
   color: var(--fg);
 }
+/* Search-in-flight indicator: a hairline accent sweep riding the input's own
+   bottom border. Inset past the corner radius so it never breaks the shape. */
+.qw-scan {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 1px;
+  overflow: hidden;
+  border-radius: 999px;
+  pointer-events: none;
+}
+.qw-scan::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  /* The focused border is already 40% accent — the sweep needs a hotter
+     core and a faint bloom to read as a moving light, not a border. */
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--accent) 55%, white),
+    transparent
+  );
+  filter: drop-shadow(0 0 3px var(--accent));
+  animation: qw-scan 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes qw-scan {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qw-scan::before { animation: none; width: 100%; opacity: 0.5; }
+}
+
 /* Tab-armed action targets — the comment-form treatment: the control takes
    its hover/active look while focus stays in the input, no ring. */
 .qw-row-armed {
