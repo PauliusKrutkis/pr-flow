@@ -220,3 +220,39 @@ test("overview ruler: occurrence ticks on click, cleared by a blank click", asyn
   await expect(page.locator("mark.qf-occ-mark")).toHaveCount(0);
   await expect(page.locator(".qf-ruler")).toHaveCount(0);
 });
+
+test("occurrence navigation: n/p and mark clicks jump between occurrences", async ({ page }) => {
+  // "gamma" occurs twice in search.ts: on the "const gamma" row and the
+  // "return gamma" row. Click the first one.
+  await clickToken(page, 1, "gamma");
+  const marks = page.locator("mark.qf-occ-mark");
+  await expect(marks).toHaveCount(2);
+
+  // n jumps to the NEXT occurrence relative to the clicked one — the row
+  // flashes, and the marks survive the jump (navigation must not clear them).
+  await page.keyboard.press("n");
+  const flash = page.locator(".qf-row-flash");
+  await expect(flash).toHaveCount(1);
+  await expect(flash).toContainText("return gamma");
+  await expect(marks).toHaveCount(2);
+
+  // n again wraps around to the first occurrence.
+  await page.keyboard.press("n");
+  await expect(flash).toContainText("const gamma");
+
+  // p steps backwards (wrapping the other way).
+  await page.keyboard.press("p");
+  await expect(flash).toContainText("return gamma");
+
+  // Clicking a mark jumps to the occurrence after it: the LAST mark (on the
+  // "return gamma" row) wraps forward to the first ("const gamma") row.
+  const markBox = (await marks.nth(1).boundingBox())!;
+  await page.mouse.move(markBox.x + markBox.width / 2, markBox.y + markBox.height / 2);
+  await page.waitForTimeout(100); // settle the hover-driven row re-render
+  await page.mouse.click(markBox.x + markBox.width / 2, markBox.y + markBox.height / 2);
+  await expect(flash).toContainText("const gamma");
+  await expect(marks).toHaveCount(2);
+
+  // The occurrence ticks rode along untouched the whole time.
+  await expect(page.locator(".qf-ruler-tick.qf-ruler-occ")).toHaveCount(2);
+});
