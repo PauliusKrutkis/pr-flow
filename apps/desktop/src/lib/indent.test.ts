@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parsePatch } from "./diff";
-import { detectIndentUnit, guideLevels } from "./indent";
+import { detectIndentUnit, guideLevelsForHunk } from "./indent";
 
 function unitOf(lines: string[]) {
   const patch = ["@@ -1,9 +1,9 @@", ...lines.map((l) => ` ${l}`)].join("\n");
@@ -44,28 +44,42 @@ describe("detectIndentUnit", () => {
   });
 });
 
-describe("guideLevels", () => {
+describe("guideLevelsForHunk", () => {
   const two = { ch: 2, chars: 2 };
-  const tab = { ch: 8, chars: 1 };
+  const row = (content: string, type = "context") => ({ type, content });
 
-  it("counts full levels for lines indented two+ units", () => {
-    expect(guideLevels("    x = 1;", two)).toBe(2);
-    expect(guideLevels("      deep();", two)).toBe(3);
-    expect(guideLevels("\t\tx();", tab)).toBe(2);
+  it("counts levels per row; zero-indent rows get null", () => {
+    const rows = [row("top();"), row("  one();"), row("    two();")];
+    expect(guideLevelsForHunk(rows, two)).toEqual([null, 1, 2]);
   });
 
-  it("returns null under two levels — a lone guide hugs the text", () => {
-    expect(guideLevels("  x = 1;", two)).toBeNull();
-    expect(guideLevels("top();", two)).toBeNull();
-    expect(guideLevels("\tx();", tab)).toBeNull();
+  it("bridges blank lines with the smaller neighbour so columns run straight", () => {
+    const rows = [
+      row("    a();"),
+      row(""),
+      row("      b();"),
+      row("        "),
+      row("  c();"),
+    ];
+    expect(guideLevelsForHunk(rows, two)).toEqual([2, 2, 3, 1, 1]);
   });
 
-  it("returns null for empty and whitespace-only lines", () => {
-    expect(guideLevels("", two)).toBeNull();
-    expect(guideLevels("        ", two)).toBeNull();
+  it("does not bridge past the hunk's edge or invent guides at top level", () => {
+    const rows = [row(""), row("    a();"), row("")];
+    expect(guideLevelsForHunk(rows, two)).toEqual([null, 2, null]);
+  });
+
+  it("hunk header rows are null and stop bridging", () => {
+    const rows = [
+      row("    a();"),
+      row("@@", "hunk"),
+      row(""),
+      row("    b();"),
+    ];
+    expect(guideLevelsForHunk(rows, two)).toEqual([2, null, null, 2]);
   });
 
   it("floors partial units — a continuation line keeps its block's guides", () => {
-    expect(guideLevels("     odd();", two)).toBe(2);
+    expect(guideLevelsForHunk([row("     odd();")], two)).toEqual([2]);
   });
 });

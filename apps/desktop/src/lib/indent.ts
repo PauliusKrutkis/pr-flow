@@ -49,14 +49,43 @@ export function detectIndentUnit(hunks: DiffHunk[]): IndentUnit {
 }
 
 /**
- * How many indent levels of guides `code` should show, or null for lines
- * indented less than TWO levels — a single level's guide hugs the text and
- * paints for no orientation value. Whitespace-only lines get no guides
- * either (nothing to guide the eye to).
+ * Guide levels per row of a hunk, editor-style: a line shows guides for its
+ * own indentation, and blank / whitespace-only lines BRIDGE — they inherit
+ * the smaller of their non-blank neighbours' levels, so a column of guides
+ * runs straight through the gaps inside a block instead of reading as a
+ * dashed fence. Rows with zero levels get null (nothing to paint), and each
+ * hunk bridges independently (a hunk boundary is a real discontinuity).
+ * Indexed to match `hunk.rows`; "hunk" header rows are null.
  */
-export function guideLevels(code: string, unit: IndentUnit): number | null {
-  const ws = LEADING_WS.exec(code)![0];
-  if (ws.length === code.length) return null;
-  const levels = Math.floor(ws.length / unit.chars);
-  return levels >= 2 ? levels : null;
+export function guideLevelsForHunk(
+  rows: ReadonlyArray<{ type: string; content: string }>,
+  unit: IndentUnit,
+): Array<number | null> {
+  const own = rows.map((row) => {
+    if (row.type === "hunk") return null;
+    const ws = LEADING_WS.exec(row.content)![0];
+    // Whitespace-only lines have no indentation of their own — bridged below.
+    if (ws.length === row.content.length) return null;
+    return Math.floor(ws.length / unit.chars);
+  });
+  const out: Array<number | null> = own.slice();
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].type === "hunk" || own[i] !== null) continue;
+    let prev: number | null = null;
+    for (let j = i - 1; j >= 0 && rows[j].type !== "hunk"; j--) {
+      if (own[j] !== null) {
+        prev = own[j];
+        break;
+      }
+    }
+    let next: number | null = null;
+    for (let j = i + 1; j < rows.length && rows[j].type !== "hunk"; j++) {
+      if (own[j] !== null) {
+        next = own[j];
+        break;
+      }
+    }
+    out[i] = prev !== null && next !== null ? Math.min(prev, next) : null;
+  }
+  return out.map((lvl) => (lvl !== null && lvl >= 1 ? lvl : null));
 }

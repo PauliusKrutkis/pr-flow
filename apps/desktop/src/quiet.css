@@ -802,19 +802,21 @@ textarea.q-input { resize: none; line-height: 1.5; }
 }
 
 /* Indent guides: a hairline at each indent level, painted as a ::before
-   layer sized by the line's levels (--qf-lvl, set by DiffLine; --qf-indent
+   layer sized by the line's levels (--qf-lvl, set by DiffLine from bridged
+   per-hunk levels — blank lines inherit their neighbours', so a column runs
+   STRAIGHT through a block instead of reading as a dashed fence; --qf-indent
    is the file's unit, set per diff). Painted OUTSIDE the text flow — no
    wrapper elements in the code, so guides can't fragment text nodes or
-   interact with selection, clicks, or the mark layers — and spanning the
-   row's full height so consecutive lines read as continuous columns instead
-   of a picket fence. At 8% fg they're furniture: visible when you look for
-   them, silent when you don't. The 1px inset keeps the innermost boundary
-   (where the text starts) unpainted. */
+   interact with selection, clicks, or the mark layers. The layer overshoots
+   the row's 1.5px vertical padding so consecutive rows' columns touch. At
+   8% fg they're furniture: visible when you look for them, silent when you
+   don't. The 1px inset keeps the innermost boundary (where the text starts)
+   unpainted. */
 .dir-quiet .qf-code::before {
   content: "";
   position: absolute;
-  top: 0;
-  bottom: 0;
+  top: -1.5px;
+  bottom: -1.5px;
   left: 0;
   width: calc(var(--qf-lvl, 0) * var(--qf-indent, 2ch) - 1px);
   background: repeating-linear-gradient(

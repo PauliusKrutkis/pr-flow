@@ -130,18 +130,42 @@ test("indent guides paint on deep lines' code element, and nothing else", async 
   expect(style.lvl).toBe("4");
   expect(style.image).toContain("repeating-linear-gradient");
   expect(parseFloat(style.width)).toBeGreaterThan(0);
+  // Guides must land ON the text columns: the gradient is sized from the
+  // MEASURED space advance, not `ch` (the "0" glyph's advance, which drifts
+  // in some fonts). The ::before spans lvl × unit − 1px, so it must equal
+  // the width of (lvl × unit) leading spaces within a fraction of a pixel.
+  const drift = await deep.evaluate((el) => {
+    const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    w.nextNode();
+    const n = w.currentNode as Text;
+    const r = document.createRange();
+    r.setStart(n, 0);
+    r.setEnd(n, 8); // 4 levels × 2-space unit
+    const spaces = r.getBoundingClientRect().width;
+    const before = parseFloat(getComputedStyle(el, "::before").width);
+    return Math.abs(before - (spaces - 1));
+  });
+  expect(drift).toBeLessThan(0.35);
   // And the text flow carries no guide wrapper elements at all.
   await expect(section.locator("mark.qf-indent")).toHaveCount(0);
 
-  // One level deep (< 2 units) gets no guide layer — no value.
+  // One level deep paints the single col-0 guide (levels >= 1 now paint, so
+  // block columns run straight through shallow rows like closing braces)…
   const shallow = section
     .locator(".qf-row:not(.qf-row-hunk)", { hasText: "let delay = 100;" })
+    .first()
     .locator(".qf-code");
-  const shallowW = await shallow.evaluate(
+  await expect(shallow).toHaveAttribute("style", /--qf-lvl:\s*1/);
+
+  // …while zero-indent rows paint nothing.
+  const flat = section
+    .locator(".qf-row:not(.qf-row-hunk)", { hasText: "export function withRetry" })
+    .first()
+    .locator(".qf-code");
+  const flatW = await flat.evaluate(
     (el) => getComputedStyle(el, "::before").width,
   );
-  // width resolves to calc(0 * unit - 1px) => negative/zero => "auto"/"-1px"/"0px"
-  expect(parseFloat(shallowW) > 0).toBe(false);
+  expect(parseFloat(flatW) > 0).toBe(false);
 });
 
 test("intraline emphasis is paint-only and survives find marks on top", async ({ page }) => {

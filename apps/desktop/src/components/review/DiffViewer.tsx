@@ -3,6 +3,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -17,7 +18,7 @@ import {
   highlightLineWithOccurrences,
 } from "../../lib/highlight";
 import { intralinePairs, type IntralineRanges } from "../../lib/intraline";
-import { detectIndentUnit, guideLevels, type IndentUnit } from "../../lib/indent";
+import { detectIndentUnit, guideLevelsForHunk } from "../../lib/indent";
 import { cn } from "../../lib/cn";
 import { useHotkeys } from "../../keyboard";
 import { useAppStore } from "../../store/appStore";
@@ -178,7 +179,7 @@ const DiffLine = memo(function DiffLine({
   hasAnchored,
   canComment,
   intra,
-  indent,
+  guideLvl,
   markKind,
   markQuery,
   markFlag,
@@ -199,8 +200,8 @@ const DiffLine = memo(function DiffLine({
    * prop never breaks the memo on unrelated re-renders.
    */
   intra: IntralineRanges | null;
-  /** The file's indent unit (one memoized object per file) for the guides. */
-  indent: IndentUnit;
+  /** Indent-guide levels for this row (blank rows arrive bridged), or null. */
+  guideLvl: number | null;
   /** The MarkSpec, as primitives so memoization only breaks when they change. */
   markKind: "find" | "occurrence" | null;
   markQuery: string | null;
@@ -212,7 +213,6 @@ const DiffLine = memo(function DiffLine({
   onOpenBox: (anchor: string) => void;
 }) {
   const marker = row.type === "add" ? "+" : row.type === "del" ? "-" : " ";
-  const guideLvl = guideLevels(row.content, indent);
   return (
     <div
       data-anchor={anchor ?? undefined}
@@ -312,6 +312,19 @@ export function DiffViewer({
   // The file's indent unit — one detection per patch; rows and the CSS
   // gradient period (--qf-indent below) share the same object.
   const indentUnit = useMemo(() => detectIndentUnit(hunks), [hunks]);
+  // Guide levels per row, blanks bridged per hunk so the columns run straight
+  // (see guideLevelsForHunk). Keyed by row identity, like the intraline map.
+  const guideByRow = useMemo(() => {
+    const m = new Map<DiffRow, number>();
+    for (const hunk of hunks) {
+      const levels = guideLevelsForHunk(hunk.rows, indentUnit);
+      hunk.rows.forEach((row, i) => {
+        const lvl = levels[i];
+        if (lvl != null) m.set(row, lvl);
+      });
+    }
+    return m;
+  }, [hunks, indentUnit]);
   const threadsByAnchor = useMemo(() => buildThreads(comments), [comments]);
   // Pending comments render with the signed-in identity, like the lab design.
   const activeAccount = useAppStore((s) =>
@@ -341,6 +354,26 @@ export function DiffViewer({
   const [flashAnchor, setFlashAnchor] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  // The REAL width of one mono column, measured from rendered spaces. The
+  // indent-guide gradient can't use `ch`: that unit is the "0" glyph's
+  // advance, which some fonts (JetBrains Mono) render a fraction wider than
+  // the space advance — a per-level drift that visibly walks the guides off
+  // the text columns by three or four levels deep. Null until measured
+  // (guides fall back to ch for the first paint).
+  const [pxPerCol, setPxPerCol] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const host = containerRef.current;
+    if (!host) return;
+    const probe = document.createElement("span");
+    probe.className = "qf-code";
+    probe.style.cssText =
+      "position:absolute;visibility:hidden;white-space:pre;pointer-events:none";
+    probe.textContent = " ".repeat(100);
+    host.appendChild(probe);
+    const w = probe.getBoundingClientRect().width / 100;
+    probe.remove();
+    if (w > 0) setPxPerCol(w);
+  }, []);
   // Only auto-scroll the cursor into view for explicit user moves — not for the
   // initial seed / collapse-driven re-placement, which would otherwise yank a
   // freshly-restored scroll position (resume) back to the top of the file.
@@ -665,7 +698,14 @@ export function DiffViewer({
       data-mode={inputMode}
       // The indent-guide gradient period, per file: guides land on every
       // indent level of THIS file's unit (see mark.qf-indent in quiet.css).
-      style={{ "--qf-indent": `${indentUnit.ch}ch` } as CSSProperties}
+      style={
+        {
+          "--qf-indent":
+            pxPerCol != null
+              ? `${(indentUnit.ch * pxPerCol).toFixed(3)}px`
+              : `${indentUnit.ch}ch`,
+        } as CSSProperties
+      }
       onMouseMove={(e) => {
         if (!isRealPointer(e.clientX, e.clientY)) return;
         if (inputMode !== "mouse") setInputMode("mouse");
@@ -710,7 +750,7 @@ export function DiffViewer({
               hasAnchored={!!hasAnchored}
               canComment={target != null}
               intra={intraByRow.get(row) ?? null}
-              indent={indentUnit}
+              guideLvl={guideByRow.get(row) ?? null}
               markKind={marks ? marks.kind : null}
               markQuery={marks ? marks.query : null}
               markFlag={
