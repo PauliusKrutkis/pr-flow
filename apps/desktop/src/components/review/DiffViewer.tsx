@@ -331,26 +331,27 @@ export function DiffViewer({
   marks,
   findCurrent,
 }: DiffViewerProps) {
+  // NOTE: several values below are deliberately NOT useMemo'd — the React
+  // Compiler caches them (react-doctor flags manual memoization here as dead
+  // weight). If the compiler ever bails on this component again, the blocking
+  // react-doctor gate goes red, and the perf e2e budgets catch the fallout.
   const hunks = useMemo(() => parsePatch(file.patch), [file.patch]);
-  // Word-level diff emphasis, computed once per patch (same memo level as the
-  // parsed rows — never per render) and looked up per row by object identity.
-  const intraByRow = useMemo(() => intralinePairs(hunks), [hunks]);
+  // Word-level diff emphasis, computed once per patch and looked up per row
+  // by object identity.
+  const intraByRow = intralinePairs(hunks);
   // The file's indent unit — one detection per patch; rows and the CSS
   // gradient period (--qf-indent below) share the same object.
-  const indentUnit = useMemo(() => detectIndentUnit(hunks), [hunks]);
+  const indentUnit = detectIndentUnit(hunks);
   // Guide levels per row, blanks bridged per hunk so the columns run straight
   // (see guideLevelsForHunk). Keyed by row identity, like the intraline map.
-  const guideByRow = useMemo(() => {
-    const m = new Map<DiffRow, number>();
-    for (const hunk of hunks) {
-      const levels = guideLevelsForHunk(hunk.rows, indentUnit);
-      hunk.rows.forEach((row, i) => {
-        const lvl = levels[i];
-        if (lvl != null) m.set(row, lvl);
-      });
-    }
-    return m;
-  }, [hunks, indentUnit]);
+  const guideByRow = new Map<DiffRow, number>();
+  for (const hunk of hunks) {
+    const levels = guideLevelsForHunk(hunk.rows, indentUnit);
+    hunk.rows.forEach((row, i) => {
+      const lvl = levels[i];
+      if (lvl != null) guideByRow.set(row, lvl);
+    });
+  }
   // Anchors of the rows the current MarkSpec actually hits. Mark props are
   // passed ONLY to these rows, so a keystroke in the find bar repaints the
   // rows whose match state changed (old hits clearing + new hits painting)
@@ -358,8 +359,8 @@ export function DiffViewer({
   // up and a full-file innerHTML rebuild per character. Both branches ride
   // the cached patch-text scanners, so this costs one indexOf sweep, not a
   // per-row pass.
-  const markedAnchors = useMemo<Set<string> | null>(() => {
-    if (!marks || !marks.query) return null;
+  let markedAnchors: Set<string> | null = null;
+  if (marks && marks.query) {
     const hits =
       marks.kind === "find"
         ? findInDiff([file], marks.query, {
@@ -371,10 +372,9 @@ export function DiffViewer({
             query: marks.query,
             wholeWord: marks.wholeWord,
           });
-    const set = new Set<string>();
-    for (const h of hits) set.add(h.anchor);
-    return set;
-  }, [file, marks]);
+    markedAnchors = new Set<string>();
+    for (const h of hits) markedAnchors.add(h.anchor);
+  }
   const threadsByAnchor = useMemo(() => buildThreads(comments), [comments]);
   // Pending comments render with the signed-in identity, like the lab design.
   const activeAccount = useAppStore((s) =>

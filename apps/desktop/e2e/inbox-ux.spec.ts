@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 import { setupApp } from "./bridge";
 import { makePr, SUBSCRIBED } from "./fixtures";
 import type { InboxFixture } from "./fixtures";

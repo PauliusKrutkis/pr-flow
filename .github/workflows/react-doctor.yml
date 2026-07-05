@@ -39,13 +39,11 @@ jobs:
           # The React app lives in the desktop workspace package; the repo
           # root is a pnpm monorepo with no React of its own.
           directory: apps/desktop
-          # Fail the check on NEW error-severity findings (relative to the
-          # merge base). Warnings stay advisory on purpose: the remaining ones
-          # are deliberate patterns — manual memoization kept as insurance in
-          # perf-critical components, a trigger-dep effect — and a warning
-          # gate would force removing them. Tighten to "warning" if that
-          # calculus changes.
-          blocking: error
+          # Fail the check on ANY new finding (relative to the merge base) —
+          # errors and warnings alike. The branch slate is clean (0/0);
+          # deliberate style disagreements are configured in
+          # apps/desktop/doctor.config.json instead of tolerated as noise.
+          blocking: warning
         # Full reference: https://www.react.doctor/ci
         # with:
         #   blocking: error          # Gate level: "none" (advisory, the default) | "warning" | "error"

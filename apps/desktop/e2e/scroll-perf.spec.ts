@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 import { setupApp } from "./bridge";
 import { makeBigDetail, perfBudget } from "./fixtures";
 

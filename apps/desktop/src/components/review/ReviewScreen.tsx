@@ -443,17 +443,20 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   // Which sections are near the viewport RIGHT NOW (adds and removes, unlike
   // `mounted`). Kept in a ref — it changes on every scroll and must not
   // re-render anything by itself; the find-mark scope below snapshots it.
-  const nearRef = useRef(new Set<number>());
+  const nearRef = useRef<Set<number>>(null!);
+  if (nearRef.current === null) nearRef.current = new Set();
   useEffect(() => {
     const root = scrollRef.current;
     if (!root || fileCount === 0) return;
+    // Captured once so the cleanup clears the same set the callbacks filled.
+    const near = nearRef.current;
     const io = new IntersectionObserver(
       (entries) => {
         for (const en of entries) {
           const idx = Number((en.target as HTMLElement).dataset.fileIndex);
           if (!Number.isFinite(idx)) continue;
           if (en.isIntersecting) {
-            nearRef.current.add(idx);
+            near.add(idx);
             // A marked query is active and a fresh section is approaching:
             // pull it into the mark scope so its highlights are painted by
             // the time it's on screen. (State change, but only while find is
@@ -464,7 +467,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
               );
             }
           } else {
-            nearRef.current.delete(idx);
+            near.delete(idx);
           }
         }
       },
@@ -473,9 +476,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     for (const el of sectionEls.current.values()) io.observe(el);
     return () => {
       io.disconnect();
-      nearRef.current.clear();
+      near.clear();
     };
-  }, [fileCount, findOpenRef]);
+  }, [fileCount, findOpenRef, nearRef]);
 
   useEffect(() => {
     return () => {
@@ -492,10 +495,12 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   // Bounded: skipped for monster PRs where holding every section's rows is
   // not worth it (content-visibility keeps mounted-but-offscreen rows cheap,
   // but DOM memory still scales with row count).
-  const totalPatchRows = useMemo(
-    () =>
-      files.reduce((n, f) => n + (f.patch ? f.patch.split("\n").length : 0), 0),
-    [files],
+  // (Plain computations, not useMemo — the React Compiler caches them; the
+  // blocking react-doctor gate flags any future compile bailout, and the perf
+  // e2e budgets catch the fallout. Same for the find/marks values below.)
+  const totalPatchRows = files.reduce(
+    (n, f) => n + (f.patch ? f.patch.split("\n").length : 0),
+    0,
   );
   const mountedRef = useLatest(mounted);
   useEffect(() => {
@@ -558,7 +563,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         else clearTimeout(handle as ReturnType<typeof setTimeout>);
       }
     };
-  }, [fileCount, totalPatchRows, mountedRef, fileCountRef]);
+  }, [fileCount, totalPatchRows, mountedRef, fileCountRef, findOpenRef]);
 
   function handleScroll() {
     lastActivityTsRef.current = performance.now();
@@ -666,13 +671,10 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   // Matches come from the PATCH TEXT (lib/findInDiff), so unmounted sections
   // count too; only rendered rows pay for highlighting.
-  const findMatches = useMemo(
-    () =>
-      findOpen && findQuery
-        ? findInDiff(files, findQuery, { caseSensitive: findCase })
-        : EMPTY_MATCHES,
-    [findOpen, findQuery, findCase, files],
-  );
+  const findMatches =
+    findOpen && findQuery
+      ? findInDiff(files, findQuery, { caseSensitive: findCase })
+      : EMPTY_MATCHES;
   /** Re-anchor find to the viewport: remember the topmost visible section and
    *  the fraction of it scrolled past. Called from the query-change handlers
    *  (event time), so the seeded-index memo below stays layout-read-free. */
@@ -698,19 +700,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   // browsers anchor find to the caret; ours is the viewport). Row order
   // within the seed file compares by the same patch-fraction approximation
   // the overview ruler places its ticks with.
-  const findSeededIndex = useMemo(() => {
-    const seed = findSeed;
-    if (!seed || findMatches.length === 0) return 0;
-    for (let i = 0; i < findMatches.length; i++) {
-      const m = findMatches[i];
-      if (m.fileIndex < seed.fileIndex) continue;
-      if (m.fileIndex > seed.fileIndex) return i;
-      // anchorFractions caches per patch (lib/diff), so this stays one lookup.
-      const fractions = anchorFractions(files[seed.fileIndex]?.patch);
-      if ((fractions.get(m.anchor) ?? 0) >= seed.frac) return i;
-    }
-    return 0;
-  }, [findMatches, files, findSeed]);
+  const findSeededIndex = seededMatchIndex(findMatches, files, findSeed);
 
   // The file list can change under an open bar (PR head moved) — stay valid.
   const findSafeIndex =
@@ -720,17 +710,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   // The current match as (row anchor, occurrence ordinal). Matches on one line
   // are adjacent in the list, so the ordinal is the run-length behind us.
-  const findCurrent = useMemo<(FindCurrent & { fileIndex: number }) | null>(() => {
-    const m = findMatches[findSafeIndex];
-    if (!m) return null;
-    let ordinal = 0;
-    for (let i = findSafeIndex - 1; i >= 0; i--) {
-      const p = findMatches[i];
-      if (p.fileIndex !== m.fileIndex || p.anchor !== m.anchor) break;
-      ordinal += 1;
-    }
-    return { fileIndex: m.fileIndex, anchor: m.anchor, ordinal };
-  }, [findMatches, findSafeIndex]);
+  const findCurrent = currentMatchAt(findMatches, findSafeIndex);
 
   // Every query edit re-anchors to the viewport: after a jump the viewport IS
   // the last match, so typing more keeps searching from where you are. The
@@ -788,53 +768,23 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   // The occurrence spec's matches across its WHOLE file, from the patch text
   // (off-screen rows count). Feeds the overview ruler's ticks and, in occ
   // mode, click/n/p navigation between occurrences.
-  const occMatchList = useMemo(
-    () =>
-      occSpec
-        ? occurrenceMatches(files[occSpec.fileIndex] ?? {}, occSpec)
-        : EMPTY_OCC,
-    [occSpec, files],
-  );
+  const occMatchList = occSpec
+    ? occurrenceMatches(files[occSpec.fileIndex] ?? {}, occSpec)
+    : EMPTY_OCC;
   const occMatchListRef = useLatest(occMatchList);
 
   // ---- occurrence navigation (clicking a mark, n/p) --------------------------
-  // These read only refs, so the mount-once click handler can call them
-  // without going stale. Declared ABOVE that handler's effect: function
-  // declarations hoist at runtime, but the React Compiler doesn't model
-  // hoisting and refuses to optimize a component that calls before declaring.
-
-  /** Index in the match list of the occurrence covering (anchor, column). */
-  function occIndexAt(anchor: string, column: number): number {
-    return occMatchListRef.current.findIndex(
-      (m) => m.anchor === anchor && m.start <= column && column <= m.end,
-    );
-  }
-
-  /** Jump to match `index` (wrapping), keeping the marks alive. */
-  function occJumpTo(index: number) {
-    const spec = occSpecRef.current;
-    const n = occMatchListRef.current.length;
-    if (!spec || n === 0) return;
-    const next = ((index % n) + n) % n;
-    occNavRef.current = next;
-    selectLineRef.current(spec.fileIndex, occMatchListRef.current[next].anchor, {
-      keepOccurrences: true,
-    });
-  }
-
-  /** n/p: step through the occurrences relative to the last-jumped position
-   *  (or the origin occurrence — the clicked/selected one — before any jump). */
-  function occStep(dir: 1 | -1) {
-    if (occMatchListRef.current.length === 0) return;
-    let at = occNavRef.current;
-    if (at < 0) {
-      const origin = occOriginRef.current;
-      const found = origin ? occIndexAt(origin.anchor, origin.column) : -1;
-      // No resolvable origin: n starts at the first match, p at the last.
-      at = found >= 0 ? found : dir > 0 ? -1 : 0;
-    }
-    occJumpTo(at + dir);
-  }
+  // buildOccNav is stateless over refs, so instances are interchangeable and
+  // built where they're used: at event time in the hotkey handlers below, and
+  // once inside the mount-once click-handler effect. Nothing render-scoped to
+  // go stale, nothing unstable in any effect's deps.
+  const occNavRefs = {
+    occMatchListRef,
+    occSpecRef,
+    occNavRef,
+    occOriginRef,
+    selectLineRef,
+  };
 
   // ---- selection → occurrence highlights ------------------------------------
 
@@ -847,6 +797,13 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   // the selection collapse that same click causes.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
+    const occNav = buildOccNav({
+      occMatchListRef,
+      occSpecRef,
+      occNavRef,
+      occOriginRef,
+      selectLineRef,
+    });
 
     // Skip identity-preserving updates entirely: no repaint on selection
     // noise, and no pointless selection restore. Capture even when clearing:
@@ -1011,8 +968,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         const textNode = mark.firstChild;
         if (code && anchor && textNode) {
           const column = codeColumnOf(code, textNode);
-          const at = column == null ? -1 : occIndexAt(anchor, column);
-          occJumpTo((at >= 0 ? at : occNavRef.current) + 1);
+          const at = column == null ? -1 : occNav.indexAt(anchor, column);
+          occNav.jumpTo((at >= 0 ? at : occNavRef.current) + 1);
           return;
         }
       }
@@ -1026,7 +983,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       document.removeEventListener("click", onClick);
       if (timer != null) clearTimeout(timer);
     };
-  }, []);
+    // All deps are refs or functions that read only refs (compiler-stable),
+    // so in practice this still attaches once.
+  }, [findOpenRef, occSpecRef, occMatchListRef, occNavRef, occOriginRef, selectLineRef]);
 
   // Re-select what the user had selected, over the row's freshly-painted text
   // nodes, before the browser paints — so the selection appears to simply
@@ -1047,29 +1006,25 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   // counts across files, but sections whose patch can't contain the query
   // keep a null prop so their memo holds through typing); occurrence marks
   // only to their own file (see occSpec).
-  const marks = useMemo<MarkSpec | null>(() => {
-    if (findOpen) {
-      return findQuery
-        ? { kind: "find", query: findQuery, caseSensitive: findCase }
-        : null;
-    }
-    return occSpec
+  const marks: MarkSpec | null = findOpen
+    ? findQuery
+      ? { kind: "find", query: findQuery, caseSensitive: findCase }
+      : null
+    : occSpec
       ? { kind: "occurrence", query: occSpec.query, wholeWord: occSpec.wholeWord }
       : null;
-  }, [findOpen, findQuery, findCase, occSpec]);
   // Which files get the find marks: a cheap superset test per file (raw patch
   // substring), NOT the capped match list — past MAX_MATCHES the list goes
   // silent on later files but their rendered highlights must still paint.
-  const findMarkFiles = useMemo<Set<number> | null>(() => {
-    if (!marks || marks.kind !== "find") return null;
-    const set = new Set<number>();
+  let findMarkFiles: Set<number> | null = null;
+  if (marks && marks.kind === "find") {
+    findMarkFiles = new Set<number>();
     for (let i = 0; i < files.length; i++) {
       if (patchMayMatch(files[i].patch, marks.query, marks.caseSensitive)) {
-        set.add(i);
+        findMarkFiles.add(i);
       }
     }
-    return set;
-  }, [marks, files]);
+  }
   const marksFor = (i: number): MarkSpec | null =>
     marks &&
     (marks.kind === "find"
@@ -1084,12 +1039,16 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   // What the overview ruler ticks: mirrors the marks precedence above — find
   // owns the diff while its bar is open, else the selection's occurrences.
-  const rulerMatches = useMemo<ReadonlyArray<RulerMatch>>(() => {
-    if (findOpen) return findQuery ? findMatches : EMPTY_RULER;
-    if (!occSpec) return EMPTY_RULER;
-    const fileIndex = occSpec.fileIndex;
-    return occMatchList.map((m) => ({ fileIndex, anchor: m.anchor }));
-  }, [findOpen, findQuery, findMatches, occSpec, occMatchList]);
+  const rulerMatches: ReadonlyArray<RulerMatch> = findOpen
+    ? findQuery
+      ? findMatches
+      : EMPTY_RULER
+    : occSpec
+      ? occMatchList.map((m) => ({
+          fileIndex: occSpec.fileIndex,
+          anchor: m.anchor,
+        }))
+      : EMPTY_RULER;
 
   // j/k crossing a file edge: activate the neighbour and seed its cursor.
   const handleCursorExit = useCallback((index: number, dir: 1 | -1) => {
@@ -1446,13 +1405,13 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
             keys: "n",
             description: "Next occurrence",
             hidden: true,
-            run: () => occStep(1),
+            run: () => buildOccNav(occNavRefs).step(1),
           },
           {
             keys: "p",
             description: "Previous occurrence",
             hidden: true,
-            run: () => occStep(-1),
+            run: () => buildOccNav(occNavRefs).step(-1),
           },
         ] satisfies Binding[])
       : []),
@@ -1787,6 +1746,99 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       />
     </div>
   );
+}
+
+/** Occurrence navigation over the current match list — see the occNav ref. */
+interface OccNav {
+  /** Index in the match list of the occurrence covering (anchor, column). */
+  indexAt(anchor: string, column: number): number;
+  /** Jump to match `index` (wrapping), keeping the marks alive. */
+  jumpTo(index: number): void;
+  /** n/p: step relative to the last-jumped position (or the origin
+   *  occurrence — the clicked/selected one — before any jump). */
+  step(dir: 1 | -1): void;
+}
+
+function buildOccNav(refs: {
+  occMatchListRef: React.RefObject<OccurrenceMatch[]>;
+  occSpecRef: React.RefObject<OccState | null>;
+  occNavRef: React.RefObject<number>;
+  occOriginRef: React.RefObject<{ anchor: string; column: number } | null>;
+  selectLineRef: React.RefObject<
+    (fileIndex: number, anchor: string, opts?: { keepOccurrences?: boolean }) => void
+  >;
+}): OccNav {
+  const { occMatchListRef, occSpecRef, occNavRef, occOriginRef, selectLineRef } =
+    refs;
+  const indexAt = (anchor: string, column: number): number =>
+    occMatchListRef.current.findIndex(
+      (m) => m.anchor === anchor && m.start <= column && column <= m.end,
+    );
+  const jumpTo = (index: number): void => {
+    const spec = occSpecRef.current;
+    const n = occMatchListRef.current.length;
+    if (!spec || n === 0) return;
+    const next = ((index % n) + n) % n;
+    occNavRef.current = next;
+    selectLineRef.current(spec.fileIndex, occMatchListRef.current[next].anchor, {
+      keepOccurrences: true,
+    });
+  };
+  const step = (dir: 1 | -1): void => {
+    if (occMatchListRef.current.length === 0) return;
+    let at = occNavRef.current;
+    if (at < 0) {
+      const origin = occOriginRef.current;
+      const found = origin ? indexAt(origin.anchor, origin.column) : -1;
+      // No resolvable origin: n starts at the first match, p at the last.
+      at = found >= 0 ? found : dir > 0 ? -1 : 0;
+    }
+    jumpTo(at + dir);
+  };
+  return { indexAt, jumpTo, step };
+}
+
+/**
+ * The first match at/after a captured viewport position, wrapping to the top
+ * when everything is behind it — the editor convention (VS Code / browsers
+ * anchor find to the caret; ours is the viewport). Row order within the seed
+ * file compares by the same patch-fraction approximation the overview ruler
+ * places its ticks with.
+ */
+function seededMatchIndex(
+  matches: FindMatch[],
+  files: ReadonlyArray<{ patch?: string | null }>,
+  seed: { fileIndex: number; frac: number } | null,
+): number {
+  if (!seed || matches.length === 0) return 0;
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    if (m.fileIndex < seed.fileIndex) continue;
+    if (m.fileIndex > seed.fileIndex) return i;
+    // anchorFractions caches per patch (lib/diff), so this stays one lookup.
+    const fractions = anchorFractions(files[seed.fileIndex]?.patch);
+    if ((fractions.get(m.anchor) ?? 0) >= seed.frac) return i;
+  }
+  return 0;
+}
+
+/**
+ * The match at `index` as (row anchor, occurrence ordinal). Matches on one
+ * line are adjacent in the list, so the ordinal is the run-length behind it.
+ */
+function currentMatchAt(
+  matches: FindMatch[],
+  index: number,
+): (FindCurrent & { fileIndex: number }) | null {
+  const m = matches[index];
+  if (!m) return null;
+  let ordinal = 0;
+  for (let i = index - 1; i >= 0; i--) {
+    const p = matches[i];
+    if (p.fileIndex !== m.fileIndex || p.anchor !== m.anchor) break;
+    ordinal += 1;
+  }
+  return { fileIndex: m.fileIndex, anchor: m.anchor, ordinal };
 }
 
 /**
