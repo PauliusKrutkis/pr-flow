@@ -99,6 +99,18 @@ test("resume: reopening paints the spot you left — no visible jump after", asy
   await page.keyboard.press("r");
   await page.keyboard.press("r");
   await expect(page.locator(".qf-fsec").nth(2).locator(".qf-diff")).toBeVisible();
+  // The file jump's own scrollIntoView runs in a rAF — wait for it to settle
+  // at the section top, or (on a slow machine) it lands AFTER the nudge below
+  // and clobbers the offset this test wants saved.
+  await page.waitForFunction(() => {
+    const host = document.querySelector(".qf-scrollhost")!;
+    const sec = document.querySelectorAll(".qf-fsec")[2];
+    return (
+      Math.abs(
+        host.getBoundingClientRect().top - sec.getBoundingClientRect().top,
+      ) < 4
+    );
+  });
   await page.evaluate(() => {
     document.querySelector(".qf-scrollhost")!.scrollTop += 120;
   });
