@@ -605,6 +605,16 @@ textarea.q-input { resize: none; line-height: 1.5; }
 }
 .dir-quiet .qf-back:hover { color: var(--fg); background: var(--surface-2); }
 
+/* The review scroll host does its OWN scroll anchoring (see the manual-anchor
+   effect in ReviewScreen): WebKitGTK — the engine the app ships on — has no
+   native scroll anchoring, so pre-mounting sections above the viewport would
+   visibly push the view around after opening a PR. Native anchoring is
+   disabled so Chromium (dev, e2e) runs the same compensation path the app
+   actually ships with. */
+.dir-quiet .qf-scrollhost {
+  overflow-anchor: none;
+}
+
 /* ============ FILE SECTIONS (continuous scroll) ============ */
 /* One section per changed file; the header stays stuck while its diff scrolls. */
 .dir-quiet .qf-fsec {

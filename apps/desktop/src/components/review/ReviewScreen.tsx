@@ -440,6 +440,37 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     return () => io.disconnect();
   }, [fileCount]);
 
+  // Manual scroll anchoring. When a section ABOVE the viewport changes height
+  // (the idle pre-mounter swapping an estimated placeholder for real rows),
+  // everything under the viewport shifts by the difference. Chromium hides
+  // that with native scroll anchoring; WebKitGTK — the engine the app ships
+  // on — has none, which read as the review "scrolling by itself" after open
+  // while pre-mount filled in the files above the resumed spot. Native
+  // anchoring is disabled on the host (overflow-anchor: none, quiet.css) and
+  // compensated here instead, so both engines run this one tested path.
+  useEffect(() => {
+    const host = scrollRef.current;
+    if (!host || fileCount === 0) return;
+    const heights = new Map<Element, number>();
+    const ro = new ResizeObserver((entries) => {
+      let shift = 0;
+      const hostTop = host.getBoundingClientRect().top;
+      for (const en of entries) {
+        const h = en.borderBoxSize?.[0]?.blockSize ?? en.contentRect.height;
+        const prev = heights.get(en.target);
+        heights.set(en.target, h);
+        if (prev === undefined || prev === h) continue;
+        // Only sections entirely above the viewport shift what you're
+        // reading; growth below just extends the scroll range.
+        const rect = en.target.getBoundingClientRect();
+        if (rect.bottom <= hostTop) shift += h - prev;
+      }
+      if (shift !== 0) host.scrollTop += shift;
+    });
+    for (const el of sectionEls.current.values()) ro.observe(el);
+    return () => ro.disconnect();
+  }, [fileCount]);
+
   // Which sections are near the viewport RIGHT NOW (adds and removes, unlike
   // `mounted`). Kept in a ref — it changes on every scroll and must not
   // re-render anything by itself; the find-mark scope below snapshots it.
@@ -593,6 +624,11 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     usePerfStore.getState().markFileStart();
     setMounted((prev) => (prev.has(target) ? prev : new Set(prev).add(target)));
     setActiveIndex(target);
+    // Eager ref sync: the useLatest write lands after React commits, but the
+    // next rAF-coalesced file move can flush BEFORE that — rapid r/t presses
+    // were reading the stale index and losing steps. (The insertion effect
+    // re-writes the same value at commit.)
+    activeIndexRef.current = target;
     setCommentIndex(0);
     setJump(null);
     // Navigating away is moving on — stale occurrence marks would just be
@@ -652,6 +688,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       prev.has(fileIndex) ? prev : new Set(prev).add(fileIndex),
     );
     setActiveIndex(fileIndex);
+    activeIndexRef.current = fileIndex; // eager — see scrollToFile
     setCommentIndex(0);
     // A search jump is navigation too — drop stale occurrence marks. Two
     // exceptions: with the find bar open the occurrence state is frozen (and
@@ -1056,13 +1093,14 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     if (next < 0 || next >= fileCountRef.current) return;
     setMounted((prev) => (prev.has(next) ? prev : new Set(prev).add(next)));
     setActiveIndex(next);
+    activeIndexRef.current = next; // eager — see scrollToFile
     seedNonceRef.current += 1;
     setSeed({
       index: next,
       edge: dir > 0 ? "first" : "last",
       nonce: seedNonceRef.current,
     });
-  }, [fileCountRef]);
+  }, [fileCountRef, activeIndexRef]);
 
   // Hovering a row claims the keyboard for that file.
   const handleActivate = useCallback((index: number) => {

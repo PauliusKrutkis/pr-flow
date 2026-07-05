@@ -72,3 +72,56 @@ test("scrolling a large PR stays smooth once idle pre-mount settles", async ({ p
   expect(result.stalls).toBeLessThanOrEqual(4);
   expect(result.p95).toBeLessThan(perfBudget(50, projectName));
 });
+
+test("resuming deep in a large PR holds position while sections above pre-mount", async ({ page }) => {
+  // The manual scroll-anchoring path (ReviewScreen; native anchoring is
+  // disabled on the host): after resume, the idle pre-mounter replaces the
+  // ESTIMATED placeholders above the viewport with real rows — hundreds of
+  // px of height error across 8 big sections. Uncompensated, that pushes the
+  // view around after open ("laggy automatic scroll"); compensated, the spot
+  // you resumed to must not move.
+  test.setTimeout(120_000);
+  await setupApp(page, { detailByLoad: [BIG_DETAIL] });
+  await expect(page.getByRole("option").first()).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".qf-diff").first()).toBeVisible();
+
+  // Jump deep (file 9, via the sidebar — one deterministic action) and let
+  // the jump's rAF scroll settle at the section top before nudging into it.
+  await page.locator('.qf-sidebar [data-file-index="8"]').click();
+  await page.waitForFunction(() => {
+    const host = document.querySelector(".qf-scrollhost")!;
+    const sec = document.querySelectorAll(".qf-fsec")[8];
+    if (!sec) return false;
+    return (
+      Math.abs(
+        host.getBoundingClientRect().top - sec.getBoundingClientRect().top,
+      ) < 4
+    );
+  });
+  await page.evaluate(() => {
+    document.querySelector(".qf-scrollhost")!.scrollTop += 200;
+  });
+  await page.waitForTimeout(600); // review-memory debounce flush
+
+  await page.reload();
+  await expect(page.locator(".qf-diff").first()).toBeVisible();
+  const measure = () =>
+    page.evaluate(() => {
+      const host = document.querySelector(".qf-scrollhost")!;
+      const sec = document.querySelectorAll(".qf-fsec")[8];
+      return host.getBoundingClientRect().top - sec.getBoundingClientRect().top;
+    });
+  const before = await measure();
+  expect(Math.abs(before - 200)).toBeLessThan(40);
+
+  // Wait for the pre-mounter to rebuild every section above (and below).
+  await page.waitForFunction(
+    (want) => document.querySelectorAll(".qf-row").length >= want,
+    FILES * LINES,
+    { timeout: 30_000 },
+  );
+  await page.waitForTimeout(300);
+  const after = await measure();
+  expect(Math.abs(after - before)).toBeLessThan(30);
+});
