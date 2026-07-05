@@ -21,7 +21,8 @@ import { findInDiff } from "../../lib/findInDiff";
 import { occurrenceMatches } from "../../lib/occurrences";
 import { detectIndentUnit, guideLevelsForHunk } from "../../lib/indent";
 import { cn } from "../../lib/cn";
-import { useHotkeys } from "../../keyboard";
+import { useLatest } from "../../hooks/useLatest";
+import { useHotkeys } from "../../keyboard/useHotkeys";
 import { useAppStore } from "../../store/appStore";
 import { Avatar } from "../ui/Avatar";
 import { CommentThread } from "./CommentThread";
@@ -548,10 +549,8 @@ export function DiffViewer({
   }
 
   // Parent callbacks, read through refs so row/cursor handlers stay stable.
-  const onActivateRef = useRef(onActivate);
-  onActivateRef.current = onActivate;
-  const onCursorExitRef = useRef(onCursorExit);
-  onCursorExitRef.current = onCursorExit;
+  const onActivateRef = useLatest(onActivate);
+  const onCursorExitRef = useLatest(onCursorExit);
 
   // Pointer-intent gate. Scrolling under a stationary pointer fires hover
   // events with unchanged coordinates, which would steal the cursor right back
@@ -587,29 +586,40 @@ export function DiffViewer({
       setCursorAnchor((cur) => (cur === anchor ? cur : anchor));
       onActivateRef.current?.();
     },
-    [isRealPointer],
+    [isRealPointer, onActivateRef],
   );
 
+  // Live refs for the rAF-coalesced cursor machinery below (and the seed
+  // effect). Declared above every closure that reads them — the React
+  // Compiler doesn't model use-before-declaration even when the closure only
+  // runs later.
+  const navAnchorsRef = useLatest(navAnchors);
+  const cursorAnchorRef = useLatest(cursorAnchor);
+
   // Cross-file cursor entry: place the cursor on this file's first/last line.
+  // Scheduled a frame out: the placement is a response to the seed COMMAND,
+  // not derived state, and a synchronous setState inside the effect would
+  // cascade renders (and bail the compiler). j/k moves are rAF-coalesced
+  // anyway, so the handoff cadence is unchanged.
   useEffect(() => {
     if (!seed) return;
-    const anchors = navAnchorsRef.current;
-    if (anchors.length === 0) return;
-    const anchor = seed.edge === "first" ? anchors[0] : anchors[anchors.length - 1];
-    keyboardHoldRef.current = true;
-    setInputMode("keyboard");
-    userMovedCursorRef.current = true;
-    setCursorAnchor(anchor);
-  }, [seed]);
+    const raf = requestAnimationFrame(() => {
+      const anchors = navAnchorsRef.current;
+      if (anchors.length === 0) return;
+      const anchor =
+        seed.edge === "first" ? anchors[0] : anchors[anchors.length - 1];
+      keyboardHoldRef.current = true;
+      setInputMode("keyboard");
+      userMovedCursorRef.current = true;
+      setCursorAnchor(anchor);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [seed, navAnchorsRef]);
 
   // Cursor movement is coalesced per animation frame: rapid key-repeats (and
   // direction changes) accumulate a net delta that is applied once, so the
   // cursor can't fall behind a backlog of queued keydowns and reversing
   // direction cancels the pending move instead of replaying it.
-  const navAnchorsRef = useRef(navAnchors);
-  navAnchorsRef.current = navAnchors;
-  const cursorAnchorRef = useRef(cursorAnchor);
-  cursorAnchorRef.current = cursorAnchor;
   const pendingDeltaRef = useRef(0);
   const rafRef = useRef<number | null>(null);
 

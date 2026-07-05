@@ -107,10 +107,23 @@ export function rowAnchor(row: DiffRow): string | null {
  * collapsed hunks don't exist here — the result is an approximation, which is
  * exactly good enough to place a 2px tick.
  */
+const fractionsCache = new Map<string, Map<string, number>>();
+
 export function anchorFractions(
   patch: string | null | undefined,
 ): Map<string, number> {
+  // Cached like parsePatch (callers treat the result as read-only): the
+  // overview ruler asks for the same file's fractions on every recompute and
+  // the find seed on every keystroke.
+  if (patch) {
+    const hit = fractionsCache.get(patch);
+    if (hit !== undefined) return hit;
+  }
   const out = new Map<string, number>();
+  if (patch) {
+    if (fractionsCache.size >= PARSE_CACHE_MAX) fractionsCache.clear();
+    fractionsCache.set(patch, out);
+  }
   const hunks = parsePatch(patch);
   let total = 0;
   for (const h of hunks) total += h.rows.length;

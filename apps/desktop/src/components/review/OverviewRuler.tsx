@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type RefObject,
-} from "react";
+import { useEffect, useState, type RefObject } from "react";
 import type { ChangedFile } from "../../types";
 import { anchorFractions } from "../../lib/diff";
 import { cn } from "../../lib/cn";
@@ -38,6 +32,16 @@ interface Tick {
   current: boolean;
 }
 
+/** Value-equality for tick lists, so recomputes that land on the same layout
+ *  keep the previous state identity (and can never re-render in a loop). */
+function sameTicks(a: Tick[], b: Tick[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].frac !== b[i].frac || a[i].current !== b[i].current) return false;
+  }
+  return true;
+}
+
 interface OverviewRulerProps {
   /** The diff's scroll host (ReviewScreen's scrollRef). */
   hostRef: RefObject<HTMLDivElement | null>;
@@ -60,64 +64,66 @@ export function OverviewRuler({
 }: OverviewRulerProps) {
   const [ticks, setTicks] = useState<Tick[]>([]);
 
-  // Row fractions per file, parsed lazily (only files that actually have
-  // matches) and cached for the lifetime of the file list.
-  const fractionsFor = useMemo(() => {
-    const cache = new Map<number, Map<string, number>>();
-    return (fileIndex: number): Map<string, number> => {
-      let hit = cache.get(fileIndex);
-      if (!hit) {
-        hit = anchorFractions(files[fileIndex]?.patch);
-        cache.set(fileIndex, hit);
-      }
-      return hit;
-    };
-  }, [files]);
-
-  const recompute = useCallback(() => {
-    const host = hostRef.current;
-    if (!host || matches.length === 0) {
-      setTicks((prev) => (prev.length === 0 ? prev : []));
-      return;
-    }
-    const scrollHeight = host.scrollHeight;
-    if (scrollHeight === 0) return;
-    // Section offsets in scroll-content coordinates (rects move with scroll;
-    // adding scrollTop pins them to the content).
-    const hostTop = host.getBoundingClientRect().top;
-    const scrollTop = host.scrollTop;
-    const stride = Math.max(1, Math.ceil(matches.length / MAX_TICKS));
-    const out: Tick[] = [];
-    for (let i = 0; i < matches.length; i++) {
-      const current = i === currentIndex;
-      if (i % stride !== 0 && !current) continue;
-      const section = sectionEls.current.get(matches[i].fileIndex);
-      if (!section) continue;
-      const rect = section.getBoundingClientRect();
-      const sectionTop = rect.top - hostTop + scrollTop;
-      const rowFrac = fractionsFor(matches[i].fileIndex).get(matches[i].anchor);
-      if (rowFrac === undefined) continue;
-      out.push({ frac: (sectionTop + rowFrac * rect.height) / scrollHeight, current });
-    }
-    setTicks(out);
-  }, [hostRef, sectionEls, matches, currentIndex, fractionsFor]);
-
   // Ticks are content-anchored, not viewport-anchored: recompute when the
   // match list changes and when layout moves (sections mounting their real
   // bodies, comment threads opening, the window resizing) — never per scroll
-  // event. A plain effect, NOT a layout effect: the rect reads run after the
-  // browser has painted (and therefore laid out) the commit that changed the
-  // matches. In a layout effect they'd run against the still-dirty layout the
-  // same commit produced — a forced synchronous reflow of the whole diff on
-  // every find keystroke, which is most of what a keystroke used to cost.
-  // Ticks landing a frame after the marks is imperceptible.
-  useEffect(recompute, [recompute]);
+  // event. One effect owns both triggers, keyed on the real inputs, so the
+  // ResizeObserver also re-attaches to sections registered since the last
+  // match change (exactly the cadence the old shared-callback deps produced).
+  //
+  // The match-change recompute is scheduled for the NEXT FRAME, not run
+  // inside the effect: the rect reads must land after the browser has painted
+  // (and therefore laid out) the commit that changed the matches. Read
+  // synchronously they'd hit the still-dirty layout that same commit produced
+  // — a forced reflow of the whole diff on every find keystroke, which is
+  // most of what a keystroke used to cost. Ticks landing a frame after the
+  // marks is imperceptible. The setTicks identity guard keeps re-runs
+  // loop-proof.
   useEffect(() => {
+    const recompute = () => {
+      const host = hostRef.current;
+      if (!host || matches.length === 0) {
+        setTicks((prev) => (prev.length === 0 ? prev : []));
+        return;
+      }
+      const scrollHeight = host.scrollHeight;
+      if (scrollHeight === 0) return;
+      // Section offsets in scroll-content coordinates (rects move with
+      // scroll; adding scrollTop pins them to the content).
+      const hostTop = host.getBoundingClientRect().top;
+      const scrollTop = host.scrollTop;
+      const stride = Math.max(1, Math.ceil(matches.length / MAX_TICKS));
+      const out: Tick[] = [];
+      for (let i = 0; i < matches.length; i++) {
+        const current = i === currentIndex;
+        if (i % stride !== 0 && !current) continue;
+        const section = sectionEls.current.get(matches[i].fileIndex);
+        if (!section) continue;
+        const rect = section.getBoundingClientRect();
+        const sectionTop = rect.top - hostTop + scrollTop;
+        // anchorFractions caches per patch (lib/diff), so repeated
+        // recomputes don't re-derive row positions.
+        const rowFrac = anchorFractions(files[matches[i].fileIndex]?.patch).get(
+          matches[i].anchor,
+        );
+        if (rowFrac === undefined) continue;
+        out.push({
+          frac: (sectionTop + rowFrac * rect.height) / scrollHeight,
+          current,
+        });
+      }
+      setTicks((prev) => (sameTicks(prev, out) ? prev : out));
+    };
+
+    const raf = requestAnimationFrame(recompute);
     const ro = new ResizeObserver(() => recompute());
     if (hostRef.current) ro.observe(hostRef.current);
     for (const el of sectionEls.current.values()) ro.observe(el);
-    return () => ro.disconnect();
-  }, [recompute, hostRef, sectionEls]);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [matches, currentIndex, files, hostRef, sectionEls]);
 
   if (ticks.length === 0) return null;
   return (

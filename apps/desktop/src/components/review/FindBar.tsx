@@ -12,6 +12,10 @@ import { cn } from "../../lib/cn";
  * ignores non-modifier keys inside editable targets, so Enter / arrows / Esc
  * are handled right here while the input is focused.
  */
+// Buttons don't steal focus from the input (onMouseDown preventDefault), so
+// clicking a chevron then pressing Enter keeps stepping through matches.
+const keepFocus = (e: React.MouseEvent) => e.preventDefault();
+
 export function FindBar({
   open,
   query,
@@ -73,17 +77,15 @@ export function FindBar({
     }
   }
 
-  // Buttons don't steal focus from the input (onMouseDown preventDefault), so
-  // clicking a chevron then pressing Enter keeps stepping through matches.
-  const keepFocus = (e: React.MouseEvent) => e.preventDefault();
   const none = query.length > 0 && total === 0;
 
   return (
-    <div className="qf-findbar" role="search" aria-label="Find in diff">
+    <search className="qf-findbar" aria-label="Find in diff">
       <input
         ref={inputRef}
         className="qf-findbar-input"
         placeholder="Find in diff"
+        aria-label="Find in diff"
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
         onKeyDown={onKeyDown}
@@ -139,6 +141,6 @@ export function FindBar({
       >
         <X size={15} aria-hidden />
       </button>
-    </div>
+    </search>
   );
 }

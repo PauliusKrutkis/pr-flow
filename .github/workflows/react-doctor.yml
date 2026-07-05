@@ -39,12 +39,13 @@ jobs:
           # The React app lives in the desktop workspace package; the repo
           # root is a pnpm monorepo with no React of its own.
           directory: apps/desktop
-        # Advisory by default: React Doctor reports findings on every PR — a
-        # sticky summary comment, inline review comments, and a commit status
-        # with the health score — but never fails the check, so it won't red-X
-        # a teammate's PR on day one. When your team trusts the signal, graduate
-        # the gate: uncomment the block below and set blocking to "error" (fail
-        # on new error-severity findings) or "warning" (fail on any finding).
+          # Fail the check on NEW error-severity findings (relative to the
+          # merge base). Warnings stay advisory on purpose: the remaining ones
+          # are deliberate patterns — manual memoization kept as insurance in
+          # perf-critical components, a trigger-dep effect — and a warning
+          # gate would force removing them. Tighten to "warning" if that
+          # calculus changes.
+          blocking: error
         # Full reference: https://www.react.doctor/ci
         # with:
         #   blocking: error          # Gate level: "none" (advisory, the default) | "warning" | "error"

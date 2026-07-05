@@ -38,16 +38,18 @@ import type {
   ReviewEvent,
 } from "../../types";
 import { useAppStore } from "../../store/appStore";
-import { useHotkeys } from "../../keyboard";
+import { useHotkeys } from "../../keyboard/useHotkeys";
 import type { Binding } from "../../keyboard/types";
 import { usePullRequestDetail } from "../../hooks/usePullRequestDetail";
 import { useInbox } from "../../hooks/useInbox";
 import { useCommentMutations } from "../../hooks/useComments";
 import { queryClient, queryKeys } from "../../lib/queryClient";
+import { useLatest } from "../../hooks/useLatest";
 import { getReviewMemory, updateReviewMemory } from "../../lib/reviewMemory";
 import { fingerprintFile } from "../../lib/viewedFingerprint";
 import { usePerfStore } from "../../lib/perf";
 import { anchorFractions } from "../../lib/diff";
+import { warmHighlightCache } from "../../lib/highlight";
 import { findInDiff, patchMayMatch, type FindMatch } from "../../lib/findInDiff";
 import {
   occurrenceMatches,
@@ -83,6 +85,10 @@ interface ReviewScreenProps {
 /** An occurrence query plus the file section it lights up. */
 type OccState = OccurrenceSpec & { fileIndex: number };
 
+// Idle pre-mounting applies up to this many total patch rows (see the
+// mount-ahead effect); past it, sections only mount as you approach them.
+const PREMOUNT_MAX_ROWS = 30_000;
+
 const EMPTY_COMMENTS: ReviewComment[] = [];
 const EMPTY_PENDING: PendingComment[] = [];
 const EMPTY_MATCHES: FindMatch[] = [];
@@ -116,8 +122,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   );
   // The info drawer starts closed — the diff dominates until `i` opens it.
   const [rightOpen, setRightOpen] = useState(false);
-  const rightOpenRef = useRef(false);
-  rightOpenRef.current = rightOpen;
+  const rightOpenRef = useLatest(rightOpen);
   const [commentIndex, setCommentIndex] = useState(0);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [prSearch, setPrSearch] = useState<null | "files" | "text">(null);
@@ -150,16 +155,19 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const [findIndex, setFindIndex] = useState<number | null>(null);
   // Where the user was looking when the query last changed: topmost visible
   // section and how far into it. Captured at event time (captureFindSeed) —
-  // the render-time derivation below must not read layout.
-  const findSeedRef = useRef<{ fileIndex: number; frac: number } | null>(null);
+  // the render-time derivation below must not read layout. State (not a ref)
+  // because findSeededIndex derives from it during render.
+  const [findSeed, setFindSeed] = useState<{
+    fileIndex: number;
+    frac: number;
+  } | null>(null);
   // Bumped when mod+f fires while the bar is already open → refocus/select.
   const [findFocusSeq, setFindFocusSeq] = useState(0);
   // The first Enter lands on the match already counted as current (the
   // viewport-seeded one, say "9/17"); only subsequent presses advance. Reset
   // whenever the match list changes.
   const findJumpedRef = useRef(false);
-  const findOpenRef = useRef(false);
-  findOpenRef.current = findOpen;
+  const findOpenRef = useLatest(findOpen);
   // Selection-occurrence highlighting: click or select a token in the diff
   // and its other occurrences in THAT FILE light up (editor convention).
   // Scoped to one file both for meaning (a click asks "where else here?" —
@@ -167,8 +175,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   // keeps a click instant on huge PRs. Cleared by clicks on blank code, Esc,
   // and file navigation.
   const [occSpec, setOccSpec] = useState<OccState | null>(null);
-  const occSpecRef = useRef(occSpec);
-  occSpecRef.current = occSpec;
+  const occSpecRef = useLatest(occSpec);
   // Repainting rows with marks replaces their text nodes, which would kill
   // the very selection that triggered the marks (and collapse → clear them
   // right back — a loop). So the selection's position is captured before the
@@ -183,6 +190,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const occOriginRef = useRef<{ anchor: string; column: number } | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  // When the diff last scrolled — the idle pre-mounter yields to live scrolls.
+  const lastScrollTsRef = useRef(0);
   const sectionEls = useRef(new Map<number, HTMLElement>());
   const resumedRef = useRef(false);
   const mountShaRef = useRef("");
@@ -221,12 +230,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const activeFile = files[clampedIndex];
 
   // Live refs so rAF-coalesced handlers and stable callbacks read fresh state.
-  const activeIndexRef = useRef(clampedIndex);
-  activeIndexRef.current = clampedIndex;
-  const fileCountRef = useRef(fileCount);
-  fileCountRef.current = fileCount;
-  const filesRef = useRef(files);
-  filesRef.current = files;
+  const activeIndexRef = useLatest(clampedIndex);
+  const fileCountRef = useLatest(fileCount);
+  const filesRef = useLatest(files);
 
   // Per-file buckets, memoized so FileSection memoization holds across the
   // frequent active-index re-renders.
@@ -248,6 +254,15 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     }
     return m;
   }, [pending]);
+
+  // Warm the per-line highlight cache in idle time: sections mount their rows
+  // synchronously as you scroll toward them, and a cold hljs pass over a big
+  // file is a whole dropped frame — pre-highlighted, mounting is cheap and
+  // scrolling stays smooth. Cancelled when the file list changes (head moved).
+  useEffect(() => {
+    if (files.length === 0) return;
+    return warmHighlightCache(files);
+  }, [files]);
 
   // Placeholder heights for not-yet-rendered sections, from patch line counts.
   const estimates = useMemo(
@@ -415,7 +430,66 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Idle mount-ahead: the IntersectionObserver above mounts sections as you
+  // APPROACH them, which means a fast scroll pays each section's mount inside
+  // a scrolled frame — the ~100ms hitch that reads as sticky-header stutter.
+  // While you're reading (not scrolling), idle time quietly mounts the rest,
+  // one section per idle slice, so scrolling lands on already-built DOM.
+  // Bounded: skipped for monster PRs where holding every section's rows is
+  // not worth it (content-visibility keeps mounted-but-offscreen rows cheap,
+  // but DOM memory still scales with row count).
+  const totalPatchRows = useMemo(
+    () =>
+      files.reduce((n, f) => n + (f.patch ? f.patch.split("\n").length : 0), 0),
+    [files],
+  );
+  const mountedRef = useLatest(mounted);
+  useEffect(() => {
+    if (fileCount === 0 || totalPatchRows > PREMOUNT_MAX_ROWS) return;
+    let cancelled = false;
+    let handle: number | ReturnType<typeof setTimeout> | null = null;
+    const idle =
+      typeof requestIdleCallback === "function"
+        ? window.requestIdleCallback.bind(window)
+        : null;
+
+    const schedule = () => {
+      handle = idle ? idle(pump, { timeout: 3000 }) : setTimeout(pump, 250);
+    };
+    const pump = () => {
+      if (cancelled) return;
+      // A mount inside a live scroll is exactly the hitch this prevents —
+      // back off until the scroll has settled.
+      if (performance.now() - lastScrollTsRef.current < 300) {
+        schedule();
+        return;
+      }
+      const have = mountedRef.current;
+      let next = -1;
+      for (let i = 0; i < fileCountRef.current; i++) {
+        if (!have.has(i)) {
+          next = i;
+          break;
+        }
+      }
+      if (next === -1) return; // everything mounted — done for good
+      setMounted((prev) =>
+        prev.has(next) ? prev : new Set(prev).add(next),
+      );
+      schedule();
+    };
+    schedule();
+    return () => {
+      cancelled = true;
+      if (handle != null) {
+        if (idle) cancelIdleCallback(handle as number);
+        else clearTimeout(handle as ReturnType<typeof setTimeout>);
+      }
+    };
+  }, [fileCount, totalPatchRows, mountedRef, fileCountRef]);
+
   function handleScroll() {
+    lastScrollTsRef.current = performance.now();
     if (scrollRef.current) {
       updateReviewMemory(keyValue, { scrollTop: scrollRef.current.scrollTop });
     }
@@ -506,8 +580,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   }
   // Ref'd so the mount-once click handler (occurrence-mark jumps) never calls
   // a stale closure over `files`.
-  const selectLineRef = useRef(selectLine);
-  selectLineRef.current = selectLine;
+  const selectLineRef = useLatest(selectLine);
 
   // ---- find in diff (mod+f) -------------------------------------------------
 
@@ -537,7 +610,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         seed = { fileIndex: i, frac };
       }
     }
-    findSeedRef.current = seed;
+    setFindSeed(seed);
   }
 
   // The first match at/after the captured viewport position, wrapping to the
@@ -546,18 +619,18 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   // within the seed file compares by the same patch-fraction approximation
   // the overview ruler places its ticks with.
   const findSeededIndex = useMemo(() => {
-    const seed = findSeedRef.current;
+    const seed = findSeed;
     if (!seed || findMatches.length === 0) return 0;
-    let fractions: Map<string, number> | null = null;
     for (let i = 0; i < findMatches.length; i++) {
       const m = findMatches[i];
       if (m.fileIndex < seed.fileIndex) continue;
       if (m.fileIndex > seed.fileIndex) return i;
-      fractions ??= anchorFractions(files[seed.fileIndex]?.patch);
+      // anchorFractions caches per patch (lib/diff), so this stays one lookup.
+      const fractions = anchorFractions(files[seed.fileIndex]?.patch);
       if ((fractions.get(m.anchor) ?? 0) >= seed.frac) return i;
     }
     return 0;
-  }, [findMatches, files]);
+  }, [findMatches, files, findSeed]);
 
   // The file list can change under an open bar (PR head moved) — stay valid.
   const findSafeIndex =
@@ -625,6 +698,57 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     setFindIndex(next);
     const m = findMatches[next];
     selectLine(m.fileIndex, m.anchor);
+  }
+
+  // The occurrence spec's matches across its WHOLE file, from the patch text
+  // (off-screen rows count). Feeds the overview ruler's ticks and, in occ
+  // mode, click/n/p navigation between occurrences.
+  const occMatchList = useMemo(
+    () =>
+      occSpec
+        ? occurrenceMatches(files[occSpec.fileIndex] ?? {}, occSpec)
+        : EMPTY_OCC,
+    [occSpec, files],
+  );
+  const occMatchListRef = useLatest(occMatchList);
+
+  // ---- occurrence navigation (clicking a mark, n/p) --------------------------
+  // These read only refs, so the mount-once click handler can call them
+  // without going stale. Declared ABOVE that handler's effect: function
+  // declarations hoist at runtime, but the React Compiler doesn't model
+  // hoisting and refuses to optimize a component that calls before declaring.
+
+  /** Index in the match list of the occurrence covering (anchor, column). */
+  function occIndexAt(anchor: string, column: number): number {
+    return occMatchListRef.current.findIndex(
+      (m) => m.anchor === anchor && m.start <= column && column <= m.end,
+    );
+  }
+
+  /** Jump to match `index` (wrapping), keeping the marks alive. */
+  function occJumpTo(index: number) {
+    const spec = occSpecRef.current;
+    const n = occMatchListRef.current.length;
+    if (!spec || n === 0) return;
+    const next = ((index % n) + n) % n;
+    occNavRef.current = next;
+    selectLineRef.current(spec.fileIndex, occMatchListRef.current[next].anchor, {
+      keepOccurrences: true,
+    });
+  }
+
+  /** n/p: step through the occurrences relative to the last-jumped position
+   *  (or the origin occurrence — the clicked/selected one — before any jump). */
+  function occStep(dir: 1 | -1) {
+    if (occMatchListRef.current.length === 0) return;
+    let at = occNavRef.current;
+    if (at < 0) {
+      const origin = occOriginRef.current;
+      const found = origin ? occIndexAt(origin.anchor, origin.column) : -1;
+      // No resolvable origin: n starts at the first match, p at the last.
+      at = found >= 0 ? found : dir > 0 ? -1 : 0;
+    }
+    occJumpTo(at + dir);
   }
 
   // ---- selection → occurrence highlights ------------------------------------
@@ -867,56 +991,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       ? marks
       : null;
 
-  // The occurrence spec's matches across its WHOLE file, from the patch text
-  // (off-screen rows count). Feeds the overview ruler's ticks and, in occ
-  // mode, click/n/p navigation between occurrences.
-  const occMatchList = useMemo(
-    () =>
-      occSpec
-        ? occurrenceMatches(files[occSpec.fileIndex] ?? {}, occSpec)
-        : EMPTY_OCC,
-    [occSpec, files],
-  );
-  const occMatchListRef = useRef(occMatchList);
-  occMatchListRef.current = occMatchList;
-
-  // ---- occurrence navigation (clicking a mark, n/p) --------------------------
-  // These read only refs, so the mount-once click handler can call them
-  // without going stale.
-
-  /** Index in the match list of the occurrence covering (anchor, column). */
-  function occIndexAt(anchor: string, column: number): number {
-    return occMatchListRef.current.findIndex(
-      (m) => m.anchor === anchor && m.start <= column && column <= m.end,
-    );
-  }
-
-  /** Jump to match `index` (wrapping), keeping the marks alive. */
-  function occJumpTo(index: number) {
-    const spec = occSpecRef.current;
-    const n = occMatchListRef.current.length;
-    if (!spec || n === 0) return;
-    const next = ((index % n) + n) % n;
-    occNavRef.current = next;
-    selectLineRef.current(spec.fileIndex, occMatchListRef.current[next].anchor, {
-      keepOccurrences: true,
-    });
-  }
-
-  /** n/p: step through the occurrences relative to the last-jumped position
-   *  (or the origin occurrence — the clicked/selected one — before any jump). */
-  function occStep(dir: 1 | -1) {
-    if (occMatchListRef.current.length === 0) return;
-    let at = occNavRef.current;
-    if (at < 0) {
-      const origin = occOriginRef.current;
-      const found = origin ? occIndexAt(origin.anchor, origin.column) : -1;
-      // No resolvable origin: n starts at the first match, p at the last.
-      at = found >= 0 ? found : dir > 0 ? -1 : 0;
-    }
-    occJumpTo(at + dir);
-  }
-
   // What the overview ruler ticks: mirrors the marks precedence above — find
   // owns the diff while its bar is open, else the selection's occurrences.
   const rulerMatches = useMemo<ReadonlyArray<RulerMatch>>(() => {
@@ -938,12 +1012,17 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       edge: dir > 0 ? "first" : "last",
       nonce: seedNonceRef.current,
     });
-  }, []);
+  }, [fileCountRef]);
 
   // Hovering a row claims the keyboard for that file.
   const handleActivate = useCallback((index: number) => {
     setActiveIndex((cur) => (cur === index ? cur : index));
   }, []);
+
+  // Declared above the closures that read it (the compiler doesn't model
+  // use-before-declaration): the PR head sha, ref'd so stable callbacks stamp
+  // the CURRENT head.
+  const headShaRef = useLatest(pr?.headSha ?? "");
 
   // Marks are stamped with the file's current content fingerprint, so a later
   // push that touches the file can drop the mark (see the reconcile effect).
@@ -959,14 +1038,14 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         return next;
       });
     },
-    [toggleViewed, keyValue],
+    [toggleViewed, keyValue, headShaRef],
   );
   const handleToggleViewedAt = useCallback(
     (index: number) => {
       const f = filesRef.current[index];
       if (f) toggleViewedWithFp(f);
     },
-    [toggleViewedWithFp],
+    [toggleViewedWithFp, filesRef],
   );
 
   function toggleViewedFile() {
@@ -1040,8 +1119,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     [removePendingStore, keyValue],
   );
 
-  const headShaRef = useRef("");
-  headShaRef.current = pr?.headSha ?? "";
   const handleAddComment = useCallback(
     async (a: { path: string; line: number; side: string; body: string }) => {
       await addReviewComment.mutateAsync({
@@ -1052,7 +1129,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         side: a.side,
       });
     },
-    [addReviewComment.mutateAsync],
+    [addReviewComment.mutateAsync, headShaRef],
   );
   const handleReply = useCallback(
     async (a: { inReplyTo: number; body: string }) => {

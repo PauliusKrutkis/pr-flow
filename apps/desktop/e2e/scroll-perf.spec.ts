@@ -1,0 +1,68 @@
+import { expect, test } from "@playwright/test";
+import { setupApp } from "./bridge";
+import { makeBigDetail } from "./fixtures";
+
+// Scroll-smoothness guard. Sections used to mount inside scrolled frames
+// (IntersectionObserver + a synchronous 400-row render ≈ a 110–160ms frozen
+// frame per file — what "janky sticky headers" feels like). The idle
+// pre-mounter now builds sections while you read, so scrolling lands on
+// existing DOM; this spec pins that: after the pre-mount settles, a full
+// top-to-bottom scroll of a 6,400-row PR must stay stall-free.
+
+// Wall-clock budgets flake when parallel workers compete for CPU; a genuine
+// regression fails every attempt, contention doesn't survive a retry.
+test.describe.configure({ retries: 2 });
+
+const FILES = 16;
+const LINES = 400;
+const BIG_DETAIL = makeBigDetail(
+  FILES,
+  LINES,
+  (f, i) => `const value_${f}_${i} = compute(${i} + ${f});`,
+);
+
+test("scrolling a large PR stays smooth once idle pre-mount settles", async ({ page }) => {
+  test.setTimeout(120_000);
+  await setupApp(page, { detailByLoad: [BIG_DETAIL] });
+  await expect(page.getByRole("option").first()).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".qf-diff").first()).toBeVisible();
+
+  // The idle pre-mounter builds one section per idle slice; wait until every
+  // row exists (this also asserts the pre-mounter itself keeps working).
+  await page.waitForFunction(
+    (want) => document.querySelectorAll(".qf-row").length >= want,
+    FILES * LINES,
+    { timeout: 30_000 },
+  );
+
+  const result = await page.evaluate(async () => {
+    const host = document.querySelector(".qf-scrollhost")!;
+    const frames: number[] = [];
+    let last = performance.now();
+    while (host.scrollTop + host.clientHeight < host.scrollHeight - 4) {
+      host.scrollTop += 150;
+      await new Promise((r) => requestAnimationFrame(r));
+      const now = performance.now();
+      frames.push(now - last);
+      last = now;
+    }
+    frames.sort((a, b) => a - b);
+    return {
+      n: frames.length,
+      p50: frames[Math.floor(frames.length / 2)],
+      p95: frames[Math.floor(frames.length * 0.95)],
+      max: frames[frames.length - 1],
+      over50: frames.filter((f) => f > 50).length,
+    };
+  });
+  console.log(
+    `scroll frames: n ${result.n} p50 ${result.p50.toFixed(1)} p95 ${result.p95.toFixed(1)} max ${result.max.toFixed(1)} over50ms ${result.over50}`,
+  );
+
+  // Mount-stall regressions produce ~15 frames of 100ms+ on this fixture —
+  // far past these bounds. Measured clean: p95 ~26ms, zero frames over 50ms;
+  // the slack absorbs GC blips and parallel-worker CPU contention.
+  expect(result.over50).toBeLessThanOrEqual(4);
+  expect(result.p95).toBeLessThan(50);
+});
