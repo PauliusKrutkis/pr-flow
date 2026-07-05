@@ -19,6 +19,12 @@ describe("parsePatch", () => {
     expect(parsePatch("")).toEqual([]);
   });
 
+  it("caches by patch string — same input, same array identity", () => {
+    // The find bar re-scans every patch per keystroke; the cache is what makes
+    // that an indexOf pass instead of a fresh parse. Identity is the contract.
+    expect(parsePatch(PATCH)).toBe(parsePatch(PATCH));
+  });
+
   it("splits hunks and keeps headers", () => {
     const hunks = parsePatch(PATCH);
     expect(hunks).toHaveLength(2);

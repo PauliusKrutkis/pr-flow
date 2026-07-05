@@ -94,6 +94,29 @@ test("find bar: mod+f opens it, typing counts, Enter steps and wraps", async ({ 
   await expect(count).toHaveText("3/3");
 });
 
+test("find seeds from the viewport: the current match is the one near you, not the top", async ({ page }) => {
+  // r jumps to search.ts — fuzzy.ts (matches 1 and 2) is now behind us.
+  await page.keyboard.press("r");
+  await expect(page.locator(".qf-fsec").nth(1).locator(".qf-diff")).toBeVisible();
+
+  await page.keyboard.press("Control+f");
+  await page.getByPlaceholder("Find in diff").fill("return");
+  const count = page.locator(".qf-findbar-count");
+  // The current match is the first one at/after the viewport — search.ts's,
+  // i.e. #3 — while all three still mark and count.
+  await expect(count).toHaveText("3/3");
+  await expect(page.locator("mark.qf-find-mark")).toHaveCount(3);
+
+  // First Enter lands on THAT match, in the second file.
+  await page.keyboard.press("Enter");
+  await expect(count).toHaveText("3/3");
+  await expect(page.locator(".qf-fsec").nth(1).locator(".qf-row-flash")).toHaveCount(1);
+
+  // Stepping on wraps around to the top of the PR.
+  await page.keyboard.press("Enter");
+  await expect(count).toHaveText("1/3");
+});
+
 test("find bar: Esc closes, clears marks, and j moves the cursor immediately", async ({ page }) => {
   await page.keyboard.press("Control+f");
   const input = page.getByPlaceholder("Find in diff");

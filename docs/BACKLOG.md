@@ -124,6 +124,13 @@ GitHub links opened this"*, you've saved weeks of integration work.
 | Command palette | Instant |
 
 - [x] 🟡 Dev overlay: `⚡ Last PR open: 84 ms · Last file switch: 4 ms`
+- [x] 🟡 Perf regression tests in CI — `find-perf` / `open-perf` e2e budgets
+      (repaint counts + median keystroke / warm-open wall clock).
+- [ ] 🟡 **Perf e2e against the production build** — today's budgets run on the
+      vite dev server, where React's dev runtime + GC noise inflate numbers
+      ~2×. Add a Playwright project that runs the perf specs against
+      `vite build` + `vite preview` so budgets reflect what users feel, then
+      tighten them (~half the current bounds).
 
 ---
 

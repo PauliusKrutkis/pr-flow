@@ -21,8 +21,26 @@ export interface DiffHunk {
 
 const HUNK_RE = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
 
+// Parses are cached by patch string: the find bar re-scans EVERY file's patch
+// on each keystroke, and the viewer/ruler/occurrence paths parse the same
+// patches again — all of them read-only. Callers must treat the result as
+// immutable. Keys are references to strings already held by the query cache,
+// so the map costs one array of row objects per distinct patch; cleared
+// wholesale past the cap like the highlight cache.
+const parseCache = new Map<string, DiffHunk[]>();
+const PARSE_CACHE_MAX = 500;
+
 export function parsePatch(patch: string | null | undefined): DiffHunk[] {
   if (!patch) return [];
+  const hit = parseCache.get(patch);
+  if (hit !== undefined) return hit;
+  const hunks = parsePatchUncached(patch);
+  if (parseCache.size >= PARSE_CACHE_MAX) parseCache.clear();
+  parseCache.set(patch, hunks);
+  return hunks;
+}
+
+function parsePatchUncached(patch: string): DiffHunk[] {
   const lines = patch.split("\n");
   const hunks: DiffHunk[] = [];
   let current: DiffHunk | null = null;

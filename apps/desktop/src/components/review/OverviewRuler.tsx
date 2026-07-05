@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useState,
   type RefObject,
@@ -106,8 +105,13 @@ export function OverviewRuler({
   // Ticks are content-anchored, not viewport-anchored: recompute when the
   // match list changes and when layout moves (sections mounting their real
   // bodies, comment threads opening, the window resizing) — never per scroll
-  // event.
-  useLayoutEffect(recompute, [recompute]);
+  // event. A plain effect, NOT a layout effect: the rect reads run after the
+  // browser has painted (and therefore laid out) the commit that changed the
+  // matches. In a layout effect they'd run against the still-dirty layout the
+  // same commit produced — a forced synchronous reflow of the whole diff on
+  // every find keystroke, which is most of what a keystroke used to cost.
+  // Ticks landing a frame after the marks is imperceptible.
+  useEffect(recompute, [recompute]);
   useEffect(() => {
     const ro = new ResizeObserver(() => recompute());
     if (hostRef.current) ro.observe(hostRef.current);

@@ -47,7 +47,8 @@ import { queryClient, queryKeys } from "../../lib/queryClient";
 import { getReviewMemory, updateReviewMemory } from "../../lib/reviewMemory";
 import { fingerprintFile } from "../../lib/viewedFingerprint";
 import { usePerfStore } from "../../lib/perf";
-import { findInDiff, type FindMatch } from "../../lib/findInDiff";
+import { anchorFractions } from "../../lib/diff";
+import { findInDiff, patchMayMatch, type FindMatch } from "../../lib/findInDiff";
 import {
   occurrenceMatches,
   occurrenceSpecFromSelection,
@@ -141,11 +142,21 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState("");
   const [findCase, setFindCase] = useState(false);
-  const [findIndex, setFindIndex] = useState(0);
+  // The concrete match position once the user has navigated (Enter/arrows);
+  // null means "not navigated yet — derive the current match from the
+  // viewport seed" (findSeededIndex below), which is what makes find start
+  // from what you're looking at instead of the top of the PR, the way
+  // editors and browsers anchor find to the caret/viewport.
+  const [findIndex, setFindIndex] = useState<number | null>(null);
+  // Where the user was looking when the query last changed: topmost visible
+  // section and how far into it. Captured at event time (captureFindSeed) —
+  // the render-time derivation below must not read layout.
+  const findSeedRef = useRef<{ fileIndex: number; frac: number } | null>(null);
   // Bumped when mod+f fires while the bar is already open → refocus/select.
   const [findFocusSeq, setFindFocusSeq] = useState(0);
-  // The first Enter lands on the match already counted as current ("1/17");
-  // only subsequent presses advance. Reset whenever the match list changes.
+  // The first Enter lands on the match already counted as current (the
+  // viewport-seeded one, say "9/17"); only subsequent presses advance. Reset
+  // whenever the match list changes.
   const findJumpedRef = useRef(false);
   const findOpenRef = useRef(false);
   findOpenRef.current = findOpen;
@@ -509,9 +520,50 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         : EMPTY_MATCHES,
     [findOpen, findQuery, findCase, files],
   );
+  /** Re-anchor find to the viewport: remember the topmost visible section and
+   *  the fraction of it scrolled past. Called from the query-change handlers
+   *  (event time), so the seeded-index memo below stays layout-read-free. */
+  function captureFindSeed() {
+    const host = scrollRef.current;
+    let seed: { fileIndex: number; frac: number } | null = null;
+    if (host) {
+      const hostTop = host.getBoundingClientRect().top;
+      for (const [i, el] of sectionEls.current) {
+        if (seed && seed.fileIndex <= i) continue;
+        const r = el.getBoundingClientRect();
+        if (r.bottom <= hostTop + 1) continue; // fully scrolled past
+        const frac =
+          r.top >= hostTop ? 0 : (hostTop - r.top) / Math.max(r.height, 1);
+        seed = { fileIndex: i, frac };
+      }
+    }
+    findSeedRef.current = seed;
+  }
+
+  // The first match at/after the captured viewport position, wrapping to the
+  // top when everything is behind you — the editor convention (VS Code /
+  // browsers anchor find to the caret; ours is the viewport). Row order
+  // within the seed file compares by the same patch-fraction approximation
+  // the overview ruler places its ticks with.
+  const findSeededIndex = useMemo(() => {
+    const seed = findSeedRef.current;
+    if (!seed || findMatches.length === 0) return 0;
+    let fractions: Map<string, number> | null = null;
+    for (let i = 0; i < findMatches.length; i++) {
+      const m = findMatches[i];
+      if (m.fileIndex < seed.fileIndex) continue;
+      if (m.fileIndex > seed.fileIndex) return i;
+      fractions ??= anchorFractions(files[seed.fileIndex]?.patch);
+      if ((fractions.get(m.anchor) ?? 0) >= seed.frac) return i;
+    }
+    return 0;
+  }, [findMatches, files]);
+
   // The file list can change under an open bar (PR head moved) — stay valid.
   const findSafeIndex =
-    findMatches.length > 0 ? Math.min(findIndex, findMatches.length - 1) : 0;
+    findMatches.length > 0
+      ? Math.min(findIndex ?? findSeededIndex, findMatches.length - 1)
+      : 0;
 
   // The current match as (row anchor, occurrence ordinal). Matches on one line
   // are adjacent in the list, so the ordinal is the run-length behind us.
@@ -527,18 +579,26 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     return { fileIndex: m.fileIndex, anchor: m.anchor, ordinal };
   }, [findMatches, findSafeIndex]);
 
+  // Every query edit re-anchors to the viewport: after a jump the viewport IS
+  // the last match, so typing more keeps searching from where you are.
   function changeFindQuery(q: string) {
+    captureFindSeed();
     setFindQuery(q);
-    setFindIndex(0);
+    setFindIndex(null);
     findJumpedRef.current = false;
   }
   function toggleFindCase() {
+    captureFindSeed();
     setFindCase((c) => !c);
-    setFindIndex(0);
+    setFindIndex(null);
     findJumpedRef.current = false;
   }
   function openFind() {
     if (!findOpenRef.current) {
+      // Reopening with a kept query still re-seeds from wherever you are now.
+      captureFindSeed();
+      setFindIndex(null);
+      findJumpedRef.current = false;
       setFindOpen(true);
       // Browser convention: selected diff text seeds the query on open.
       const selected =
@@ -774,8 +834,10 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   // highlights once and FileSection memoization holds otherwise. Find wins
   // while its bar is open (even with an empty query): two mark systems at
   // once is noise. Occurrence marks come back when the bar closes, if the
-  // selection survived. Find marks go to every section (the bar counts
-  // across files); occurrence marks only to their own file (see occSpec).
+  // selection survived. Find marks go to every section WITH a hit (the bar
+  // counts across files, but sections whose patch can't contain the query
+  // keep a null prop so their memo holds through typing); occurrence marks
+  // only to their own file (see occSpec).
   const marks = useMemo<MarkSpec | null>(() => {
     if (findOpen) {
       return findQuery
@@ -786,8 +848,24 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       ? { kind: "occurrence", query: occSpec.query, wholeWord: occSpec.wholeWord }
       : null;
   }, [findOpen, findQuery, findCase, occSpec]);
+  // Which files get the find marks: a cheap superset test per file (raw patch
+  // substring), NOT the capped match list — past MAX_MATCHES the list goes
+  // silent on later files but their rendered highlights must still paint.
+  const findMarkFiles = useMemo<Set<number> | null>(() => {
+    if (!marks || marks.kind !== "find") return null;
+    const set = new Set<number>();
+    for (let i = 0; i < files.length; i++) {
+      if (patchMayMatch(files[i].patch, marks.query, marks.caseSensitive)) {
+        set.add(i);
+      }
+    }
+    return set;
+  }, [marks, files]);
   const marksFor = (i: number): MarkSpec | null =>
-    marks && (marks.kind === "find" || occSpec?.fileIndex === i) ? marks : null;
+    marks &&
+    (marks.kind === "find" ? !!findMarkFiles?.has(i) : occSpec?.fileIndex === i)
+      ? marks
+      : null;
 
   // The occurrence spec's matches across its WHOLE file, from the patch text
   // (off-screen rows count). Feeds the overview ruler's ticks and, in occ

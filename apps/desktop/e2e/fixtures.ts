@@ -255,6 +255,39 @@ export const INBOX_UPDATED = {
   },
 };
 
+/**
+ * A synthetic large PR for the performance specs: `fileCount` files of one
+ * `lines`-row hunk each, row text supplied by `lineAt` so each spec controls
+ * where its needle tokens land. Kept in fixtures so every perf test measures
+ * the same shape of PR.
+ */
+export function makeBigDetail(
+  fileCount: number,
+  lines: number,
+  lineAt: (f: number, i: number) => string,
+) {
+  return {
+    ...DETAIL,
+    pr: {
+      ...makePr(1, "Big refactor", "alice", "2026-07-02T10:00:00Z"),
+      changedFiles: fileCount,
+    },
+    files: Array.from({ length: fileCount }, (_, f) => ({
+      filename: `src/mod${String(f).padStart(2, "0")}.ts`,
+      status: "modified",
+      additions: 0,
+      deletions: 0,
+      changes: lines,
+      patch: [
+        `@@ -1,${lines} +1,${lines} @@`,
+        ...Array.from({ length: lines }, (_, i) => " " + lineAt(f, i + 1)),
+      ].join("\n"),
+      sha: `bf${f}`,
+    })),
+    comments: [],
+  };
+}
+
 export const ACCOUNT = {
   id: "github-com-me",
   provider: "github",
