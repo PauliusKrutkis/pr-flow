@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { setupApp } from "./bridge";
-import { makeBigDetail } from "./fixtures";
+import { makeBigDetail, perfBudget } from "./fixtures";
 
 // Scroll-smoothness guard. Sections used to mount inside scrolled frames
 // (IntersectionObserver + a synchronous 400-row render ≈ a 110–160ms frozen
@@ -56,6 +56,7 @@ test("scrolling a large PR stays smooth once idle pre-mount settles", async ({ p
       over50: frames.filter((f) => f > 50).length,
     };
   });
+  const projectName = test.info().project.name;
   console.log(
     `scroll frames: n ${result.n} p50 ${result.p50.toFixed(1)} p95 ${result.p95.toFixed(1)} max ${result.max.toFixed(1)} over50ms ${result.over50}`,
   );
@@ -63,6 +64,6 @@ test("scrolling a large PR stays smooth once idle pre-mount settles", async ({ p
   // Mount-stall regressions produce ~15 frames of 100ms+ on this fixture —
   // far past these bounds. Measured clean: p95 ~26ms, zero frames over 50ms;
   // the slack absorbs GC blips and parallel-worker CPU contention.
-  expect(result.over50).toBeLessThanOrEqual(4);
-  expect(result.p95).toBeLessThan(50);
+  expect(result.over50).toBeLessThanOrEqual(projectName.startsWith("webkit") ? 8 : 4);
+  expect(result.p95).toBeLessThan(perfBudget(50, projectName));
 });

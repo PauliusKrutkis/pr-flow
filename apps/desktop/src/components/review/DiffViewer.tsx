@@ -404,7 +404,7 @@ export function DiffViewer({
   const [flashAnchor, setFlashAnchor] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  // The REAL width of one mono column (see monoColWidth below). Seeded from
+  // The REAL width of one mono column (see monoColWidth above). Seeded from
   // the shared cache; guides fall back to ch until the first measurement.
   const [pxPerCol, setPxPerCol] = useState<number | null>(monoColWidthCache);
   useEffect(() => {

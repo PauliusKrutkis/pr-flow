@@ -288,6 +288,17 @@ export function makeBigDetail(
   };
 }
 
+/**
+ * Wall-clock budget scaled for the running engine: the webkit-perf project
+ * exists to catch WebKitGTK-shaped regressions Chromium hides, but its
+ * JavaScriptCore dev-mode numbers run slower across the board — ×3 until CI
+ * trend logs justify tightening. Structural assertions (repaint counts) are
+ * engine-independent and never scale.
+ */
+export function perfBudget(ms: number, projectName: string): number {
+  return projectName.startsWith("webkit") ? ms * 3 : ms;
+}
+
 export const ACCOUNT = {
   id: "github-com-me",
   provider: "github",

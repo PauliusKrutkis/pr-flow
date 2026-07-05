@@ -94,6 +94,42 @@ test("find bar: mod+f opens it, typing counts, Enter steps and wraps", async ({ 
   await expect(count).toHaveText("3/3");
 });
 
+test("resume: reopening paints the spot you left — no visible jump after", async ({ page }) => {
+  // Land on the third file and scroll a little way into it.
+  await page.keyboard.press("r");
+  await page.keyboard.press("r");
+  await expect(page.locator(".qf-fsec").nth(2).locator(".qf-diff")).toBeVisible();
+  await page.evaluate(() => {
+    document.querySelector(".qf-scrollhost")!.scrollTop += 120;
+  });
+  // Let the debounced review-memory write flush before "quitting".
+  await page.waitForTimeout(600);
+
+  await page.reload();
+  await expect(page.locator(".qf-diff").first()).toBeVisible();
+
+  // The resumed spot is ALREADY on screen: ~120px into file 3's section
+  // (restored pre-paint — the old post-paint scrollIntoView painted the top
+  // of the PR first and then visibly jumped there).
+  const delta = await page.evaluate(() => {
+    const host = document.querySelector(".qf-scrollhost")!;
+    const sec = document.querySelectorAll(".qf-fsec")[2];
+    return host.getBoundingClientRect().top - sec.getBoundingClientRect().top;
+  });
+  expect(Math.abs(delta - 120)).toBeLessThan(40);
+
+  // …and it STAYS there while the idle pre-mounter fills in sections above
+  // (scroll anchoring keeps the view pinned as their estimated heights turn
+  // real). A drifting view here is the "scrolls to some visible place" bug.
+  await page.waitForTimeout(900);
+  const delta2 = await page.evaluate(() => {
+    const host = document.querySelector(".qf-scrollhost")!;
+    const sec = document.querySelectorAll(".qf-fsec")[2];
+    return host.getBoundingClientRect().top - sec.getBoundingClientRect().top;
+  });
+  expect(Math.abs(delta2 - delta)).toBeLessThan(24);
+});
+
 test("find seeds from the viewport: the current match is the one near you, not the top", async ({ page }) => {
   // r jumps to search.ts — fuzzy.ts (matches 1 and 2) is now behind us.
   await page.keyboard.press("r");

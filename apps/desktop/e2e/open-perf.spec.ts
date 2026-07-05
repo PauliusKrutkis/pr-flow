@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { setupApp } from "./bridge";
-import { makeBigDetail } from "./fixtures";
+import { makeBigDetail, perfBudget } from "./fixtures";
 
 // PR-open latency guard: inbox → Enter → diff rows painted, measured inside
 // the page (keydown to the second frame after the diff exists), on the same
@@ -78,6 +78,6 @@ test("opening a PR from cache stays fast", async ({ page }) => {
   // Warm opens measure ~80–120ms on a dev box under the dev runtime; ~2.5×
   // headroom for CI. The cold bound is looser — it includes first-time syntax
   // highlighting of every mounted row.
-  expect(avg).toBeLessThan(300);
-  expect(cold).toBeLessThan(900);
+  expect(avg).toBeLessThan(perfBudget(300, test.info().project.name));
+  expect(cold).toBeLessThan(perfBudget(900, test.info().project.name));
 });

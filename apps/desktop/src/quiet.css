@@ -795,11 +795,13 @@ textarea.q-input { resize: none; line-height: 1.5; }
   border-left: 2px solid transparent;
   /* the "+" affordance positions against the whole row (see .qf-add-btn) */
   position: relative;
-  /* NO content-visibility here, deliberately: skipped rows realize during
-     scrolling with estimated heights, and the estimate error accumulates
-     into visible pop-in and scrollbar drift (measured ~8000px over a 6.4k-row
-     PR). The idle pre-mounter (ReviewScreen) makes off-screen sections cheap
-     the honest way — they're built with real geometry before you arrive. */
+  /* NO content-visibility here — twice tried, twice retired: estimated
+     intrinsic heights accumulate into scrollbar drift / visible pop-in, and
+     even with a measured height, caretPositionFromPoint inside a skipped-
+     content row returns an ELEMENT instead of a text node (Chromium), which
+     silently kills occurrence clicks (wordAtPoint). The idle pre-mounter is
+     what keeps scrolling stall-free instead — sections are built with real
+     geometry before you arrive. */
 }
 .dir-quiet .qf-row-hunk {
   width: 100%;

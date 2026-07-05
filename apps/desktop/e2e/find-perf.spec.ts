@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { setupApp } from "./bridge";
-import { makeBigDetail } from "./fixtures";
+import { makeBigDetail, perfBudget } from "./fixtures";
 
 // Find-in-diff performance guard. Typing in the find bar used to repaint the
 // innerHTML of EVERY rendered diff row per keystroke; the fix gates mark props
@@ -132,9 +132,14 @@ test("typing in the find bar repaints matching rows, not the whole diff", async 
     // the ~3600 rendered rows a full repaint would touch.
     expect(repainted).toBeLessThanOrEqual(MATCH_ROWS * 3);
   }
-  // The marks on screen agree with the counter (2 per file, every file).
+  // The counter counts across the WHOLE PR (patch text), while rendered
+  // marks are scoped to the sections near the viewport (that scope is what
+  // keeps keystroke cost viewport-bounded instead of PR-sized) — so: full
+  // count, partial-but-present marks.
   await expect(page.locator(".qf-findbar-count")).toHaveText(`1/${MATCH_ROWS}`);
-  await expect(page.locator("mark.qf-find-mark")).toHaveCount(MATCH_ROWS);
+  const marksNear = await page.locator("mark.qf-find-mark").count();
+  expect(marksNear).toBeGreaterThanOrEqual(2);
+  expect(marksNear).toBeLessThan(MATCH_ROWS);
 
   // Narrowing further exercises the clear-and-shrink path; keep timing.
   for (const ch of "_1_7") {
@@ -155,7 +160,9 @@ test("typing in the find bar repaints matching rows, not the whole diff", async 
   console.log(
     `find keystrokes ms: [${times.map((t) => t.toFixed(1)).join(", ")}] median ${median.toFixed(1)}`,
   );
-  expect(median).toBeLessThan(100);
+  // Viewport-scoped marks measure ~25ms median in dev; 60 leaves contention
+  // headroom while still failing the PR-sized repaint modes (100ms+).
+  expect(median).toBeLessThan(perfBudget(60, test.info().project.name));
 });
 
 test("typing right after open stays smooth while sections pre-mount", async ({ page }) => {
@@ -196,7 +203,7 @@ test("typing right after open stays smooth while sections pre-mount", async ({ p
   );
   // Pre-mount collisions showed up as 100-230ms keystrokes; deferred, the
   // median sits ~15-45ms in dev mode.
-  expect(median).toBeLessThan(100);
+  expect(median).toBeLessThan(perfBudget(100, test.info().project.name));
 });
 
 test("a keystroke that clears all matches repaints only the previously marked rows", async ({ page }) => {
@@ -205,12 +212,14 @@ test("a keystroke that clears all matches repaints only the previously marked ro
   await page.keyboard.press("Control+f");
   await expect(page.getByPlaceholder("Find in diff")).toBeFocused();
   for (const ch of "zebra") await keystroke(page, ch);
-  await expect(page.locator("mark.qf-find-mark")).toHaveCount(MATCH_ROWS);
+  // Marks render only in the viewport-scoped sections (see the repaint test).
+  const marked = await page.locator("mark.qf-find-mark").count();
+  expect(marked).toBeGreaterThanOrEqual(2);
 
-  // "zebraq" matches nothing: the 24 marked rows must clear — and ONLY they
-  // may repaint.
+  // "zebraq" matches nothing: every marked row must clear — and ONLY those
+  // rows may repaint.
   const [, repainted] = await keystroke(page, "q");
   await expect(page.locator("mark.qf-find-mark")).toHaveCount(0);
-  expect(repainted).toBeLessThanOrEqual(MATCH_ROWS + 6);
-  expect(repainted).toBeGreaterThanOrEqual(MATCH_ROWS);
+  expect(repainted).toBeLessThanOrEqual(marked + 6);
+  expect(repainted).toBeGreaterThanOrEqual(Math.max(1, marked - 2));
 });

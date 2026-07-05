@@ -161,6 +161,15 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     fileIndex: number;
     frac: number;
   } | null>(null);
+  // The sections whose rendered rows carry the find marks: seeded with what's
+  // near the viewport when the query changes, grown as sections approach (the
+  // near-IO below). Keystroke cost stays viewport-bounded this way — marking
+  // EVERY mounted section made typing scale with PR size once the idle
+  // pre-mounter started mounting everything. The counter and overview ruler
+  // read the patch-text match list and are unaffected by this scope.
+  const [findMarkScope, setFindMarkScope] = useState<Set<number>>(
+    () => new Set(),
+  );
   // Bumped when mod+f fires while the bar is already open → refocus/select.
   const [findFocusSeq, setFindFocusSeq] = useState(0);
   // The first Enter lands on the match already counted as current (the
@@ -366,18 +375,24 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     }
   }, [pr, files, viewedFiles, keyValue, reconcileViewed, setToast]);
 
-  // Resume: scroll back to the file you were on. Anchoring to the file section
+  // Resume: put the viewport back where it was. A LAYOUT effect that sets
+  // scrollTop directly, so the first frame the user sees IS the resumed spot —
+  // the old post-paint scrollIntoView painted the top of the PR first and
+  // then visibly jumped. Anchoring to the file section plus a stored offset
   // (not a raw scrollTop) stays correct even though placeholder heights above
   // it are estimates.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!detail || resumedRef.current) return;
-    resumedRef.current = true;
     const idx = initialMem?.fileIndex ?? 0;
-    if (idx > 0 && idx < detail.files.length) {
-      requestAnimationFrame(() => {
-        sectionEls.current.get(idx)?.scrollIntoView({ block: "start" });
-      });
-    }
+    const host = scrollRef.current;
+    const el = sectionEls.current.get(idx);
+    if (!host || (!el && idx > 0)) return; // sections not registered yet
+    resumedRef.current = true;
+    const offset = initialMem?.sectionOffset ?? 0;
+    if (!el || (idx === 0 && offset === 0)) return;
+    const hostTop = host.getBoundingClientRect().top;
+    const secTop = el.getBoundingClientRect().top - hostTop + host.scrollTop;
+    host.scrollTop = Math.max(0, secTop + offset);
   }, [detail, initialMem]);
 
   // Persist the current file for resume — but only once the real file list is
@@ -425,6 +440,43 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     return () => io.disconnect();
   }, [fileCount]);
 
+  // Which sections are near the viewport RIGHT NOW (adds and removes, unlike
+  // `mounted`). Kept in a ref — it changes on every scroll and must not
+  // re-render anything by itself; the find-mark scope below snapshots it.
+  const nearRef = useRef(new Set<number>());
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root || fileCount === 0) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const en of entries) {
+          const idx = Number((en.target as HTMLElement).dataset.fileIndex);
+          if (!Number.isFinite(idx)) continue;
+          if (en.isIntersecting) {
+            nearRef.current.add(idx);
+            // A marked query is active and a fresh section is approaching:
+            // pull it into the mark scope so its highlights are painted by
+            // the time it's on screen. (State change, but only while find is
+            // open AND only for sections not already in scope.)
+            if (findOpenRef.current) {
+              setFindMarkScope((prev) =>
+                prev.has(idx) ? prev : new Set(prev).add(idx),
+              );
+            }
+          } else {
+            nearRef.current.delete(idx);
+          }
+        }
+      },
+      { root, rootMargin: "1500px 0px" },
+    );
+    for (const el of sectionEls.current.values()) io.observe(el);
+    return () => {
+      io.disconnect();
+      nearRef.current.clear();
+    };
+  }, [fileCount, findOpenRef]);
+
   useEffect(() => {
     return () => {
       if (fileRafRef.current != null) cancelAnimationFrame(fileRafRef.current);
@@ -471,7 +523,13 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     };
     const pump = () => {
       if (cancelled) return;
-      if (performance.now() - lastActivityTsRef.current < 400) {
+      // Defer while input is recent — and entirely while the find bar is
+      // open: every mounted section is one more section a keystroke may have
+      // to repaint, so mounting DURING a find session works against it.
+      if (
+        findOpenRef.current ||
+        performance.now() - lastActivityTsRef.current < 400
+      ) {
         schedule();
         return;
       }
@@ -504,9 +562,17 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   function handleScroll() {
     lastActivityTsRef.current = performance.now();
-    if (scrollRef.current) {
-      updateReviewMemory(keyValue, { scrollTop: scrollRef.current.scrollTop });
-    }
+    const host = scrollRef.current;
+    if (!host) return;
+    // Position relative to the active file's section — what resume replays.
+    // One rect read against clean layout (we're inside a scroll event).
+    const sec = sectionEls.current.get(activeIndexRef.current);
+    const sectionOffset = sec
+      ? Math.round(
+          host.getBoundingClientRect().top - sec.getBoundingClientRect().top,
+        )
+      : 0;
+    updateReviewMemory(keyValue, { scrollTop: host.scrollTop, sectionOffset });
   }
 
   function pageScroll(dir: number) {
@@ -667,15 +733,19 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   }, [findMatches, findSafeIndex]);
 
   // Every query edit re-anchors to the viewport: after a jump the viewport IS
-  // the last match, so typing more keeps searching from where you are.
+  // the last match, so typing more keeps searching from where you are. The
+  // mark scope re-snapshots to the sections near the viewport for the same
+  // reason (see findMarkScope).
   function changeFindQuery(q: string) {
     captureFindSeed();
+    setFindMarkScope(new Set(nearRef.current));
     setFindQuery(q);
     setFindIndex(null);
     findJumpedRef.current = false;
   }
   function toggleFindCase() {
     captureFindSeed();
+    setFindMarkScope(new Set(nearRef.current));
     setFindCase((c) => !c);
     setFindIndex(null);
     findJumpedRef.current = false;
@@ -684,6 +754,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     if (!findOpenRef.current) {
       // Reopening with a kept query still re-seeds from wherever you are now.
       captureFindSeed();
+      setFindMarkScope(new Set(nearRef.current));
       setFindIndex(null);
       findJumpedRef.current = false;
       setFindOpen(true);
@@ -1001,7 +1072,13 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   }, [marks, files]);
   const marksFor = (i: number): MarkSpec | null =>
     marks &&
-    (marks.kind === "find" ? !!findMarkFiles?.has(i) : occSpec?.fileIndex === i)
+    (marks.kind === "find"
+      ? // In scope (near the viewport when the query changed, or approached
+        // since) AND possibly matching — plus the current match's section
+        // unconditionally, so an Enter into a far file paints immediately.
+        (!!findMarkFiles?.has(i) &&
+          (findMarkScope.has(i) || findCurrent?.fileIndex === i))
+      : occSpec?.fileIndex === i)
       ? marks
       : null;
 
