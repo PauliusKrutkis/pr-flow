@@ -190,8 +190,10 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const occOriginRef = useRef<{ anchor: string; column: number } | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  // When the diff last scrolled — the idle pre-mounter yields to live scrolls.
-  const lastScrollTsRef = useRef(0);
+  // When the user last did anything (scroll, keys, pointer) — the idle
+  // pre-mounter yields to live interaction, because a section mount landing
+  // between two keystrokes or scroll frames IS the lag it exists to prevent.
+  const lastActivityTsRef = useRef(0);
   const sectionEls = useRef(new Map<number, HTMLElement>());
   const resumedRef = useRef(false);
   const mountShaRef = useRef("");
@@ -453,14 +455,23 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         ? window.requestIdleCallback.bind(window)
         : null;
 
+    // "Idle" to requestIdleCallback just means the frame has slack — a pause
+    // BETWEEN keystrokes qualifies, and a ~100ms section mount landing there
+    // makes typing (find bar, comments) feel laggy. So the pump defers while
+    // ANY input is recent, not only scrolling.
+    const touch = () => {
+      lastActivityTsRef.current = performance.now();
+    };
+    window.addEventListener("keydown", touch, { capture: true, passive: true });
+    window.addEventListener("pointerdown", touch, { capture: true, passive: true });
+    window.addEventListener("wheel", touch, { capture: true, passive: true });
+
     const schedule = () => {
       handle = idle ? idle(pump, { timeout: 3000 }) : setTimeout(pump, 250);
     };
     const pump = () => {
       if (cancelled) return;
-      // A mount inside a live scroll is exactly the hitch this prevents —
-      // back off until the scroll has settled.
-      if (performance.now() - lastScrollTsRef.current < 300) {
+      if (performance.now() - lastActivityTsRef.current < 400) {
         schedule();
         return;
       }
@@ -481,6 +492,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     schedule();
     return () => {
       cancelled = true;
+      window.removeEventListener("keydown", touch, { capture: true });
+      window.removeEventListener("pointerdown", touch, { capture: true });
+      window.removeEventListener("wheel", touch, { capture: true });
       if (handle != null) {
         if (idle) cancelIdleCallback(handle as number);
         else clearTimeout(handle as ReturnType<typeof setTimeout>);
@@ -489,7 +503,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   }, [fileCount, totalPatchRows, mountedRef, fileCountRef]);
 
   function handleScroll() {
-    lastScrollTsRef.current = performance.now();
+    lastActivityTsRef.current = performance.now();
     if (scrollRef.current) {
       updateReviewMemory(keyValue, { scrollTop: scrollRef.current.scrollTop });
     }

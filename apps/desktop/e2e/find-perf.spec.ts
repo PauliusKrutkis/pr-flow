@@ -93,16 +93,18 @@ async function keystroke(page: Page, ch: string): Promise<[number, number]> {
   }, ch);
 }
 
+// NOTE: mountAllSections is NOT in beforeEach — the post-open test below
+// depends on sections still being unmounted when it types.
 test.beforeEach(async ({ page }) => {
   await setupApp(page, { detailByLoad: [BIG_DETAIL] });
   await expect(page.getByRole("option").first()).toBeVisible();
   await page.keyboard.press("Enter");
   await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
-  await mountAllSections(page);
 });
 
 test("typing in the find bar repaints matching rows, not the whole diff", async ({ page }) => {
   test.setTimeout(60_000);
+  await mountAllSections(page);
   const rendered = await page.locator(".qf-row:not(.qf-row-hunk)").count();
   expect(rendered).toBeGreaterThanOrEqual(FILES * LINES);
 
@@ -156,8 +158,50 @@ test("typing in the find bar repaints matching rows, not the whole diff", async 
   expect(median).toBeLessThan(100);
 });
 
+test("typing right after open stays smooth while sections pre-mount", async ({ page }) => {
+  // Regression guard for the idle pre-mounter colliding with input: "idle"
+  // slices exist BETWEEN keystrokes, and a ~100ms section mount landing there
+  // made the find bar feel laggy. The pre-mounter must defer while any input
+  // is recent. No mountAllSections here on purpose — the point is typing
+  // while mounting still has work to do.
+  test.setTimeout(60_000);
+  await page.keyboard.press("Control+f");
+  await expect(page.getByPlaceholder("Find in diff")).toBeFocused();
+
+  const times: number[] = [];
+  for (const ch of "zebra_1_7") {
+    const ms = await page.evaluate(async (ch) => {
+      const input = document.querySelector<HTMLInputElement>(".qf-findbar-input")!;
+      const set = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!;
+      const t0 = performance.now();
+      // A real key press reaches the pre-mounter's keydown listener first —
+      // the synthetic pair mirrors that order.
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: ch, bubbles: true }));
+      set.call(input, input.value + ch);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      await new Promise((r) =>
+        requestAnimationFrame(() => requestAnimationFrame(r)),
+      );
+      return performance.now() - t0;
+    }, ch);
+    times.push(ms);
+    await page.waitForTimeout(120); // human typing cadence — leaves idle slices
+  }
+  const median = [...times].sort((a, b) => a - b)[Math.floor(times.length / 2)];
+  console.log(
+    `post-open keystrokes ms: [${times.map((t) => t.toFixed(1)).join(", ")}] median ${median.toFixed(1)}`,
+  );
+  // Pre-mount collisions showed up as 100-230ms keystrokes; deferred, the
+  // median sits ~15-45ms in dev mode.
+  expect(median).toBeLessThan(100);
+});
+
 test("a keystroke that clears all matches repaints only the previously marked rows", async ({ page }) => {
   test.setTimeout(60_000);
+  await mountAllSections(page);
   await page.keyboard.press("Control+f");
   await expect(page.getByPlaceholder("Find in diff")).toBeFocused();
   for (const ch of "zebra") await keystroke(page, ch);

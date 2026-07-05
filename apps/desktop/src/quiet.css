@@ -708,7 +708,21 @@ textarea.q-input { resize: none; line-height: 1.5; }
   background: var(--add-bg);
 }
 /* not-yet-rendered section body — height comes from the patch line count */
-.dir-quiet .qf-fsec-ph { background: transparent; }
+/* A not-yet-mounted section, seen only when a fast scroll outruns the idle
+   pre-mounter. Faint code-shaped bars (period matched to the ~26px row pitch,
+   inset to the code column) so the swap to real rows reads as content
+   sharpening, not popping in from nothing. Static on purpose — a shimmer
+   would advertise a loading state that usually lasts a frame or two. */
+.dir-quiet .qf-fsec-ph {
+  background: linear-gradient(
+      to bottom,
+      var(--surface) 0,
+      var(--surface) 14px,
+      transparent 14px
+    )
+    126px 6px / min(46%, 520px) 26px repeat-y;
+  opacity: 0.6;
+}
 
 /* ============ IMAGE DIFF ============ */
 .dir-quiet .qf-imgdiff {
@@ -781,13 +795,11 @@ textarea.q-input { resize: none; line-height: 1.5; }
   border-left: 2px solid transparent;
   /* the "+" affordance positions against the whole row (see .qf-add-btn) */
   position: relative;
-  /* Rows outside the viewport skip layout & paint entirely: mounting a big
-     section costs only the rows on screen instead of laying out every line —
-     the difference between a ~100ms hitch per file while scrolling and none.
-     The intrinsic estimate stands in until a row first renders (`auto`
-     remembers the real height after that, so wrapped lines settle honestly). */
-  content-visibility: auto;
-  contain-intrinsic-size: auto 24px;
+  /* NO content-visibility here, deliberately: skipped rows realize during
+     scrolling with estimated heights, and the estimate error accumulates
+     into visible pop-in and scrollbar drift (measured ~8000px over a 6.4k-row
+     PR). The idle pre-mounter (ReviewScreen) makes off-screen sections cheap
+     the honest way — they're built with real geometry before you arrive. */
 }
 .dir-quiet .qf-row-hunk {
   width: 100%;
