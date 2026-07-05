@@ -36,7 +36,13 @@ test("scrolling a large PR stays smooth once idle pre-mount settles", async ({ p
     { timeout: 30_000 },
   );
 
-  const result = await page.evaluate(async () => {
+  // What counts as a stall scales with the engine baseline: headless WebKit
+  // software-renders at ~35ms/frame, so its ordinary frames brush past the
+  // 50ms that is already alarming on Chromium. Mount-stall regressions sit
+  // at 100ms+ on BOTH engines — safely past either threshold.
+  const projectName = test.info().project.name;
+  const stallMs = projectName.startsWith("webkit") ? 100 : 50;
+  const result = await page.evaluate(async (stallMs) => {
     const host = document.querySelector(".qf-scrollhost")!;
     const frames: number[] = [];
     let last = performance.now();
@@ -53,17 +59,16 @@ test("scrolling a large PR stays smooth once idle pre-mount settles", async ({ p
       p50: frames[Math.floor(frames.length / 2)],
       p95: frames[Math.floor(frames.length * 0.95)],
       max: frames[frames.length - 1],
-      over50: frames.filter((f) => f > 50).length,
+      stalls: frames.filter((f) => f > stallMs).length,
     };
-  });
-  const projectName = test.info().project.name;
+  }, stallMs);
   console.log(
-    `scroll frames: n ${result.n} p50 ${result.p50.toFixed(1)} p95 ${result.p95.toFixed(1)} max ${result.max.toFixed(1)} over50ms ${result.over50}`,
+    `scroll frames: n ${result.n} p50 ${result.p50.toFixed(1)} p95 ${result.p95.toFixed(1)} max ${result.max.toFixed(1)} over${stallMs}ms ${result.stalls}`,
   );
 
-  // Mount-stall regressions produce ~15 frames of 100ms+ on this fixture —
-  // far past these bounds. Measured clean: p95 ~26ms, zero frames over 50ms;
-  // the slack absorbs GC blips and parallel-worker CPU contention.
-  expect(result.over50).toBeLessThanOrEqual(projectName.startsWith("webkit") ? 8 : 4);
+  // Mount-stall regressions produce ~15 stall frames on this fixture — far
+  // past these bounds. Measured clean: zero stalls on either engine; the
+  // slack absorbs GC blips and parallel-worker CPU contention.
+  expect(result.stalls).toBeLessThanOrEqual(4);
   expect(result.p95).toBeLessThan(perfBudget(50, projectName));
 });
