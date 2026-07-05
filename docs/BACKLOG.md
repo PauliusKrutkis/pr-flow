@@ -124,6 +124,47 @@ GitHub links opened this"*, you've saved weeks of integration work.
 | Command palette | Instant |
 
 - [x] 🟡 Dev overlay: `⚡ Last PR open: 84 ms · Last file switch: 4 ms`
+- [x] 🟡 Perf regression tests in CI — `find-perf` / `open-perf` / `scroll-perf`
+      e2e budgets (repaint counts + median keystroke / warm-open wall clock /
+      stall frames), run on Chromium AND Playwright WebKit (the app ships on
+      WebKitGTK; Chromium-only budgets hid engine-shaped lag).
+- [ ] 🟡 **Perf e2e against the production build** — today's budgets run on the
+      vite dev server, where React's dev runtime + GC noise inflate numbers
+      ~2×. Add a Playwright project that runs the perf specs against
+      `vite build` + `vite preview` so budgets reflect what users feel, then
+      tighten them (~half the current bounds).
+
+### Performance architecture — decisions queued (2026-07-05)
+
+Post-mortem of the find-in-diff perf saga (PR #18): nearly every symptom —
+mount stalls, pop-in, phantom scrolling on open, find lag scaling with PR
+size — traced to ONE architecture choice (render the whole PR as one DOM and
+window it by hand) plus ONE platform reality (Linux ships WebKitGTK: no
+scroll anchoring, main-thread overflow scrolling, untested-on engine). The
+hand-rolled windowing now works and is guarded by e2e, but it is ~400 lines
+of incrementally reinvented virtual list: mounted-section set + IO mounting +
+height estimates + idle pre-mounter + input yielding + manual scroll
+anchoring + section-offset resume + viewport-scoped find marks.
+
+- [ ] 🔴 **Replace hand-rolled windowing with react-virtuoso** — its own PR,
+      after #18 merges, driven by the existing e2e suite (behavioral + perf +
+      page-error guard). Native sticky group headers, variable heights,
+      scroll restore, anchoring. Deletes most of the list above and removes
+      two ceilings: the 30k-row pre-mount cap and DOM memory scaling with PR
+      size; find/scroll costs become viewport-bounded by construction.
+      (CodeMirror 6 per file was considered and ruled out: purpose-built but
+      a much deeper integration for marginal gain over virtuoso here.)
+- [ ] 🟡 **Real-app perf telemetry** — PerformanceObserver (long tasks +
+      event timing) feeding the existing perf overlay/store, so regressions
+      show up as numbers from the user's machine instead of bug reports that
+      start "feels laggy". Every complaint in the saga arrived through feel;
+      CI budgets only test the fixtures we thought of.
+- [ ] ⏸ **Electron decision trigger** — keep Tauri, but count the cost:
+      every time a WebKitGTK-specific issue burns a day (scroll anchoring,
+      compositing, the AppImage EGL workaround), tick this item. If it keeps
+      ticking, Chromium-everywhere via Electron is the honest fallback —
+      ~10× footprint for perf predictability and dev/prod engine parity. Do
+      NOT reach for more engine-specific cleverness first.
 
 ---
 

@@ -6,13 +6,23 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
 } from "react";
 import { ArrowDown, ArrowUp, MessageSquarePlus } from "lucide-react";
 import type { ChangedFile, PendingComment, ReviewComment } from "../../types";
 import { parsePatch, type DiffRow } from "../../lib/diff";
-import { highlightLine } from "../../lib/highlight";
+import {
+  highlightLineWithFind,
+  highlightLineWithIntra,
+  highlightLineWithOccurrences,
+} from "../../lib/highlight";
+import { intralinePairs, type IntralineRanges } from "../../lib/intraline";
+import { findInDiff } from "../../lib/findInDiff";
+import { occurrenceMatches } from "../../lib/occurrences";
+import { detectIndentUnit, guideLevelsForHunk } from "../../lib/indent";
 import { cn } from "../../lib/cn";
-import { useHotkeys } from "../../keyboard";
+import { useLatest } from "../../hooks/useLatest";
+import { useHotkeys } from "../../keyboard/useHotkeys";
 import { useAppStore } from "../../store/appStore";
 import { Avatar } from "../ui/Avatar";
 import { CommentThread } from "./CommentThread";
@@ -29,6 +39,25 @@ export interface JumpTarget {
 export interface CursorSeed {
   edge: "first" | "last";
   nonce: number;
+}
+
+/**
+ * What to mark on every rendered row. One prop serves both mark systems — the
+ * find bar (mod+f) and selection occurrences — rather than two parallel prop
+ * sets, because at most one is ever active (find wins while its bar is open)
+ * and a single identity keeps the memo contract simple: a row repaints exactly
+ * when ITS match state changes (mark props are gated per row — see markedRows),
+ * and never while stepping through matches.
+ */
+export type MarkSpec =
+  | { kind: "find"; query: string; caseSensitive: boolean }
+  | { kind: "occurrence"; query: string; wholeWord: boolean };
+
+/** The current find match, when it's in this file: which row, which occurrence. */
+export interface FindCurrent {
+  anchor: string;
+  /** 0-based occurrence index within the row (multiple hits per line). */
+  ordinal: number;
 }
 
 interface DiffViewerProps {
@@ -63,6 +92,10 @@ interface DiffViewerProps {
   onCursorExit?: (dir: 1 | -1) => void;
   /** Place the cursor on this file's first/last line (cross-file j/k). */
   seed?: CursorSeed | null;
+  /** Highlight every occurrence of a query on rendered rows (find/selection). */
+  marks?: MarkSpec | null;
+  /** The current find match when it lives in this file (find mode only). */
+  findCurrent?: FindCurrent | null;
 }
 
 /** A stable key for anchoring comments/boxes to a (side, line) location. */
@@ -148,6 +181,12 @@ const DiffLine = memo(function DiffLine({
   isFlash,
   hasAnchored,
   canComment,
+  intra,
+  guideLvl,
+  markKind,
+  markQuery,
+  markFlag,
+  findOrdinal,
   onEnter,
   onOpenBox,
 }: {
@@ -158,6 +197,21 @@ const DiffLine = memo(function DiffLine({
   isFlash: boolean;
   hasAnchored: boolean;
   canComment: boolean;
+  /**
+   * Intraline word-diff emphasis ranges for this row. Identity is stable —
+   * the arrays live in a Map memoized alongside the parsed rows — so this
+   * prop never breaks the memo on unrelated re-renders.
+   */
+  intra: IntralineRanges | null;
+  /** Indent-guide levels for this row (blank rows arrive bridged), or null. */
+  guideLvl: number | null;
+  /** The MarkSpec, as primitives so memoization only breaks when they change. */
+  markKind: "find" | "occurrence" | null;
+  markQuery: string | null;
+  /** Mode-dependent: caseSensitive for find, wholeWord for occurrences. */
+  markFlag: boolean;
+  /** Which occurrence on THIS row is the current find match, if any. */
+  findOrdinal: number | null;
   onEnter: (anchor: string, x: number, y: number) => void;
   onOpenBox: (anchor: string) => void;
 }) {
@@ -194,17 +248,70 @@ const DiffLine = memo(function DiffLine({
       </span>
       <span className="qf-gutter qf-gutter-new">{row.newLine ?? ""}</span>
       <span className="qf-marker">{marker}</span>
-      <code className="qf-code">
+      <code
+        className="qf-code"
+        // Indent guides paint as this element's ::before, sized by the line's
+        // levels — they never enter the text flow (see .qf-code::before).
+        style={
+          guideLvl != null
+            ? ({ "--qf-lvl": guideLvl } as CSSProperties)
+            : undefined
+        }
+      >
         <span
           className="hljs"
           dangerouslySetInnerHTML={{
-            __html: highlightLine(row.content, filename),
+            // Marks are layered onto the SAME highlighted HTML (by wrapping
+            // text nodes), so syntax colours stay intact under them. Intraline
+            // emphasis goes on first; find/occurrence marks nest inside it.
+            __html:
+              markQuery == null
+                ? highlightLineWithIntra(row.content, filename, intra)
+                : markKind === "find"
+                  ? highlightLineWithFind(
+                      row.content,
+                      filename,
+                      markQuery,
+                      markFlag,
+                      findOrdinal,
+                      intra,
+                    )
+                  : highlightLineWithOccurrences(
+                      row.content,
+                      filename,
+                      markQuery,
+                      markFlag,
+                      intra,
+                    ),
           }}
         />
       </code>
     </div>
   );
 });
+
+// The width of one mono column, measured from rendered spaces. The
+// indent-guide gradient can't use `ch`: that unit is the "0" glyph's advance,
+// which some fonts (JetBrains Mono) render a fraction wider than the space
+// advance — a per-level drift that visibly walks the guides off the text
+// columns by three or four levels deep. It's a property of the app's font,
+// not of any one file, so one measurement serves every DiffViewer; it's only
+// cached once the fonts have actually loaded, so a provisional fallback-font
+// value can't get frozen app-wide.
+let monoColWidthCache: number | null = null;
+
+function measureMonoColWidth(host: HTMLElement): number {
+  const probe = document.createElement("span");
+  probe.className = "qf-code";
+  probe.style.cssText =
+    "position:absolute;visibility:hidden;white-space:pre;pointer-events:none";
+  probe.textContent = " ".repeat(100);
+  host.appendChild(probe);
+  const w = probe.getBoundingClientRect().width / 100;
+  probe.remove();
+  if (w > 0 && document.fonts?.status === "loaded") monoColWidthCache = w;
+  return w;
+}
 
 export function DiffViewer({
   file,
@@ -221,8 +328,53 @@ export function DiffViewer({
   onActivate,
   onCursorExit,
   seed,
+  marks,
+  findCurrent,
 }: DiffViewerProps) {
+  // NOTE: several values below are deliberately NOT useMemo'd — the React
+  // Compiler caches them (react-doctor flags manual memoization here as dead
+  // weight). If the compiler ever bails on this component again, the blocking
+  // react-doctor gate goes red, and the perf e2e budgets catch the fallout.
   const hunks = useMemo(() => parsePatch(file.patch), [file.patch]);
+  // Word-level diff emphasis, computed once per patch and looked up per row
+  // by object identity.
+  const intraByRow = intralinePairs(hunks);
+  // The file's indent unit — one detection per patch; rows and the CSS
+  // gradient period (--qf-indent below) share the same object.
+  const indentUnit = detectIndentUnit(hunks);
+  // Guide levels per row, blanks bridged per hunk so the columns run straight
+  // (see guideLevelsForHunk). Keyed by row identity, like the intraline map.
+  const guideByRow = new Map<DiffRow, number>();
+  for (const hunk of hunks) {
+    const levels = guideLevelsForHunk(hunk.rows, indentUnit);
+    hunk.rows.forEach((row, i) => {
+      const lvl = levels[i];
+      if (lvl != null) guideByRow.set(row, lvl);
+    });
+  }
+  // Anchors of the rows the current MarkSpec actually hits. Mark props are
+  // passed ONLY to these rows, so a keystroke in the find bar repaints the
+  // rows whose match state changed (old hits clearing + new hits painting)
+  // instead of every rendered line — the difference between typing that keeps
+  // up and a full-file innerHTML rebuild per character. Both branches ride
+  // the cached patch-text scanners, so this costs one indexOf sweep, not a
+  // per-row pass.
+  let markedAnchors: Set<string> | null = null;
+  if (marks && marks.query) {
+    const hits =
+      marks.kind === "find"
+        ? findInDiff([file], marks.query, {
+            caseSensitive: marks.caseSensitive,
+            // The navigable list caps for sanity; rendered marks must not.
+            maxMatches: Infinity,
+          })
+        : occurrenceMatches(file, {
+            query: marks.query,
+            wholeWord: marks.wholeWord,
+          });
+    markedAnchors = new Set<string>();
+    for (const h of hits) markedAnchors.add(h.anchor);
+  }
   const threadsByAnchor = useMemo(() => buildThreads(comments), [comments]);
   // Pending comments render with the signed-in identity, like the lab design.
   const activeAccount = useAppStore((s) =>
@@ -252,6 +404,22 @@ export function DiffViewer({
   const [flashAnchor, setFlashAnchor] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  // The REAL width of one mono column (see monoColWidth above). Seeded from
+  // the shared cache; guides fall back to ch until the first measurement.
+  const [pxPerCol, setPxPerCol] = useState<number | null>(monoColWidthCache);
+  useEffect(() => {
+    if (pxPerCol != null) return;
+    const host = containerRef.current;
+    if (!host) return;
+    // Measure AFTER paint (plain effect + rAF): probing in a layout effect
+    // read layout mid-commit and forced a whole-document reflow per mounted
+    // section — a big slice of what opening a PR used to cost.
+    const raf = requestAnimationFrame(() => {
+      const w = measureMonoColWidth(host);
+      if (w > 0) setPxPerCol(w);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [pxPerCol]);
   // Only auto-scroll the cursor into view for explicit user moves — not for the
   // initial seed / collapse-driven re-placement, which would otherwise yank a
   // freshly-restored scroll position (resume) back to the top of the file.
@@ -321,9 +489,15 @@ export function DiffViewer({
       containerRef.current
         ?.closest(".qf-fsec")
         ?.querySelector<HTMLElement>(".qf-fsec-head")?.offsetHeight ?? 40;
+    // Hunk headers pin under the file header (quiet.css) — moving the cursor
+    // upward must clear that second sticky band too, or the row lands hidden
+    // behind the pinned `@@` line.
+    const hunkH =
+      containerRef.current?.querySelector<HTMLElement>(".qf-row-hunk")
+        ?.offsetHeight ?? 0;
     const hostRect = host.getBoundingClientRect();
     const rowRect = el.getBoundingClientRect();
-    const topEdge = hostRect.top + headerH + 4;
+    const topEdge = hostRect.top + headerH + hunkH + 4;
     const bottomEdge = hostRect.bottom - 4;
     if (rowRect.top < topEdge) {
       host.scrollBy({ top: rowRect.top - topEdge });
@@ -375,10 +549,8 @@ export function DiffViewer({
   }
 
   // Parent callbacks, read through refs so row/cursor handlers stay stable.
-  const onActivateRef = useRef(onActivate);
-  onActivateRef.current = onActivate;
-  const onCursorExitRef = useRef(onCursorExit);
-  onCursorExitRef.current = onCursorExit;
+  const onActivateRef = useLatest(onActivate);
+  const onCursorExitRef = useLatest(onCursorExit);
 
   // Pointer-intent gate. Scrolling under a stationary pointer fires hover
   // events with unchanged coordinates, which would steal the cursor right back
@@ -414,29 +586,40 @@ export function DiffViewer({
       setCursorAnchor((cur) => (cur === anchor ? cur : anchor));
       onActivateRef.current?.();
     },
-    [isRealPointer],
+    [isRealPointer, onActivateRef],
   );
 
+  // Live refs for the rAF-coalesced cursor machinery below (and the seed
+  // effect). Declared above every closure that reads them — the React
+  // Compiler doesn't model use-before-declaration even when the closure only
+  // runs later.
+  const navAnchorsRef = useLatest(navAnchors);
+  const cursorAnchorRef = useLatest(cursorAnchor);
+
   // Cross-file cursor entry: place the cursor on this file's first/last line.
+  // Scheduled a frame out: the placement is a response to the seed COMMAND,
+  // not derived state, and a synchronous setState inside the effect would
+  // cascade renders (and bail the compiler). j/k moves are rAF-coalesced
+  // anyway, so the handoff cadence is unchanged.
   useEffect(() => {
     if (!seed) return;
-    const anchors = navAnchorsRef.current;
-    if (anchors.length === 0) return;
-    const anchor = seed.edge === "first" ? anchors[0] : anchors[anchors.length - 1];
-    keyboardHoldRef.current = true;
-    setInputMode("keyboard");
-    userMovedCursorRef.current = true;
-    setCursorAnchor(anchor);
-  }, [seed]);
+    const raf = requestAnimationFrame(() => {
+      const anchors = navAnchorsRef.current;
+      if (anchors.length === 0) return;
+      const anchor =
+        seed.edge === "first" ? anchors[0] : anchors[anchors.length - 1];
+      keyboardHoldRef.current = true;
+      setInputMode("keyboard");
+      userMovedCursorRef.current = true;
+      setCursorAnchor(anchor);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [seed, navAnchorsRef]);
 
   // Cursor movement is coalesced per animation frame: rapid key-repeats (and
   // direction changes) accumulate a net delta that is applied once, so the
   // cursor can't fall behind a backlog of queued keydowns and reversing
   // direction cancels the pending move instead of replaying it.
-  const navAnchorsRef = useRef(navAnchors);
-  navAnchorsRef.current = navAnchors;
-  const cursorAnchorRef = useRef(cursorAnchor);
-  cursorAnchorRef.current = cursorAnchor;
   const pendingDeltaRef = useRef(0);
   const rafRef = useRef<number | null>(null);
 
@@ -570,6 +753,16 @@ export function DiffViewer({
       ref={containerRef}
       className="qf-diff"
       data-mode={inputMode}
+      // The indent-guide gradient period, per file: guides land on every
+      // indent level of THIS file's unit (see mark.qf-indent in quiet.css).
+      style={
+        {
+          "--qf-indent":
+            pxPerCol != null
+              ? `${(indentUnit.ch * pxPerCol).toFixed(3)}px`
+              : `${indentUnit.ch}ch`,
+        } as CSSProperties
+      }
       onMouseMove={(e) => {
         if (!isRealPointer(e.clientX, e.clientY)) return;
         if (inputMode !== "mouse") setInputMode("mouse");
@@ -602,6 +795,8 @@ export function DiffViewer({
         const hasAnchored =
           (threads && threads.length > 0) ||
           (pendingHere && pendingHere.length > 0);
+        const rowMarked =
+          key != null && markedAnchors != null && markedAnchors.has(key);
 
         return (
           <Fragment key={`r-${idx}`}>
@@ -613,6 +808,26 @@ export function DiffViewer({
               isFlash={key != null && key === flashAnchor}
               hasAnchored={!!hasAnchored}
               canComment={target != null}
+              intra={intraByRow.get(row) ?? null}
+              guideLvl={guideByRow.get(row) ?? null}
+              markKind={marks && rowMarked ? marks.kind : null}
+              markQuery={marks && rowMarked ? marks.query : null}
+              markFlag={
+                marks && rowMarked
+                  ? marks.kind === "find"
+                    ? marks.caseSensitive
+                    : marks.wholeWord
+                  : false
+              }
+              findOrdinal={
+                marks?.kind === "find" &&
+                rowMarked &&
+                findCurrent &&
+                key != null &&
+                findCurrent.anchor === key
+                  ? findCurrent.ordinal
+                  : null
+              }
               onEnter={handleRowEnter}
               onOpenBox={openBox}
             />

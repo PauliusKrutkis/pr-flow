@@ -605,13 +605,33 @@ textarea.q-input { resize: none; line-height: 1.5; }
 }
 .dir-quiet .qf-back:hover { color: var(--fg); background: var(--surface-2); }
 
+/* The review scroll host does its OWN scroll anchoring (see the manual-anchor
+   effect in ReviewScreen): WebKitGTK — the engine the app ships on — has no
+   native scroll anchoring, so pre-mounting sections above the viewport would
+   visibly push the view around after opening a PR. Native anchoring is
+   disabled so Chromium (dev, e2e) runs the same compensation path the app
+   actually ships with. */
+.dir-quiet .qf-scrollhost {
+  overflow-anchor: none;
+}
+
 /* ============ FILE SECTIONS (continuous scroll) ============ */
 /* One section per changed file; the header stays stuck while its diff scrolls. */
-.dir-quiet .qf-fsec { border-bottom: 1px solid var(--line); }
+.dir-quiet .qf-fsec {
+  border-bottom: 1px solid var(--line);
+  /* Scope layout/paint invalidations to the section: repainting one file's
+     rows (find marks, cursor) can't force work across the whole scroll run.
+     Sticky headers are unaffected — they already pin within their section. */
+  contain: content;
+}
 .dir-quiet .qf-fsec-head {
   position: sticky;
   top: 0;
   z-index: 5;
+  /* Own compositing layer: a pinned header repositions every scrolled frame,
+     and engines without fully composited scrolling (WebKitGTK) repaint the
+     strip each time — which reads as stutter. */
+  will-change: transform;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -698,7 +718,21 @@ textarea.q-input { resize: none; line-height: 1.5; }
   background: var(--add-bg);
 }
 /* not-yet-rendered section body — height comes from the patch line count */
-.dir-quiet .qf-fsec-ph { background: transparent; }
+/* A not-yet-mounted section, seen only when a fast scroll outruns the idle
+   pre-mounter. Faint code-shaped bars (period matched to the ~26px row pitch,
+   inset to the code column) so the swap to real rows reads as content
+   sharpening, not popping in from nothing. Static on purpose — a shimmer
+   would advertise a loading state that usually lasts a frame or two. */
+.dir-quiet .qf-fsec-ph {
+  background: linear-gradient(
+      to bottom,
+      var(--surface) 0,
+      var(--surface) 14px,
+      transparent 14px
+    )
+    126px 6px / min(46%, 520px) 26px repeat-y;
+  opacity: 0.6;
+}
 
 /* ============ IMAGE DIFF ============ */
 .dir-quiet .qf-imgdiff {
@@ -771,6 +805,13 @@ textarea.q-input { resize: none; line-height: 1.5; }
   border-left: 2px solid transparent;
   /* the "+" affordance positions against the whole row (see .qf-add-btn) */
   position: relative;
+  /* NO content-visibility here — twice tried, twice retired: estimated
+     intrinsic heights accumulate into scrollbar drift / visible pop-in, and
+     even with a measured height, caretPositionFromPoint inside a skipped-
+     content row returns an ELEMENT instead of a text node (Chromium), which
+     silently kills occurrence clicks (wordAtPoint). The idle pre-mounter is
+     what keeps scrolling stall-free instead — sections are built with real
+     geometry before you arrive. */
 }
 .dir-quiet .qf-row-hunk {
   width: 100%;
@@ -825,7 +866,51 @@ textarea.q-input { resize: none; line-height: 1.5; }
   -webkit-user-select: none;
 }
 .dir-quiet .qf-marker { text-align: center; color: var(--faint); user-select: none; -webkit-user-select: none; }
-.dir-quiet .qf-code { white-space: pre-wrap; word-break: break-word; color: var(--fg); }
+/* Ligatures stay OFF in diff code (VS Code's default too): a reviewer should
+   see the literal characters, and fonts with contextual ligatures (JetBrains
+   Mono, Fira Code) re-shape when a <mark> boundary splits a sequence — the
+   glyphs around a highlight would visibly shift as marks come and go.
+   geometricPrecision serves the same contract in WebKit, which otherwise
+   rounds text-run advances PER INLINE BOX: splitting a line's text nodes
+   with marks would nudge every glyph after them by accumulated subpixels. */
+.dir-quiet .qf-code {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--fg);
+  font-variant-ligatures: none;
+  text-rendering: geometricPrecision;
+  /* Pinned (it's also the browser default) because the indent guides assume
+     one tab = one 8ch stop — see lib/indent.ts. */
+  tab-size: 8;
+  /* anchors the indent-guide ::before below */
+  position: relative;
+}
+
+/* Indent guides: a hairline at each indent level, painted as a ::before
+   layer sized by the line's levels (--qf-lvl, set by DiffLine from bridged
+   per-hunk levels — blank lines inherit their neighbours', so a column runs
+   STRAIGHT through a block instead of reading as a dashed fence; --qf-indent
+   is the file's unit, set per diff). Painted OUTSIDE the text flow — no
+   wrapper elements in the code, so guides can't fragment text nodes or
+   interact with selection, clicks, or the mark layers. The layer overshoots
+   the row's 1.5px vertical padding so consecutive rows' columns touch. At
+   8% fg they're furniture: visible when you look for them, silent when you
+   don't. The 1px inset keeps the innermost boundary (where the text starts)
+   unpainted. */
+.dir-quiet .qf-code::before {
+  content: "";
+  position: absolute;
+  top: -1.5px;
+  bottom: -1.5px;
+  left: 0;
+  width: calc(var(--qf-lvl, 0) * var(--qf-indent, 2ch) - 1px);
+  background: repeating-linear-gradient(
+    to right,
+    color-mix(in srgb, var(--fg) 8%, transparent) 0 1px,
+    transparent 1px var(--qf-indent, 2ch)
+  );
+  pointer-events: none;
+}
 
 /* inline "add comment" affordance in the gutter — absolutely positioned against
    the ROW (not the gutter's one-line text box), so it stays vertically centered
@@ -868,6 +953,159 @@ textarea.q-input { resize: none; line-height: 1.5; }
 }
 @media (prefers-reduced-motion: reduce) {
   .qf-skel { animation: none; background: var(--surface-2); }
+}
+
+/* ============ FIND IN DIFF (mod+f) ============ */
+/* A compact editor-style bar floated over the diff's top-right corner. No
+   scrim and no focus trap — the diff stays live underneath: this is a lens on
+   the text, not a mode. */
+.dir-quiet .qf-findbar {
+  position: absolute;
+  top: 8px;
+  right: 20px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 5px 4px 11px;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(139, 128, 255, 0.05);
+  font-family: var(--font-ui);
+  animation: q-fade 120ms ease;
+}
+.dir-quiet .qf-findbar-input {
+  width: 200px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--fg);
+  font-size: 12.5px;
+  font-family: var(--font-ui);
+}
+.dir-quiet .qf-findbar-input::placeholder { color: var(--faint); }
+/* the "3/17" counter — mono so it doesn't wobble while stepping */
+.dir-quiet .qf-findbar-count {
+  min-width: 42px;
+  padding-right: 6px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.dir-quiet .qf-findbar-none { color: var(--del); }
+.dir-quiet .qf-findbar-sep { width: 1px; height: 16px; margin: 0 3px; background: var(--line); }
+.dir-quiet .qf-findbar-btn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+}
+.dir-quiet .qf-findbar-btn:hover:not(:disabled) { background: var(--surface-hi); color: var(--fg); }
+.dir-quiet .qf-findbar-btn:disabled { color: var(--faint); opacity: 0.55; cursor: default; }
+.dir-quiet .qf-findbar-btn-on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+
+/* Match marks, layered over the syntax highlighting (they wrap text nodes
+   inside hljs token spans, so colours show through). Zero padding/margin —
+   the mark must sit seamlessly in the mono text flow, like .q-hl. The current
+   match flips to solid iris so it reads at a glance among its siblings. */
+.dir-quiet mark.qf-find-mark {
+  color: inherit;
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+  border-radius: 2px;
+  padding: 0;
+  margin: 0;
+}
+.dir-quiet mark.qf-find-current {
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: none;
+}
+
+/* Selection-occurrence marks (click/select a token → its other occurrences
+   light up). VS Code's word-highlight shape: a solid neutral fill, no ring or
+   underline — a ring reads as a box AROUND the token (as if space were added)
+   and was easy to miss. Neutral (not accent) keeps it distinct from the find
+   marks, and paint-only properties guarantee zero layout shift in the mono
+   grid. */
+.dir-quiet mark.qf-occ-mark {
+  color: inherit;
+  /* 26% ≈ VS Code's dark-theme word-highlight weight — 15% disappeared into
+     the add/del row tints. Square corners on purpose: rounding makes the
+     fill read as a padded chip around the word ("something added space"). */
+  background: color-mix(in srgb, var(--fg) 26%, transparent);
+  padding: 0;
+  margin: 0;
+}
+
+/* Intraline word-diff emphasis (GitHub's "darker span inside the tinted row"):
+   on a −/+ pair only the tokens that differ get a stronger add/del fill, so
+   the eye lands on WHAT changed instead of re-reading both lines. Paint-only
+   (no padding/border) — the mono grid must not shift as diffs render. Scoped
+   to add/del rows: a stray mark anywhere else stays invisible by design. */
+.dir-quiet mark.qf-intra-mark {
+  color: inherit;
+  background: transparent;
+  border-radius: 2px;
+  padding: 0;
+  margin: 0;
+}
+.dir-quiet .qf-row-del mark.qf-intra-mark {
+  background: color-mix(in srgb, var(--del) 30%, transparent);
+}
+.dir-quiet .qf-row-add mark.qf-intra-mark {
+  background: color-mix(in srgb, var(--add) 30%, transparent);
+}
+
+/* ============ OVERVIEW RULER ============ */
+/* A slim column of ticks along the diff's right edge marking where the find /
+   occurrence matches live in the whole scroll range. It sits just LEFT of the
+   9px overlay scrollbar (which owns the very edge) and never intercepts the
+   pointer — it's a read-only instrument, the scrollbar stays the control. */
+.dir-quiet .qf-ruler {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  right: 9px;
+  width: 6px;
+  z-index: 20; /* over the sticky headers (5), under the find bar (30) */
+  pointer-events: none;
+}
+.dir-quiet .qf-ruler-tick {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  height: 2px;
+  border-radius: 1px;
+}
+.dir-quiet .qf-ruler-find {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+/* the current find match — slightly wider and full-strength */
+.dir-quiet .qf-ruler-find.qf-ruler-current {
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--accent);
+}
+/* occurrence ticks are neutral, like their marks — quieter than find */
+.dir-quiet .qf-ruler-occ {
+  background: color-mix(in srgb, var(--fg) 40%, transparent);
 }
 
 /* ============ COMMENT THREADS ============ */

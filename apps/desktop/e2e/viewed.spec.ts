@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 import { setupApp } from "./bridge";
 import { DETAIL, DETAIL_CHANGED, INBOX, INBOX_UPDATED } from "./fixtures";
 
@@ -20,7 +20,7 @@ test("a viewed file whose content changed is auto-unviewed on reopen, with a not
 
   // Mark the active (first) file viewed.
   await page.keyboard.press("v");
-  await expect(page.locator(".qf-side-count")).toHaveText("1/2 viewed");
+  await expect(page.locator(".qf-side-count")).toHaveText("1/3 viewed");
   // Let the debounced persist land (400ms); the beforeunload flush is the
   // backstop, but don't race it.
   await page.waitForTimeout(600);
@@ -33,7 +33,7 @@ test("a viewed file whose content changed is auto-unviewed on reopen, with a not
   await expect(page.locator(".qb-toast")).toContainText(
     "src/lib/fuzzy.ts changed since you viewed it — marked unviewed.",
   );
-  await expect(page.locator(".qf-side-count")).toHaveText("0/2 viewed");
+  await expect(page.locator(".qf-side-count")).toHaveText("0/3 viewed");
   await expect(page.locator(".qf-file-dot")).toHaveCount(1);
   await expect(page.locator(".qf-updated-chip")).toHaveCount(1);
 
@@ -41,7 +41,7 @@ test("a viewed file whose content changed is auto-unviewed on reopen, with a not
   await page.keyboard.press("v");
   await expect(page.locator(".qf-file-dot")).toHaveCount(0);
   await expect(page.locator(".qf-updated-chip")).toHaveCount(0);
-  await expect(page.locator(".qf-side-count")).toHaveText("1/2 viewed");
+  await expect(page.locator(".qf-side-count")).toHaveText("1/3 viewed");
 });
 
 test("an unchanged viewed file keeps its mark across reopen", async ({ page }) => {
@@ -59,14 +59,14 @@ test("an unchanged viewed file keeps its mark across reopen", async ({ page }) =
     "1",
   );
   await page.keyboard.press("v");
-  await expect(page.locator(".qf-side-count")).toHaveText("1/2 viewed");
+  await expect(page.locator(".qf-side-count")).toHaveText("1/3 viewed");
   await page.waitForTimeout(600);
 
   await page.reload();
   await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
 
   // No unview, no notice — the mark survives the head move.
-  await expect(page.locator(".qf-side-count")).toHaveText("1/2 viewed");
+  await expect(page.locator(".qf-side-count")).toHaveText("1/3 viewed");
   await expect(page.locator(".qb-toast")).toHaveCount(0);
   await expect(page.locator(".qf-file-dot")).toHaveCount(0);
 });
@@ -87,7 +87,7 @@ test("an inbox heartbeat that sees the PR move refreshes the open diff", async (
   await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
 
   await page.keyboard.press("v");
-  await expect(page.locator(".qf-side-count")).toHaveText("1/2 viewed");
+  await expect(page.locator(".qf-side-count")).toHaveText("1/3 viewed");
   await expect(page.getByText("const two = 2;")).toHaveCount(0);
 
   // The heartbeat: a focus/visibility flip refetches the inbox, which now
@@ -103,7 +103,7 @@ test("an inbox heartbeat that sees the PR move refreshes the open diff", async (
   await expect(page.locator(".qb-toast")).toContainText(
     "changed since you viewed it — marked unviewed.",
   );
-  await expect(page.locator(".qf-side-count")).toHaveText("0/2 viewed");
+  await expect(page.locator(".qf-side-count")).toHaveText("0/3 viewed");
   await expect(page.locator(".qf-file-dot")).toHaveCount(1);
 });
 

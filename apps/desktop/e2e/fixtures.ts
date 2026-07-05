@@ -104,15 +104,81 @@ export const DETAIL = {
     {
       filename: "src/lib/search.ts",
       status: "added",
-      additions: 4,
+      additions: 5,
       deletions: 0,
-      changes: 4,
-      patch: `@@ -0,0 +1,4 @@
+      changes: 5,
+      // The last line deliberately ends in a WORD character (no semicolon):
+      // clicking the blank space right of it exercises the caret-snap guard
+      // in the occurrence-highlight click handler.
+      patch: `@@ -0,0 +1,5 @@
 +export function search(q: string) {
 +  const gamma = q.trim();
 +  return gamma.length > 0;
-+}`,
++}
++export default search`,
       sha: "f2",
+    },
+    {
+      filename: "src/lib/retry.ts",
+      status: "modified",
+      additions: 36,
+      deletions: 1,
+      changes: 37,
+      // Hunk 1 is a clean one-token rename: the −/+ pair passes the intraline
+      // noise guard, so exactly "Count"/"Limit" carry word-diff emphasis.
+      // (fuzzy.ts above pairs "return 1;" with a comment — that pair must
+      // FAIL the guard and render without emphasis.) Hunk 2 is a long pure-add
+      // run (no del run → no intraline pairs) that exercises the sticky hunk
+      // header, and its `@@` line carries the enclosing function the way git
+      // emits it. Keep this file free of the tokens other tests count across
+      // files: return/gamma/beta/alpha/search.
+      patch: `@@ -1,4 +1,4 @@
+ export function withRetry(fn: () => Promise<void>) {
+-  const retryCount = 3;
++  const retryLimit = 3;
+   let delay = 100;
+ }
+@@ -10,4 +10,39 @@ export function retryLoop(base: number) {
+   let delay = base;
+   let attempt = 0;
++  const history: number[] = [];
++  const jitter = () => Math.random() * 10;
++  while (attempt < 8) {
++    attempt += 1;
++    delay = delay * 2 + jitter();
++    history.push(delay);
++    if (delay > 5_000) {
++      delay = 5_000;
++    }
++    if (attempt === 3) {
++      log("still trying", {
++        attempt,
++        delay,
++      });
++    }
++    if (attempt === 5) {
++      log("backing off", {
++        attempt,
++        delay,
++      });
++    }
++  }
++  const total = history.reduce((sum, d) => sum + d, 0);
++  const longest = history.reduce((max, d) => (d > max ? d : max), 0);
++  const shortest = history.reduce((min, d) => (d < min ? d : min), total);
++  log("settled", {
++    attempts: attempt,
++    total,
++    longest,
++    shortest,
++  });
++  if (total > 20_000) {
++    warnSlow(total);
++  }
++  history.length = 0;
+   done(delay);
+ }`,
+      sha: "f3",
     },
   ],
   comments: [
@@ -165,7 +231,10 @@ export const DETAIL_CHANGED = {
  export const beta = true;`,
       sha: "f1b",
     },
+    // The push only reworks fuzzy.ts — search.ts and retry.ts are untouched,
+    // so their viewed marks must survive the reconcile.
     DETAIL.files[1],
+    DETAIL.files[2],
   ],
   fetchedAt: 1_750_000_100_000,
 };
@@ -185,6 +254,50 @@ export const INBOX_UPDATED = {
     ],
   },
 };
+
+/**
+ * A synthetic large PR for the performance specs: `fileCount` files of one
+ * `lines`-row hunk each, row text supplied by `lineAt` so each spec controls
+ * where its needle tokens land. Kept in fixtures so every perf test measures
+ * the same shape of PR.
+ */
+export function makeBigDetail(
+  fileCount: number,
+  lines: number,
+  lineAt: (f: number, i: number) => string,
+) {
+  return {
+    ...DETAIL,
+    pr: {
+      ...makePr(1, "Big refactor", "alice", "2026-07-02T10:00:00Z"),
+      changedFiles: fileCount,
+    },
+    files: Array.from({ length: fileCount }, (_, f) => ({
+      filename: `src/mod${String(f).padStart(2, "0")}.ts`,
+      status: "modified",
+      additions: 0,
+      deletions: 0,
+      changes: lines,
+      patch: [
+        `@@ -1,${lines} +1,${lines} @@`,
+        ...Array.from({ length: lines }, (_, i) => " " + lineAt(f, i + 1)),
+      ].join("\n"),
+      sha: `bf${f}`,
+    })),
+    comments: [],
+  };
+}
+
+/**
+ * Wall-clock budget scaled for the running engine: the webkit-perf project
+ * exists to catch WebKitGTK-shaped regressions Chromium hides, but its
+ * JavaScriptCore dev-mode numbers run slower across the board — ×3 until CI
+ * trend logs justify tightening. Structural assertions (repaint counts) are
+ * engine-independent and never scale.
+ */
+export function perfBudget(ms: number, projectName: string): number {
+  return projectName.startsWith("webkit") ? ms * 3 : ms;
+}
 
 export const ACCOUNT = {
   id: "github-com-me",

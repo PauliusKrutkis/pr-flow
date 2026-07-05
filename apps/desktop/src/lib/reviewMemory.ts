@@ -11,6 +11,13 @@ export interface ReviewMemory {
   fileIndex: number;
   /** scrollTop of the diff scroll container for that file */
   scrollTop: number;
+  /**
+   * Viewport top relative to `fileIndex`'s section top, in px (may be
+   * negative — viewing content above it). Raw scrollTop can't be replayed
+   * across sessions (placeholder heights above the section are estimates);
+   * "this far into file N" can.
+   */
+  sectionOffset?: number;
   /** head commit sha seen the last time this PR was opened */
   headSha: string;
 }

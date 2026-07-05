@@ -19,6 +19,25 @@ export default defineConfig({
     baseURL: `http://localhost:${port}`,
     viewport: { width: 1280, height: 800 },
   },
+  projects: [
+    // The full suite on Chromium: fast, and fine for behavioral coverage.
+    { name: "chromium", use: { browserName: "chromium" } },
+    // The PERF specs additionally run on WebKit — the app ships on Tauri's
+    // WebKitGTK, which shares its engine lineage (JavaScriptCore, main-thread
+    // overflow scrolling), so Chromium-only budgets can pass while the real
+    // app lags. Budgets in the specs scale via test.info().project.name.
+    // CI-only by default: Playwright's WebKit is an Ubuntu build and won't
+    // launch on every dev distro — opt in locally with E2E_WEBKIT=1.
+    ...(process.env.CI || process.env.E2E_WEBKIT
+      ? [
+          {
+            name: "webkit-perf",
+            use: { browserName: "webkit" as const },
+            testMatch: /(find|open|scroll)-perf\.spec\.ts/,
+          },
+        ]
+      : []),
+  ],
   webServer: {
     command: `pnpm exec vite --port ${port} --strictPort`,
     port,

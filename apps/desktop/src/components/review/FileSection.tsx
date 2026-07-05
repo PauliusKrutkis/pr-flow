@@ -2,7 +2,13 @@ import { memo, useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import type { ChangedFile, PendingComment, ReviewComment } from "../../types";
 import { cn } from "../../lib/cn";
-import { DiffViewer, type CursorSeed, type JumpTarget } from "./DiffViewer";
+import {
+  DiffViewer,
+  type CursorSeed,
+  type FindCurrent,
+  type MarkSpec,
+  type JumpTarget,
+} from "./DiffViewer";
 import { ImageDiff, isImageFile } from "./ImageDiff";
 
 export interface FileSectionCallbacks {
@@ -43,6 +49,15 @@ interface FileSectionProps extends FileSectionCallbacks {
   pending: PendingComment[];
   jump: JumpTarget | null;
   seed: CursorSeed | null;
+  /**
+   * Occurrence marks — the find bar's (mod+f) or the selection's. `marks`
+   * shares one identity across all sections (it only changes with the query),
+   * and `findCurrent` is non-null for exactly one section — so stepping
+   * through find matches re-renders at most two sections and this memo
+   * contract holds.
+   */
+  marks: MarkSpec | null;
+  findCurrent: FindCurrent | null;
   /** Content changed since the reviewer marked it viewed (auto-unviewed). */
   changed: boolean;
   addPending: boolean;
@@ -86,6 +101,8 @@ export const FileSection = memo(function FileSection({
   pending,
   jump,
   seed,
+  marks,
+  findCurrent,
   changed,
   addPending,
   onActivate,
@@ -183,6 +200,8 @@ export const FileSection = memo(function FileSection({
             pending={pending}
             jumpTo={jump}
             seed={seed}
+            marks={marks}
+            findCurrent={findCurrent}
             active={active}
             onActivate={() => onActivate(index)}
             onCursorExit={(dir) => onCursorExit(index, dir)}
