@@ -23,8 +23,9 @@ test.beforeEach(async ({ page }) => {
 async function tokenCenter(page: Page, section: number, token: string) {
   const rect = await page.evaluate(
     ({ section, token }) => {
-      const sec = document.querySelectorAll(".qf-fsec")[section];
-      const codes = sec?.querySelectorAll(".qf-row:not(.qf-row-hunk) .qf-code") ?? [];
+      const codes = document.querySelectorAll(
+        `.qf-row[data-file-index="${section}"]:not(.qf-row-hunk) .qf-code`,
+      );
       for (const code of codes) {
         const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
         while (walker.nextNode()) {
@@ -61,8 +62,9 @@ async function dblclickToken(page: Page, section: number, token: string) {
 async function selectInCode(page: Page, section: number, text: string) {
   const ok = await page.evaluate(
     ({ section, text }) => {
-      const sec = document.querySelectorAll(".qf-fsec")[section];
-      const codes = sec?.querySelectorAll(".qf-row:not(.qf-row-hunk) .qf-code") ?? [];
+      const codes = document.querySelectorAll(
+        `.qf-row[data-file-index="${section}"]:not(.qf-row-hunk) .qf-code`,
+      );
       for (const code of codes) {
         const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
         while (walker.nextNode()) {
@@ -98,7 +100,7 @@ test("single-clicking a token marks its occurrences within that file", async ({ 
   await expect(occMarks(page)).toHaveCount(2);
   expect(await occMarks(page).allTextContents()).toEqual(["return", "return"]);
   await expect(
-    page.locator(".qf-fsec").nth(1).locator("mark.qf-occ-mark"),
+    page.locator('.qf-row[data-file-index="1"] mark.qf-occ-mark'),
   ).toHaveCount(0);
 
   // Clicking another token retargets the marks to it.
@@ -108,9 +110,7 @@ test("single-clicking a token marks its occurrences within that file", async ({ 
 
   // Clicking blank code (not a word) clears them.
   const row = await page
-    .locator(".qf-fsec")
-    .first()
-    .locator(".qf-row:not(.qf-row-hunk) .qf-code")
+    .locator('.qf-row[data-file-index="0"]:not(.qf-row-hunk) .qf-code')
     .first()
     .boundingBox();
   await page.mouse.click(row!.x + row!.width - 8, row!.y + row!.height / 2);
@@ -132,9 +132,9 @@ test("clicking blank space right of a line ending in a word clears, not highligh
   // "search" — and without the glyph-box guard that would highlight "search"
   // instead of reading as blank.
   const lineEnd = await page.evaluate(() => {
-    const codes = document
-      .querySelectorAll(".qf-fsec")[1]
-      .querySelectorAll(".qf-row:not(.qf-row-hunk) .qf-code");
+    const codes = document.querySelectorAll(
+      '.qf-row[data-file-index="1"]:not(.qf-row-hunk) .qf-code',
+    );
     for (const code of codes) {
       if (!code.textContent?.includes("export default search")) continue;
       const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
@@ -153,9 +153,7 @@ test("clicking blank space right of a line ending in a word clears, not highligh
 
 test("marks are paint-only — the line's geometry does not move", async ({ page }) => {
   const codeLine = page
-    .locator(".qf-fsec")
-    .nth(1)
-    .locator(".qf-row:not(.qf-row-hunk) .qf-code")
+    .locator('.qf-row[data-file-index="1"]:not(.qf-row-hunk) .qf-code')
     .first();
   const before = await codeLine.boundingBox();
 

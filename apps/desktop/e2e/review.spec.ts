@@ -11,10 +11,12 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("continuous scroll: all files render with sticky headers", async ({ page }) => {
-  await expect(page.locator(".qf-fsec")).toHaveCount(3);
-  await expect(page.locator(".qf-fsec-head").nth(0)).toContainText("fuzzy.ts");
-  await expect(page.locator(".qf-fsec-head").nth(1)).toContainText("search.ts");
-  await expect(page.locator(".qf-fsec-head").nth(2)).toContainText("retry.ts");
+  // The small fixture fits the render window, so every group header exists.
+  // (Locators scope by data-file-index — virtuoso pins a clone of the current
+  // group's header, so bare nth() ordering isn't stable.)
+  await expect(page.locator('.qf-fsec-head[data-file-index="0"]').first()).toContainText("fuzzy.ts");
+  await expect(page.locator('.qf-fsec-head[data-file-index="1"]').first()).toContainText("search.ts");
+  await expect(page.locator('.qf-fsec-head[data-file-index="2"]').first()).toContainText("retry.ts");
 });
 
 test("j moves the line cursor; sidebar follows the cursor's file", async ({ page }) => {
@@ -76,16 +78,16 @@ test("find bar: mod+f opens it, typing counts, Enter steps and wraps", async ({ 
   // flashes and the current mark singles out that occurrence.
   await page.keyboard.press("Enter");
   await expect(count).toHaveText("1/3");
-  await expect(page.locator(".qf-fsec").nth(0).locator(".qf-row-flash")).toHaveCount(1);
+  await expect(page.locator('.qf-row-flash[data-file-index="0"]')).toHaveCount(1);
   await expect(page.locator("mark.qf-find-current")).toHaveCount(1);
-  await expect(page.locator(".qf-fsec").nth(0).locator("mark.qf-find-current")).toHaveCount(1);
+  await expect(page.locator('.qf-row[data-file-index="0"] mark.qf-find-current')).toHaveCount(1);
 
   // Subsequent Enters advance; the third match lives in the second file.
   await page.keyboard.press("Enter");
   await expect(count).toHaveText("2/3");
   await page.keyboard.press("Enter");
   await expect(count).toHaveText("3/3");
-  await expect(page.locator(".qf-fsec").nth(1).locator("mark.qf-find-current")).toHaveCount(1);
+  await expect(page.locator('.qf-row[data-file-index="1"] mark.qf-find-current')).toHaveCount(1);
 
   // Wraps forward past the end, and Shift+Enter wraps backward.
   await page.keyboard.press("Enter");
@@ -98,54 +100,60 @@ test("resume: reopening paints the spot you left — no visible jump after", asy
   // Land on the third file and scroll a little way into it.
   await page.keyboard.press("r");
   await page.keyboard.press("r");
-  await expect(page.locator(".qf-fsec").nth(2).locator(".qf-diff")).toBeVisible();
-  // The file jump's own scrollIntoView runs in a rAF — wait for it to settle
-  // at the section top, or (on a slow machine) it lands AFTER the nudge below
-  // and clobbers the offset this test wants saved.
+  const fileRow = page.locator('.qf-row[data-file-index="2"]').first();
+  await expect(fileRow).toBeVisible();
+  // Wait for the jump's scroll to settle before nudging, or the nudge races it.
   await page.waitForFunction(() => {
     const host = document.querySelector(".qf-scrollhost")!;
-    const sec = document.querySelectorAll(".qf-fsec")[2];
-    return (
-      Math.abs(
-        host.getBoundingClientRect().top - sec.getBoundingClientRect().top,
-      ) < 4
-    );
+    const row = document.querySelector('.qf-row[data-file-index="2"]')!;
+    const d = row.getBoundingClientRect().top - host.getBoundingClientRect().top;
+    return d >= 0 && d < 120;
   });
   await page.evaluate(() => {
     document.querySelector(".qf-scrollhost")!.scrollTop += 120;
   });
-  // Let the debounced review-memory write flush before "quitting".
-  await page.waitForTimeout(600);
+  // Reference: where the first retry.ts row sits after the nudge.
+  const before = await page.evaluate(() => {
+    const host = document.querySelector(".qf-scrollhost")!;
+    const row = document.querySelector('[data-anchor][data-file-index="2"]')!;
+    return row.getBoundingClientRect().top - host.getBoundingClientRect().top;
+  });
+  // Let the scroll-state snapshot (300ms) + review-memory write (400ms) flush.
+  await page.waitForTimeout(900);
 
   await page.reload();
   await expect(page.locator(".qf-diff").first()).toBeVisible();
+  await expect(
+    page.locator('[data-anchor][data-file-index="2"]').first(),
+  ).toBeVisible();
 
-  // The resumed spot is ALREADY on screen: ~120px into file 3's section
-  // (restored pre-paint — the old post-paint scrollIntoView painted the top
-  // of the PR first and then visibly jumped there).
-  const delta = await page.evaluate(() => {
-    const host = document.querySelector(".qf-scrollhost")!;
-    const sec = document.querySelectorAll(".qf-fsec")[2];
-    return host.getBoundingClientRect().top - sec.getBoundingClientRect().top;
-  });
-  expect(Math.abs(delta - 120)).toBeLessThan(40);
-
-  // …and it STAYS there while the idle pre-mounter fills in sections above
-  // (scroll anchoring keeps the view pinned as their estimated heights turn
-  // real). A drifting view here is the "scrolls to some visible place" bug.
-  await page.waitForTimeout(900);
-  const delta2 = await page.evaluate(() => {
-    const host = document.querySelector(".qf-scrollhost")!;
-    const sec = document.querySelectorAll(".qf-fsec")[2];
-    return host.getBoundingClientRect().top - sec.getBoundingClientRect().top;
-  });
-  expect(Math.abs(delta2 - delta)).toBeLessThan(24);
+  // The resumed viewport shows the same spot (virtuoso state restore) — and
+  // holds it, with no post-paint jumping.
+  const measure = () =>
+    page.evaluate(() => {
+      const host = document.querySelector(".qf-scrollhost")!;
+      const row = document.querySelector('[data-anchor][data-file-index="2"]');
+      if (!row) return null;
+      return row.getBoundingClientRect().top - host.getBoundingClientRect().top;
+    });
+  const after = await measure();
+  expect(after).not.toBeNull();
+  expect(Math.abs((after as number) - before)).toBeLessThan(40);
+  await page.waitForTimeout(700);
+  const settled = await measure();
+  expect(Math.abs((settled as number) - (after as number))).toBeLessThan(24);
 });
 
 test("find seeds from the viewport: the current match is the one near you, not the top", async ({ page }) => {
   // r jumps to search.ts — fuzzy.ts (matches 1 and 2) is now behind us.
   await page.keyboard.press("r");
-  await expect(page.locator(".qf-fsec").nth(1).locator(".qf-diff")).toBeVisible();
+  await expect(page.locator('.qf-row[data-file-index="1"]').first()).toBeVisible();
+  await page.waitForFunction(() => {
+    const host = document.querySelector(".qf-scrollhost")!;
+    const row = document.querySelector('.qf-row[data-file-index="1"]')!;
+    const d = row.getBoundingClientRect().top - host.getBoundingClientRect().top;
+    return d >= 0 && d < 120;
+  });
 
   await page.keyboard.press("Control+f");
   await page.getByPlaceholder("Find in diff").fill("return");
@@ -158,7 +166,7 @@ test("find seeds from the viewport: the current match is the one near you, not t
   // First Enter lands on THAT match, in the second file.
   await page.keyboard.press("Enter");
   await expect(count).toHaveText("3/3");
-  await expect(page.locator(".qf-fsec").nth(1).locator(".qf-row-flash")).toHaveCount(1);
+  await expect(page.locator('.qf-row-flash[data-file-index="1"]')).toHaveCount(1);
 
   // Stepping on wraps around to the top of the PR.
   await page.keyboard.press("Enter");
@@ -173,7 +181,7 @@ test("find bar: Esc closes, clears marks, and j moves the cursor immediately", a
 
   // The jump lands in search.ts (the only file mentioning gamma).
   await page.keyboard.press("Enter");
-  await expect(page.locator(".qf-fsec").nth(1).locator(".qf-row-flash")).toHaveCount(1);
+  await expect(page.locator('.qf-row-flash[data-file-index="1"]')).toHaveCount(1);
 
   await page.keyboard.press("Escape");
   await expect(page.locator(".qf-findbar")).toHaveCount(0);

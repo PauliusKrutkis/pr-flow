@@ -1,3 +1,5 @@
+import type { StateSnapshot } from "react-virtuoso";
+
 // Per-PR review memory — the "resume where you left off" substrate.
 //
 // For each PR we remember the file you were on, your scroll position within it,
@@ -12,12 +14,16 @@ export interface ReviewMemory {
   /** scrollTop of the diff scroll container for that file */
   scrollTop: number;
   /**
-   * Viewport top relative to `fileIndex`'s section top, in px (may be
-   * negative — viewing content above it). Raw scrollTop can't be replayed
-   * across sessions (placeholder heights above the section are estimates);
-   * "this far into file N" can.
+   * Viewport top relative to `fileIndex`'s section top, in px. Legacy field
+   * from the pre-virtualized review scroll; superseded by `listState`.
    */
   sectionOffset?: number;
+  /**
+   * The virtualizer's state snapshot (react-virtuoso getState) — scroll
+   * offset plus measured item ranges. Restoring it puts the viewport back
+   * exactly, without replaying pixel offsets against estimated heights.
+   */
+  listState?: StateSnapshot;
   /** head commit sha seen the last time this PR was opened */
   headSha: string;
 }
