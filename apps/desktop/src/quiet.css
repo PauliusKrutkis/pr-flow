@@ -1179,6 +1179,16 @@ textarea.q-input { resize: none; line-height: 1.5; }
 .dir-quiet .qf-resolve-btn { flex: 0 0 auto; justify-content: flex-end; }
 .dir-quiet .qf-resolve-btn:hover { color: var(--add); }
 
+/* Hotkey hints on the thread's own actions — invisible at rest, fading in
+   exactly when the keys are armed: aiming at the thread (hover) or focusing
+   into it is what makes it the r/x target. */
+.dir-quiet .qf-thread-actions .qf-key-hint { opacity: 0; transition: opacity 120ms ease; }
+.dir-quiet .qf-thread:hover .qf-key-hint,
+.dir-quiet .qf-thread:focus-within .qf-key-hint { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .dir-quiet .qf-thread-actions .qf-key-hint { transition: none; }
+}
+
 /* resolved threads — collapsed to one quiet row until clicked open */
 .dir-quiet .qf-thread-collapsed {
   display: flex;
@@ -1299,22 +1309,60 @@ textarea.qa-textarea {
 .qa-seg-on { color: var(--fg); background: var(--surface-hi); box-shadow: inset 0 0 0 1px var(--line-2); }
 .qa-seg-on svg { color: var(--accent); }
 .qa-actions { display: flex; align-items: center; gap: 8px; }
-/* "Insert suggestion" — a quiet utility next to the composer's actions */
-.qa-suggest-btn {
+
+/* The composer's hint bar: one quiet line under the textarea where every
+   entry is both the hotkey lesson and the button. "Suggestion" leads because
+   it's the only semantic action; preview sits apart on the right. */
+.qa-tools { display: flex; align-items: center; gap: 3px; margin-top: 7px; flex-wrap: wrap; }
+.qa-tool {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 11.5px;
-  color: var(--muted);
+  padding: 3px 7px;
+  font-size: 11px;
+  color: var(--faint);
   background: transparent;
-  border: 1px solid var(--line-2);
+  border: none;
   border-radius: 6px;
-  padding: 4px 9px;
   cursor: pointer;
-  transition: color 120ms ease, border-color 120ms ease;
+  transition: color 120ms ease, background-color 120ms ease;
 }
-.qa-suggest-btn:hover { color: var(--fg); border-color: var(--line-2); }
-.qa-suggest-btn svg { color: var(--accent); }
+.qa-tool:hover { color: var(--fg); background: var(--surface-2); }
+.qa-tool .q-kbd { font-size: 9px; padding: 2px 4px; min-width: 14px; box-shadow: none; }
+.qa-tool-suggest { color: var(--muted); border: 1px solid var(--line-2); font-size: 11.5px; padding: 3px 9px; margin-right: 4px; }
+.qa-tool-suggest:hover { background: transparent; }
+.qa-tool-suggest svg { color: var(--accent); }
+.qa-tool-preview { margin-left: auto; }
+.qa-tool-on { color: var(--accent); }
+.qa-tool-on .q-kbd { color: var(--accent); border-color: var(--accent-line); }
+.qa-tool-on:hover { color: var(--accent); }
+
+/* Preview pane — stands in for the textarea, same footprint. The textarea
+   itself stays mounted and focused (all composer keys keep working, and the
+   preview renders live), just clipped out of the visual flow. */
+.qa-inline { position: relative; }
+.qa-preview {
+  min-height: 86px;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  font-size: 13px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.qa-preview-empty { font-size: 12px; color: var(--faint); }
+textarea.qa-textarea-ghost {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .qa-explain { margin-top: 10px; font-size: 11.5px; color: var(--faint); line-height: 1.5; }
 
 /* ============ INFO DRAWER ============ */

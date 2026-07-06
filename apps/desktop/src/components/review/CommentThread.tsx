@@ -4,6 +4,7 @@ import type { ReviewComment } from "../../types";
 import { formatRelativeTime, formatAbsolute } from "../../lib/time";
 import { Markdown } from "../Markdown";
 import { Avatar } from "../ui/Avatar";
+import { Kbd } from "../ui/Kbd";
 import { AddCommentBox } from "./AddCommentBox";
 
 /** An `r`-key request to open this thread's reply composer (nonce re-fires). */
@@ -139,12 +140,20 @@ export function CommentThread({
         </div>
       ) : (
         <div className="qf-thread-actions">
+          {/* The Kbd chips teach the thread-scoped keys exactly when they
+              work: hovering (or focusing into) the thread is what arms them,
+              and it's also what fades the chips in — see .qf-thread:hover. */}
           <button
             type="button"
             onClick={() => setReplying(true)}
             className="qf-reply-btn qf-focusable"
           >
             Reply
+            {/* aria-hidden: the chip is a visual hint — the button's
+                accessible name must stay "Reply", not "Reply R". */}
+            <span aria-hidden className="qf-key-hint">
+              <Kbd combo="r" />
+            </span>
           </button>
           {threadId != null && onResolve && (
             <button
@@ -158,6 +167,9 @@ export function CommentThread({
               }}
             >
               {resolved ? "Unresolve" : "Resolve"}
+              <span aria-hidden className="qf-key-hint">
+                <Kbd combo="x" />
+              </span>
             </button>
           )}
         </div>

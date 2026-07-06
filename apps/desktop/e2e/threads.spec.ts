@@ -79,6 +79,40 @@ test("r with no active thread keeps its old meaning: next file", async ({ page }
   ).toBeVisible();
 });
 
+test("x resolves the hovered thread; x on the collapsed row unresolves", async ({ page }) => {
+  const thread = page.locator('[data-comment-root="100"]');
+  await thread.hover();
+  await page.keyboard.press("x");
+  const collapsed = page.locator(".qf-thread-collapsed");
+  await expect(collapsed).toBeVisible();
+
+  // The collapsed row is the same thread — aim at it and x flips it back.
+  await collapsed.hover();
+  await page.keyboard.press("x");
+  await expect(collapsed).toHaveCount(0);
+  await expect(thread.getByText("Is this constant right?")).toBeVisible();
+});
+
+test("]c focuses a thread, so x resolves it without hovering", async ({ page }) => {
+  await page.keyboard.press("]");
+  await page.keyboard.press("c");
+  await page.keyboard.press("x");
+  await expect(page.locator(".qf-thread-collapsed")).toBeVisible();
+});
+
+test("hovering a thread fades in the r/x hotkey hints on its actions", async ({ page }) => {
+  const thread = page.locator('[data-comment-root="100"]');
+  const hints = thread.locator(".qf-thread-actions .qf-key-hint");
+  await expect(hints.first()).toHaveCSS("opacity", "0");
+  await thread.hover();
+  await expect(hints.first()).toHaveCSS("opacity", "1");
+  // Reply teaches r, Resolve teaches x.
+  await expect(thread.locator(".qf-thread-actions .q-kbd")).toHaveText([
+    "R",
+    "X",
+  ]);
+});
+
 test("suggestion fences render as a card; copy puts the lines on the clipboard", async ({ page }) => {
   const card = page.locator(".md-suggestion");
   await expect(card).toBeVisible();
@@ -104,6 +138,10 @@ test("insert suggestion prefills the fence with the commented line", async ({ pa
   await expect(box).toHaveValue(
     "```suggestion\nexport function alpha() {\n```\n",
   );
+  // The click moved focus to the button; the insert hands it back (with the
+  // line selected) a frame later — wait for it, or the typed keys below land
+  // on the button and get read as global hotkeys.
+  await expect(box).toBeFocused();
   // The prefilled line is selected — typing replaces it in place.
   await page.keyboard.type("export function alpha(): number {");
   await expect(box).toHaveValue(

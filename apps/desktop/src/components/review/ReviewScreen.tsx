@@ -12,6 +12,7 @@ import {
   ArrowUp,
   Check,
   CheckCheck,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ChevronsDown,
@@ -1201,6 +1202,18 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     nextFile();
   }
 
+  // `x`: flip the hovered/]c-focused thread's resolved state. Same target as
+  // `r`, but no fallback meaning — with no thread under aim, nothing happens.
+  // The root is re-read from the cache: threadId/resolved must be current, and
+  // the thread may have vanished on a refetch.
+  function resolveActiveThread() {
+    const t = activeThreadRef.current;
+    if (!t) return;
+    const root = commentsRef.current.find((c) => c.id === t.rootId);
+    if (!root || root.threadId == null) return;
+    resolveThread.mutate({ threadId: root.threadId, resolved: !root.resolved });
+  }
+
   function openSubmit() {
     submitReview.reset();
     setSubmitOpen(true);
@@ -1303,6 +1316,13 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       group: "Comments",
       icon: MessageSquare,
       run: () => goToComment(-1),
+    },
+    {
+      keys: "x",
+      description: "Resolve / unresolve comment",
+      group: "Comments",
+      icon: CheckCircle2,
+      run: resolveActiveThread,
     },
     {
       keys: "e",
