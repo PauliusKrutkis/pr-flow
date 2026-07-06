@@ -327,9 +327,17 @@ Inline → Code view. PR-level → Info tab + badge. ⏸ Conversation mode.
 
 - [x] 🟢 Thread hotkeys — `r` reply / `x` resolve on the hovered or
       `]c`-focused thread; hints fade in on the thread's own action buttons.
-- [x] 🟢 Composer hint-bar toolbar — ⌘B/⌘I/⌘K markdown wrapping + ⌘⇧P
-      in-place live preview; entries are clickable hints, not GitHub's
-      14-icon strip.
+- [x] 🟢 Composer hint-bar toolbar — every entry is a clickable hotkey hint,
+      not GitHub's 14-icon strip. (First shipped as markdown-symbol wrapping +
+      ⌘⇧P preview; superseded days later by the rich composer below after
+      "inserting symbols feels like going back" feedback.)
+- [x] 🟡 **Rich composer (TipTap v3)** — WYSIWYG surface, markdown wire
+      format (`editor.getMarkdown()` feeds the same API payloads). ⌘B/⌘I/⌘E
+      toggle real marks, ⌘K links the selection via an inline url input,
+      markdown typing shortcuts (`**bold**`, `- `, ``` ) autoconvert, and the
+      suggestion is a real block that round-trips to the ```suggestion fence.
+      Pending cards render markdown now (raw body would reintroduce the
+      symbols). Watch WebKitGTK contenteditable quirks in the wild.
 - [ ] 🔴 **Multi-line comment ranges (GitLab-style)** — its own branch; the
       anchoring model changes end-to-end. Spec (2026-07-06):
       - *Selection model:* a line range is a "fat cursor" — `shift+j`/`shift+k`

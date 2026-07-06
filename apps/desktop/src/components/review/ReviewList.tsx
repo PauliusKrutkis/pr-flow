@@ -35,6 +35,7 @@ import type { IntralineRanges } from "../../lib/intraline";
 import { cn } from "../../lib/cn";
 import { useAppStore } from "../../store/appStore";
 import { Avatar } from "../ui/Avatar";
+import { Markdown } from "../Markdown";
 import { CommentThread, type ReplyRequest } from "./CommentThread";
 import { AddCommentBox } from "./AddCommentBox";
 import { ImageDiff } from "./ImageDiff";
@@ -343,7 +344,11 @@ function CommentsBlock({
                 Discard
               </button>
             </div>
-            <div className="qf-comment-body whitespace-pre-wrap">{p.body}</div>
+            {/* The composer writes markdown — the pending card must render
+                it, or bold comes back as asterisks the moment you save. */}
+            <div className="qf-comment-body">
+              <Markdown>{p.body}</Markdown>
+            </div>
           </div>
         </div>
       ))}
