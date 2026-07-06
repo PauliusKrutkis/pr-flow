@@ -82,6 +82,22 @@ test("resuming deep in a large PR holds position while the list restores", async
   await page.evaluate(() => {
     document.querySelector(".qf-scrollhost")!.scrollTop += 200;
   });
+  // Deep jumps into unmeasured territory settle asynchronously (the
+  // virtualizer re-adjusts as real row heights come in — on WebKit that
+  // adjustment lands ~180px late). Wait for the scroll to hold still before
+  // taking the reference, or we'd record a mid-settle position the snapshot
+  // (saved later, settled) will legitimately disagree with.
+  await page.waitForFunction(() => {
+    const host = document.querySelector(".qf-scrollhost")!;
+    const w = window as unknown as { __lastTop?: number; __stable?: number };
+    if (w.__lastTop === host.scrollTop) {
+      w.__stable = (w.__stable ?? 0) + 1;
+    } else {
+      w.__stable = 0;
+      w.__lastTop = host.scrollTop;
+    }
+    return (w.__stable ?? 0) >= 5;
+  });
   // Pin the measurement to ONE specific row (the first VISIBLE one of file
   // 9): "first rendered" differs across engines/reloads with the overscan
   // window, which would compare different rows.
