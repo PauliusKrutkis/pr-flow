@@ -979,6 +979,14 @@ textarea.q-input { resize: none; line-height: 1.5; }
 .dir-quiet .qf-fsec-active .qf-diff:not([data-mode="mouse"]) .qf-row-active .qf-add-btn { display: grid; }
 .dir-quiet .qf-diff[data-mode="mouse"] .qf-row:hover .qf-add-btn { display: grid; }
 
+/* While a gutter drag is extending a range, the "+" travels with the moving
+   end — the row the composer will open under (GitLab's affordance). The
+   pressed button holds the pointer capture, so it FADES (display:none would
+   release the capture and kill the drag); the end row's own button paints in
+   its place. */
+.dir-quiet .qf-diff[data-dragging] .qf-add-btn { opacity: 0; }
+.dir-quiet .qf-diff[data-dragging] .qf-row-sel-end .qf-add-btn { display: grid; opacity: 1; }
+
 .dir-quiet .qf-empty { padding: 40px; text-align: center; color: var(--faint); font-family: var(--font-ui); }
 
 /* skeleton shimmer — cold-cache placeholders (never spinners) */

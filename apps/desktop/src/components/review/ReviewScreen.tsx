@@ -174,6 +174,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   // cursor once created, so hover can't tear it — but any plain cursor move
   // (j/k), file jump, or composer close collapses it, editor-style.
   const [selection, setSelection] = useState<LineSelection | null>(null);
+  // A gutter drag is in flight — the "+" travels with the range's moving end
+  // while this is true (state, not a ref: the rows must repaint with it).
+  const [dragging, setDragging] = useState(false);
   // Last input modality — drives which single "+" affordance shows (cursor
   // row vs hovered row) so there's never two.
   const [inputMode, setInputMode] = useState<"keyboard" | "mouse">("keyboard");
@@ -326,6 +329,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       hunkIndex: selection.hunkIndex,
       fromItem: Math.min(a, b),
       toItem: Math.max(a, b),
+      // The MOVING end (un-normalized) — where the traveling "+" paints.
+      endItem: b,
     };
   })();
   const selectionRef = useLatest(selection);
@@ -681,6 +686,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         hunkIndex: item.hunkIndex,
         from: anchor,
       };
+      setDragging(true);
     },
     onPlusDragOver(fileIndex: number, anchor: string) {
       const d = dragRef.current;
@@ -726,6 +732,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     onPlusDragEnd() {
       const d = dragRef.current;
       dragRef.current = null;
+      setDragging(false);
       if (!d) return;
       const live = liveSelectionRef.current;
       const m = modelRef.current;
@@ -1949,9 +1956,11 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
                       fileIndex: liveSelection.fileIndex,
                       fromItem: liveSelection.fromItem,
                       toItem: liveSelection.toItem,
+                      endItem: liveSelection.endItem,
                     }
                   : null
               }
+              dragging={dragging}
               flashKey={flashKey}
               inputMode={inputMode}
               marks={marks}

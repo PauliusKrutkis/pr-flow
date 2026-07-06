@@ -136,6 +136,11 @@ test("dragging the gutter + selects the range and opens the composer", async ({ 
     steps: 6,
   });
   await expect(page.locator(".qf-row-selected")).toHaveCount(3);
+  // The "+" travels with the drag: it paints on the moving end row while the
+  // pressed one (still holding pointer capture) fades out.
+  await expect(to.locator(".qf-add-btn")).toHaveCSS("display", "grid");
+  await expect(to.locator(".qf-add-btn")).toHaveCSS("opacity", "1");
+  await expect(btn).toHaveCSS("opacity", "0");
   await page.mouse.up();
 
   await expect(page.locator(".qf-range-head")).toHaveText("Lines 2–4");

@@ -127,8 +127,16 @@ interface ReviewListProps {
   /** fileAnchorKey of the cursor/flash row (null = none). */
   cursorKey: string | null;
   /** The multi-line range, normalized to item order (rows in between paint
-   *  selected). Null = no range. */
-  selection: { fileIndex: number; fromItem: number; toItem: number } | null;
+   *  selected); endItem is the MOVING end, where the traveling "+" paints
+   *  during a drag. Null = no range. */
+  selection: {
+    fileIndex: number;
+    fromItem: number;
+    toItem: number;
+    endItem: number;
+  } | null;
+  /** A gutter drag is extending the range right now. */
+  dragging: boolean;
   flashKey: string | null;
   inputMode: "keyboard" | "mouse";
   marks: MarkSpec | null;
@@ -183,9 +191,7 @@ function glyphFor(status: string): { letter: string; cls: string } {
 function DiffLine({
   item,
   filename,
-  isCursor,
-  isSelected,
-  isFlash,
+  stateCls,
   intra,
   guideLvl,
   indentVar,
@@ -201,10 +207,10 @@ function DiffLine({
 }: {
   item: ReviewRowItem;
   filename: string;
-  isCursor: boolean;
-  /** Row is inside the multi-line comment range. */
-  isSelected: boolean;
-  isFlash: boolean;
+  /** The row's cursor/selection/flash classes, pre-joined — ONE string prop
+   *  (value-compared) so the compiler's row memoization survives; an object
+   *  would be identity-fresh every render and repaint every row. */
+  stateCls: string;
   intra: IntralineRanges | null;
   guideLvl: number | null;
   /** The file's indent-guide period (px or ch string) — see --qf-indent. */
@@ -235,9 +241,7 @@ function DiffLine({
         "qf-row",
         row.type === "add" && "qf-row-add",
         row.type === "del" && "qf-row-del",
-        isCursor && "qf-row-active",
-        isSelected && "qf-row-selected",
-        isFlash && "qf-row-flash",
+        stateCls,
         hasAnchored && "qf-row-threaded",
       )}
       style={{ "--qf-indent": indentVar } as CSSProperties}
@@ -604,18 +608,21 @@ function renderItem(ctx: ListContext, index: number, item: ReviewItem) {
           ? `${(meta.indentUnit.ch * ctx.colW).toFixed(3)}px`
           : `${meta.indentUnit.ch}ch`;
       const sel = p.selection;
+      const inSel =
+        sel != null &&
+        sel.fileIndex === item.fileIndex &&
+        index >= sel.fromItem &&
+        index <= sel.toItem;
       return (
         <DiffLine
           item={item}
           filename={file.filename}
-          isCursor={key != null && key === p.cursorKey}
-          isSelected={
-            sel != null &&
-            sel.fileIndex === item.fileIndex &&
-            index >= sel.fromItem &&
-            index <= sel.toItem
-          }
-          isFlash={key != null && key === p.flashKey}
+          stateCls={cn(
+            key != null && key === p.cursorKey && "qf-row-active",
+            inSel && "qf-row-selected",
+            inSel && index === sel.endItem && "qf-row-sel-end",
+            key != null && key === p.flashKey && "qf-row-flash",
+          )}
           intra={meta.intraByRow.get(item.row) ?? null}
           guideLvl={meta.guideByRow.get(item.row) ?? null}
           indentVar={indentVar}
@@ -797,6 +804,9 @@ export function ReviewList({
       <div
         className="qf-diff qf-review-list min-h-0 min-w-0 flex-1"
         data-mode={props.inputMode}
+        // Present only while a drag has actually formed a range — a plain
+        // press must not blink the button under the pointer.
+        data-dragging={props.dragging && props.selection ? "" : undefined}
         onMouseMove={(e) => props.callbacks.onMouseMove(e.clientX, e.clientY)}
       >
         <GroupedVirtuoso<unknown, ListContext>
