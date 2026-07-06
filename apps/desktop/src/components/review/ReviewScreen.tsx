@@ -368,11 +368,13 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     updateReviewMemory(keyValue, { fileIndex: clampedIndex });
   }, [detail, fileCount, clampedIndex, keyValue]);
 
-  // Anchor-exact resume correction: restoreStateFrom applied the snapshot at
-  // mount, but its scrollTop replays against height ESTIMATES — on an engine
-  // or font where rows measure differently, the same scrollTop shows a spot
-  // several rows off. One scrollItemTo against the saved top row fixes the
-  // position against real geometry, before the user interacts.
+  // Anchor-exact resume correction: restoreStateFrom applies the snapshot at
+  // mount, but its scrollTop replays against height ESTIMATES — an engine or
+  // font that measures rows differently shows a spot several rows off (the
+  // webkit CI leg caught a deterministic 183px). A settle loop measures the
+  // saved top row's REAL position each frame and nudges scrollTop by the
+  // delta until it holds — geometry-exact, and immune to the virtualizer's
+  // own late restore adjustments (which clobbered a one-shot correction).
   const resumeCorrectedRef = useRef(false);
   useEffect(() => {
     if (resumeCorrectedRef.current) return;
@@ -383,8 +385,34 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     const idx = modelRef.current.anchorItem.get(
       fileAnchorKey(t.fileIndex, t.anchor),
     );
-    if (idx == null) return;
-    listRef.current?.scrollItemTo(idx, t.top);
+    let tries = 0;
+    let raf = 0;
+    let settled = 0;
+    const step = () => {
+      const scroller = listRef.current?.scroller();
+      if (!scroller) return;
+      const row = scroller.querySelector<HTMLElement>(
+        `[data-anchor="${t.anchor}"][data-file-index="${t.fileIndex}"]`,
+      );
+      if (!row) {
+        // Snapshot landed too far for the row to be rendered — jump close.
+        if (idx != null) listRef.current?.scrollItemTo(idx, t.top);
+      } else {
+        const delta =
+          row.getBoundingClientRect().top -
+          scroller.getBoundingClientRect().top -
+          t.top;
+        if (Math.abs(delta) > 2) {
+          scroller.scrollTop += delta;
+          settled = 0;
+        } else if (++settled >= 2) {
+          return; // held for two frames — done
+        }
+      }
+      if (++tries < 12) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
   }, [detail, initialMem, modelRef]);
 
   // Record file-switch latency after the paint that follows the switch.
