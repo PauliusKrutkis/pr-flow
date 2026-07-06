@@ -43,11 +43,17 @@ export function CommentThread({
 
   // `r` on the hovered / ]c-focused thread: surface the composer. Expanding
   // first means a resolved thread un-collapses instead of ignoring the key;
-  // AddCommentBox's autoFocus then claims the caret.
+  // AddCommentBox's autoFocus then claims the caret. Scheduled a frame out:
+  // this is a response to a COMMAND prop, not derived state, and a
+  // synchronous setState inside the effect cascades renders (and bails the
+  // compiler) — the same pattern as the review list's jump handling.
   useEffect(() => {
     if (!replyRequest || replyRequest.rootId !== rootId) return;
-    setExpanded(true);
-    setReplying(true);
+    const raf = requestAnimationFrame(() => {
+      setExpanded(true);
+      setReplying(true);
+    });
+    return () => cancelAnimationFrame(raf);
   }, [replyRequest, rootId]);
 
   if (comments.length === 0) return null;
