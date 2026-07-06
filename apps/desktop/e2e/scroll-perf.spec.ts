@@ -2,12 +2,11 @@ import { expect, test } from "./test";
 import { setupApp } from "./bridge";
 import { makeBigDetail, perfBudget } from "./fixtures";
 
-// Scroll-smoothness guard. Sections used to mount inside scrolled frames
-// (IntersectionObserver + a synchronous 400-row render ≈ a 110–160ms frozen
-// frame per file — what "janky sticky headers" feels like). The idle
-// pre-mounter now builds sections while you read, so scrolling lands on
-// existing DOM; this spec pins that: after the pre-mount settles, a full
-// top-to-bottom scroll of a 6,400-row PR must stay stall-free.
+// Scroll-smoothness guard, virtualized edition. The review scroll renders a
+// bounded slice of rows and materializes new ones as they enter the window —
+// there are no section mounts to stall a frame, and no pre-mounter to wait
+// for. This spec scrolls a 6,400-row PR top to bottom immediately after open
+// and requires stall-free frames plus a bounded DOM the whole way.
 
 // Wall-clock budgets flake when parallel workers compete for CPU; a genuine
 // regression fails every attempt, contention doesn't survive a retry.
@@ -21,30 +20,23 @@ const BIG_DETAIL = makeBigDetail(
   (f, i) => `const value_${f}_${i} = compute(${i} + ${f});`,
 );
 
-test("scrolling a large PR stays smooth once idle pre-mount settles", async ({ page }) => {
+test("scrolling a large PR stays smooth, with a bounded DOM", async ({ page }) => {
   test.setTimeout(120_000);
   await setupApp(page, { detailByLoad: [BIG_DETAIL] });
   await expect(page.getByRole("option").first()).toBeVisible();
   await page.keyboard.press("Enter");
   await expect(page.locator(".qf-diff").first()).toBeVisible();
-
-  // The idle pre-mounter builds one section per idle slice; wait until every
-  // row exists (this also asserts the pre-mounter itself keeps working).
-  await page.waitForFunction(
-    (want) => document.querySelectorAll(".qf-row").length >= want,
-    FILES * LINES,
-    { timeout: 30_000 },
-  );
+  await page.waitForTimeout(300);
 
   // What counts as a stall scales with the engine baseline: headless WebKit
   // software-renders at ~35ms/frame, so its ordinary frames brush past the
-  // 50ms that is already alarming on Chromium. Mount-stall regressions sit
-  // at 100ms+ on BOTH engines — safely past either threshold.
+  // 50ms that is already alarming on Chromium.
   const projectName = test.info().project.name;
   const stallMs = projectName.startsWith("webkit") ? 100 : 50;
   const result = await page.evaluate(async (stallMs) => {
     const host = document.querySelector(".qf-scrollhost")!;
     const frames: number[] = [];
+    let maxRows = 0;
     let last = performance.now();
     while (host.scrollTop + host.clientHeight < host.scrollHeight - 4) {
       host.scrollTop += 150;
@@ -52,6 +44,7 @@ test("scrolling a large PR stays smooth once idle pre-mount settles", async ({ p
       const now = performance.now();
       frames.push(now - last);
       last = now;
+      maxRows = Math.max(maxRows, document.querySelectorAll(".qf-row").length);
     }
     frames.sort((a, b) => a - b);
     return {
@@ -60,68 +53,86 @@ test("scrolling a large PR stays smooth once idle pre-mount settles", async ({ p
       p95: frames[Math.floor(frames.length * 0.95)],
       max: frames[frames.length - 1],
       stalls: frames.filter((f) => f > stallMs).length,
+      maxRows,
     };
   }, stallMs);
   console.log(
-    `scroll frames: n ${result.n} p50 ${result.p50.toFixed(1)} p95 ${result.p95.toFixed(1)} max ${result.max.toFixed(1)} over${stallMs}ms ${result.stalls}`,
+    `scroll frames: n ${result.n} p50 ${result.p50.toFixed(1)} p95 ${result.p95.toFixed(1)} max ${result.max.toFixed(1)} over${stallMs}ms ${result.stalls} maxRows ${result.maxRows}`,
   );
 
-  // Mount-stall regressions produce ~15 stall frames on this fixture — far
-  // past these bounds. Measured clean: zero stalls on either engine; the
-  // slack absorbs GC blips and parallel-worker CPU contention.
+  // The DOM never grows past a viewport-ish slice — the property every other
+  // bound rests on.
+  expect(result.maxRows).toBeLessThan(300);
   expect(result.stalls).toBeLessThanOrEqual(4);
   expect(result.p95).toBeLessThan(perfBudget(50, projectName));
 });
 
-test("resuming deep in a large PR holds position while sections above pre-mount", async ({ page }) => {
-  // The manual scroll-anchoring path (ReviewScreen; native anchoring is
-  // disabled on the host): after resume, the idle pre-mounter replaces the
-  // ESTIMATED placeholders above the viewport with real rows — hundreds of
-  // px of height error across 8 big sections. Uncompensated, that pushes the
-  // view around after open ("laggy automatic scroll"); compensated, the spot
-  // you resumed to must not move.
+test("resuming deep in a large PR holds position while the list restores", async ({ page }) => {
   test.setTimeout(120_000);
   await setupApp(page, { detailByLoad: [BIG_DETAIL] });
   await expect(page.getByRole("option").first()).toBeVisible();
   await page.keyboard.press("Enter");
   await expect(page.locator(".qf-diff").first()).toBeVisible();
 
-  // Jump deep (file 9, via the sidebar — one deterministic action) and let
-  // the jump's rAF scroll settle at the section top before nudging into it.
+  // Jump deep (file 9, via the sidebar) and nudge into it.
   await page.locator('.qf-sidebar [data-file-index="8"]').click();
-  await page.waitForFunction(() => {
-    const host = document.querySelector(".qf-scrollhost")!;
-    const sec = document.querySelectorAll(".qf-fsec")[8];
-    if (!sec) return false;
-    return (
-      Math.abs(
-        host.getBoundingClientRect().top - sec.getBoundingClientRect().top,
-      ) < 4
-    );
-  });
+  await expect(
+    page.locator('[data-anchor][data-file-index="8"]').first(),
+  ).toBeVisible();
   await page.evaluate(() => {
     document.querySelector(".qf-scrollhost")!.scrollTop += 200;
   });
-  await page.waitForTimeout(600); // review-memory debounce flush
+  // Deep jumps into unmeasured territory settle asynchronously (the
+  // virtualizer re-adjusts as real row heights come in — on WebKit that
+  // adjustment lands ~180px late). Wait for the scroll to hold still before
+  // taking the reference, or we'd record a mid-settle position the snapshot
+  // (saved later, settled) will legitimately disagree with.
+  await page.waitForFunction(() => {
+    const host = document.querySelector(".qf-scrollhost")!;
+    const w = window as unknown as { __lastTop?: number; __stable?: number };
+    if (w.__lastTop === host.scrollTop) {
+      w.__stable = (w.__stable ?? 0) + 1;
+    } else {
+      w.__stable = 0;
+      w.__lastTop = host.scrollTop;
+    }
+    return (w.__stable ?? 0) >= 5;
+  });
+  // Pin the measurement to ONE specific row (the first VISIBLE one of file
+  // 9): "first rendered" differs across engines/reloads with the overscan
+  // window, which would compare different rows.
+  const before = await page.evaluate(() => {
+    const host = document.querySelector(".qf-scrollhost")!;
+    const hostTop = host.getBoundingClientRect().top;
+    for (const row of document.querySelectorAll<HTMLElement>(
+      '[data-anchor][data-file-index="8"]',
+    )) {
+      const top = row.getBoundingClientRect().top - hostTop;
+      if (top >= 0) return { anchor: row.dataset.anchor!, top };
+    }
+    return null;
+  });
+  expect(before).not.toBeNull();
+  // Let the scroll-state snapshot (300ms) + review-memory write (400ms) flush.
+  await page.waitForTimeout(900);
 
   await page.reload();
   await expect(page.locator(".qf-diff").first()).toBeVisible();
-  const measure = () =>
-    page.evaluate(() => {
-      const host = document.querySelector(".qf-scrollhost")!;
-      const sec = document.querySelectorAll(".qf-fsec")[8];
-      return host.getBoundingClientRect().top - sec.getBoundingClientRect().top;
-    });
-  const before = await measure();
-  expect(Math.abs(before - 200)).toBeLessThan(40);
+  const rowSel = `[data-anchor="${before!.anchor}"][data-file-index="8"]`;
+  await expect(page.locator(rowSel)).toBeVisible();
 
-  // Wait for the pre-mounter to rebuild every section above (and below).
-  await page.waitForFunction(
-    (want) => document.querySelectorAll(".qf-row").length >= want,
-    FILES * LINES,
-    { timeout: 30_000 },
-  );
-  await page.waitForTimeout(300);
+  const measure = () =>
+    page.evaluate((sel) => {
+      const host = document.querySelector(".qf-scrollhost")!;
+      const row = document.querySelector(sel);
+      if (!row) return null;
+      return row.getBoundingClientRect().top - host.getBoundingClientRect().top;
+    }, rowSel);
   const after = await measure();
-  expect(Math.abs(after - before)).toBeLessThan(30);
+  expect(after).not.toBeNull();
+  expect(Math.abs((after as number) - before!.top)).toBeLessThan(40);
+  // …and it holds — no post-paint drift.
+  await page.waitForTimeout(700);
+  const settled = await measure();
+  expect(Math.abs((settled as number) - (after as number))).toBeLessThan(24);
 });

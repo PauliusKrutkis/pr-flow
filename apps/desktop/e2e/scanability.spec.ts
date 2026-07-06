@@ -9,9 +9,9 @@ import { setupApp } from "./bridge";
 async function tokenCenter(page: Page, section: number, token: string) {
   const rect = await page.evaluate(
     ({ section, token }) => {
-      const sec = document.querySelectorAll(".qf-fsec")[section];
-      const codes =
-        sec?.querySelectorAll(".qf-row:not(.qf-row-hunk) .qf-code") ?? [];
+      const codes = document.querySelectorAll(
+        `.qf-row[data-file-index="${section}"]:not(.qf-row-hunk) .qf-code`,
+      );
       for (const code of codes) {
         const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
         while (walker.nextNode()) {
@@ -55,15 +55,14 @@ test("a clean rename emphasizes exactly the changed word pieces", async ({ page 
   // retry.ts pairs "const retryCount = 3;" with "const retryLimit = 3;" —
   // the tokenizer splits the camelCase identifier, so only the differing
   // pieces light up.
-  const section = page.locator(".qf-fsec").nth(2);
-  const marks = section.locator("mark.qf-intra-mark");
+  const marks = page.locator('.qf-row[data-file-index="2"] mark.qf-intra-mark');
   await expect(marks).toHaveCount(2);
   expect(await marks.allTextContents()).toEqual(["Count", "Limit"]);
   await expect(
-    section.locator(".qf-row-del mark.qf-intra-mark"),
+    page.locator('.qf-row-del[data-file-index="2"] mark.qf-intra-mark'),
   ).toHaveText("Count");
   await expect(
-    section.locator(".qf-row-add mark.qf-intra-mark"),
+    page.locator('.qf-row-add[data-file-index="2"] mark.qf-intra-mark'),
   ).toHaveText("Limit");
 });
 
@@ -71,11 +70,12 @@ test("a rewrite pair fails the noise guard and renders without emphasis", async 
   // fuzzy.ts pairs "- return 1;" with "+ // tuned" (the del run's only row
   // against the add run's first): no substantive tokens in common, so
   // emphasizing would cover both lines wall-to-wall — the guard bails.
-  const section = page.locator(".qf-fsec").nth(0);
-  // The section is rendered (its marks WOULD be visible)…
-  await expect(section.locator(".qf-row-del")).toHaveCount(1);
-  // …but carries no intraline emphasis.
-  await expect(section.locator("mark.qf-intra-mark")).toHaveCount(0);
+  // The rows are rendered (marks WOULD be visible)…
+  await expect(page.locator('.qf-row-del[data-file-index="0"]')).toHaveCount(1);
+  // …but carry no intraline emphasis.
+  await expect(
+    page.locator('.qf-row[data-file-index="0"] mark.qf-intra-mark'),
+  ).toHaveCount(0);
 });
 
 test("clicking inside an intraline-emphasized token still selects the whole word", async ({ page }) => {
@@ -83,8 +83,9 @@ test("clicking inside an intraline-emphasized token still selects the whole word
   // text. A click on "retry" must expand across the WHOLE line's text to
   // "retryLimit" — expanding within the clicked fragment would yield the
   // sub-word and match nothing.
-  const section = page.locator(".qf-fsec").nth(2);
-  const target = section.locator(".qf-row-add", { hasText: "retryLimit" });
+  const target = page.locator('.qf-row-add[data-file-index="2"]', {
+    hasText: "retryLimit",
+  });
   await target.scrollIntoViewIfNeeded();
   await page.waitForTimeout(200); // settle scroll + hover re-render
   const pos = await target.locator(".qf-code").evaluate((code) => {
@@ -106,18 +107,19 @@ test("clicking inside an intraline-emphasized token still selects the whole word
   await page.mouse.click(pos!.x, pos!.y);
   // The single whole-word occurrence marks up (fragmented across the
   // intraline mark boundary, so join the pieces).
-  const marks = section.locator("mark.qf-occ-mark");
+  const marks = page.locator('.qf-row[data-file-index="2"] mark.qf-occ-mark');
   await expect(marks.first()).toBeVisible();
   expect((await marks.allTextContents()).join("")).toBe("retryLimit");
 });
 
 test("indent guides paint on deep lines' code element, and nothing else", async ({ page }) => {
-  const section = page.locator(".qf-fsec").nth(2);
   // retry.ts is 2-space indented; "        attempt," sits four levels deep.
   // Guides are a ::before layer on the code element (never in the text flow),
   // sized by --qf-lvl.
-  const deep = section
-    .locator(".qf-row:not(.qf-row-hunk)", { hasText: "attempt," })
+  const deep = page
+    .locator('.qf-row[data-file-index="2"]:not(.qf-row-hunk)', {
+      hasText: "attempt,",
+    })
     .first()
     .locator(".qf-code");
   const style = await deep.evaluate((el) => {
@@ -148,19 +150,25 @@ test("indent guides paint on deep lines' code element, and nothing else", async 
   });
   expect(drift).toBeLessThan(0.35);
   // And the text flow carries no guide wrapper elements at all.
-  await expect(section.locator("mark.qf-indent")).toHaveCount(0);
+  await expect(
+    page.locator('.qf-row[data-file-index="2"] mark.qf-indent'),
+  ).toHaveCount(0);
 
   // One level deep paints the single col-0 guide (levels >= 1 now paint, so
   // block columns run straight through shallow rows like closing braces)…
-  const shallow = section
-    .locator(".qf-row:not(.qf-row-hunk)", { hasText: "let delay = 100;" })
+  const shallow = page
+    .locator('.qf-row[data-file-index="2"]:not(.qf-row-hunk)', {
+      hasText: "let delay = 100;",
+    })
     .first()
     .locator(".qf-code");
   await expect(shallow).toHaveAttribute("style", /--qf-lvl:\s*1/);
 
   // …while zero-indent rows paint nothing.
-  const flat = section
-    .locator(".qf-row:not(.qf-row-hunk)", { hasText: "export function withRetry" })
+  const flat = page
+    .locator('.qf-row[data-file-index="2"]:not(.qf-row-hunk)', {
+      hasText: "export function withRetry",
+    })
     .first()
     .locator(".qf-code");
   const flatW = await flat.evaluate(
@@ -170,7 +178,7 @@ test("indent guides paint on deep lines' code element, and nothing else", async 
 });
 
 test("intraline emphasis is paint-only and survives find marks on top", async ({ page }) => {
-  const row = page.locator(".qf-fsec").nth(2).locator(".qf-row-add").first();
+  const row = page.locator('.qf-row-add[data-file-index="2"]').first();
   const before = await row.boundingBox();
 
   // Find marks layer over the intraline marks without displacing them. One
@@ -181,7 +189,7 @@ test("intraline emphasis is paint-only and survives find marks on top", async ({
   await expect(page.locator(".qf-findbar-count")).toHaveText("1/1");
   await expect(page.locator("mark.qf-find-mark")).toHaveCount(2);
   await expect(
-    page.locator(".qf-fsec").nth(2).locator("mark.qf-intra-mark"),
+    page.locator('.qf-row[data-file-index="2"] mark.qf-intra-mark'),
   ).toHaveCount(2);
 
   const after = await row.boundingBox();
@@ -234,9 +242,7 @@ test("overview ruler: occurrence ticks on click, cleared by a blank click", asyn
 
   // A click on blank code clears the marks — and their ticks.
   const row = await page
-    .locator(".qf-fsec")
-    .nth(1)
-    .locator(".qf-row:not(.qf-row-hunk) .qf-code")
+    .locator('.qf-row[data-file-index="1"]:not(.qf-row-hunk) .qf-code')
     .first()
     .boundingBox();
   await page.mouse.click(row!.x + row!.width - 8, row!.y + row!.height / 2);

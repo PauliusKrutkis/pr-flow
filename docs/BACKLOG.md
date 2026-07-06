@@ -146,7 +146,7 @@ of incrementally reinvented virtual list: mounted-section set + IO mounting +
 height estimates + idle pre-mounter + input yielding + manual scroll
 anchoring + section-offset resume + viewport-scoped find marks.
 
-- [ ] 🔴 **Replace hand-rolled windowing with react-virtuoso** — its own PR,
+- [x] 🔴 **Replace hand-rolled windowing with react-virtuoso** — its own PR,
       after #18 merges, driven by the existing e2e suite (behavioral + perf +
       page-error guard). Native sticky group headers, variable heights,
       scroll restore, anchoring. Deletes most of the list above and removes

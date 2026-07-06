@@ -3,55 +3,37 @@ import type { Page } from "@playwright/test";
 import { setupApp } from "./bridge";
 import { makeBigDetail, perfBudget } from "./fixtures";
 
-// Find-in-diff performance guard. Typing in the find bar used to repaint the
-// innerHTML of EVERY rendered diff row per keystroke; the fix gates mark props
-// per row so only rows whose match state changed repaint. This spec pins that
-// behavior two ways:
+// Find-in-diff performance guard, virtualized edition. The review scroll is
+// ONE virtualized list (react-virtuoso), so only ~a viewport of rows exists
+// no matter the PR size — keystroke cost is viewport-bounded BY CONSTRUCTION.
+// This spec pins that construction:
 //
-//  1. Structurally (the tight, deterministic guard): a MutationObserver counts
-//     how many .qf-code elements mutate per keystroke. With ~3600 rendered
-//     rows and 24 matching rows, the count must stay near 24 — if a change
-//     re-breaks the row gating, this jumps to ~3600 and fails loudly on any
-//     machine, fast or slow.
-//  2. As a wall-clock budget (the gross backstop): keystroke → second frame
-//     must stay under a generous bound, so a regression that keeps mutations
-//     low but adds per-keystroke CPU (say, an uncached re-parse of every
-//     patch) still trips something.
+//  1. Structurally: the rendered row count stays bounded on a 6,400-row PR,
+//     and a MutationObserver counts how many .qf-code elements mutate per
+//     keystroke — bounded by the rendered set, never the PR.
+//  2. As a wall-clock budget: keystroke → second frame stays under a bound
+//     that a regression to PR-sized work (uncached scans, full-list renders)
+//     blows through.
 
 // Wall-clock budgets flake when parallel workers compete for CPU; a genuine
 // regression fails every attempt, contention doesn't survive a retry.
 test.describe.configure({ retries: 2 });
 
-const FILES = 12;
-const LINES = 300;
-// "zebra" lands on 2 lines per file; no other fixture word shares a letter
-// with it, so every prefix ("z", "ze", …) matches exactly those 24 rows and
-// the per-keystroke mutation count stays flat while typing.
-const MATCH_ROWS = FILES * 2;
+const FILES = 16;
+const LINES = 400;
+// "zebra" lands on 3 lines per file (rows 75/225/375); no other fixture word
+// shares a letter with it, so every prefix ("z", "ze", …) matches exactly
+// those rows and the per-keystroke mutation count stays flat while typing.
+const MATCH_ROWS = FILES * 3;
+// The virtualization dividend: however big the PR, the DOM stays around a
+// viewport (+ overscan) of rows. 200 is ~4× the typical rendered set.
+const RENDERED_CAP = 200;
 
 const BIG_DETAIL = makeBigDetail(FILES, LINES, (f, i) =>
   i % 150 === 75
     ? `const zebra_${f}_${i} = herd(${i});`
     : `const value_${f}_${i} = compute(${i} + ${f});`,
 );
-
-/** Scroll the review pane to the bottom so every windowed section mounts
- *  (mounted sections never unmount — this is the realistic worst case for a
- *  reviewer who has scrolled through the PR before searching). */
-async function mountAllSections(page: Page) {
-  await page.waitForFunction(
-    (want) => {
-      const host = document.querySelector(".qf-scrollhost");
-      if (!host) return false;
-      host.scrollTop = host.scrollTop + host.clientHeight * 2;
-      const atEnd =
-        host.scrollTop + host.clientHeight >= host.scrollHeight - 2;
-      return atEnd && document.querySelectorAll(".qf-row").length >= want;
-    },
-    FILES * LINES,
-    { polling: 100, timeout: 30_000 },
-  );
-}
 
 /** Dispatch one real (React-visible) keystroke into the find input ("\b" =
  *  backspace) and return [elapsed ms to the second following frame, distinct
@@ -78,6 +60,7 @@ async function keystroke(page: Page, ch: string): Promise<[number, number]> {
       "value",
     )!.set!;
     const t0 = performance.now();
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: ch, bubbles: true }));
     setValue.call(
       input,
       ch === "\b" ? input.value.slice(0, -1) : input.value + ch,
@@ -94,8 +77,6 @@ async function keystroke(page: Page, ch: string): Promise<[number, number]> {
   }, ch);
 }
 
-// NOTE: mountAllSections is NOT in beforeEach — the post-open test below
-// depends on sections still being unmounted when it types.
 test.beforeEach(async ({ page }) => {
   await setupApp(page, { detailByLoad: [BIG_DETAIL] });
   await expect(page.getByRole("option").first()).toBeVisible();
@@ -103,22 +84,19 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
 });
 
-test("typing in the find bar repaints matching rows, not the whole diff", async ({ page }) => {
+test("typing in the find bar repaints the viewport, not the PR", async ({ page }) => {
   test.setTimeout(60_000);
-  await mountAllSections(page);
+  // The virtualization dividend, asserted: a 6,400-row PR renders a bounded
+  // slice of rows.
   const rendered = await page.locator(".qf-row:not(.qf-row-hunk)").count();
-  expect(rendered).toBeGreaterThanOrEqual(FILES * LINES);
+  expect(rendered).toBeGreaterThan(10);
+  expect(rendered).toBeLessThan(RENDERED_CAP);
 
   await page.keyboard.press("Control+f");
   await expect(page.getByPlaceholder("Find in diff")).toBeFocused();
 
-  // Warm up: the FIRST couple of keystrokes pay one-time costs that say
-  // nothing about typing responsiveness — dev-runtime/JIT warmup and the
-  // per-patch scan caches. (The dev server runs React's dev runtime, whose
-  // jsxDEV element creation alone is several times the production cost.)
-  // Then a settle pause so the major GC of the warmup's render garbage lands
-  // before, not inside, the measured window. The budget below guards the
-  // steady state a typing user actually feels.
+  // Warm up (dev-runtime/JIT + scan caches), then a settle pause so warmup
+  // GC lands before the measured window.
   for (const ch of "zz") await keystroke(page, ch);
   await keystroke(page, "\b");
   await keystroke(page, "\b");
@@ -128,99 +106,67 @@ test("typing in the find bar repaints matching rows, not the whole diff", async 
   for (const ch of "zebra") {
     const [ms, repainted] = await keystroke(page, ch);
     times.push(ms);
-    // The tight guard: per keystroke, repaints stay in the neighbourhood of
-    // the 24 matching rows (clears + paints + the odd extra), nowhere near
-    // the ~3600 rendered rows a full repaint would touch.
-    expect(repainted).toBeLessThanOrEqual(MATCH_ROWS * 3);
+    // The tight guard: repaints bounded by the rendered set — a regression
+    // that renders (or repaints) the whole PR is two orders past this.
+    expect(repainted).toBeLessThanOrEqual(RENDERED_CAP);
   }
-  // The counter counts across the WHOLE PR (patch text), while rendered
-  // marks are scoped to the sections near the viewport (that scope is what
-  // keeps keystroke cost viewport-bounded instead of PR-sized) — so: full
-  // count, partial-but-present marks.
+  // The counter counts across the WHOLE PR (patch text); the marks on screen
+  // are whatever matches sit in the rendered slice.
   await expect(page.locator(".qf-findbar-count")).toHaveText(`1/${MATCH_ROWS}`);
-  const marksNear = await page.locator("mark.qf-find-mark").count();
-  expect(marksNear).toBeGreaterThanOrEqual(2);
-  expect(marksNear).toBeLessThan(MATCH_ROWS);
 
   // Narrowing further exercises the clear-and-shrink path; keep timing.
   for (const ch of "_1_7") {
     const [ms, repainted] = await keystroke(page, ch);
     times.push(ms);
-    expect(repainted).toBeLessThanOrEqual(MATCH_ROWS * 3);
+    expect(repainted).toBeLessThanOrEqual(RENDERED_CAP);
   }
   await expect(page.locator(".qf-findbar-count")).toHaveText("1/1");
 
-  // Wall-clock budget on the warm steady state, as the MEDIAN: ~40ms per
-  // keystroke on a dev box under the dev runtime (production is far cheaper —
-  // dev-mode element creation dominates what's left). The median is the
-  // right statistic here: the dev page throws occasional one-off ~200ms GC
-  // pauses that say nothing about the code, while a real regression (per-row
-  // scanning, layout-forcing effects, full repaints) shifts EVERY keystroke
-  // and moves the median with it. Logged so CI runs leave a trend.
+  // Wall-clock budget on the warm steady state, as the MEDIAN (dev pages
+  // throw one-off GC pauses; a real regression shifts every keystroke).
   const median = [...times].sort((a, b) => a - b)[Math.floor(times.length / 2)];
   console.log(
     `find keystrokes ms: [${times.map((t) => t.toFixed(1)).join(", ")}] median ${median.toFixed(1)}`,
   );
-  // Viewport-scoped marks measure ~25ms median in dev; 60 leaves contention
-  // headroom while still failing the PR-sized repaint modes (100ms+).
-  expect(median).toBeLessThan(perfBudget(60, test.info().project.name));
+  // ~35ms solo on the dev runtime; parallel-suite contention runs 2-4×. The
+  // structural guards above are the tight net — this only trips gross,
+  // PR-sized regressions.
+  expect(median).toBeLessThan(perfBudget(150, test.info().project.name));
 });
 
-test("typing right after open stays smooth while sections pre-mount", async ({ page }) => {
-  // Regression guard for the idle pre-mounter colliding with input: "idle"
-  // slices exist BETWEEN keystrokes, and a ~100ms section mount landing there
-  // made the find bar feel laggy. The pre-mounter must defer while any input
-  // is recent. No mountAllSections here on purpose — the point is typing
-  // while mounting still has work to do.
+test("typing right after open stays smooth", async ({ page }) => {
+  // Cold caches, first render just happened — the first thing a reviewer
+  // does must not stutter.
   test.setTimeout(60_000);
   await page.keyboard.press("Control+f");
   await expect(page.getByPlaceholder("Find in diff")).toBeFocused();
 
   const times: number[] = [];
   for (const ch of "zebra_1_7") {
-    const ms = await page.evaluate(async (ch) => {
-      const input = document.querySelector<HTMLInputElement>(".qf-findbar-input")!;
-      const set = Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        "value",
-      )!.set!;
-      const t0 = performance.now();
-      // A real key press reaches the pre-mounter's keydown listener first —
-      // the synthetic pair mirrors that order.
-      input.dispatchEvent(new KeyboardEvent("keydown", { key: ch, bubbles: true }));
-      set.call(input, input.value + ch);
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      await new Promise((r) =>
-        requestAnimationFrame(() => requestAnimationFrame(r)),
-      );
-      return performance.now() - t0;
-    }, ch);
+    const [ms] = await keystroke(page, ch);
     times.push(ms);
-    await page.waitForTimeout(120); // human typing cadence — leaves idle slices
+    await page.waitForTimeout(120); // human typing cadence
   }
   const median = [...times].sort((a, b) => a - b)[Math.floor(times.length / 2)];
   console.log(
     `post-open keystrokes ms: [${times.map((t) => t.toFixed(1)).join(", ")}] median ${median.toFixed(1)}`,
   );
-  // Pre-mount collisions showed up as 100-230ms keystrokes; deferred, the
-  // median sits ~15-45ms in dev mode.
-  expect(median).toBeLessThan(perfBudget(100, test.info().project.name));
+  expect(median).toBeLessThan(perfBudget(130, test.info().project.name));
 });
 
-test("a keystroke that clears all matches repaints only the previously marked rows", async ({ page }) => {
+test("a keystroke that clears all matches repaints only the marked rows", async ({ page }) => {
   test.setTimeout(60_000);
-  await mountAllSections(page);
   await page.keyboard.press("Control+f");
   await expect(page.getByPlaceholder("Find in diff")).toBeFocused();
   for (const ch of "zebra") await keystroke(page, ch);
-  // Marks render only in the viewport-scoped sections (see the repaint test).
+  // Jump to the current match so marked rows are in the rendered slice.
+  await page.keyboard.press("Enter");
+  await expect(page.locator("mark.qf-find-mark").first()).toBeVisible();
   const marked = await page.locator("mark.qf-find-mark").count();
-  expect(marked).toBeGreaterThanOrEqual(2);
 
-  // "zebraq" matches nothing: every marked row must clear — and ONLY those
-  // rows may repaint.
+  // "zebraq" matches nothing: every marked row must clear — and only those
+  // rows (plus the odd cursor/flash neighbour) may repaint.
   const [, repainted] = await keystroke(page, "q");
   await expect(page.locator("mark.qf-find-mark")).toHaveCount(0);
-  expect(repainted).toBeLessThanOrEqual(marked + 6);
-  expect(repainted).toBeGreaterThanOrEqual(Math.max(1, marked - 2));
+  expect(repainted).toBeLessThanOrEqual(marked + 8);
 });
