@@ -405,11 +405,13 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         if (Math.abs(delta) > 2) {
           scroller.scrollTop += delta;
           settled = 0;
-        } else if (++settled >= 2) {
-          return; // held for two frames — done
+        } else {
+          settled += 1;
+          if (settled >= 2) return; // held for two frames — done
         }
       }
-      if (++tries < 12) raf = requestAnimationFrame(step);
+      tries += 1;
+      if (tries < 12) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
