@@ -560,6 +560,16 @@ export function ReviewList({
 }: ReviewListProps & { ref?: Ref<ReviewListHandle> }) {
   const vRef = useRef<GroupedVirtuosoHandle>(null);
   const scrollerRef = useRef<HTMLElement | null>(null);
+  // In-flight geometric settle for scrollToFileStart (cancelled by newer
+  // navigations and on unmount).
+  const settleRafRef = useRef<number | null>(null);
+  useEffect(() => {
+    return () => {
+      if (settleRafRef.current != null) {
+        cancelAnimationFrame(settleRafRef.current);
+      }
+    };
+  }, []);
   const { model } = props;
   // Event-time model access for the imperative handle (written in an
   // insertion effect — never during render; render paths read ctx.props).
@@ -620,15 +630,41 @@ export function ReviewList({
         scrollToFileStart(fileIndex) {
           const first = modelRef.current.groupFirstItem[fileIndex];
           if (first == null) return;
-          // The group header pins OVER the viewport top — without the offset
-          // the file's first row lands hidden underneath it.
-          vRef.current?.scrollToIndex({
-            index: first,
-            align: "start",
-            offset: -stickyHeaderPx(),
-          });
+          vRef.current?.scrollToIndex({ index: first, align: "start" });
+          // Geometric settle (like the resume correction): scrollToIndex
+          // into unmeasured territory lands approximately and keeps
+          // adjusting async — approximate landings left the PREVIOUS file's
+          // rows peeking above the header, with ITS header pinned. Nudge
+          // until the file's first item sits exactly below the pinned band,
+          // 1px past the group boundary so the pinned header is THIS file's.
+          if (settleRafRef.current != null) {
+            cancelAnimationFrame(settleRafRef.current);
+          }
+          let tries = 0;
+          const step = () => {
+            settleRafRef.current = null;
+            const scroller = scrollerRef.current;
+            if (!scroller) return;
+            const item = scroller.querySelector<HTMLElement>(
+              `[data-file-index="${fileIndex}"]:not(.qf-fsec-head)`,
+            );
+            if (item) {
+              const delta =
+                item.getBoundingClientRect().top -
+                (scroller.getBoundingClientRect().top + stickyHeaderPx() - 1);
+              if (Math.abs(delta) > 1) scroller.scrollTop += delta;
+              else return; // settled
+            }
+            tries += 1;
+            if (tries < 10) settleRafRef.current = requestAnimationFrame(step);
+          };
+          settleRafRef.current = requestAnimationFrame(step);
         },
         centerItem(itemIndex) {
+          if (settleRafRef.current != null) {
+            cancelAnimationFrame(settleRafRef.current);
+            settleRafRef.current = null;
+          }
           vRef.current?.scrollToIndex({ index: itemIndex, align: "center" });
         },
         nudgeItemIntoView(itemIndex) {

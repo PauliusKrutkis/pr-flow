@@ -96,6 +96,35 @@ test("find bar: mod+f opens it, typing counts, Enter steps and wraps", async ({ 
   await expect(count).toHaveText("3/3");
 });
 
+test("next file lands cleanly: current file's header pinned, no previous rows peeking", async ({ page }) => {
+  await page.keyboard.press("r");
+  // The jump settles geometrically (scrollToIndex into unmeasured territory
+  // adjusts async) — once settled, the pinned header must be the CURRENT
+  // file's, with none of the previous file's rows visible above it.
+  await page.waitForFunction(() => {
+    const pinned = document.querySelector<HTMLElement>(
+      '[data-testid="virtuoso-top-item-list"] .qf-fsec-head',
+    );
+    return pinned?.dataset.fileIndex === "1";
+  });
+  const prevPeeking = await page.evaluate(() => {
+    const host = document.querySelector(".qf-scrollhost")!;
+    const top = host.getBoundingClientRect().top;
+    return Array.from(
+      document.querySelectorAll('.qf-row[data-file-index="0"]'),
+    ).some((r) => r.getBoundingClientRect().bottom > top + 2);
+  });
+  expect(prevPeeking).toBe(false);
+  // And back: t returns to the first file, same contract.
+  await page.keyboard.press("t");
+  await page.waitForFunction(() => {
+    const pinned = document.querySelector<HTMLElement>(
+      '[data-testid="virtuoso-top-item-list"] .qf-fsec-head',
+    );
+    return pinned?.dataset.fileIndex === "0";
+  });
+});
+
 test("resume: reopening paints the spot you left — no visible jump after", async ({ page }) => {
   // Land on the third file and scroll a little way into it.
   await page.keyboard.press("r");
@@ -159,9 +188,11 @@ test("find seeds from the viewport: the current match is the one near you, not t
   await page.getByPlaceholder("Find in diff").fill("return");
   const count = page.locator(".qf-findbar-count");
   // The current match is the first one at/after the viewport — search.ts's,
-  // i.e. #3 — while all three still mark and count.
+  // i.e. #3. The counter counts the whole PR; rendered marks are whatever
+  // matches sit in the virtualizer's window (file 0 may be culled entirely
+  // now that file jumps land cleanly on the group boundary).
   await expect(count).toHaveText("3/3");
-  await expect(page.locator("mark.qf-find-mark")).toHaveCount(3);
+  await expect(page.locator("mark.qf-find-mark").first()).toBeVisible();
 
   // First Enter lands on THAT match, in the second file.
   await page.keyboard.press("Enter");
