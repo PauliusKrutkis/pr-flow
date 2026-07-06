@@ -73,6 +73,7 @@ export function useCommentMutations(
       path: string;
       line: number;
       side: string;
+      startLine?: number;
     }) => api.createReviewComment({ owner, repo, number, ...args }),
     onMutate: (args) =>
       insertOptimistic(

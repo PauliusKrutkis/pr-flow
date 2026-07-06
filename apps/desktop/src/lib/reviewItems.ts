@@ -36,6 +36,35 @@ export function rowTarget(row: DiffRow): { line: number; side: string } | null {
   return null;
 }
 
+/** The line number an anchor key encodes ("SIDE:line"). */
+export function anchorLine(anchor: string): number {
+  return Number(anchor.slice(anchor.indexOf(":") + 1));
+}
+
+/**
+ * The neighboring row anchor a line selection may extend to: the immediately
+ * adjacent nav row in the same file, same hunk, on the same comment side.
+ * Anything else (hunk header, side flip, file boundary) ends the range —
+ * multi-line comments are one-side, hunk-contiguous runs.
+ */
+export function adjacentSelectableAnchor(
+  m: ReviewListModel,
+  fileIndex: number,
+  side: string,
+  hunkIndex: number,
+  fromAnchor: string,
+  delta: 1 | -1,
+): string | null {
+  const idx = m.navIndexOf.get(fileAnchorKey(fileIndex, fromAnchor));
+  if (idx == null) return null;
+  const next = m.nav[idx + delta];
+  if (!next || next.fileIndex !== fileIndex) return null;
+  const item = m.items[next.itemIndex];
+  if (item.kind !== "row" || item.hunkIndex !== hunkIndex) return null;
+  if (item.target == null || item.target.side !== side) return null;
+  return next.anchor;
+}
+
 /**
  * Group flat review comments into threads (root first, then replies) and
  * index each thread by the anchor of its root comment.
@@ -112,6 +141,10 @@ export interface ReviewCommentsItem {
   threads: ReviewComment[][];
   pending: PendingComment[];
   boxOpen: boolean;
+  /** Open composer's range start line (multi-line comment); null = single. */
+  boxStartLine: number | null;
+  /** The range's rows, start→end, for the multi-line suggestion prefill. */
+  rangeContent: string | null;
 }
 
 /** Whole-file bodies without rows: image comparisons and binary notes. */
@@ -153,8 +186,9 @@ export interface BuildReviewItemsInput {
   isImage: (file: ChangedFile) => boolean;
   /** fileIndex → collapsed hunk indexes. */
   collapsed: ReadonlyMap<number, ReadonlySet<number>>;
-  /** fileAnchorKey(...) entries with an open composer. */
-  openBoxes: ReadonlySet<string>;
+  /** fileAnchorKey(...) entries with an open composer → the composer's range
+   *  start line (multi-line comment), or null for a single-line comment. */
+  openBoxes: ReadonlyMap<string, number | null>;
   /** filename → review comments / pending drafts. */
   commentsByFile: ReadonlyMap<string, ReviewComment[]>;
   pendingByFile: ReadonlyMap<string, PendingComment[]>;
@@ -214,12 +248,21 @@ export function buildReviewItems(input: BuildReviewItemsInput): ReviewListModel 
         collapsed: isCollapsed,
       });
       if (isCollapsed) return;
+      // Row content by anchor, within this hunk — a range composer anchored
+      // at its END row looks its earlier lines up here (ranges are one-side,
+      // one-hunk, so every start..end line has been seen by then).
+      const contentByAnchor = new Map<string, string>();
       for (const row of hunk.rows) {
         if (row.type === "hunk") continue;
         const target = rowTarget(row);
         const anchor = target ? anchorKey(target.side, target.line) : null;
+        if (anchor != null) contentByAnchor.set(anchor, row.content);
         const rowThreads = anchor ? threads.get(anchor) : undefined;
         const rowPending = anchor ? pendingByAnchor.get(anchor) : undefined;
+        const boxStartLine =
+          anchor != null
+            ? (openBoxes.get(fileAnchorKey(fileIndex, anchor)) ?? null)
+            : null;
         const boxOpen =
           anchor != null && openBoxes.has(fileAnchorKey(fileIndex, anchor));
         const hasAnchored =
@@ -239,6 +282,15 @@ export function buildReviewItems(input: BuildReviewItemsInput): ReviewListModel 
           hasAnchored,
         });
         if (hasAnchored || boxOpen) {
+          let rangeContent: string | null = null;
+          if (boxOpen && boxStartLine != null && target != null) {
+            const lines: string[] = [];
+            for (let l = boxStartLine; l <= target.line; l += 1) {
+              const c = contentByAnchor.get(anchorKey(target.side, l));
+              if (c != null) lines.push(c);
+            }
+            rangeContent = lines.join("\n");
+          }
           commentItems.push(items.length);
           items.push({
             kind: "comments",
@@ -249,6 +301,8 @@ export function buildReviewItems(input: BuildReviewItemsInput): ReviewListModel 
             threads: rowThreads ?? [],
             pending: rowPending ?? [],
             boxOpen,
+            boxStartLine: boxOpen ? boxStartLine : null,
+            rangeContent,
           });
         }
       }

@@ -72,6 +72,8 @@ export const api = {
     path: string;
     line: number;
     side: string;
+    /** Range start for a multi-line comment (line = the range's end). */
+    startLine?: number;
   }) => invoke<ReviewComment>("create_review_comment", args),
   replyToReviewComment: (args: {
     owner: string;
@@ -100,7 +102,13 @@ export const api = {
     event: ReviewEvent;
     body: string;
     commitId: string;
-    comments: { path: string; line: number; side: string; body: string }[];
+    comments: {
+      path: string;
+      line: number;
+      side: string;
+      body: string;
+      startLine?: number;
+    }[];
   }) => invoke<void>("submit_review", args),
 
   // ---- file blobs (image diffs) ----

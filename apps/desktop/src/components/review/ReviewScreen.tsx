@@ -60,6 +60,8 @@ import {
   type OccurrenceSpec,
 } from "../../lib/occurrences";
 import {
+  adjacentSelectableAnchor,
+  anchorLine,
   buildReviewItems,
   fileAnchorKey,
   type ReviewListModel,
@@ -96,6 +98,16 @@ type OccState = OccurrenceSpec & { fileIndex: number };
 interface CursorPos {
   fileIndex: number;
   anchor: string;
+}
+
+/** A multi-line comment range: a one-side, hunk-contiguous run of rows.
+ *  `from` is the fixed end (where extension started), `to` the moving end. */
+interface LineSelection {
+  fileIndex: number;
+  side: string;
+  hunkIndex: number;
+  from: string;
+  to: string;
 }
 
 const EMPTY_COMMENTS: ReviewComment[] = [];
@@ -152,12 +164,16 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const [collapsed, setCollapsed] = useState<
     ReadonlyMap<number, ReadonlySet<number>>
   >(EMPTY_COLLAPSED);
-  const [openBoxes, setOpenBoxes] = useState<ReadonlySet<string>>(
-    () => new Set<string>(),
+  const [openBoxes, setOpenBoxes] = useState<ReadonlyMap<string, number | null>>(
+    () => new Map<string, number | null>(),
   );
   // The line cursor (j/k, hover, jumps) — tracked by (file, anchor) so it
   // stays on the same logical line when hunks collapse or the list rebuilds.
   const [cursor, setCursor] = useState<CursorPos | null>(null);
+  // The multi-line comment range (shift+j/k, gutter drag). Independent of the
+  // cursor once created, so hover can't tear it — but any plain cursor move
+  // (j/k), file jump, or composer close collapses it, editor-style.
+  const [selection, setSelection] = useState<LineSelection | null>(null);
   // Last input modality — drives which single "+" affordance shows (cursor
   // row vs hovered row) so there's never two.
   const [inputMode, setInputMode] = useState<"keyboard" | "mouse">("keyboard");
@@ -291,6 +307,29 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     cursor && model.navIndexOf.has(fileAnchorKey(cursor.fileIndex, cursor.anchor))
       ? cursor
       : null;
+
+  // Same doctrine for the selection: if either end no longer resolves (hunk
+  // collapsed, file list changed), it stops applying. Normalized to item
+  // order here — the list paints [fromItem..toItem], `c` anchors at the end.
+  const liveSelection = (() => {
+    if (!selection) return null;
+    const a = model.anchorItem.get(
+      fileAnchorKey(selection.fileIndex, selection.from),
+    );
+    const b = model.anchorItem.get(
+      fileAnchorKey(selection.fileIndex, selection.to),
+    );
+    if (a == null || b == null || a === b) return null;
+    return {
+      fileIndex: selection.fileIndex,
+      side: selection.side,
+      hunkIndex: selection.hunkIndex,
+      fromItem: Math.min(a, b),
+      toItem: Math.max(a, b),
+    };
+  })();
+  const selectionRef = useLatest(selection);
+  const liveSelectionRef = useLatest(liveSelection);
 
   // Warm the per-line highlight cache in idle time: rows highlight as they
   // render into the viewport, and a warm cache keeps fast scrolling smooth.
@@ -532,6 +571,79 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     setInputMode,
   };
 
+  // ---- multi-line selection (shift+j/k, gutter drag) --------------------------
+
+  // shift+j/k: grow (or shrink) the range one row at a time. The moving end
+  // follows the keyboard; the cursor rides along so the accent and any
+  // follow-up `c` agree about where you are.
+  function extendSelection(delta: 1 | -1) {
+    const m = modelRef.current;
+    keyboardHoldRef.current = true;
+    setInputMode("keyboard");
+    const sel = selectionRef.current;
+    if (sel) {
+      const next = adjacentSelectableAnchor(
+        m,
+        sel.fileIndex,
+        sel.side,
+        sel.hunkIndex,
+        sel.to,
+        delta,
+      );
+      if (!next) return;
+      // Shrinking back over the fixed end collapses the range entirely.
+      if (next === sel.from) {
+        setSelection(null);
+        setCursor({ fileIndex: sel.fileIndex, anchor: next });
+        return;
+      }
+      setSelection({ ...sel, to: next });
+      setCursor({ fileIndex: sel.fileIndex, anchor: next });
+      const itemIndex = m.anchorItem.get(fileAnchorKey(sel.fileIndex, next));
+      if (itemIndex != null) listRef.current?.nudgeItemIntoView(itemIndex);
+      return;
+    }
+    // No range yet: seed one from the cursor row (side/hunk come from it).
+    const cur = cursorRef.current;
+    if (!cur) {
+      // No cursor either — shift+j just reveals it, like a plain j.
+      buildCursorMover(cursorMoverRefs).move(delta, false);
+      return;
+    }
+    const item = m.items[m.anchorItem.get(fileAnchorKey(cur.fileIndex, cur.anchor)) ?? -1];
+    if (item?.kind !== "row" || item.target == null) return;
+    const next = adjacentSelectableAnchor(
+      m,
+      cur.fileIndex,
+      item.target.side,
+      item.hunkIndex,
+      cur.anchor,
+      delta,
+    );
+    if (!next) return;
+    setSelection({
+      fileIndex: cur.fileIndex,
+      side: item.target.side,
+      hunkIndex: item.hunkIndex,
+      from: cur.anchor,
+      to: next,
+    });
+    setCursor({ fileIndex: cur.fileIndex, anchor: next });
+    const itemIndex = m.anchorItem.get(fileAnchorKey(cur.fileIndex, next));
+    if (itemIndex != null) listRef.current?.nudgeItemIntoView(itemIndex);
+  }
+
+  // Gutter drag (press the "+" and pull): the same range state as shift+j/k.
+  // Pointer capture keeps events on the button, so the target row comes from
+  // hit-testing — and the cursor is steered here (rows get no mouseenter
+  // while captured).
+  const dragRef = useRef<{
+    fileIndex: number;
+    side: string;
+    hunkIndex: number;
+    from: string;
+  } | null>(null);
+
   // Hovering a row moves the cursor (without scrolling) and claims the file.
   const cbRef = useLatest({
     onRowEnter(fileIndex: number, anchor: string, x: number, y: number) {
@@ -544,17 +656,94 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       );
       setActiveIndex((cur) => (cur === fileIndex ? cur : fileIndex));
     },
-    onOpenBox(fileIndex: number, anchor: string) {
+    onOpenBox(fileIndex: number, anchor: string, startLine?: number) {
       setOpenBoxes((prev) =>
-        new Set(prev).add(fileAnchorKey(fileIndex, anchor)),
+        new Map(prev).set(fileAnchorKey(fileIndex, anchor), startLine ?? null),
       );
     },
     onCloseBox(fileIndex: number, anchor: string) {
       setOpenBoxes((prev) => {
-        const next = new Set(prev);
+        const next = new Map(prev);
         next.delete(fileAnchorKey(fileIndex, anchor));
         return next;
       });
+      // Closing the composer retires the range it was anchored to.
+      setSelection(null);
+    },
+    // ---- gutter drag → range selection ----
+    onPlusDragStart(fileIndex: number, anchor: string) {
+      const m = modelRef.current;
+      const item = m.items[m.anchorItem.get(fileAnchorKey(fileIndex, anchor)) ?? -1];
+      if (item?.kind !== "row" || item.target == null) return;
+      dragRef.current = {
+        fileIndex,
+        side: item.target.side,
+        hunkIndex: item.hunkIndex,
+        from: anchor,
+      };
+    },
+    onPlusDragOver(fileIndex: number, anchor: string) {
+      const d = dragRef.current;
+      if (!d || fileIndex !== d.fileIndex) return;
+      setCursor({ fileIndex, anchor });
+      if (anchor === d.from) {
+        setSelection(null);
+        return;
+      }
+      // Walk from the fixed end toward the pointer row, one selectable step
+      // at a time; a break (hunk/side/file) clamps the range at the last
+      // valid row instead of jumping past it.
+      const m = modelRef.current;
+      const fromIdx = m.navIndexOf.get(fileAnchorKey(fileIndex, d.from));
+      const toIdx = m.navIndexOf.get(fileAnchorKey(fileIndex, anchor));
+      if (fromIdx == null || toIdx == null) return;
+      const delta = toIdx > fromIdx ? (1 as const) : (-1 as const);
+      let last = d.from;
+      while (last !== anchor) {
+        const next = adjacentSelectableAnchor(
+          m,
+          d.fileIndex,
+          d.side,
+          d.hunkIndex,
+          last,
+          delta,
+        );
+        if (!next) break;
+        last = next;
+      }
+      if (last === d.from) {
+        setSelection(null);
+        return;
+      }
+      setSelection({
+        fileIndex: d.fileIndex,
+        side: d.side,
+        hunkIndex: d.hunkIndex,
+        from: d.from,
+        to: last,
+      });
+    },
+    onPlusDragEnd() {
+      const d = dragRef.current;
+      dragRef.current = null;
+      if (!d) return;
+      const live = liveSelectionRef.current;
+      const m = modelRef.current;
+      if (live && live.fileIndex === d.fileIndex) {
+        // Open the composer under the range's END row, carrying the start.
+        const endItem = m.items[live.toItem];
+        const startItem = m.items[live.fromItem];
+        if (endItem?.kind === "row" && endItem.anchor && startItem?.kind === "row") {
+          cbRef.current.onOpenBox(
+            d.fileIndex,
+            endItem.anchor,
+            anchorLine(startItem.anchor ?? endItem.anchor),
+          );
+          return;
+        }
+      }
+      // No range formed — the press was a click: single-line composer.
+      cbRef.current.onOpenBox(d.fileIndex, d.from);
     },
     onToggleHunk(fileIndex: number, hunkIndex: number) {
       setCollapsed((prev) => {
@@ -578,7 +767,13 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
       copyTimerRef.current = setTimeout(() => setCopiedPathIndex(null), 1200);
     },
-    onAddPending(c: { path: string; line: number; side: string; body: string }) {
+    onAddPending(c: {
+      path: string;
+      line: number;
+      side: string;
+      body: string;
+      startLine?: number;
+    }) {
       addPendingStore(keyValue, c);
     },
     async onAddComment(a: {
@@ -586,6 +781,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       line: number;
       side: string;
       body: string;
+      startLine?: number;
     }) {
       await addReviewComment.mutateAsync({
         body: a.body,
@@ -593,6 +789,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         path: a.path,
         line: a.line,
         side: a.side,
+        startLine: a.startLine,
       });
     },
     async onReply(a: { inReplyTo: number; body: string }) {
@@ -623,6 +820,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       onRowEnter: (...a) => r.current.onRowEnter(...a),
       onOpenBox: (...a) => r.current.onOpenBox(...a),
       onCloseBox: (...a) => r.current.onCloseBox(...a),
+      onPlusDragStart: (...a) => r.current.onPlusDragStart(...a),
+      onPlusDragOver: (...a) => r.current.onPlusDragOver(...a),
+      onPlusDragEnd: () => r.current.onPlusDragEnd(),
       onToggleHunk: (...a) => r.current.onToggleHunk(...a),
       onToggleViewed: (...a) => r.current.onToggleViewed(...a),
       onCopyPath: (...a) => r.current.onCopyPath(...a),
@@ -639,6 +839,26 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   function commentAtCursor() {
     const m = modelRef.current;
+    // A live range wins: the composer opens under its END row and carries
+    // the start line (the multi-line anchor both hosts expect).
+    const sel = liveSelectionRef.current;
+    if (sel) {
+      const endItem = m.items[sel.toItem];
+      const startItem = m.items[sel.fromItem];
+      if (
+        endItem?.kind === "row" &&
+        endItem.anchor != null &&
+        startItem?.kind === "row" &&
+        startItem.anchor != null
+      ) {
+        cbRef.current.onOpenBox(
+          sel.fileIndex,
+          endItem.anchor,
+          anchorLine(startItem.anchor),
+        );
+        return;
+      }
+    }
     const cur = cursorRef.current;
     const entry = cur ?? m.nav[0];
     if (!entry) return;
@@ -663,8 +883,10 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     activeIndexRef.current = target;
     setCommentIndex(0);
     // Navigating away is moving on — stale occurrence marks would just be
-    // mystery highlights with their selection off-screen.
+    // mystery highlights with their selection off-screen. Same for a line
+    // range left behind in another file.
     setOccSpec(null);
+    setSelection(null);
     listRef.current?.scrollToFileStart(target);
   }
 
@@ -1230,6 +1452,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         line: p.line,
         side: p.side,
         body: p.body,
+        startLine: p.startLine,
       })),
     };
     setSubmitOpen(false);
@@ -1250,18 +1473,39 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       description: "Next line",
       group: "Navigation",
       icon: ArrowDown,
-      run: (e) => buildCursorMover(cursorMoverRefs).move(1, e.repeat),
+      run: (e) => {
+        // Plain movement collapses the range, editor-style.
+        setSelection(null);
+        buildCursorMover(cursorMoverRefs).move(1, e.repeat);
+      },
     },
     {
       keys: ["k", "up"],
       description: "Previous line",
       group: "Navigation",
       icon: ArrowUp,
-      run: (e) => buildCursorMover(cursorMoverRefs).move(-1, e.repeat),
+      run: (e) => {
+        setSelection(null);
+        buildCursorMover(cursorMoverRefs).move(-1, e.repeat);
+      },
+    },
+    {
+      keys: ["shift+j", "shift+down"],
+      description: "Extend selection down",
+      group: "Comments",
+      icon: ArrowDown,
+      run: () => extendSelection(1),
+    },
+    {
+      keys: ["shift+k", "shift+up"],
+      description: "Extend selection up",
+      group: "Comments",
+      icon: ArrowUp,
+      run: () => extendSelection(-1),
     },
     {
       keys: "c",
-      description: "Comment on line",
+      description: "Comment on line / selection",
       group: "Comments",
       icon: MessageSquarePlus,
       run: commentAtCursor,
@@ -1436,14 +1680,15 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         ] satisfies Binding[])
       : []),
     {
-      // Esc walks out one layer at a time: find bar, then the info drawer,
-      // then the inbox.
+      // Esc walks out one layer at a time: line selection, find bar, the
+      // info drawer, then the inbox.
       keys: "esc",
       description: "Close panel / back to inbox",
       group: "Navigation",
       icon: Inbox,
       run: () => {
-        if (findOpenRef.current) closeFind();
+        if (selectionRef.current) setSelection(null);
+        else if (findOpenRef.current) closeFind();
         else if (rightOpenRef.current) setRightOpen(false);
         else goInbox();
       },
@@ -1696,6 +1941,15 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
               cursorKey={
                 liveCursor
                   ? fileAnchorKey(liveCursor.fileIndex, liveCursor.anchor)
+                  : null
+              }
+              selection={
+                liveSelection
+                  ? {
+                      fileIndex: liveSelection.fileIndex,
+                      fromItem: liveSelection.fromItem,
+                      toItem: liveSelection.toItem,
+                    }
                   : null
               }
               flashKey={flashKey}

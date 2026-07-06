@@ -338,23 +338,18 @@ Inline → Code view. PR-level → Info tab + badge. ⏸ Conversation mode.
       suggestion is a real block that round-trips to the ```suggestion fence.
       Pending cards render markdown now (raw body would reintroduce the
       symbols). Watch WebKitGTK contenteditable quirks in the wild.
-- [ ] 🔴 **Multi-line comment ranges (GitLab-style)** — its own branch; the
-      anchoring model changes end-to-end. Spec (2026-07-06):
-      - *Selection model:* a line range is a "fat cursor" — `shift+j`/`shift+k`
-        (and shift+arrows) extend from the cursor line; `Esc` collapses; `c`
-        comments on the range. Mouse: press the gutter `+` and drag (one
-        pointer-capture handler feeding the same range state). The iris
-        left-rail accent stretches over the selected rows.
-      - *Composer:* header reads `Lines 12–15 · RIGHT`; "Suggestion" prefills
-        the fence with **all** selected rows (this is where multi-line earns
-        its keep). Range must be one side and one hunk-contiguous run.
-      - *Plumbing:* `start_line`/`start_side` + `line`/`side` on the GitHub
-        review-comment API (GitLab: `line_range`), rust `github.rs`/`gitlab.rs`
-        payloads, `PendingComment` gains optional `startLine`, comment items
-        anchor to the range's END row in `buildReviewItems`, and
-        `rowContent` becomes the joined range for suggestion prefill.
-      - *Tests:* e2e for shift+j extend → c → prefilled multi-line fence;
-        drag path; pending-comment persistence round-trip with `startLine`.
+- [x] 🔴 **Multi-line comment ranges (GitLab-style)** — shipped as specced
+      (2026-07-06): `shift+j/k` (+ shift+arrows) grow a one-side,
+      hunk-contiguous "fat cursor" from the line cursor; gutter `+` drag
+      builds the same range (pointer capture + hit-testing); `Esc`/plain
+      movement collapses it; `c` opens the composer under the END row with a
+      `Lines 12–15` header; Suggestion prefills every selected row; pending
+      cards carry a range chip; wire format is `start_line`/`start_side` on
+      GitHub and `line_range` on GitLab. Caveats: GitLab's multiline
+      `line_code` is under-documented — the payload is best-effort and falls
+      back to a single-line anchor if the host rejects it (verify against a
+      real GitLab); existing comments' ranges (`start_line` from the API)
+      are not yet displayed on threads — follow-up.
 
 ---
 

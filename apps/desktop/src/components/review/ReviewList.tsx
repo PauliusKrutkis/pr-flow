@@ -87,17 +87,29 @@ export interface ReviewListHandle {
 
 export interface ReviewListCallbacks {
   onRowEnter(fileIndex: number, anchor: string, x: number, y: number): void;
-  onOpenBox(fileIndex: number, anchor: string): void;
+  /** startLine present = a multi-line composer (anchor is the range's end). */
+  onOpenBox(fileIndex: number, anchor: string, startLine?: number): void;
   onCloseBox(fileIndex: number, anchor: string): void;
+  /** Gutter "+" drag — the mouse path to a multi-line range. */
+  onPlusDragStart(fileIndex: number, anchor: string): void;
+  onPlusDragOver(fileIndex: number, anchor: string): void;
+  onPlusDragEnd(): void;
   onToggleHunk(fileIndex: number, hunkIndex: number): void;
   onToggleViewed(fileIndex: number): void;
   onCopyPath(fileIndex: number): void;
-  onAddPending(c: { path: string; line: number; side: string; body: string }): void;
+  onAddPending(c: {
+    path: string;
+    line: number;
+    side: string;
+    body: string;
+    startLine?: number;
+  }): void;
   onAddComment(a: {
     path: string;
     line: number;
     side: string;
     body: string;
+    startLine?: number;
   }): Promise<void>;
   onReply(a: { inReplyTo: number; body: string }): Promise<void>;
   /** Flip a thread's resolved state (optimistic upstream). */
@@ -114,6 +126,9 @@ interface ReviewListProps {
   files: ReadonlyArray<ChangedFile>;
   /** fileAnchorKey of the cursor/flash row (null = none). */
   cursorKey: string | null;
+  /** The multi-line range, normalized to item order (rows in between paint
+   *  selected). Null = no range. */
+  selection: { fileIndex: number; fromItem: number; toItem: number } | null;
   flashKey: string | null;
   inputMode: "keyboard" | "mouse";
   marks: MarkSpec | null;
@@ -169,6 +184,7 @@ function DiffLine({
   item,
   filename,
   isCursor,
+  isSelected,
   isFlash,
   intra,
   guideLvl,
@@ -179,10 +195,15 @@ function DiffLine({
   findOrdinal,
   onEnter,
   onOpenBox,
+  onPlusDragStart,
+  onPlusDragOver,
+  onPlusDragEnd,
 }: {
   item: ReviewRowItem;
   filename: string;
   isCursor: boolean;
+  /** Row is inside the multi-line comment range. */
+  isSelected: boolean;
   isFlash: boolean;
   intra: IntralineRanges | null;
   guideLvl: number | null;
@@ -193,7 +214,10 @@ function DiffLine({
   markFlag: boolean;
   findOrdinal: number | null;
   onEnter: (fileIndex: number, anchor: string, x: number, y: number) => void;
-  onOpenBox: (fileIndex: number, anchor: string) => void;
+  onOpenBox: (fileIndex: number, anchor: string, startLine?: number) => void;
+  onPlusDragStart: (fileIndex: number, anchor: string) => void;
+  onPlusDragOver: (fileIndex: number, anchor: string) => void;
+  onPlusDragEnd: () => void;
 }) {
   const { row, anchor, fileIndex, hasAnchored } = item;
   const canComment = item.target != null;
@@ -212,6 +236,7 @@ function DiffLine({
         row.type === "add" && "qf-row-add",
         row.type === "del" && "qf-row-del",
         isCursor && "qf-row-active",
+        isSelected && "qf-row-selected",
         isFlash && "qf-row-flash",
         hasAnchored && "qf-row-threaded",
       )}
@@ -223,7 +248,29 @@ function DiffLine({
           <button
             type="button"
             aria-label="Add comment"
-            onClick={() => onOpenBox(fileIndex, anchor)}
+            // Press-and-drag selects a line range (GitLab-style); pointer
+            // capture keeps the stream on this button, so drag targets come
+            // from hit-testing. A plain press is just a click — drag-end
+            // opens the single-line composer. The click handler only serves
+            // keyboard activation (detail 0); mouse opens via drag-end,
+            // otherwise every drag would ALSO fire a range-killing click.
+            onPointerDown={(e) => {
+              e.preventDefault();
+              e.currentTarget.setPointerCapture(e.pointerId);
+              onPlusDragStart(fileIndex, anchor);
+            }}
+            onPointerMove={(e) => {
+              if (e.buttons === 0) return;
+              const el = document.elementFromPoint(e.clientX, e.clientY);
+              const rowEl = el?.closest?.("[data-anchor]");
+              const a = rowEl?.getAttribute("data-anchor");
+              const f = rowEl?.getAttribute("data-file-index");
+              if (a && f != null) onPlusDragOver(Number(f), a);
+            }}
+            onPointerUp={onPlusDragEnd}
+            onClick={(e) => {
+              if (e.detail === 0) onOpenBox(fileIndex, anchor);
+            }}
             className="qf-add-btn"
           >
             +
@@ -336,6 +383,11 @@ function CommentsBlock({
                 {activeAccount?.login ?? "You"}
               </span>
               <span className="qf-pending-tag">Pending</span>
+              {p.startLine != null && (
+                <span className="qf-range-tag">
+                  Lines {p.startLine}–{p.line}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => callbacks.onRemovePending(p.id)}
@@ -355,17 +407,23 @@ function CommentsBlock({
       {item.boxOpen && target != null && (
         <div className="qf-thread">
           <div className="qf-comment">
+            {item.boxStartLine != null && (
+              <div className="qf-range-head">
+                Lines {item.boxStartLine}–{target.line}
+              </div>
+            )}
             <AddCommentBox
               pending={addPending}
               autoFocus
               placeholder="Add a review comment…"
               submitLabel="Add to review"
               secondaryLabel="Comment now"
-              // ```suggestion blocks replace the line as it exists on the
-              // head side, so only RIGHT-side rows offer the insert.
+              // ```suggestion blocks replace the range as it exists on the
+              // head side, so only RIGHT-side rows offer the insert; a
+              // multi-line composer prefills every selected row.
               suggestionText={
                 target.side === "RIGHT"
-                  ? (item.rowContent ?? undefined)
+                  ? (item.rangeContent ?? item.rowContent ?? undefined)
                   : undefined
               }
               onCancel={() => callbacks.onCloseBox(item.fileIndex, item.anchor)}
@@ -375,6 +433,7 @@ function CommentsBlock({
                   line: target.line,
                   side: target.side,
                   body,
+                  startLine: item.boxStartLine ?? undefined,
                 });
                 callbacks.onCloseBox(item.fileIndex, item.anchor);
               }}
@@ -386,6 +445,7 @@ function CommentsBlock({
                   line: target.line,
                   side: target.side,
                   body,
+                  startLine: item.boxStartLine ?? undefined,
                 });
                 callbacks.onCloseBox(item.fileIndex, item.anchor);
               }}
@@ -457,7 +517,7 @@ function GroupHeader({ ctx, groupIndex }: { ctx: ListContext; groupIndex: number
   );
 }
 
-function renderItem(ctx: ListContext, item: ReviewItem) {
+function renderItem(ctx: ListContext, index: number, item: ReviewItem) {
   const p = ctx.props;
   const file = p.files[item.fileIndex];
   if (!file) return <div style={{ height: 1 }} />;
@@ -543,11 +603,18 @@ function renderItem(ctx: ListContext, item: ReviewItem) {
         ctx.colW != null
           ? `${(meta.indentUnit.ch * ctx.colW).toFixed(3)}px`
           : `${meta.indentUnit.ch}ch`;
+      const sel = p.selection;
       return (
         <DiffLine
           item={item}
           filename={file.filename}
           isCursor={key != null && key === p.cursorKey}
+          isSelected={
+            sel != null &&
+            sel.fileIndex === item.fileIndex &&
+            index >= sel.fromItem &&
+            index <= sel.toItem
+          }
           isFlash={key != null && key === p.flashKey}
           intra={meta.intraByRow.get(item.row) ?? null}
           guideLvl={meta.guideByRow.get(item.row) ?? null}
@@ -564,6 +631,9 @@ function renderItem(ctx: ListContext, item: ReviewItem) {
           findOrdinal={findOrdinal}
           onEnter={p.callbacks.onRowEnter}
           onOpenBox={p.callbacks.onOpenBox}
+          onPlusDragStart={p.callbacks.onPlusDragStart}
+          onPlusDragOver={p.callbacks.onPlusDragOver}
+          onPlusDragEnd={p.callbacks.onPlusDragEnd}
         />
       );
     }
@@ -737,7 +807,7 @@ export function ReviewList({
             <GroupHeader ctx={ctx} groupIndex={groupIndex} />
           )}
           itemContent={(index, _group, _data, ctx) =>
-            renderItem(ctx, ctx.props.model.items[index])
+            renderItem(ctx, index, ctx.props.model.items[index])
           }
           computeItemKey={(index, _group, ctx) => {
             const it = ctx.props.model.items[index];

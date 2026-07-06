@@ -60,10 +60,13 @@ impl AnyPlatform {
         path: &str,
         line: u64,
         side: &str,
+        start_line: Option<u64>,
     ) -> Result<ReviewComment, String> {
         dispatch!(self, p => {
-            p.create_review_comment(owner, repo, number, body, commit_id, path, line, side)
-                .await
+            p.create_review_comment(
+                owner, repo, number, body, commit_id, path, line, side, start_line,
+            )
+            .await
         })
     }
 

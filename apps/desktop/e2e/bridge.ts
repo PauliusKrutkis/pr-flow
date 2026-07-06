@@ -120,7 +120,12 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
       },
       create_issue_comment: () =>
         cfg.hangIssueComment ? new Promise(() => {}) : null,
-      submit_review: () => null,
+      // Recorded so tests can assert the wire payload (e.g. multi-line
+      // comments carrying startLine).
+      submit_review: (args) => {
+        localStorage.setItem("e2e:lastReview", JSON.stringify(args));
+        return null;
+      },
       check_for_update: () => null,
       "plugin:opener|open_url": () => null,
       "plugin:opener|open": () => null,

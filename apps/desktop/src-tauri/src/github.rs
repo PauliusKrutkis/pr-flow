@@ -198,9 +198,13 @@ pub struct RepoHit {
 #[serde(rename_all = "camelCase")]
 pub struct ReviewCommentInput {
     pub path: String,
+    /// The anchor line — for a multi-line comment, the range's END line.
     pub line: u64,
     pub side: String,
     pub body: String,
+    /// Multi-line range start (same side as `line`); None = single line.
+    #[serde(default)]
+    pub start_line: Option<u64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -847,14 +851,21 @@ impl GitHubPlatform {
         path: &str,
         line: u64,
         side: &str,
+        start_line: Option<u64>,
     ) -> Result<ReviewComment, String> {
-        let payload = json!({
+        let mut payload = json!({
             "body": body,
             "commit_id": commit_id,
             "path": path,
             "line": line,
             "side": side,
         });
+        // Multi-line comment: GitHub wants the range start alongside the end
+        // (`line`), with its own side — ranges here are always one-sided.
+        if let Some(start) = start_line {
+            payload["start_line"] = json!(start);
+            payload["start_side"] = json!(side);
+        }
         let resp = self
             .client
             .post(format!("{API}/repos/{owner}/{repo}/pulls/{number}/comments"))
@@ -920,7 +931,15 @@ impl GitHubPlatform {
     ) -> Result<(), String> {
         let comment_payload: Vec<Value> = comments
             .iter()
-            .map(|c| json!({ "path": c.path, "line": c.line, "side": c.side, "body": c.body }))
+            .map(|c| {
+                let mut v =
+                    json!({ "path": c.path, "line": c.line, "side": c.side, "body": c.body });
+                if let Some(start) = c.start_line {
+                    v["start_line"] = json!(start);
+                    v["start_side"] = json!(c.side);
+                }
+                v
+            })
             .collect();
         let mut payload = json!({
             "event": event,
