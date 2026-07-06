@@ -29,3 +29,7 @@ apps/design-lab/public/designs/
 .playwright-mcp/
 test-results/
 playwright-report/
+
+# Claude Code local state (worktrees are per-machine; skills are shared)
+.claude/*
+!.claude/skills/

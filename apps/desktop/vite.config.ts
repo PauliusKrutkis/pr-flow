@@ -7,7 +7,17 @@ const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react({
+      babel: {
+        // React Compiler: automatic memoization at build time. Components it
+        // can't prove safe (e.g. ref writes during render) are skipped, not
+        // broken — they just keep their unoptimized behavior.
+        plugins: [["babel-plugin-react-compiler", {}]],
+      },
+    }),
+    tailwindcss(),
+  ],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

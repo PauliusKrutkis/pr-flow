@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 import { setupApp } from "./bridge";
 
 test("no accounts boots into the identity gate", async ({ page }) => {

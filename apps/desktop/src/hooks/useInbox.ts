@@ -26,5 +26,9 @@ export function useInbox() {
     queryFn: () => api.listInbox(),
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
+    // Always stale: coming back to the app re-asks immediately (the 30s
+    // default swallowed focus refetches). One cheap request — and it's the
+    // heartbeat that tells an open review its PR moved.
+    staleTime: 0,
   });
 }

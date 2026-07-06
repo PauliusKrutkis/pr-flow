@@ -15,6 +15,7 @@
     "onlyBuiltDependencies": ["esbuild"]
   },
   "devDependencies": {
+    "react-doctor": "^0.7.1",
     "typescript": "~5.8.3"
   }
 }

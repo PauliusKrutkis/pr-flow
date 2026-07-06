@@ -36,6 +36,17 @@ export interface PullRequest {
   deletions: number;
   changedFiles: number;
   body: string;
+  /** Newest comment, for the inbox reading pane (list fetch only; absent on
+   *  detail fetches and providers that can't supply it cheaply). */
+  lastComment?: LastComment;
+}
+
+export interface LastComment {
+  author: string;
+  authorAvatarUrl: string;
+  /** Plain text — a teaser, not Markdown. */
+  body: string;
+  createdAt: string;
 }
 
 export type FileStatus =
@@ -133,8 +144,15 @@ export interface PendingComment {
   body: string;
 }
 
-/** prKey -> list of filenames marked viewed */
-export type ViewedMap = Record<string, string[]>;
+/**
+ * filename -> content fingerprint captured when the file was marked viewed
+ * (see lib/viewedFingerprint.ts; "?" = migrated legacy mark, fingerprint
+ * unknown until the PR's detail is next loaded).
+ */
+export type ViewedFileMap = Record<string, string>;
+
+/** prKey -> the files marked viewed, with their content fingerprints. */
+export type ViewedMap = Record<string, ViewedFileMap>;
 
 /** A repository search hit (the watch-repos picker). */
 export interface RepoHit {
