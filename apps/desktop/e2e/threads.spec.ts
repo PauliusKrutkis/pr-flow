@@ -51,7 +51,7 @@ test("r on a hovered thread opens its reply composer", async ({ page }) => {
   const thread = page.locator('[data-comment-root="100"]');
   await thread.hover();
   await page.keyboard.press("r");
-  const box = page.getByPlaceholder("Reply…");
+  const box = page.getByRole("textbox", { name: "Reply…" });
   await expect(box).toBeFocused();
   // Esc backs out of the composer without leaving the review.
   await page.keyboard.press("Escape");
@@ -65,7 +65,7 @@ test("]c focuses a thread, so r replies to it without hovering", async ({ page }
   await page.keyboard.press("]");
   await page.keyboard.press("c");
   await page.keyboard.press("r");
-  await expect(page.getByPlaceholder("Reply…")).toBeFocused();
+  await expect(page.getByRole("textbox", { name: "Reply…" })).toBeFocused();
 });
 
 test("r with no active thread keeps its old meaning: next file", async ({ page }) => {
@@ -128,23 +128,17 @@ test("suggestion fences render as a card; copy puts the lines on the clipboard",
   );
 });
 
-test("insert suggestion prefills the fence with the commented line", async ({ page }) => {
+test("insert suggestion prefills the block with the commented line", async ({ page }) => {
   // j reveals the cursor on the first visible line of fuzzy.ts, c comments.
   await page.keyboard.press("j");
   await page.keyboard.press("c");
-  const box = page.getByPlaceholder("Add a review comment…");
+  const box = page.getByRole("textbox", { name: "Add a review comment…" });
   await expect(box).toBeFocused();
   await page.getByRole("button", { name: "Insert suggestion" }).click();
-  await expect(box).toHaveValue(
-    "```suggestion\nexport function alpha() {\n```\n",
-  );
-  // The click moved focus to the button; the insert hands it back (with the
-  // line selected) a frame later — wait for it, or the typed keys below land
-  // on the button and get read as global hotkeys.
+  const sugg = box.locator("pre code.language-suggestion");
+  await expect(sugg).toHaveText("export function alpha() {");
   await expect(box).toBeFocused();
   // The prefilled line is selected — typing replaces it in place.
   await page.keyboard.type("export function alpha(): number {");
-  await expect(box).toHaveValue(
-    "```suggestion\nexport function alpha(): number {\n```\n",
-  );
+  await expect(sugg).toHaveText("export function alpha(): number {");
 });
