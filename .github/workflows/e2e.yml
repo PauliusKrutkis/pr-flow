@@ -20,7 +20,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Install Playwright browsers
-        run: npx --prefix apps/desktop playwright install --with-deps chromium
+        # webkit runs the perf specs (playwright.config.ts webkit-perf): the
+        # app ships on Tauri's WebKitGTK, and Chromium-only budgets can pass
+        # while the real engine lags.
+        run: npx --prefix apps/desktop playwright install --with-deps chromium webkit
       - name: Run e2e
         working-directory: apps/desktop
         run: pnpm e2e

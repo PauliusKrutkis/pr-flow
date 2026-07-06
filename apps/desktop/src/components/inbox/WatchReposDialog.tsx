@@ -26,19 +26,36 @@ export function WatchReposDialog({
   const [hits, setHits] = useState<RepoHit[]>([]);
   const [sel, setSel] = useState(0);
   const [searching, setSearching] = useState(false);
+  // Tab arms an action (a row's "stop watching" or Done) without moving DOM
+  // focus — the comment-form pattern: active styling, no focus ring, Enter
+  // fires it. null = Enter means "watch the picked result / pasted repo".
+  const [armed, setArmed] = useState<number | "done" | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<number | null>(null);
   const requestSeq = useRef(0);
 
+  // Interaction state resets when the dialog opens; the repo list syncs from
+  // the query on its own. One effect for both would wipe typing and the armed
+  // cursor whenever a fetch settles — persist() itself writes the query back.
   useEffect(() => {
     if (open) {
-      setRepos(data ?? []);
       setInput("");
       setHits([]);
       setSel(0);
+      setArmed(null);
       requestAnimationFrame(() => inputRef.current?.focus());
     }
+  }, [open]);
+  useEffect(() => {
+    if (open) setRepos(data ?? []);
   }, [open, data]);
+
+  useEffect(() => {
+    listRef.current
+      ?.querySelector('[data-armed="true"]')
+      ?.scrollIntoView({ block: "nearest" });
+  }, [armed]);
 
   // Debounced provider search while typing.
   useEffect(() => {
@@ -81,6 +98,21 @@ export function WatchReposDialog({
 
   if (!open) return null;
 
+  function stopWatching(repo: string) {
+    const next = repos.filter((x) => x !== repo);
+    persist(next);
+    // Keep the armed cursor useful: stay on the row that slid into this slot,
+    // clamp at the end, disarm when the list empties.
+    setArmed((a) =>
+      typeof a === "number"
+        ? next.length === 0
+          ? null
+          : Math.min(a, next.length - 1)
+        : a,
+    );
+    inputRef.current?.focus();
+  }
+
   function persist(next: string[]) {
     setRepos(next);
     // Optimistic per design principle — write-through, then refresh the tab.
@@ -105,18 +137,41 @@ export function WatchReposDialog({
     inputRef.current?.focus();
   }
 
+  function cycleArmed(dir: 1 | -1) {
+    // null → each watched row → Done → null (reversed for shift+tab).
+    const order: (number | "done" | null)[] = [
+      null,
+      ...repos.map((_, i) => i),
+      "done",
+    ];
+    const i = order.findIndex((t) => t === armed);
+    setArmed(order[(i + dir + order.length) % order.length]);
+  }
+
   function onKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "ArrowDown") {
+    if (e.key === "Tab") {
       e.preventDefault();
+      cycleArmed(e.shiftKey ? -1 : 1);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setArmed(null);
       setSel((s) => Math.min(s + 1, hits.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
+      setArmed(null);
       setSel((s) => Math.max(s - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const hit = hits[sel];
-      // A result wins; otherwise accept a verbatim owner/repo or URL paste.
-      watch(hit ? hit.fullName : input);
+      if (armed === "done") {
+        onClose();
+      } else if (typeof armed === "number") {
+        const repo = repos[armed];
+        if (repo) stopWatching(repo);
+      } else {
+        const hit = hits[sel];
+        // A result wins; otherwise accept a verbatim owner/repo or URL paste.
+        watch(hit ? hit.fullName : input);
+      }
     } else if (e.key === "Escape") {
       e.preventDefault();
       onClose();
@@ -157,19 +212,26 @@ export function WatchReposDialog({
             <input
               ref={inputRef}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value);
+                setArmed(null); // typing means "back to searching"
+              }}
               onKeyDown={onKeyDown}
               placeholder="Search repositories…  (or paste owner/repo)"
               spellCheck={false}
               autoComplete="off"
-              className="q-input pl-9 font-mono"
+              className="q-input q-input-icon font-mono"
               role="combobox"
               aria-expanded={hits.length > 0}
             />
+            {/* Search-in-flight: the input's bottom edge becomes a 1px accent
+                sweep — no spinner, no reserved space below. */}
+            {searching && <span className="qw-scan" aria-hidden />}
           </div>
 
-          {/* live results */}
-          {input.trim().length >= 2 && (
+          {/* live results — only once there's something to say; an empty box
+              while the first search resolves is just a weird gap */}
+          {input.trim().length >= 2 && (hits.length > 0 || !searching) && (
             <div className="mt-2 flex flex-col gap-0.5" role="listbox">
               {hits.map((hit, i) => {
                 const watched = repos.includes(hit.fullName);
@@ -210,19 +272,27 @@ export function WatchReposDialog({
             </div>
           )}
 
-          <div className="mt-3 flex max-h-56 flex-col gap-1 overflow-y-auto">
+          <div
+            ref={listRef}
+            className="mt-3 flex max-h-56 flex-col gap-1 overflow-y-auto"
+          >
             {repos.length === 0 ? (
               <p className="py-4 text-center text-xs text-faint">
                 Nothing watched yet. Search above to add a repository.
               </p>
             ) : (
-              repos.map((r) => (
-                <div key={r} className="qw-row">
+              repos.map((r, i) => (
+                <div
+                  key={r}
+                  data-armed={armed === i}
+                  className={"qw-row" + (armed === i ? " qw-row-armed" : "")}
+                >
                   <span className="q-mono min-w-0 truncate text-[13px]">{r}</span>
                   <button
                     type="button"
+                    tabIndex={-1}
                     className="qb-x"
-                    onClick={() => persist(repos.filter((x) => x !== r))}
+                    onClick={() => stopWatching(r)}
                     aria-label={`Stop watching ${r}`}
                   >
                     <X size={13} aria-hidden />
@@ -236,10 +306,23 @@ export function WatchReposDialog({
         <div className="flex items-center justify-between border-t border-line px-5 py-3">
           <span className="text-xs text-faint">
             <Kbd combo="up" />
-            <Kbd combo="down" /> pick · <Kbd combo="enter" /> watch ·{" "}
-            <Kbd combo="esc" /> done
+            <Kbd combo="down" /> pick · <Kbd combo="enter" />{" "}
+            {armed === "done"
+              ? "close"
+              : typeof armed === "number"
+                ? "stop watching"
+                : "watch"}{" "}
+            · <Kbd combo="tab" /> actions · <Kbd combo="esc" /> done
           </span>
-          <button type="button" onClick={onClose} className="q-btn q-btn-quiet">
+          <button
+            type="button"
+            tabIndex={-1}
+            data-armed={armed === "done"}
+            onClick={onClose}
+            className={
+              "q-btn q-btn-quiet" + (armed === "done" ? " qw-done-armed" : "")
+            }
+          >
             Done
           </button>
         </div>

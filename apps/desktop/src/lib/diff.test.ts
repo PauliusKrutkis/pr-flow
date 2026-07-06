@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { changedRowCount, parsePatch } from "./diff";
+import { anchorFractions, changedRowCount, parsePatch, rowAnchor } from "./diff";
 
 const PATCH = `@@ -1,4 +1,5 @@
  context one
@@ -17,6 +17,12 @@ describe("parsePatch", () => {
     expect(parsePatch(undefined)).toEqual([]);
     expect(parsePatch(null)).toEqual([]);
     expect(parsePatch("")).toEqual([]);
+  });
+
+  it("caches by patch string — same input, same array identity", () => {
+    // The find bar re-scans every patch per keystroke; the cache is what makes
+    // that an indexOf pass instead of a fresh parse. Identity is the contract.
+    expect(parsePatch(PATCH)).toBe(parsePatch(PATCH));
   });
 
   it("splits hunks and keeps headers", () => {
@@ -66,5 +72,37 @@ describe("changedRowCount", () => {
   it("counts adds + dels across hunks", () => {
     expect(changedRowCount(PATCH)).toBe(5);
     expect(changedRowCount(null)).toBe(0);
+  });
+});
+
+describe("rowAnchor", () => {
+  it("anchors dels to the old side, everything else to the new side", () => {
+    const rows = parsePatch(PATCH)[0].rows;
+    expect(rows.map(rowAnchor)).toEqual([
+      null, // the hunk header row
+      "RIGHT:1",
+      "LEFT:2",
+      "RIGHT:2",
+      "RIGHT:3",
+      "RIGHT:4",
+    ]);
+  });
+});
+
+describe("anchorFractions", () => {
+  it("places each anchor at its row's center within the patch", () => {
+    const f = anchorFractions(PATCH);
+    // 10 rows total (2 headers + 8 lines); row i sits at (i + 0.5) / 10.
+    expect(f.get("RIGHT:1")).toBeCloseTo(1.5 / 10);
+    expect(f.get("LEFT:2")).toBeCloseTo(2.5 / 10);
+    expect(f.get("RIGHT:12")).toBeCloseTo(9.5 / 10);
+    // Fractions are monotonically render-ordered and inside (0, 1).
+    const values = [...f.values()];
+    expect(values).toEqual([...values].sort((a, b) => a - b));
+    expect(values.every((v) => v > 0 && v < 1)).toBe(true);
+  });
+
+  it("returns an empty map for missing patches", () => {
+    expect(anchorFractions(null).size).toBe(0);
   });
 });

@@ -57,6 +57,20 @@ pub struct PullRequest {
     pub deletions: u64,
     pub changed_files: u64,
     pub body: String,
+    /// Newest comment, for the inbox reading pane (list fetch only; `None`
+    /// on detail fetches and providers that can't supply it cheaply).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_comment: Option<LastComment>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct LastComment {
+    pub author: String,
+    pub author_avatar_url: String,
+    /// Plain text (GraphQL `bodyText`) — a teaser, not rendered as Markdown.
+    pub body: String,
+    pub created_at: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -339,11 +353,15 @@ pub(crate) async fn fetch_user(client: &reqwest::Client) -> Result<GitHubUser, S
 // GitHub mappers: GitHub JSON -> our structs
 // ---------------------------------------------------------------------------
 
+/// Everything the inbox list AND its reading pane need: the diff-stat scalars
+/// and body are cheap to include, and `comments(last: 1)` doubles as the
+/// total count plus a "latest comment" teaser for the pane.
 const FRAGMENT_P: &str = r#"fragment P on PullRequest {
   databaseId number title url state isDraft createdAt updatedAt
+  body additions deletions changedFiles
   author { login avatarUrl }
   repository { name owner { login } }
-  comments { totalCount }
+  comments(last: 1) { totalCount nodes { author { login avatarUrl } bodyText createdAt } }
 }"#;
 
 /// One GraphQL document fetching all four inbox tabs (and their counts) via
@@ -353,12 +371,6 @@ const INBOX_QUERY: &str = r#"{
   assigned: search(query: "is:open is:pr assignee:@me archived:false sort:updated-desc", type: ISSUE, first: 50) { issueCount nodes { ...P } }
   created: search(query: "is:open is:pr author:@me archived:false sort:updated-desc", type: ISSUE, first: 50) { issueCount nodes { ...P } }
   involved: search(query: "is:open is:pr involves:@me archived:false sort:updated-desc", type: ISSUE, first: 50) { issueCount nodes { ...P } }
-}
-fragment P on PullRequest {
-  databaseId number title url state isDraft createdAt updatedAt
-  author { login avatarUrl }
-  repository { name owner { login } }
-  comments { totalCount }
 }"#;
 
 fn bucket_from(data: &Value, alias: &str) -> InboxBucket {
@@ -376,7 +388,8 @@ fn bucket_from(data: &Value, alias: &str) -> InboxBucket {
 }
 
 /// Maps a GraphQL `PullRequest` search node into our `PullRequest`. List items
-/// omit the heavy fields (diff stats, head sha, body) — those load with detail.
+/// omit the truly heavy fields (head sha, files) — those load with detail —
+/// but carry the body, diff-stat scalars and newest comment for the pane.
 fn pr_from_graphql(v: &Value) -> PullRequest {
     let name = nstr(v, "repository", "name");
     let owner = v
@@ -392,6 +405,17 @@ fn pr_from_graphql(v: &Value) -> PullRequest {
         .and_then(|c| c.get("totalCount"))
         .and_then(Value::as_u64)
         .unwrap_or(0);
+    let last_comment = v
+        .get("comments")
+        .and_then(|c| c.get("nodes"))
+        .and_then(Value::as_array)
+        .and_then(|nodes| nodes.iter().rev().find(|n| !n.is_null()))
+        .map(|n| LastComment {
+            author: nstr(n, "author", "login"),
+            author_avatar_url: nstr(n, "author", "avatarUrl"),
+            body: fstr(n, "bodyText"),
+            created_at: fstr(n, "createdAt"),
+        });
     PullRequest {
         id: v.get("databaseId").and_then(Value::as_u64).unwrap_or(0),
         number: fu64(v, "number"),
@@ -412,10 +436,11 @@ fn pr_from_graphql(v: &Value) -> PullRequest {
         base_sha: String::new(),
         head_ref: String::new(),
         base_ref: String::new(),
-        additions: 0,
-        deletions: 0,
-        changed_files: 0,
-        body: String::new(),
+        additions: fu64(v, "additions"),
+        deletions: fu64(v, "deletions"),
+        changed_files: fu64(v, "changedFiles"),
+        body: fstr(v, "body"),
+        last_comment,
     }
 }
 
@@ -445,6 +470,7 @@ fn pr_from_pull(v: &Value, owner: &str, repo: &str) -> PullRequest {
         deletions: fu64(v, "deletions"),
         changed_files: fu64(v, "changed_files"),
         body: fstr(v, "body"),
+        last_comment: None,
     }
 }
 
@@ -544,7 +570,9 @@ impl GitHubPlatform {
 
     pub async fn inbox(&self) -> Result<InboxData, String> {
         log("GraphQL inbox: review-requested / assigned / created / involved");
-        let v = self.graphql(INBOX_QUERY).await?;
+        let v = self
+            .graphql(&format!("{INBOX_QUERY}\n{FRAGMENT_P}"))
+            .await?;
         let data = v
             .get("data")
             .ok_or_else(|| "GraphQL response missing `data`".to_string())?;

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 import { setupApp } from "./bridge";
 
 // Thread-level features: resolve/unresolve, the `r` reply shortcut, and
@@ -69,9 +69,14 @@ test("]c focuses a thread, so r replies to it without hovering", async ({ page }
 });
 
 test("r with no active thread keeps its old meaning: next file", async ({ page }) => {
-  await expect(page.locator(".qf-fsec").nth(0)).toHaveClass(/qf-fsec-active/);
+  // The active accent lives on the file header now (virtualized list).
+  await expect(
+    page.locator('.qf-fsec-head.qf-fsec-active[data-file-index="0"]').first(),
+  ).toBeVisible();
   await page.keyboard.press("r");
-  await expect(page.locator(".qf-fsec").nth(1)).toHaveClass(/qf-fsec-active/);
+  await expect(
+    page.locator('.qf-fsec-head.qf-fsec-active[data-file-index="1"]').first(),
+  ).toBeVisible();
 });
 
 test("suggestion fences render as a card; copy puts the lines on the clipboard", async ({ page }) => {
