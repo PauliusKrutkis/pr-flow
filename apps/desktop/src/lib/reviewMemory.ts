@@ -20,10 +20,16 @@ export interface ReviewMemory {
   sectionOffset?: number;
   /**
    * The virtualizer's state snapshot (react-virtuoso getState) — scroll
-   * offset plus measured item ranges. Restoring it puts the viewport back
-   * exactly, without replaying pixel offsets against estimated heights.
+   * offset plus measured item ranges. Gets the viewport CLOSE on restore;
+   * `topRow` then corrects it exactly.
    */
   listState?: StateSnapshot;
+  /**
+   * The topmost visible row and its offset from the scroller top. Snapshot
+   * scrollTop replays against height ESTIMATES, which drift across engines
+   * and fonts — anchoring to a concrete row makes resume exact everywhere.
+   */
+  topRow?: { fileIndex: number; anchor: string; top: number };
   /** head commit sha seen the last time this PR was opened */
   headSha: string;
 }

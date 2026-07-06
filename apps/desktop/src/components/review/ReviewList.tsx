@@ -75,6 +75,13 @@ export interface ReviewListHandle {
    * put "what you're looking at" hundreds of px above the viewport).
    */
   firstVisibleRowItem(): number | null;
+  /** The topmost rendered row and its offset from the scroller top — the
+   *  anchor-exact half of the resume position (see scrollItemTo). */
+  firstVisibleRow(): { fileIndex: number; anchor: string; top: number } | null;
+  /** Put an item's top exactly `topPx` below the scroller top. Snapshot
+   *  restore alone lands wherever the height ESTIMATES say (engines/fonts
+   *  drift); this corrects against real geometry. */
+  scrollItemTo(itemIndex: number, topPx: number): void;
 }
 
 export interface ReviewListCallbacks {
@@ -635,6 +642,28 @@ export function ReviewList({
         },
         getState(cb) {
           vRef.current?.getState(cb);
+        },
+        firstVisibleRow() {
+          const scroller = scrollerRef.current;
+          if (!scroller) return null;
+          const top = scroller.getBoundingClientRect().top;
+          const rows = scroller.querySelectorAll<HTMLElement>("[data-anchor]");
+          for (const el of rows) {
+            const rect = el.getBoundingClientRect();
+            if (rect.bottom <= top + 1) continue;
+            const anchor = el.dataset.anchor;
+            const fi = Number(el.dataset.fileIndex);
+            if (anchor == null || !Number.isFinite(fi)) continue;
+            return { fileIndex: fi, anchor, top: rect.top - top };
+          }
+          return null;
+        },
+        scrollItemTo(itemIndex, topPx) {
+          vRef.current?.scrollToIndex({
+            index: itemIndex,
+            align: "start",
+            offset: -topPx,
+          });
         },
         firstVisibleRowItem() {
           const scroller = scrollerRef.current;

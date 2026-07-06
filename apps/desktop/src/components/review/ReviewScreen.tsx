@@ -368,6 +368,25 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     updateReviewMemory(keyValue, { fileIndex: clampedIndex });
   }, [detail, fileCount, clampedIndex, keyValue]);
 
+  // Anchor-exact resume correction: restoreStateFrom applied the snapshot at
+  // mount, but its scrollTop replays against height ESTIMATES — on an engine
+  // or font where rows measure differently, the same scrollTop shows a spot
+  // several rows off. One scrollItemTo against the saved top row fixes the
+  // position against real geometry, before the user interacts.
+  const resumeCorrectedRef = useRef(false);
+  useEffect(() => {
+    if (resumeCorrectedRef.current) return;
+    if (modelRef.current.items.length === 0) return; // detail not in yet
+    resumeCorrectedRef.current = true;
+    const t = initialMem?.topRow;
+    if (!t || !initialMem?.listState) return;
+    const idx = modelRef.current.anchorItem.get(
+      fileAnchorKey(t.fileIndex, t.anchor),
+    );
+    if (idx == null) return;
+    listRef.current?.scrollItemTo(idx, t.top);
+  }, [detail, initialMem, modelRef]);
+
   // Record file-switch latency after the paint that follows the switch.
   useEffect(() => {
     requestAnimationFrame(() => usePerfStore.getState().completeFile());
@@ -390,8 +409,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   function handleListScroll() {
     if (saveStateTimerRef.current) clearTimeout(saveStateTimerRef.current);
     saveStateTimerRef.current = setTimeout(() => {
+      const topRow = listRef.current?.firstVisibleRow() ?? undefined;
       listRef.current?.getState((state) => {
-        updateReviewMemory(keyValue, { listState: state });
+        updateReviewMemory(keyValue, { listState: state, topRow });
       });
     }, 300);
   }
