@@ -325,6 +325,37 @@ Subtle **`8 / 12`** · auto-open verdict when all viewed · no animation · no s
 
 Inline → Code view. PR-level → Info tab + badge. ⏸ Conversation mode.
 
+- [x] 🟢 Thread hotkeys — `r` reply / `x` resolve on the hovered or
+      `]c`-focused thread; hints fade in on the thread's own action buttons.
+- [x] 🟢 Composer hint-bar toolbar — every entry is a clickable hotkey hint,
+      not GitHub's 14-icon strip. (First shipped as markdown-symbol wrapping +
+      ⌘⇧P preview; superseded days later by the rich composer below after
+      "inserting symbols feels like going back" feedback.)
+- [x] 🟡 **Rich composer (TipTap v3)** — WYSIWYG surface, markdown wire
+      format (`editor.getMarkdown()` feeds the same API payloads). ⌘B/⌘I/⌘E
+      toggle real marks, ⌘K links the selection via an inline url input,
+      markdown typing shortcuts (`**bold**`, `- `, ``` ) autoconvert, and the
+      suggestion is a real block that round-trips to the ```suggestion fence.
+      Pending cards render markdown now (raw body would reintroduce the
+      symbols). Watch WebKitGTK contenteditable quirks in the wild.
+- [ ] 🔴 **Multi-line comment ranges (GitLab-style)** — its own branch; the
+      anchoring model changes end-to-end. Spec (2026-07-06):
+      - *Selection model:* a line range is a "fat cursor" — `shift+j`/`shift+k`
+        (and shift+arrows) extend from the cursor line; `Esc` collapses; `c`
+        comments on the range. Mouse: press the gutter `+` and drag (one
+        pointer-capture handler feeding the same range state). The iris
+        left-rail accent stretches over the selected rows.
+      - *Composer:* header reads `Lines 12–15 · RIGHT`; "Suggestion" prefills
+        the fence with **all** selected rows (this is where multi-line earns
+        its keep). Range must be one side and one hunk-contiguous run.
+      - *Plumbing:* `start_line`/`start_side` + `line`/`side` on the GitHub
+        review-comment API (GitLab: `line_range`), rust `github.rs`/`gitlab.rs`
+        payloads, `PendingComment` gains optional `startLine`, comment items
+        anchor to the range's END row in `buildReviewItems`, and
+        `rowContent` becomes the joined range for suggestion prefill.
+      - *Tests:* e2e for shift+j extend → c → prefilled multi-line fence;
+        drag path; pending-comment persistence round-trip with `startLine`.
+
 ---
 
 ## 7. Data freshness

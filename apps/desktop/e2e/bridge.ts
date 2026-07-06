@@ -9,6 +9,8 @@ import type { BucketFixture, InboxFixture } from "./fixtures";
 export interface AppOptions {
   /** false boots into the sign-in gate. */
   hasToken?: boolean;
+  /** create_issue_comment never resolves — proves optimistic UI. */
+  hangIssueComment?: boolean;
   /**
    * PR-detail payload per document load: index 0 serves the first load, 1 the
    * first reload, … (the last entry repeats). Lets a test change a PR "server
@@ -37,6 +39,7 @@ export interface AppOptions {
 export async function setupApp(page: Page, opts: AppOptions = {}) {
   const config = {
     hasToken: opts.hasToken ?? true,
+    hangIssueComment: opts.hangIssueComment ?? false,
     inbox: opts.inbox ?? INBOX,
     subscribed: opts.subscribed ?? { count: 0, prs: [] },
     detail: DETAIL,
@@ -101,15 +104,32 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
         userAvatarUrl: "",
         createdAt: new Date().toISOString(),
         inReplyToId: null,
+        threadId: null,
+        resolved: false,
       }),
-      create_issue_comment: () => null,
+      // Persist the flip into the fixture detail so the invalidation refetch
+      // that follows the optimistic update agrees with it (like the hosts do).
+      resolve_thread: (args) => {
+        for (const c of cfg.detail.comments as Array<{
+          threadId: string | null;
+          resolved: boolean;
+        }>) {
+          if (c.threadId === args.threadId) c.resolved = args.resolved as boolean;
+        }
+        return null;
+      },
+      create_issue_comment: () =>
+        cfg.hangIssueComment ? new Promise(() => {}) : null,
       submit_review: () => null,
       check_for_update: () => null,
       "plugin:opener|open_url": () => null,
       "plugin:opener|open": () => null,
     };
 
+    // configurable: a test may call setupApp again with different options —
+    // the later init script's bridge must be able to replace this one.
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
+      configurable: true,
       value: {
         invoke: (cmd: string, args?: Record<string, unknown>) => {
           const handler = handlers[cmd];

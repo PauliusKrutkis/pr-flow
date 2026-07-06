@@ -12,6 +12,7 @@ import {
   ArrowUp,
   Check,
   CheckCheck,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ChevronsDown,
@@ -97,6 +98,7 @@ interface CursorPos {
   anchor: string;
 }
 
+const EMPTY_COMMENTS: ReviewComment[] = [];
 const EMPTY_PENDING: PendingComment[] = [];
 const EMPTY_MATCHES: FindMatch[] = [];
 const EMPTY_OCC: OccurrenceMatch[] = [];
@@ -107,7 +109,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const keyValue = prKey({ owner, name: repo, number });
 
   const { data, isError, error } = usePullRequestDetail(owner, repo, number);
-  const { addReviewComment, reply, addIssueComment, submitReview } =
+  const { addReviewComment, reply, addIssueComment, resolveThread, submitReview } =
     useCommentMutations(owner, repo, number);
 
   const detail = data;
@@ -136,6 +138,12 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const [changedSinceViewed, setChangedSinceViewed] = useState<Set<string>>(
     () => new Set(),
   );
+  // A pending "open this thread's reply composer" request (the `r` key),
+  // mirroring the jump/seed nonce pattern so repeats on the same thread
+  // re-fire. Routed to the FileSection whose file matches `path`.
+  const [replyReq, setReplyReq] = useState<
+    { rootId: number; path: string; nonce: number } | null
+  >(null);
 
   // ---- the flattened list's interaction state --------------------------------
   // Collapsed hunks and open composers feed the item model (collapsing removes
@@ -194,6 +202,10 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveStateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const replyNonceRef = useRef(0);
+  // The thread `r` replies to: whatever the pointer is over, or the last stop
+  // of ]c/[c. A ref (not state) — hover must never re-render the screen.
+  const activeThreadRef = useRef<{ rootId: number; path: string } | null>(null);
 
   const goInbox = useAppStore((s) => s.goInbox);
   const toggleViewed = useAppStore((s) => s.toggleViewed);
@@ -230,6 +242,15 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const activeIndexRef = useLatest(clampedIndex);
   const fileCountRef = useLatest(fileCount);
   const filesRef = useLatest(files);
+  const commentsRef = useLatest<ReviewComment[]>(
+    detail?.comments ?? EMPTY_COMMENTS,
+  );
+
+  // A changed file list can re-anchor or drop threads — stale reply targets
+  // must not survive it.
+  useEffect(() => {
+    activeThreadRef.current = null;
+  }, [files]);
 
   // Per-file comment buckets for the item model.
   const commentsByFile = useMemo(() => {
@@ -425,6 +446,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   useEffect(() => {
     return () => {
       if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+      if (threadFlashRef.current) clearTimeout(threadFlashRef.current);
       if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
       if (saveStateTimerRef.current) clearTimeout(saveStateTimerRef.current);
       if (fileRafRef.current != null) cancelAnimationFrame(fileRafRef.current);
@@ -576,6 +598,12 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     async onReply(a: { inReplyTo: number; body: string }) {
       await reply.mutateAsync(a);
     },
+    onResolveThread(a: { threadId: string; resolved: boolean }) {
+      resolveThread.mutate(a);
+    },
+    onThreadHover(t: { rootId: number; path: string } | null) {
+      activeThreadRef.current = t;
+    },
     onRemovePending(id: string) {
       removePendingStore(keyValue, id);
     },
@@ -601,6 +629,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       onAddPending: (...a) => r.current.onAddPending(...a),
       onAddComment: (...a) => r.current.onAddComment(...a),
       onReply: (...a) => r.current.onReply(...a),
+      onResolveThread: (...a) => r.current.onResolveThread(...a),
+      onThreadHover: (...a) => r.current.onThreadHover(...a),
       onRemovePending: (...a) => r.current.onRemovePending(...a),
       onScroll: () => r.current.onScroll(),
       onMouseMove: (...a) => r.current.onMouseMove(...a),
@@ -1091,6 +1121,53 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     }
   }
 
+  // From the drawer's "Code discussion" index: close it and land on the
+  // thread's comment block. The item model knows every comment (rendered or
+  // not); the flash retries briefly because the centered item needs a frame
+  // to render into the window. Outdated threads whose file isn't in this
+  // diff have nowhere to go — no-op.
+  const threadFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function jumpToThread(path: string, rootId: number) {
+    const m = modelRef.current;
+    const fileIndex = filesRef.current.findIndex((f) => f.filename === path);
+    if (fileIndex < 0) return;
+    setRightOpen(false);
+    usePerfStore.getState().markFileStart();
+    setActiveIndex(fileIndex);
+    activeIndexRef.current = fileIndex; // eager — see scrollToFile
+    const itemIndex = m.commentItems.find((i) => {
+      const it = m.items[i];
+      return (
+        it.kind === "comments" &&
+        it.fileIndex === fileIndex &&
+        it.threads.some((t) => t[0]?.id === rootId)
+      );
+    });
+    if (itemIndex == null) {
+      listRef.current?.scrollToFileStart(fileIndex);
+      return;
+    }
+    listRef.current?.centerItem(itemIndex);
+    let tries = 0;
+    const land = () => {
+      const el = listRef.current
+        ?.scroller()
+        ?.querySelector<HTMLElement>(`[data-comment-root="${rootId}"]`);
+      if (!el) {
+        tries += 1;
+        if (tries < 20) requestAnimationFrame(land);
+        return;
+      }
+      el.classList.add("qf-row-flash");
+      if (threadFlashRef.current) clearTimeout(threadFlashRef.current);
+      threadFlashRef.current = setTimeout(
+        () => el.classList.remove("qf-row-flash"),
+        1600,
+      );
+    };
+    requestAnimationFrame(land);
+  }
+
   // ]c/[c walk the comment blocks by ITEM index — virtualization means
   // off-screen comments have no DOM to query, but the model knows them all.
   function goToComment(delta: number) {
@@ -1099,6 +1176,42 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     const next = (commentIndex + delta + list.length) % list.length;
     setCommentIndex(next);
     listRef.current?.centerItem(list[next]);
+    // The stop becomes the `r` reply target — the item model knows the
+    // thread root directly (pending-only blocks carry no threads and clear
+    // the target).
+    const item = modelRef.current.items[list[next]];
+    activeThreadRef.current =
+      item?.kind === "comments" && item.threads.length > 0
+        ? {
+            rootId: item.threads[0][0].id,
+            path: filesRef.current[item.fileIndex]?.filename ?? "",
+          }
+        : null;
+  }
+
+  // `r`: reply to the hovered/]c-focused thread when there is one (and its
+  // root still exists in the cache — it may have vanished on a refetch);
+  // otherwise keep its historical meaning, next file.
+  function replyToActiveThreadOrNextFile() {
+    const t = activeThreadRef.current;
+    if (t && commentsRef.current.some((c) => c.id === t.rootId)) {
+      replyNonceRef.current += 1;
+      setReplyReq({ ...t, nonce: replyNonceRef.current });
+      return;
+    }
+    nextFile();
+  }
+
+  // `x`: flip the hovered/]c-focused thread's resolved state. Same target as
+  // `r`, but no fallback meaning — with no thread under aim, nothing happens.
+  // The root is re-read from the cache: threadId/resolved must be current, and
+  // the thread may have vanished on a refetch.
+  function resolveActiveThread() {
+    const t = activeThreadRef.current;
+    if (!t) return;
+    const root = commentsRef.current.find((c) => c.id === t.rootId);
+    if (!root || root.threadId == null) return;
+    resolveThread.mutate({ threadId: root.threadId, resolved: !root.resolved });
   }
 
   function openSubmit() {
@@ -1155,10 +1268,10 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     },
     {
       keys: ["r"],
-      description: "Next file",
+      description: "Reply to comment / next file",
       group: "Files",
       icon: ChevronRight,
-      run: nextFile,
+      run: replyToActiveThreadOrNextFile,
     },
     {
       keys: ["t"],
@@ -1203,6 +1316,13 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       group: "Comments",
       icon: MessageSquare,
       run: () => goToComment(-1),
+    },
+    {
+      keys: "x",
+      description: "Resolve / unresolve comment",
+      group: "Comments",
+      icon: CheckCircle2,
+      run: resolveActiveThread,
     },
     {
       keys: "e",
@@ -1445,6 +1565,14 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   const viewedNow = viewedSet.size;
   const isOwnPr = !!activeLogin && pr.author === activeLogin;
+  const reviews = detail.reviews ?? [];
+  // The i-button badge counts everything the drawer can show: PR-level
+  // comments, review verdicts that said something, and inline thread roots —
+  // so a "quiet-looking" PR still advertises its conversation.
+  const convoCount =
+    (detail.issueComments?.length ?? 0) +
+    reviews.filter((r) => r.body.trim().length > 0).length +
+    detail.comments.filter((c) => c.inReplyToId == null).length;
   // Design principle: no loading states — mutations are optimistic, so the
   // composers never enter a busy mode.
 
@@ -1521,9 +1649,12 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
               className="qf-info-btn qf-focusable"
               onClick={() => setRightOpen((o) => !o)}
               aria-pressed={rightOpen}
-              title="PR description & comment (i)"
+              title="PR description & conversation (i)"
             >
               i
+              {convoCount > 0 && (
+                <span className="qf-info-count">{convoCount}</span>
+              )}
             </button>
             <button
               type="button"
@@ -1582,6 +1713,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
               addPending={false}
               restoreState={initialMem?.listState}
               initialFileIndex={initialMem?.fileIndex ?? 0}
+              replyRequest={replyReq}
               callbacks={listCallbacks}
             />
           )}
@@ -1600,11 +1732,14 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         pr={pr}
         fileCount={fileCount}
         conversation={detail.issueComments ?? []}
+        reviews={reviews}
+        inlineComments={detail.comments}
         open={rightOpen}
         onClose={() => setRightOpen(false)}
         onAddIssueComment={async (body) => {
           await addIssueComment.mutateAsync({ body });
         }}
+        onJumpToThread={jumpToThread}
       />
 
       <SubmitReviewModal

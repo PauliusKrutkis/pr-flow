@@ -78,6 +78,25 @@ impl AnyPlatform {
         dispatch!(self, p => p.reply_to_review_comment(owner, repo, number, body, in_reply_to).await)
     }
 
+    /// Resolve / unresolve a review thread. GitHub keys threads by GraphQL
+    /// node id alone; GitLab needs the MR coordinates too — the seam carries
+    /// both so callers stay provider-blind.
+    pub async fn resolve_thread(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        thread_id: &str,
+        resolved: bool,
+    ) -> Result<(), String> {
+        match self {
+            AnyPlatform::GitHub(p) => p.resolve_thread(thread_id, resolved).await,
+            AnyPlatform::GitLab(p) => {
+                p.resolve_thread(owner, repo, number, thread_id, resolved).await
+            }
+        }
+    }
+
     pub async fn create_issue_comment(
         &self,
         owner: &str,

@@ -102,6 +102,16 @@ pub struct ReviewComment {
     pub user_avatar_url: String,
     pub created_at: String,
     pub in_reply_to_id: Option<u64>,
+    /// Resolvable-thread identity: GitHub's GraphQL review-thread node id, or
+    /// GitLab's discussion id. Stamped on EVERY comment of the thread (not
+    /// just the root) so the frontend can group/flip without walking reply
+    /// chains. `None` means "can't resolve from here" (e.g. the GraphQL probe
+    /// failed) and the UI hides the affordance. Serde defaults keep cached
+    /// details from before this field readable.
+    #[serde(default)]
+    pub thread_id: Option<String>,
+    #[serde(default)]
+    pub resolved: bool,
 }
 
 /// A PR-level conversation comment (not anchored to a diff line).
@@ -115,6 +125,22 @@ pub struct IssueComment {
     pub created_at: String,
 }
 
+/// A submitted review: an approval / change request / review with a summary
+/// body. These are the "LGTM" moments the conversation view would otherwise
+/// silently drop — inline comments live in `ReviewComment`, but the verdict
+/// itself only exists here.
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewSummary {
+    pub id: u64,
+    pub user: String,
+    pub user_avatar_url: String,
+    /// "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED" | "DISMISSED"
+    pub state: String,
+    pub body: String,
+    pub submitted_at: String,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PullRequestDetail {
@@ -124,6 +150,9 @@ pub struct PullRequestDetail {
     /// PR-level conversation, oldest first (default keeps old caches readable).
     #[serde(default)]
     pub issue_comments: Vec<IssueComment>,
+    /// Submitted review verdicts/summaries, oldest first (default: old caches).
+    #[serde(default)]
+    pub reviews: Vec<ReviewSummary>,
     pub fetched_at: u64,
 }
 
@@ -478,6 +507,10 @@ fn comment_from(v: &Value) -> ReviewComment {
         user_avatar_url: nstr(v, "user", "avatar_url"),
         created_at: fstr(v, "created_at"),
         in_reply_to_id: fopt_u64(v, "in_reply_to_id"),
+        // REST doesn't expose thread identity/resolution — pr_detail stamps
+        // these from a GraphQL pass afterwards (best-effort).
+        thread_id: None,
+        resolved: false,
     }
 }
 
@@ -497,10 +530,14 @@ impl GitHubPlatform {
     }
 
     async fn graphql(&self, query: &str) -> Result<Value, String> {
+        self.graphql_vars(query, Value::Null).await
+    }
+
+    async fn graphql_vars(&self, query: &str, variables: Value) -> Result<Value, String> {
         let resp = self
             .client
             .post(GRAPHQL_URL)
-            .json(&json!({ "query": query }))
+            .json(&json!({ "query": query, "variables": variables }))
             .send()
             .await
             .map_err(net_err)?;
@@ -630,7 +667,25 @@ impl GitHubPlatform {
             &format!("{API}/repos/{owner}/{repo}/pulls/{number}/comments"),
         )
         .await?;
-        let comments: Vec<ReviewComment> = comments_v.iter().map(comment_from).collect();
+        let mut comments: Vec<ReviewComment> = comments_v.iter().map(comment_from).collect();
+
+        // REST comments carry no thread identity or resolved state — overlay
+        // them from GraphQL. Best-effort: a fine-grained token without GraphQL
+        // access (or any other failure) just leaves thread_id = None, which
+        // hides the resolve affordance instead of breaking the detail fetch.
+        match self.review_threads(owner, repo, number).await {
+            Ok(map) => {
+                for c in comments.iter_mut() {
+                    if let Some((thread_id, resolved)) = map.get(&c.id) {
+                        c.thread_id = Some(thread_id.clone());
+                        c.resolved = *resolved;
+                    }
+                }
+            }
+            Err(e) => log(&format!(
+                "review threads unavailable for {owner}/{repo}#{number} (resolve disabled): {e}"
+            )),
+        }
 
         let issue_v = get_all_pages(
             &self.client,
@@ -648,11 +703,46 @@ impl GitHubPlatform {
             })
             .collect();
 
+        let reviews_v = get_all_pages(
+            &self.client,
+            &format!("{API}/repos/{owner}/{repo}/pulls/{number}/reviews"),
+        )
+        .await?;
+        let reviews: Vec<ReviewSummary> = reviews_v
+            .iter()
+            .filter_map(|v| {
+                let state = fstr(v, "state");
+                let body = fstr(v, "body");
+                // PENDING is the viewer's own unsubmitted draft — not conversation.
+                if state == "PENDING" {
+                    return None;
+                }
+                // A body-less COMMENTED review is just the container GitHub wraps
+                // around inline comments (which we fetch separately) — showing it
+                // would be an empty row. Body-less verdicts (approve / request
+                // changes / dismissed) still carry meaning on their own.
+                if body.trim().is_empty()
+                    && !matches!(state.as_str(), "APPROVED" | "CHANGES_REQUESTED" | "DISMISSED")
+                {
+                    return None;
+                }
+                Some(ReviewSummary {
+                    id: fu64(v, "id"),
+                    user: nstr(v, "user", "login"),
+                    user_avatar_url: nstr(v, "user", "avatar_url"),
+                    state,
+                    body,
+                    submitted_at: fstr(v, "submitted_at"),
+                })
+            })
+            .collect();
+
         let detail = PullRequestDetail {
             pr,
             files,
             comments,
             issue_comments,
+            reviews,
             fetched_at: now_millis(),
         };
         log(&format!(
@@ -661,6 +751,89 @@ impl GitHubPlatform {
             detail.comments.len()
         ));
         Ok(detail)
+    }
+
+    /// Maps review-comment database id -> (thread node id, isResolved) for
+    /// every review thread on the PR, paginating `reviewThreads`.
+    async fn review_threads(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<std::collections::HashMap<u64, (String, bool)>, String> {
+        const QUERY: &str = r#"query($owner:String!,$name:String!,$number:Int!,$cursor:String) {
+  repository(owner:$owner, name:$name) {
+    pullRequest(number:$number) {
+      reviewThreads(first:100, after:$cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes { id isResolved comments(first:100) { nodes { databaseId } } }
+      }
+    }
+  }
+}"#;
+        let mut map = std::collections::HashMap::new();
+        let mut cursor: Option<String> = None;
+        // Same page cap as get_all_pages — a runaway cursor never loops forever.
+        let mut pages = 0u32;
+        loop {
+            pages += 1;
+            if pages > 20 {
+                break;
+            }
+            let v = self
+                .graphql_vars(
+                    QUERY,
+                    json!({ "owner": owner, "name": repo, "number": number, "cursor": cursor }),
+                )
+                .await?;
+            let threads = v
+                .pointer("/data/repository/pullRequest/reviewThreads")
+                .cloned()
+                .unwrap_or(Value::Null);
+            for node in threads
+                .get("nodes")
+                .and_then(Value::as_array)
+                .map(Vec::as_slice)
+                .unwrap_or(&[])
+            {
+                let thread_id = fstr(node, "id");
+                if thread_id.is_empty() {
+                    continue;
+                }
+                let resolved = fbool(node, "isResolved");
+                let ids = node
+                    .pointer("/comments/nodes")
+                    .and_then(Value::as_array)
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]);
+                for c in ids {
+                    if let Some(db_id) = c.get("databaseId").and_then(Value::as_u64) {
+                        map.insert(db_id, (thread_id.clone(), resolved));
+                    }
+                }
+            }
+            let page = threads.get("pageInfo").cloned().unwrap_or(Value::Null);
+            if !fbool(&page, "hasNextPage") {
+                break;
+            }
+            match fopt_str(&page, "endCursor") {
+                Some(c) => cursor = Some(c),
+                None => break,
+            }
+        }
+        Ok(map)
+    }
+
+    /// Flip a review thread's resolved state (GraphQL — thread ids are node ids).
+    pub async fn resolve_thread(&self, thread_id: &str, resolved: bool) -> Result<(), String> {
+        let mutation = if resolved {
+            "mutation($id:ID!) { resolveReviewThread(input:{threadId:$id}) { thread { id isResolved } } }"
+        } else {
+            "mutation($id:ID!) { unresolveReviewThread(input:{threadId:$id}) { thread { id isResolved } } }"
+        };
+        self.graphql_vars(mutation, json!({ "id": thread_id }))
+            .await?;
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]

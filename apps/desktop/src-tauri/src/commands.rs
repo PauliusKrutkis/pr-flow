@@ -204,6 +204,23 @@ pub async fn reply_to_review_comment(
         .await
 }
 
+/// Resolve / unresolve an inline review thread. `thread_id` is the provider's
+/// thread handle carried on ReviewComment (GraphQL node id / discussion id).
+#[tauri::command]
+pub async fn resolve_thread(
+    app: AppHandle,
+    owner: String,
+    repo: String,
+    number: u64,
+    thread_id: String,
+    resolved: bool,
+) -> Result<(), String> {
+    let (_, platform) = accounts::active_platform(&app).await?;
+    platform
+        .resolve_thread(&owner, &repo, number, &thread_id, resolved)
+        .await
+}
+
 #[tauri::command]
 pub async fn create_issue_comment(
     app: AppHandle,

@@ -83,6 +83,14 @@ export interface ReviewComment {
   userAvatarUrl: string;
   createdAt: string;
   inReplyToId: number | null;
+  /**
+   * Resolvable-thread handle (GitHub GraphQL node id / GitLab discussion id),
+   * stamped on every comment of the thread. null = resolving unavailable
+   * (e.g. the token can't reach GraphQL) and the UI hides the action.
+   */
+  threadId: string | null;
+  /** The whole thread's resolved state, mirrored onto each of its comments. */
+  resolved: boolean;
 }
 
 /** A PR-level conversation comment (not anchored to a diff line). */
@@ -94,12 +102,25 @@ export interface IssueComment {
   createdAt: string;
 }
 
+/** A submitted review: an approval / change request / review summary body. */
+export interface ReviewSummary {
+  id: number;
+  user: string;
+  userAvatarUrl: string;
+  /** "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED" | "DISMISSED" */
+  state: string;
+  body: string;
+  submittedAt: string;
+}
+
 export interface PullRequestDetail {
   pr: PullRequest;
   files: ChangedFile[];
   comments: ReviewComment[];
   /** PR-level conversation, oldest first. */
   issueComments: IssueComment[];
+  /** Submitted review verdicts/summaries, oldest first. */
+  reviews: ReviewSummary[];
   /** unix epoch millis */
   fetchedAt: number;
 }
