@@ -166,8 +166,11 @@ fn file_from_diff(v: &Value, head_sha: &str) -> ChangedFile {
 }
 
 /// Maps one note of a diff discussion. `root` carries the thread's anchor;
-/// replies point at it via `in_reply_to_id`.
-fn note_to_comment(note: &Value, root: Option<&Value>) -> ReviewComment {
+/// replies point at it via `in_reply_to_id`. `thread` is the enclosing
+/// discussion's (id, resolved) pair when the thread is resolvable — stamped on
+/// every note of the thread (matching the GitHub GraphQL overlay) so the
+/// frontend never has to walk to the root.
+fn note_to_comment(note: &Value, root: Option<&Value>, thread: Option<(&str, bool)>) -> ReviewComment {
     let anchor = root.unwrap_or(note);
     let pos = anchor.get("position").cloned().unwrap_or(Value::Null);
     let new_line = fopt_u64(&pos, "new_line");
@@ -200,6 +203,8 @@ fn note_to_comment(note: &Value, root: Option<&Value>) -> ReviewComment {
         user_avatar_url: nstr(note, "author", "avatar_url"),
         created_at: fstr(note, "created_at"),
         in_reply_to_id: root.map(|r| fu64(r, "id")),
+        thread_id: thread.map(|(id, _)| id.to_string()),
+        resolved: thread.map(|(_, r)| r).unwrap_or(false),
     }
 }
 
@@ -424,13 +429,21 @@ impl GitLabPlatform {
                 }
                 continue;
             }
-            // Diff-anchored threads become review comments.
-            comments.push(note_to_comment(root, None));
+            // Diff-anchored threads become review comments. The discussion id
+            // is the thread handle for resolve/unresolve; non-resolvable
+            // threads (rare for diff notes) get no handle, hiding the action.
+            let disc_id = fstr(disc, "id");
+            let thread = if fbool(root, "resolvable") && !disc_id.is_empty() {
+                Some((disc_id.as_str(), fbool(root, "resolved")))
+            } else {
+                None
+            };
+            comments.push(note_to_comment(root, None, thread));
             for reply in notes.iter().skip(1) {
                 if fbool(reply, "system") {
                     continue;
                 }
-                comments.push(note_to_comment(reply, Some(root)));
+                comments.push(note_to_comment(reply, Some(root), thread));
             }
         }
         issue_comments.sort_by(|a, b| a.created_at.cmp(&b.created_at));
@@ -502,7 +515,15 @@ impl GitLabPlatform {
             .and_then(|n| n.first())
             .cloned()
             .ok_or_else(|| "GitLab did not return the created note".to_string())?;
-        Ok(note_to_comment(&note, None))
+        // The response IS the new discussion — carry its id so the fresh
+        // thread is resolvable without waiting for a detail refetch.
+        let disc_id = fstr(&v, "id");
+        let thread = if fbool(&note, "resolvable") && !disc_id.is_empty() {
+            Some((disc_id.as_str(), false))
+        } else {
+            None
+        };
+        Ok(note_to_comment(&note, None, thread))
     }
 
     pub async fn reply_to_review_comment(
@@ -544,7 +565,37 @@ impl GitLabPlatform {
             .await
             .map_err(net_err)?;
         let v = read_body(resp).await?;
-        Ok(note_to_comment(&v, Some(&root)))
+        let thread = if fbool(&root, "resolvable") && !disc_id.is_empty() {
+            Some((disc_id.as_str(), fbool(&root, "resolved")))
+        } else {
+            None
+        };
+        Ok(note_to_comment(&v, Some(&root), thread))
+    }
+
+    /// Flip a diff discussion's resolved state.
+    /// PUT /projects/:id/merge_requests/:iid/discussions/:discussion_id?resolved=…
+    pub async fn resolve_thread(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        thread_id: &str,
+        resolved: bool,
+    ) -> Result<(), String> {
+        let resp = self
+            .client
+            .put(format!(
+                "{}/discussions/{}",
+                self.mr_url(owner, repo, number),
+                thread_id
+            ))
+            .json(&json!({ "resolved": resolved }))
+            .send()
+            .await
+            .map_err(net_err)?;
+        read_body(resp).await?;
+        Ok(())
     }
 
     pub async fn create_issue_comment(
@@ -740,15 +791,18 @@ mod tests {
             "id": 11, "body": "reply", "created_at": "t2", "system": false,
             "author": { "username": "b", "avatar_url": "" }
         });
-        let rc = note_to_comment(&root, None);
+        let rc = note_to_comment(&root, None, Some(("disc-1", true)));
         assert_eq!(rc.line, Some(7));
         assert_eq!(rc.side, "RIGHT");
         assert_eq!(rc.path, "f.ts");
         assert_eq!(rc.in_reply_to_id, None);
-        let rr = note_to_comment(&reply, Some(&root));
+        assert_eq!(rc.thread_id.as_deref(), Some("disc-1"));
+        assert!(rc.resolved);
+        let rr = note_to_comment(&reply, Some(&root), Some(("disc-1", true)));
         assert_eq!(rr.in_reply_to_id, Some(10));
         assert_eq!(rr.path, "f.ts"); // anchor path comes from the root
         assert_eq!(rr.line, None);
+        assert_eq!(rr.thread_id.as_deref(), Some("disc-1")); // stamped on replies too
     }
 
     #[test]
@@ -758,9 +812,11 @@ mod tests {
             "author": { "username": "a", "avatar_url": "" },
             "position": { "old_path": "f.ts", "old_line": 3 }
         });
-        let rc = note_to_comment(&root, None);
+        let rc = note_to_comment(&root, None, None);
         assert_eq!(rc.side, "LEFT");
         assert_eq!(rc.line, Some(3));
+        assert_eq!(rc.thread_id, None); // no thread handle -> resolve hidden
+        assert!(!rc.resolved);
     }
 
     #[test]

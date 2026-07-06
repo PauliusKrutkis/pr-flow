@@ -12,6 +12,7 @@ import {
   ArrowUp,
   Check,
   CheckCheck,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ChevronsDown,
@@ -97,6 +98,7 @@ interface CursorPos {
   anchor: string;
 }
 
+const EMPTY_COMMENTS: ReviewComment[] = [];
 const EMPTY_PENDING: PendingComment[] = [];
 const EMPTY_MATCHES: FindMatch[] = [];
 const EMPTY_OCC: OccurrenceMatch[] = [];
@@ -107,7 +109,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const keyValue = prKey({ owner, name: repo, number });
 
   const { data, isError, error } = usePullRequestDetail(owner, repo, number);
-  const { addReviewComment, reply, addIssueComment, submitReview } =
+  const { addReviewComment, reply, addIssueComment, resolveThread, submitReview } =
     useCommentMutations(owner, repo, number);
 
   const detail = data;
@@ -136,6 +138,12 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const [changedSinceViewed, setChangedSinceViewed] = useState<Set<string>>(
     () => new Set(),
   );
+  // A pending "open this thread's reply composer" request (the `r` key),
+  // mirroring the jump/seed nonce pattern so repeats on the same thread
+  // re-fire. Routed to the FileSection whose file matches `path`.
+  const [replyReq, setReplyReq] = useState<
+    { rootId: number; path: string; nonce: number } | null
+  >(null);
 
   // ---- the flattened list's interaction state --------------------------------
   // Collapsed hunks and open composers feed the item model (collapsing removes
@@ -194,6 +202,10 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveStateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const replyNonceRef = useRef(0);
+  // The thread `r` replies to: whatever the pointer is over, or the last stop
+  // of ]c/[c. A ref (not state) — hover must never re-render the screen.
+  const activeThreadRef = useRef<{ rootId: number; path: string } | null>(null);
 
   const goInbox = useAppStore((s) => s.goInbox);
   const toggleViewed = useAppStore((s) => s.toggleViewed);
@@ -230,6 +242,15 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const activeIndexRef = useLatest(clampedIndex);
   const fileCountRef = useLatest(fileCount);
   const filesRef = useLatest(files);
+  const commentsRef = useLatest<ReviewComment[]>(
+    detail?.comments ?? EMPTY_COMMENTS,
+  );
+
+  // A changed file list can re-anchor or drop threads — stale reply targets
+  // must not survive it.
+  useEffect(() => {
+    activeThreadRef.current = null;
+  }, [files]);
 
   // Per-file comment buckets for the item model.
   const commentsByFile = useMemo(() => {
@@ -577,6 +598,12 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     async onReply(a: { inReplyTo: number; body: string }) {
       await reply.mutateAsync(a);
     },
+    onResolveThread(a: { threadId: string; resolved: boolean }) {
+      resolveThread.mutate(a);
+    },
+    onThreadHover(t: { rootId: number; path: string } | null) {
+      activeThreadRef.current = t;
+    },
     onRemovePending(id: string) {
       removePendingStore(keyValue, id);
     },
@@ -602,6 +629,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       onAddPending: (...a) => r.current.onAddPending(...a),
       onAddComment: (...a) => r.current.onAddComment(...a),
       onReply: (...a) => r.current.onReply(...a),
+      onResolveThread: (...a) => r.current.onResolveThread(...a),
+      onThreadHover: (...a) => r.current.onThreadHover(...a),
       onRemovePending: (...a) => r.current.onRemovePending(...a),
       onScroll: () => r.current.onScroll(),
       onMouseMove: (...a) => r.current.onMouseMove(...a),
@@ -1147,6 +1176,42 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     const next = (commentIndex + delta + list.length) % list.length;
     setCommentIndex(next);
     listRef.current?.centerItem(list[next]);
+    // The stop becomes the `r` reply target — the item model knows the
+    // thread root directly (pending-only blocks carry no threads and clear
+    // the target).
+    const item = modelRef.current.items[list[next]];
+    activeThreadRef.current =
+      item?.kind === "comments" && item.threads.length > 0
+        ? {
+            rootId: item.threads[0][0].id,
+            path: filesRef.current[item.fileIndex]?.filename ?? "",
+          }
+        : null;
+  }
+
+  // `r`: reply to the hovered/]c-focused thread when there is one (and its
+  // root still exists in the cache — it may have vanished on a refetch);
+  // otherwise keep its historical meaning, next file.
+  function replyToActiveThreadOrNextFile() {
+    const t = activeThreadRef.current;
+    if (t && commentsRef.current.some((c) => c.id === t.rootId)) {
+      replyNonceRef.current += 1;
+      setReplyReq({ ...t, nonce: replyNonceRef.current });
+      return;
+    }
+    nextFile();
+  }
+
+  // `x`: flip the hovered/]c-focused thread's resolved state. Same target as
+  // `r`, but no fallback meaning — with no thread under aim, nothing happens.
+  // The root is re-read from the cache: threadId/resolved must be current, and
+  // the thread may have vanished on a refetch.
+  function resolveActiveThread() {
+    const t = activeThreadRef.current;
+    if (!t) return;
+    const root = commentsRef.current.find((c) => c.id === t.rootId);
+    if (!root || root.threadId == null) return;
+    resolveThread.mutate({ threadId: root.threadId, resolved: !root.resolved });
   }
 
   function openSubmit() {
@@ -1203,10 +1268,10 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     },
     {
       keys: ["r"],
-      description: "Next file",
+      description: "Reply to comment / next file",
       group: "Files",
       icon: ChevronRight,
-      run: nextFile,
+      run: replyToActiveThreadOrNextFile,
     },
     {
       keys: ["t"],
@@ -1251,6 +1316,13 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       group: "Comments",
       icon: MessageSquare,
       run: () => goToComment(-1),
+    },
+    {
+      keys: "x",
+      description: "Resolve / unresolve comment",
+      group: "Comments",
+      icon: CheckCircle2,
+      run: resolveActiveThread,
     },
     {
       keys: "e",
@@ -1641,6 +1713,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
               addPending={false}
               restoreState={initialMem?.listState}
               initialFileIndex={initialMem?.fileIndex ?? 0}
+              replyRequest={replyReq}
               callbacks={listCallbacks}
             />
           )}

@@ -102,6 +102,7 @@ pub fn run() {
             commands::get_file_blob,
             commands::create_review_comment,
             commands::reply_to_review_comment,
+            commands::resolve_thread,
             commands::create_issue_comment,
             commands::submit_review,
             commands::get_viewed_map,

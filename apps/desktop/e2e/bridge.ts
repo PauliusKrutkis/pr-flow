@@ -104,7 +104,20 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
         userAvatarUrl: "",
         createdAt: new Date().toISOString(),
         inReplyToId: null,
+        threadId: null,
+        resolved: false,
       }),
+      // Persist the flip into the fixture detail so the invalidation refetch
+      // that follows the optimistic update agrees with it (like the hosts do).
+      resolve_thread: (args) => {
+        for (const c of cfg.detail.comments as Array<{
+          threadId: string | null;
+          resolved: boolean;
+        }>) {
+          if (c.threadId === args.threadId) c.resolved = args.resolved as boolean;
+        }
+        return null;
+      },
       create_issue_comment: () =>
         cfg.hangIssueComment ? new Promise(() => {}) : null,
       submit_review: () => null,

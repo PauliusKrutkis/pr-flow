@@ -107,6 +107,8 @@ export interface ReviewCommentsItem {
   fileIndex: number;
   anchor: string;
   target: { line: number; side: string } | null;
+  /** The anchored row's code — the composer's ```suggestion prefill. */
+  rowContent: string | null;
   threads: ReviewComment[][];
   pending: PendingComment[];
   boxOpen: boolean;
@@ -243,6 +245,7 @@ export function buildReviewItems(input: BuildReviewItemsInput): ReviewListModel 
             fileIndex,
             anchor: anchor!,
             target,
+            rowContent: row.content,
             threads: rowThreads ?? [],
             pending: rowPending ?? [],
             boxOpen,

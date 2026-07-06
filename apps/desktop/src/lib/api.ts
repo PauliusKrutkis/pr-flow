@@ -80,6 +80,13 @@ export const api = {
     body: string;
     inReplyTo: number;
   }) => invoke<ReviewComment>("reply_to_review_comment", args),
+  resolveThread: (args: {
+    owner: string;
+    repo: string;
+    number: number;
+    threadId: string;
+    resolved: boolean;
+  }) => invoke<void>("resolve_thread", args),
   createIssueComment: (args: {
     owner: string;
     repo: string;

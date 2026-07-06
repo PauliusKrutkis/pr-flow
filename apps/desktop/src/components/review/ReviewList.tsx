@@ -35,7 +35,8 @@ import type { IntralineRanges } from "../../lib/intraline";
 import { cn } from "../../lib/cn";
 import { useAppStore } from "../../store/appStore";
 import { Avatar } from "../ui/Avatar";
-import { CommentThread } from "./CommentThread";
+import { Markdown } from "../Markdown";
+import { CommentThread, type ReplyRequest } from "./CommentThread";
 import { AddCommentBox } from "./AddCommentBox";
 import { ImageDiff } from "./ImageDiff";
 
@@ -99,6 +100,10 @@ export interface ReviewListCallbacks {
     body: string;
   }): Promise<void>;
   onReply(a: { inReplyTo: number; body: string }): Promise<void>;
+  /** Flip a thread's resolved state (optimistic upstream). */
+  onResolveThread(a: { threadId: string; resolved: boolean }): void;
+  /** The pointer entered (or left, null) a thread — the `r` reply target. */
+  onThreadHover(t: { rootId: number; path: string } | null): void;
   onRemovePending(id: string): void;
   onScroll(): void;
   onMouseMove(x: number, y: number): void;
@@ -126,6 +131,9 @@ interface ReviewListProps {
   restoreState?: StateSnapshot;
   /** Fallback resume target when no snapshot exists (group start). */
   initialFileIndex?: number;
+  /** Open the reply composer on the matching thread (from the `r` key);
+   *  each rendered thread checks the rootId itself. */
+  replyRequest: (ReplyRequest & { path: string }) | null;
   callbacks: ReviewListCallbacks;
 }
 
@@ -285,11 +293,13 @@ function CommentsBlock({
   item,
   filename,
   addPending,
+  replyRequest,
   callbacks,
 }: {
   item: ReviewCommentsItem;
   filename: string;
   addPending: boolean;
+  replyRequest: ReplyRequest | null;
   callbacks: ReviewListCallbacks;
 }) {
   const activeAccount = useAppStore((s) =>
@@ -304,6 +314,13 @@ function CommentsBlock({
           comments={thread}
           onReply={callbacks.onReply}
           replyPending={addPending}
+          onResolve={callbacks.onResolveThread}
+          onHoverChange={(hovering) =>
+            callbacks.onThreadHover(
+              hovering ? { rootId: thread[0].id, path: filename } : null,
+            )
+          }
+          replyRequest={replyRequest}
         />
       ))}
       {item.pending.map((p: PendingComment) => (
@@ -327,7 +344,11 @@ function CommentsBlock({
                 Discard
               </button>
             </div>
-            <div className="qf-comment-body whitespace-pre-wrap">{p.body}</div>
+            {/* The composer writes markdown — the pending card must render
+                it, or bold comes back as asterisks the moment you save. */}
+            <div className="qf-comment-body">
+              <Markdown>{p.body}</Markdown>
+            </div>
           </div>
         </div>
       ))}
@@ -340,6 +361,13 @@ function CommentsBlock({
               placeholder="Add a review comment…"
               submitLabel="Add to review"
               secondaryLabel="Comment now"
+              // ```suggestion blocks replace the line as it exists on the
+              // head side, so only RIGHT-side rows offer the insert.
+              suggestionText={
+                target.side === "RIGHT"
+                  ? (item.rowContent ?? undefined)
+                  : undefined
+              }
               onCancel={() => callbacks.onCloseBox(item.fileIndex, item.anchor)}
               onSubmit={(body) => {
                 callbacks.onAddPending({
@@ -473,6 +501,11 @@ function renderItem(ctx: ListContext, item: ReviewItem) {
           item={item}
           filename={file.filename}
           addPending={p.addPending}
+          replyRequest={
+            p.replyRequest && p.replyRequest.path === file.filename
+              ? p.replyRequest
+              : null
+          }
           callbacks={p.callbacks}
         />
       );
