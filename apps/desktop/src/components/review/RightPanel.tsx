@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import type {
   IssueComment,
   PullRequest,
@@ -85,36 +85,32 @@ export function RightPanel({
   // PR-level comments and review verdicts interleave into one timeline.
   // ISO-8601 timestamps compare lexicographically, and optimistic comments are
   // stamped "now", so they land at the tail the instant they're typed.
-  const timeline = useMemo<TimelineEntry[]>(() => {
-    const entries: TimelineEntry[] = [
-      ...conversation.map((c) => ({
-        kind: "comment" as const,
-        at: c.createdAt,
-        comment: c,
-      })),
-      ...reviews.map((r) => ({
-        kind: "review" as const,
-        at: r.submittedAt,
-        review: r,
-      })),
-    ];
-    return entries.sort((a, b) => a.at.localeCompare(b.at));
-  }, [conversation, reviews]);
+  // (Plain computations, not useMemo — the React Compiler caches them.)
+  const timeline: TimelineEntry[] = [
+    ...conversation.map((c) => ({
+      kind: "comment" as const,
+      at: c.createdAt,
+      comment: c,
+    })),
+    ...reviews.map((r) => ({
+      kind: "review" as const,
+      at: r.submittedAt,
+      review: r,
+    })),
+  ].sort((a, b) => a.at.localeCompare(b.at));
 
   // Inline comments grouped into threads: roots carry no inReplyToId, replies
   // point at their root. The drawer only indexes them — the full thread lives
   // in the diff, which is where the row jumps.
-  const threads = useMemo(() => {
-    const replyCounts = new Map<number, number>();
-    for (const c of inlineComments) {
-      if (c.inReplyToId != null) {
-        replyCounts.set(c.inReplyToId, (replyCounts.get(c.inReplyToId) ?? 0) + 1);
-      }
+  const replyCounts = new Map<number, number>();
+  for (const c of inlineComments) {
+    if (c.inReplyToId != null) {
+      replyCounts.set(c.inReplyToId, (replyCounts.get(c.inReplyToId) ?? 0) + 1);
     }
-    return inlineComments
-      .filter((c) => c.inReplyToId == null)
-      .map((root) => ({ root, replyCount: replyCounts.get(root.id) ?? 0 }));
-  }, [inlineComments]);
+  }
+  const threads = inlineComments
+    .filter((c) => c.inReplyToId == null)
+    .map((root) => ({ root, replyCount: replyCounts.get(root.id) ?? 0 }));
 
   return (
     <>
