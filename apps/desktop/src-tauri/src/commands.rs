@@ -182,10 +182,13 @@ pub async fn create_review_comment(
     path: String,
     line: u64,
     side: String,
+    start_line: Option<u64>,
 ) -> Result<ReviewComment, String> {
     let (_, platform) = accounts::active_platform(&app).await?;
     platform
-        .create_review_comment(&owner, &repo, number, &body, &commit_id, &path, line, &side)
+        .create_review_comment(
+            &owner, &repo, number, &body, &commit_id, &path, line, &side, start_line,
+        )
         .await
 }
 

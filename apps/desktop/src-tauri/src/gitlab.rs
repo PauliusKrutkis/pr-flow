@@ -27,6 +27,19 @@ pub struct GitLabPlatform {
     api: String,
 }
 
+/// One end of a GitLab multi-line `line_range`. The line_code format is
+/// `{sha1(file_path)}_{old_line}_{new_line}`; the side the line doesn't
+/// exist on is encoded as 0 (best-effort — see the fallback at the caller).
+fn gl_range_end(path: &str, line: u64, side: &str) -> Value {
+    use sha1::{Digest, Sha1};
+    let sha = format!("{:x}", Sha1::digest(path.as_bytes()));
+    if side == "LEFT" {
+        json!({ "line_code": format!("{sha}_{line}_0"), "type": "old", "old_line": line })
+    } else {
+        json!({ "line_code": format!("{sha}_0_{line}"), "type": "new", "new_line": line })
+    }
+}
+
 /// Percent-encode a path segment (RFC 3986 unreserved set), '/' included —
 /// GitLab wants project paths and file paths as single encoded segments.
 fn enc(s: &str) -> String {
@@ -486,6 +499,7 @@ impl GitLabPlatform {
         path: &str,
         line: u64,
         side: &str,
+        start_line: Option<u64>,
     ) -> Result<ReviewComment, String> {
         let refs = self.diff_refs(owner, repo, number).await?;
         let mut position = json!({
@@ -501,13 +515,35 @@ impl GitLabPlatform {
         } else {
             position["new_line"] = json!(line);
         }
-        let resp = self
+        // Multi-line: GitLab takes a line_range whose ends carry line_codes
+        // (sha1-of-path + old/new line numbers). The exact code for a line
+        // that exists on only one side is under-documented, so this is
+        // best-effort — a rejected range falls back to the single-line
+        // anchor below rather than losing the comment.
+        if let Some(start) = start_line {
+            position["line_range"] = json!({
+                "start": gl_range_end(path, start, side),
+                "end": gl_range_end(path, line, side),
+            });
+        }
+        let mut resp = self
             .client
             .post(format!("{}/discussions", self.mr_url(owner, repo, number)))
             .json(&json!({ "body": body, "position": position }))
             .send()
             .await
             .map_err(net_err)?;
+        if start_line.is_some() && !resp.status().is_success() {
+            let obj = position.as_object_mut().expect("position is an object");
+            obj.remove("line_range");
+            resp = self
+                .client
+                .post(format!("{}/discussions", self.mr_url(owner, repo, number)))
+                .json(&json!({ "body": body, "position": position }))
+                .send()
+                .await
+                .map_err(net_err)?;
+        }
         let v = read_body(resp).await?;
         let note = v
             .get("notes")
@@ -629,7 +665,15 @@ impl GitLabPlatform {
     ) -> Result<(), String> {
         for c in comments {
             self.create_review_comment(
-                owner, repo, number, &c.body, commit_id, &c.path, c.line, &c.side,
+                owner,
+                repo,
+                number,
+                &c.body,
+                commit_id,
+                &c.path,
+                c.line,
+                &c.side,
+                c.start_line,
             )
             .await?;
         }

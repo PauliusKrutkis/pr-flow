@@ -147,9 +147,12 @@ export type ReviewEvent = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
 export interface PendingComment {
   id: string;
   path: string;
+  /** The anchor line — for a multi-line comment, the range's END line. */
   line: number;
   side: string;
   body: string;
+  /** Multi-line range start (same side as `line`); absent = single line. */
+  startLine?: number;
 }
 
 /**

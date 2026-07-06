@@ -29,6 +29,8 @@ tokio = { version = "1", features = ["rt"] }
 base64 = "0.22"
 # GitLab OAuth (PKCE): code-challenge hashing + verifier generation.
 sha2 = "0.10"
+# GitLab multi-line comment line_codes (sha1 of the file path).
+sha1 = "0.10"
 rand = "0.8"
 dotenvy = "0.15"
 # Auto-update. PR Flow is a desktop-only app, so this stays a plain dependency.

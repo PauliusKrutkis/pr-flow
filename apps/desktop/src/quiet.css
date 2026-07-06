@@ -881,6 +881,15 @@ textarea.q-input { resize: none; line-height: 1.5; }
 }
 .dir-quiet .qf-row-threaded .qf-marker { color: var(--accent); opacity: 0.9; }
 
+/* Rows inside the multi-line comment range — the cursor's iris treatment
+   stretched over the run, in either input mode (a selection is a commitment,
+   not a hover). */
+.dir-quiet .qf-row-selected {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+.dir-quiet .qf-row-selected .qf-gutter { color: var(--fg); }
+
 /* the row a search jump landed on — a brief iris flash that settles back */
 .dir-quiet .qf-row-flash { animation: qf-flash 1.5s ease-out; }
 @keyframes qf-flash {
@@ -969,6 +978,14 @@ textarea.q-input { resize: none; line-height: 1.5; }
    never both at once. */
 .dir-quiet .qf-fsec-active .qf-diff:not([data-mode="mouse"]) .qf-row-active .qf-add-btn { display: grid; }
 .dir-quiet .qf-diff[data-mode="mouse"] .qf-row:hover .qf-add-btn { display: grid; }
+
+/* While a gutter drag is extending a range, the "+" travels with the moving
+   end — the row the composer will open under (GitLab's affordance). The
+   pressed button holds the pointer capture, so it FADES (display:none would
+   release the capture and kill the drag); the end row's own button paints in
+   its place. */
+.dir-quiet .qf-diff[data-dragging] .qf-add-btn { opacity: 0; }
+.dir-quiet .qf-diff[data-dragging] .qf-row-sel-end .qf-add-btn { display: grid; opacity: 1; }
 
 .dir-quiet .qf-empty { padding: 40px; text-align: center; color: var(--faint); font-family: var(--font-ui); }
 
@@ -1270,6 +1287,26 @@ textarea.q-input { resize: none; line-height: 1.5; }
   transition: color 120ms ease, border-color 120ms ease;
 }
 .dir-quiet .qf-pending-remove:hover { color: var(--del); border-color: var(--del); }
+
+/* multi-line range labels: the composer's "Lines 12–15" header and the
+   pending card's range chip */
+.dir-quiet .qf-range-head {
+  margin-bottom: 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.dir-quiet .qf-range-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 2px 7px;
+}
 
 /* add-comment composer (inline) */
 .dir-quiet .qf-compose { padding: 4px 0; }

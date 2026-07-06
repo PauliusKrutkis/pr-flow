@@ -236,7 +236,13 @@ interface AppState {
   pendingComments: Record<string, PendingComment[]>;
   addPendingComment: (
     prKey: string,
-    c: { path: string; line: number; side: string; body: string },
+    c: {
+      path: string;
+      line: number;
+      side: string;
+      body: string;
+      startLine?: number;
+    },
   ) => void;
   removePendingComment: (prKey: string, id: string) => void;
   clearPendingComments: (prKey: string) => void;

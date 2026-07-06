@@ -205,6 +205,19 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
       // Bare modifier keys: ignore.
       if (key === "shift") return;
 
+      // Bare shift+key descriptors (e.g. "shift+j" extends the selection) —
+      // matched only when a scope explicitly binds one, so shifted CHARACTERS
+      // ("]", "?", "+") keep resolving through their produced key like always.
+      if (e.shiftKey) {
+        const shifted = findByKey(bindings, `shift+${key}`);
+        if (shifted) {
+          e.preventDefault();
+          clearSeq();
+          shifted.run(e);
+          return;
+        }
+      }
+
       // ---- single keys & two-key sequences ----
       const buf = seqRef.current + key;
 
