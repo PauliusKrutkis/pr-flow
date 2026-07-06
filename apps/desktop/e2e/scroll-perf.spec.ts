@@ -82,30 +82,39 @@ test("resuming deep in a large PR holds position while the list restores", async
   await page.evaluate(() => {
     document.querySelector(".qf-scrollhost")!.scrollTop += 200;
   });
+  // Pin the measurement to ONE specific row (the first VISIBLE one of file
+  // 9): "first rendered" differs across engines/reloads with the overscan
+  // window, which would compare different rows.
   const before = await page.evaluate(() => {
     const host = document.querySelector(".qf-scrollhost")!;
-    const row = document.querySelector('[data-anchor][data-file-index="8"]')!;
-    return row.getBoundingClientRect().top - host.getBoundingClientRect().top;
+    const hostTop = host.getBoundingClientRect().top;
+    for (const row of document.querySelectorAll<HTMLElement>(
+      '[data-anchor][data-file-index="8"]',
+    )) {
+      const top = row.getBoundingClientRect().top - hostTop;
+      if (top >= 0) return { anchor: row.dataset.anchor!, top };
+    }
+    return null;
   });
+  expect(before).not.toBeNull();
   // Let the scroll-state snapshot (300ms) + review-memory write (400ms) flush.
   await page.waitForTimeout(900);
 
   await page.reload();
   await expect(page.locator(".qf-diff").first()).toBeVisible();
-  await expect(
-    page.locator('[data-anchor][data-file-index="8"]').first(),
-  ).toBeVisible();
+  const rowSel = `[data-anchor="${before!.anchor}"][data-file-index="8"]`;
+  await expect(page.locator(rowSel)).toBeVisible();
 
   const measure = () =>
-    page.evaluate(() => {
+    page.evaluate((sel) => {
       const host = document.querySelector(".qf-scrollhost")!;
-      const row = document.querySelector('[data-anchor][data-file-index="8"]');
+      const row = document.querySelector(sel);
       if (!row) return null;
       return row.getBoundingClientRect().top - host.getBoundingClientRect().top;
-    });
+    }, rowSel);
   const after = await measure();
   expect(after).not.toBeNull();
-  expect(Math.abs((after as number) - before)).toBeLessThan(40);
+  expect(Math.abs((after as number) - before!.top)).toBeLessThan(40);
   // …and it holds — no post-paint drift.
   await page.waitForTimeout(700);
   const settled = await measure();
