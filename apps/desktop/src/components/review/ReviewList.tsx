@@ -1,12 +1,11 @@
 import {
-  forwardRef,
-  memo,
   useEffect,
   useImperativeHandle,
   useRef,
   useState,
   type CSSProperties,
   type HTMLAttributes,
+  type Ref,
 } from "react";
 import {
   GroupedVirtuoso,
@@ -16,13 +15,13 @@ import {
 } from "react-virtuoso";
 import { Check } from "lucide-react";
 import type { ChangedFile, PendingComment } from "../../types";
-import type { DiffRow } from "../../lib/diff";
 import {
   fileAnchorKey,
   fileRenderMeta,
   type ReviewCommentsItem,
   type ReviewItem,
   type ReviewListModel,
+  type ReviewRowItem,
 } from "../../lib/reviewItems";
 import {
   highlightLineWithFind,
@@ -30,6 +29,7 @@ import {
   highlightLineWithOccurrences,
 } from "../../lib/highlight";
 import { findMatchRangesInLine } from "../../lib/findInDiff";
+import { useLatest } from "../../hooks/useLatest";
 import { occurrenceRangesInLine } from "../../lib/occurrences";
 import type { IntralineRanges } from "../../lib/intraline";
 import { cn } from "../../lib/cn";
@@ -147,17 +147,14 @@ function glyphFor(status: string): { letter: string; cls: string } {
   }
 }
 
-/** One diff line. Memoized: cursor moves flip `isCursor` on two rows, and the
- *  memo keeps the other rendered rows' innerHTML untouched. */
-const DiffLine = memo(function DiffLine({
-  row,
-  anchor,
-  fileIndex,
+/** One diff line. The React Compiler memoizes it (and the element trees that
+ *  feed it), so cursor moves flip `isCursor` on two rows without rebuilding
+ *  the other rendered rows' innerHTML — the find-perf spec pins that. */
+function DiffLine({
+  item,
   filename,
   isCursor,
   isFlash,
-  hasAnchored,
-  canComment,
   intra,
   guideLvl,
   indentVar,
@@ -168,14 +165,10 @@ const DiffLine = memo(function DiffLine({
   onEnter,
   onOpenBox,
 }: {
-  row: DiffRow;
-  anchor: string | null;
-  fileIndex: number;
+  item: ReviewRowItem;
   filename: string;
   isCursor: boolean;
   isFlash: boolean;
-  hasAnchored: boolean;
-  canComment: boolean;
   intra: IntralineRanges | null;
   guideLvl: number | null;
   /** The file's indent-guide period (px or ch string) — see --qf-indent. */
@@ -187,6 +180,8 @@ const DiffLine = memo(function DiffLine({
   onEnter: (fileIndex: number, anchor: string, x: number, y: number) => void;
   onOpenBox: (fileIndex: number, anchor: string) => void;
 }) {
+  const { row, anchor, fileIndex, hasAnchored } = item;
+  const canComment = item.target != null;
   const marker = row.type === "add" ? "+" : row.type === "del" ? "-" : " ";
   return (
     <div
@@ -259,7 +254,7 @@ const DiffLine = memo(function DiffLine({
       </code>
     </div>
   );
-});
+}
 
 // The width of one mono column, measured from rendered spaces (the indent
 // guides can't use `ch` — see quiet.css). One app-global measurement; only
@@ -510,14 +505,10 @@ function renderItem(ctx: ListContext, item: ReviewItem) {
           : `${meta.indentUnit.ch}ch`;
       return (
         <DiffLine
-          row={item.row}
-          anchor={item.anchor}
-          fileIndex={item.fileIndex}
+          item={item}
           filename={file.filename}
           isCursor={key != null && key === p.cursorKey}
           isFlash={key != null && key === p.flashKey}
-          hasAnchored={item.hasAnchored}
-          canComment={item.target != null}
           intra={meta.intraByRow.get(item.row) ?? null}
           guideLvl={meta.guideByRow.get(item.row) ?? null}
           indentVar={indentVar}
@@ -541,26 +532,31 @@ function renderItem(ctx: ListContext, item: ReviewItem) {
 
 // Custom scroller so the scroll element carries the app's classes (CSS hooks,
 // e2e selectors) — virtuoso owns the element, we own its identity.
-const Scroller = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
-  function Scroller({ className: _cn, ...props }, ref) {
-    return (
-      <div
-        ref={ref}
-        {...props}
-        className="qf-scrollhost min-w-0 flex-1"
-        data-testid="review-scroller"
-      />
-    );
-  },
-);
+function Scroller({
+  className: _cn,
+  ref,
+  ...props
+}: HTMLAttributes<HTMLDivElement> & { ref?: Ref<HTMLDivElement> }) {
+  return (
+    <div
+      ref={ref}
+      {...props}
+      className="qf-scrollhost min-w-0 flex-1"
+      data-testid="review-scroller"
+    />
+  );
+}
 
-export const ReviewList = forwardRef<ReviewListHandle, ReviewListProps>(
-  function ReviewList(props, ref) {
-    const vRef = useRef<GroupedVirtuosoHandle>(null);
-    const scrollerRef = useRef<HTMLElement | null>(null);
-    const { model } = props;
-    const modelRef = useRef(model);
-    modelRef.current = model;
+export function ReviewList({
+  ref,
+  ...props
+}: ReviewListProps & { ref?: Ref<ReviewListHandle> }) {
+  const vRef = useRef<GroupedVirtuosoHandle>(null);
+  const scrollerRef = useRef<HTMLElement | null>(null);
+  const { model } = props;
+  // Event-time model access for the imperative handle (written in an
+  // insertion effect — never during render; render paths read ctx.props).
+  const modelRef = useLatest(model);
 
     // The measured mono-column width, held in STATE so rows re-render with
     // it (a module cache alone re-renders nothing). Measured after first
@@ -674,10 +670,10 @@ export const ReviewList = forwardRef<ReviewListHandle, ReviewListProps>(
             <GroupHeader ctx={ctx} groupIndex={groupIndex} />
           )}
           itemContent={(index, _group, _data, ctx) =>
-            renderItem(ctx, modelRef.current.items[index])
+            renderItem(ctx, ctx.props.model.items[index])
           }
-          computeItemKey={(index) => {
-            const it = modelRef.current.items[index];
+          computeItemKey={(index, _group, ctx) => {
+            const it = ctx.props.model.items[index];
             if (!it) return `i${index}`;
             switch (it.kind) {
               case "row":
@@ -709,5 +705,4 @@ export const ReviewList = forwardRef<ReviewListHandle, ReviewListProps>(
         />
       </div>
     );
-  },
-);
+}
