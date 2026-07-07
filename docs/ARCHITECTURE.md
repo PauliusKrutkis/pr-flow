@@ -109,3 +109,19 @@ line:
   fingerprints.
 
 See [TESTING.md](./TESTING.md) for what to test when touching these layers.
+
+---
+
+## Linting and formatting
+
+[Ultracite](https://www.ultracite.ai/) (Biome preset) is configured at the repo root.
+
+| Command | Purpose |
+| ------- | ------- |
+| `pnpm check` | Lint + format check (CI) |
+| `pnpm fix` | Auto-fix safe issues |
+| `pnpm exec ultracite doctor` | Verify setup |
+
+Config: `biome.jsonc` extends `ultracite/biome/{core,type-aware,react}`.
+The Lint workflow runs on every PR; it is expected to fail until existing code
+is cleaned up.

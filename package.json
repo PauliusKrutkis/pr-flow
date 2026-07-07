@@ -1,20 +1,26 @@
 {
+  "devDependencies": {
+    "@biomejs/biome": "2.5.2",
+    "react-doctor": "^0.7.1",
+    "typescript": "~5.8.3",
+    "ultracite": "7.9.2"
+  },
   "name": "pr-flow",
-  "private": true,
-  "version": "0.1.0",
-  "type": "module",
   "scripts": {
     "dev": "pnpm --filter @pr-flow/desktop dev",
     "dev:desktop": "pnpm --filter @pr-flow/desktop tauri dev",
     "build": "pnpm --filter @pr-flow/desktop build",
     "tauri": "pnpm --filter @pr-flow/desktop tauri",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
   },
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
-  },
-  "devDependencies": {
-    "react-doctor": "^0.7.1",
-    "typescript": "~5.8.3"
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }
