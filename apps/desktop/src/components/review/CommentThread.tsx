@@ -35,19 +35,11 @@ export function CommentThread({
   replyRequest,
 }: CommentThreadProps) {
   const [replying, setReplying] = useState(false);
-  // Resolved threads collapse to a single row; expanding is per-thread local
-  // state that resets when you leave the PR (matching the hosts' behavior).
   const [expanded, setExpanded] = useState(false);
 
   const root = comments[0];
   const rootId = root?.id;
 
-  // `r` on the hovered / ]c-focused thread: surface the composer. Expanding
-  // first means a resolved thread un-collapses instead of ignoring the key;
-  // AddCommentBox's autoFocus then claims the caret. Scheduled a frame out:
-  // this is a response to a COMMAND prop, not derived state, and a
-  // synchronous setState inside the effect cascades renders (and bails the
-  // compiler) — the same pattern as the review list's jump handling.
   useEffect(() => {
     if (!replyRequest || replyRequest.rootId !== rootId) return;
     const raf = requestAnimationFrame(() => {
@@ -58,7 +50,8 @@ export function CommentThread({
   }, [replyRequest, rootId]);
 
   if (comments.length === 0) return null;
-  // Thread identity/state ride on every comment; read them off the root.
+  /** Thread identity/state ride on every comment; read them off the root. */
+
   const threadId = root.threadId;
   const resolved = root.resolved;
 
@@ -68,15 +61,10 @@ export function CommentThread({
   };
 
   function submitReply(body: string) {
-    // Optimistic — the reply is inserted into the cache by the mutation's
-    // onMutate; close the composer immediately.
     void onReply({ inReplyTo: rootId, body });
     setReplying(false);
   }
 
-  // Collapsed resolved thread: one quiet row that expands on click (a real
-  // <button>, so Enter/Space work too). data-comment-root stays on it so the
-  // drawer's jump-to-thread still lands and flashes here.
   if (resolved && !expanded) {
     return (
       <button
@@ -97,8 +85,6 @@ export function CommentThread({
   }
 
   return (
-    // data-comment-root lets the info drawer's "Code discussion" index find
-    // and flash this thread when jumping to it.
     <div className="qf-thread" data-comment-root={rootId} {...hoverProps}>
       {resolved && (
         <div className="qf-thread-resolved-bar">
@@ -160,8 +146,6 @@ export function CommentThread({
               type="button"
               className="qf-reply-btn qf-resolve-btn qf-focusable"
               onClick={() => {
-                // Optimistic — the flip lands in the cache immediately;
-                // resolving also collapses the card out of the way.
                 onResolve({ threadId, resolved: !resolved });
                 setExpanded(resolved);
               }}

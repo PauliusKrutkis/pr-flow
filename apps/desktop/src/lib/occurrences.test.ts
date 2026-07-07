@@ -29,9 +29,7 @@ describe("occurrenceSpecFromSelection", () => {
   });
 
   it("keeps the selection verbatim but gates on the trimmed length", () => {
-    // Padding doesn't count toward the minimum…
     expect(occurrenceSpecFromSelection("  a  ")).toBeNull();
-    // …but a qualifying selection keeps its exact text (and spaces break \w+).
     expect(occurrenceSpecFromSelection(" ab ")).toEqual({
       query: " ab ",
       wholeWord: false,

@@ -2,14 +2,6 @@ import { expect, test } from "./test";
 import { setupApp } from "./bridge";
 import { makeBigDetail, perfBudget } from "./fixtures";
 
-// Scroll-smoothness guard, virtualized edition. The review scroll renders a
-// bounded slice of rows and materializes new ones as they enter the window —
-// there are no section mounts to stall a frame, and no pre-mounter to wait
-// for. This spec scrolls a 6,400-row PR top to bottom immediately after open
-// and requires stall-free frames plus a bounded DOM the whole way.
-
-// Wall-clock budgets flake when parallel workers compete for CPU; a genuine
-// regression fails every attempt, contention doesn't survive a retry.
 test.describe.configure({ retries: 2 });
 
 const FILES = 16;
@@ -28,9 +20,12 @@ test("scrolling a large PR stays smooth, with a bounded DOM", async ({ page }) =
   await expect(page.locator(".qf-diff").first()).toBeVisible();
   await page.waitForTimeout(300);
 
-  // What counts as a stall scales with the engine baseline: headless WebKit
-  // software-renders at ~35ms/frame, so its ordinary frames brush past the
-  // 50ms that is already alarming on Chromium.
+  /**
+   * What counts as a stall scales with the engine baseline: headless WebKit
+   * software-renders at ~35ms/frame, so its ordinary frames brush past the
+   * 50ms that is already alarming on Chromium.
+   */
+
   const projectName = test.info().project.name;
   const stallMs = projectName.startsWith("webkit") ? 100 : 50;
   const result = await page.evaluate(async (stallMs) => {
@@ -60,8 +55,6 @@ test("scrolling a large PR stays smooth, with a bounded DOM", async ({ page }) =
     `scroll frames: n ${result.n} p50 ${result.p50.toFixed(1)} p95 ${result.p95.toFixed(1)} max ${result.max.toFixed(1)} over${stallMs}ms ${result.stalls} maxRows ${result.maxRows}`,
   );
 
-  // The DOM never grows past a viewport-ish slice — the property every other
-  // bound rests on.
   expect(result.maxRows).toBeLessThan(300);
   expect(result.stalls).toBeLessThanOrEqual(4);
   expect(result.p95).toBeLessThan(perfBudget(50, projectName));
@@ -74,7 +67,6 @@ test("resuming deep in a large PR holds position while the list restores", async
   await page.keyboard.press("Enter");
   await expect(page.locator(".qf-diff").first()).toBeVisible();
 
-  // Jump deep (file 9, via the sidebar) and nudge into it.
   await page.locator('.qf-sidebar [data-file-index="8"]').click();
   await expect(
     page.locator('[data-anchor][data-file-index="8"]').first(),
@@ -82,11 +74,6 @@ test("resuming deep in a large PR holds position while the list restores", async
   await page.evaluate(() => {
     document.querySelector(".qf-scrollhost")!.scrollTop += 200;
   });
-  // Deep jumps into unmeasured territory settle asynchronously (the
-  // virtualizer re-adjusts as real row heights come in — on WebKit that
-  // adjustment lands ~180px late). Wait for the scroll to hold still before
-  // taking the reference, or we'd record a mid-settle position the snapshot
-  // (saved later, settled) will legitimately disagree with.
   await page.waitForFunction(() => {
     const host = document.querySelector(".qf-scrollhost")!;
     const w = window as unknown as { __lastTop?: number; __stable?: number };
@@ -98,9 +85,12 @@ test("resuming deep in a large PR holds position while the list restores", async
     }
     return (w.__stable ?? 0) >= 5;
   });
-  // Pin the measurement to ONE specific row (the first VISIBLE one of file
-  // 9): "first rendered" differs across engines/reloads with the overscan
-  // window, which would compare different rows.
+  /**
+   * Pin the measurement to ONE specific row (the first VISIBLE one of file
+   * 9): "first rendered" differs across engines/reloads with the overscan
+   * window, which would compare different rows.
+   */
+
   const before = await page.evaluate(() => {
     const host = document.querySelector(".qf-scrollhost")!;
     const hostTop = host.getBoundingClientRect().top;
@@ -113,7 +103,6 @@ test("resuming deep in a large PR holds position while the list restores", async
     return null;
   });
   expect(before).not.toBeNull();
-  // Let the scroll-state snapshot (300ms) + review-memory write (400ms) flush.
   await page.waitForTimeout(900);
 
   await page.reload();
@@ -131,7 +120,6 @@ test("resuming deep in a large PR holds position while the list restores", async
   const after = await measure();
   expect(after).not.toBeNull();
   expect(Math.abs((after as number) - before!.top)).toBeLessThan(40);
-  // …and it holds — no post-paint drift.
   await page.waitForTimeout(700);
   const settled = await measure();
   expect(Math.abs((settled as number) - (after as number))).toBeLessThan(24);

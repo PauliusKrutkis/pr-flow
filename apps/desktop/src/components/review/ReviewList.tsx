@@ -166,8 +166,11 @@ interface ListContext {
   colW: number | null;
 }
 
-// The sticky group-header band the cursor must clear when moving upward.
-// Measured lazily from the rendered header; this is the pre-measure fallback.
+/**
+ * The sticky group-header band the cursor must clear when moving upward.
+ * Measured lazily from the rendered header; this is the pre-measure fallback.
+ */
+
 const HEADER_FALLBACK_PX = 36;
 
 function glyphFor(status: string): { letter: string; cls: string } {
@@ -252,12 +255,6 @@ function DiffLine({
           <button
             type="button"
             aria-label="Add comment"
-            // Press-and-drag selects a line range (GitLab-style); pointer
-            // capture keeps the stream on this button, so drag targets come
-            // from hit-testing. A plain press is just a click — drag-end
-            // opens the single-line composer. The click handler only serves
-            // keyboard activation (detail 0); mouse opens via drag-end,
-            // otherwise every drag would ALSO fire a range-killing click.
             onPointerDown={(e) => {
               e.preventDefault();
               e.currentTarget.setPointerCapture(e.pointerId);
@@ -294,8 +291,6 @@ function DiffLine({
         <span
           className="hljs"
           dangerouslySetInnerHTML={{
-            // Marks are layered onto the SAME highlighted HTML (by wrapping
-            // text nodes), so syntax colours stay intact under them.
             __html:
               markQuery == null
                 ? highlightLineWithIntra(row.content, filename, intra)
@@ -322,9 +317,12 @@ function DiffLine({
   );
 }
 
-// The width of one mono column, measured from rendered spaces (the indent
-// guides can't use `ch` — see quiet.css). One app-global measurement; only
-// cached once fonts have loaded so a fallback-font value can't stick.
+/**
+ * The width of one mono column, measured from rendered spaces (the indent
+ * guides can't use `ch` — see quiet.css). One app-global measurement; only
+ * cached once fonts have loaded so a fallback-font value can't stick.
+ */
+
 let monoColWidthCache: number | null = null;
 
 function measureMonoColWidth(host: HTMLElement): number {
@@ -422,9 +420,6 @@ function CommentsBlock({
               placeholder="Add a review comment…"
               submitLabel="Add to review"
               secondaryLabel="Comment now"
-              // ```suggestion blocks replace the range as it exists on the
-              // head side, so only RIGHT-side rows offer the insert; a
-              // multi-line composer prefills every selected row.
               suggestionText={
                 target.side === "RIGHT"
                   ? (item.rangeContent ?? item.rowContent ?? undefined)
@@ -442,8 +437,6 @@ function CommentsBlock({
                 callbacks.onCloseBox(item.fileIndex, item.anchor);
               }}
               onSecondary={(body) => {
-                // Optimistic — the comment is already in the cache; close
-                // immediately, the network settles behind.
                 void callbacks.onAddComment({
                   path: filename,
                   line: target.line,
@@ -578,11 +571,14 @@ function renderItem(ctx: ListContext, index: number, item: ReviewItem) {
       const key =
         item.anchor != null ? fileAnchorKey(item.fileIndex, item.anchor) : null;
       const marks = p.marks;
-      // Mark props flow only to rows that actually match — one indexOf over
-      // each RENDERED row's text (a viewport-sized set) keeps the memoized
-      // non-matching rows from rebuilding their innerHTML on every keystroke.
-      // Occurrence marks additionally stay scoped to their own file (editor
-      // convention — the click asks "where else HERE?").
+      /**
+       * Mark props flow only to rows that actually match — one indexOf over
+       * each RENDERED row's text (a viewport-sized set) keeps the memoized
+       * non-matching rows from rebuilding their innerHTML on every keystroke.
+       * Occurrence marks additionally stay scoped to their own file (editor
+       * convention — the click asks "where else HERE?").
+       */
+
       const marked =
         marks != null &&
         (marks.kind === "find"
@@ -647,8 +643,11 @@ function renderItem(ctx: ListContext, index: number, item: ReviewItem) {
   }
 }
 
-// Custom scroller so the scroll element carries the app's classes (CSS hooks,
-// e2e selectors) — virtuoso owns the element, we own its identity.
+/**
+ * Custom scroller so the scroll element carries the app's classes (CSS hooks,
+ * e2e selectors) — virtuoso owns the element, we own its identity.
+ */
+
 function Scroller({
   className: _cn,
   ref,
@@ -658,8 +657,6 @@ function Scroller({
     <div
       ref={ref}
       {...props}
-      // Programmatically focusable so the info drawer can hand focus back
-      // here on close (never in the Tab order — Tab cycles files).
       tabIndex={-1}
       className="qf-scrollhost min-w-0 flex-1"
       data-testid="review-scroller"
@@ -674,14 +671,13 @@ export function ReviewList({
   const vRef = useRef<GroupedVirtuosoHandle>(null);
   const scrollerRef = useRef<HTMLElement | null>(null);
   const { model } = props;
-  // Event-time model access for the imperative handle (written in an
-  // insertion effect — never during render; render paths read ctx.props).
+  /**
+   * Event-time model access for the imperative handle (written in an
+   * insertion effect — never during render; render paths read ctx.props).
+   */
+
   const modelRef = useLatest(model);
 
-    // The measured mono-column width, held in STATE so rows re-render with
-    // it (a module cache alone re-renders nothing). Measured after first
-    // paint; if fonts hadn't loaded yet the value is provisional (fallback
-    // font metrics) and re-measured once they land.
     const [colW, setColW] = useState<number | null>(monoColWidthCache);
     useEffect(() => {
       if (monoColWidthCache != null) return;
@@ -710,7 +706,8 @@ export function ReviewList({
       return el?.offsetHeight ?? HEADER_FALLBACK_PX;
     }
 
-    // Keep the cursor clear of the sticky header band when moving upward.
+    /** Keep the cursor clear of the sticky header band when moving upward. */
+
     const cursorViewLocation: CalculateViewLocation = ({
       itemTop,
       itemBottom,
@@ -733,14 +730,6 @@ export function ReviewList({
         scrollToFileStart(fileIndex) {
           const first = modelRef.current.groupFirstItem[fileIndex];
           if (first == null) return;
-          // Plain align-start, NO offset and NO manual settling: virtuoso
-          // self-converges within a couple of frames to the group boundary
-          // with the target's header pinned. A per-frame corrective loop
-          // here FOUGHT that convergence (visible wobble + header flicker),
-          // and an offset landed a header-height short of the boundary,
-          // pinning the previous file's header. The one thing this trades
-          // away is the first hunk's @@ line sliding under the pinned
-          // header — same as the sticky-header behavior everywhere else.
           vRef.current?.scrollToIndex({ index: first, align: "start" });
         },
         centerItem(itemIndex) {
@@ -804,8 +793,6 @@ export function ReviewList({
       <div
         className="qf-diff qf-review-list min-h-0 min-w-0 flex-1"
         data-mode={props.inputMode}
-        // Present only while a drag has actually formed a range — a plain
-        // press must not blink the button under the pointer.
         data-dragging={props.dragging && props.selection ? "" : undefined}
         onMouseMove={(e) => props.callbacks.onMouseMove(e.clientX, e.clientY)}
       >

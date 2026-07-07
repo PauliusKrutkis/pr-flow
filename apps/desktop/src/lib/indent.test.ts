@@ -19,7 +19,6 @@ describe("detectIndentUnit", () => {
   });
 
   it("clamps to 2/4/8", () => {
-    // A 3-space minimum reads as continuation alignment, not a 3-space unit.
     expect(unitOf(["   three;"]).ch).toBe(2);
     expect(unitOf(["     five;"]).ch).toBe(4);
     expect(unitOf(["         nine;"]).ch).toBe(8);
@@ -35,7 +34,6 @@ describe("detectIndentUnit", () => {
       ch: 8,
       chars: 1,
     });
-    // Mixed tab/space lines count as tab-indented.
     expect(unitOf(["\t  mixed;", "  two;"])).toEqual({ ch: 8, chars: 1 });
   });
 

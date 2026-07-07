@@ -1,10 +1,12 @@
-// The review scroll's flattened item model. The whole PR renders as ONE
-// virtualized list (react-virtuoso) — files are groups with sticky headers,
-// and every hunk header, diff row, and comment block is an item. Building the
-// flat list here, as a pure function, gives every consumer the same indexing:
-// the list renders items, the keyboard cursor walks `nav`, find/search jumps
-// resolve `anchorItem`, ]c/[c walks `commentItems`, and the overview ruler
-// turns item indexes into fractions.
+/**
+ * The review scroll's flattened item model. The whole PR renders as ONE
+ * virtualized list (react-virtuoso) — files are groups with sticky headers,
+ * and every hunk header, diff row, and comment block is an item. Building the
+ * flat list here, as a pure function, gives every consumer the same indexing:
+ * the list renders items, the keyboard cursor walks `nav`, find/search jumps
+ * resolve `anchorItem`, ]c/[c walks `commentItems`, and the overview ruler
+ * turns item indexes into fractions.
+ */
 
 import type { ChangedFile, PendingComment, ReviewComment } from "../types";
 import { parsePatch, type DiffHunk, type DiffRow } from "./diff";
@@ -248,9 +250,12 @@ export function buildReviewItems(input: BuildReviewItemsInput): ReviewListModel 
         collapsed: isCollapsed,
       });
       if (isCollapsed) return;
-      // Row content by anchor, within this hunk — a range composer anchored
-      // at its END row looks its earlier lines up here (ranges are one-side,
-      // one-hunk, so every start..end line has been seen by then).
+      /**
+       * Row content by anchor, within this hunk — a range composer anchored
+       * at its END row looks its earlier lines up here (ranges are one-side,
+       * one-hunk, so every start..end line has been seen by then).
+       */
+
       const contentByAnchor = new Map<string, string>();
       for (const row of hunk.rows) {
         if (row.type === "hunk") continue;
@@ -322,11 +327,12 @@ export function buildReviewItems(input: BuildReviewItemsInput): ReviewListModel 
   };
 }
 
-// ---- per-file render metadata ------------------------------------------------
-// Intraline emphasis, indent guides, and the indent unit are derived from the
-// parsed hunks. parsePatch caches by patch string, so the hunks array identity
-// is stable — a WeakMap keyed by it gives every rendered row O(1) access
-// without recomputing per render or per item.
+/**
+ * Intraline emphasis, indent guides, and the indent unit are derived from the
+ * parsed hunks. parsePatch caches by patch string, so the hunks array identity
+ * is stable — a WeakMap keyed by it gives every rendered row O(1) access
+ * without recomputing per render or per item.
+ */
 
 export interface FileRenderMeta {
   intraByRow: ReadonlyMap<DiffRow, IntralineRanges>;

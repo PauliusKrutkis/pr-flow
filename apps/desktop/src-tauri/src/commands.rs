@@ -25,10 +25,6 @@ fn viewed_name(account_id: &str) -> String {
     format!("viewed_{account_id}.json")
 }
 
-// ---------------------------------------------------------------------------
-// Auth-ish commands (kept under their historical names for the frontend)
-// ---------------------------------------------------------------------------
-
 /// "Is the app signed in at all?" — true when any account exists (migrating a
 /// legacy single-token install on the way).
 #[tauri::command]
@@ -63,10 +59,6 @@ pub async fn get_current_user(app: AppHandle) -> Result<GitHubUser, String> {
     platform.current_user().await
 }
 
-// ---------------------------------------------------------------------------
-// Inbox
-// ---------------------------------------------------------------------------
-
 #[tauri::command]
 pub async fn list_inbox(app: AppHandle) -> Result<InboxData, String> {
     let (account, platform) = accounts::active_platform(&app).await?;
@@ -81,10 +73,7 @@ pub async fn get_cached_inbox(app: AppHandle) -> Result<Option<InboxData>, Strin
     storage::read_json::<InboxData>(&app, &inbox_cache_name(&account.id))
 }
 
-// ---------------------------------------------------------------------------
-// Watched repositories ("Watching" tab)
-// ---------------------------------------------------------------------------
-
+/// Watched repositories ("Watching" tab).
 fn watched_name(account_id: &str) -> String {
     format!("watched_{account_id}.json")
 }
@@ -131,10 +120,6 @@ pub async fn get_cached_subscribed(app: AppHandle) -> Result<Option<InboxBucket>
     storage::read_json::<InboxBucket>(&app, &subscribed_cache_name(&account.id))
 }
 
-// ---------------------------------------------------------------------------
-// Pull request detail
-// ---------------------------------------------------------------------------
-
 #[tauri::command]
 pub async fn get_pull_request_detail(
     app: AppHandle,
@@ -165,10 +150,6 @@ pub async fn get_cached_pull_request_detail(
         &detail_cache_name(&account.id, &owner, &repo, number),
     )
 }
-
-// ---------------------------------------------------------------------------
-// Comments & reviews
-// ---------------------------------------------------------------------------
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
@@ -256,10 +237,6 @@ pub async fn submit_review(
         .await
 }
 
-// ---------------------------------------------------------------------------
-// File blobs (image diffs)
-// ---------------------------------------------------------------------------
-
 #[tauri::command]
 pub async fn get_file_blob(
     app: AppHandle,
@@ -272,18 +249,12 @@ pub async fn get_file_blob(
     platform.file_blob(&owner, &repo, &path, &r#ref).await
 }
 
-// ---------------------------------------------------------------------------
-// Viewed-file state (local only, per account)
-// ---------------------------------------------------------------------------
-
 #[tauri::command]
 pub async fn get_viewed_map(app: AppHandle) -> Result<Value, String> {
     let account = accounts::active_account(&app).await?;
     if let Some(v) = storage::read_json::<Value>(&app, &viewed_name(&account.id))? {
         return Ok(v);
     }
-    // Pre-multi-account installs kept one global viewed.json — fall back to it
-    // (reads only; writes go to the namespaced file).
     Ok(storage::read_json::<Value>(&app, "viewed.json")?.unwrap_or_else(|| json!({})))
 }
 

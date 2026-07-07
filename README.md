@@ -71,6 +71,9 @@ comments: use the composer in the info panel (`i`).
 
 ## Architecture
 
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for layering, comment conventions,
+and state/caching notes. Overview:
+
 ```
 ┌──────────────────────────── Webview (React) ────────────────────────────┐
 │  Inbox / Review screens  ·  keyboard layer  ·  zustand UI state          │

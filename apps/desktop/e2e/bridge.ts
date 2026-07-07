@@ -2,9 +2,11 @@ import type { Page } from "@playwright/test";
 import { ACCOUNT, DETAIL, INBOX } from "./fixtures";
 import type { BucketFixture, InboxFixture } from "./fixtures";
 
-// The mocked Tauri bridge. @tauri-apps/api routes every call through
-// `window.__TAURI_INTERNALS__.invoke`, so defining it before the app loads
-// makes the real frontend run against fixtures — no Rust, no network.
+/**
+ * The mocked Tauri bridge. @tauri-apps/api routes every call through
+ * `window.__TAURI_INTERNALS__.invoke`, so defining it before the app loads
+ * makes the real frontend run against fixtures — no Rust, no network.
+ */
 
 export interface AppOptions {
   /** false boots into the sign-in gate. */
@@ -52,15 +54,19 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
   };
 
   await page.addInitScript((cfg) => {
-    // Which document load is this? The init script runs once per navigation,
-    // so a localStorage counter (fresh per test context) tells reloads apart.
+    /**
+     * Which document load is this? The init script runs once per navigation,
+     * so a localStorage counter (fresh per test context) tells reloads apart.
+     */
+
     const load = Number(localStorage.getItem("e2e:load") ?? "0");
     localStorage.setItem("e2e:load", String(load + 1));
     const byLoad = cfg.detailByLoad;
     const detail = byLoad
       ? byLoad[Math.min(load, byLoad.length - 1)]
       : cfg.detail;
-    // Per-call sequences (clamped to their last entry).
+    /** Per-call sequences (clamped to their last entry). */
+
     let detailCalls = 0;
     let inboxCalls = 0;
     const seq = (arr: unknown[] | null, n: number, fallback: unknown) =>
@@ -82,8 +88,6 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
       set_watched_repos: () => null,
       search_repos: () =>
         new Promise((resolve) => setTimeout(() => resolve(cfg.repoHits), 200)),
-      // Viewed marks persist in localStorage so they survive a reload, like
-      // the real Rust JSON file survives an app restart.
       get_viewed_map: () =>
         JSON.parse(localStorage.getItem("e2e:viewed") ?? "{}"),
       set_viewed_map: (args) => {
@@ -107,8 +111,6 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
         threadId: null,
         resolved: false,
       }),
-      // Persist the flip into the fixture detail so the invalidation refetch
-      // that follows the optimistic update agrees with it (like the hosts do).
       resolve_thread: (args) => {
         for (const c of cfg.detail.comments as Array<{
           threadId: string | null;
@@ -120,8 +122,6 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
       },
       create_issue_comment: () =>
         cfg.hangIssueComment ? new Promise(() => {}) : null,
-      // Recorded so tests can assert the wire payload (e.g. multi-line
-      // comments carrying startLine).
       submit_review: (args) => {
         localStorage.setItem("e2e:lastReview", JSON.stringify(args));
         return null;
@@ -131,8 +131,6 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
       "plugin:opener|open": () => null,
     };
 
-    // configurable: a test may call setupApp again with different options —
-    // the later init script's bridge must be able to replace this one.
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
       configurable: true,
       value: {

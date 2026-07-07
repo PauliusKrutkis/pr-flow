@@ -5,7 +5,6 @@ import { queryClient } from "./lib/queryClient";
 import { KeyboardProvider } from "./keyboard";
 import App from "./App";
 
-// Quiet type palette, bundled locally so it resolves offline in Tauri.
 import "@fontsource/inter/latin-400.css";
 import "@fontsource/inter/latin-500.css";
 import "@fontsource/inter/latin-600.css";

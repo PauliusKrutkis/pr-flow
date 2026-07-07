@@ -1,6 +1,9 @@
-// shadcn-style Tabs — Radix roving-focus tablist (arrow-key nav, aria-selected,
-// correct tab/tabpanel wiring) themed by the Quiet system. Used by the Inbox to
-// switch between Review requests · Assigned · Created · Involved.
+/**
+ * shadcn-style Tabs — Radix roving-focus tablist (arrow-key nav, aria-selected,
+ * correct tab/tabpanel wiring) themed by the Quiet system. Used by the Inbox to
+ * switch between Review requests · Assigned · Created · Involved.
+ */
+
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { forwardRef } from "react";
 import { cn } from "../lib/cn";

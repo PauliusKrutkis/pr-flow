@@ -20,9 +20,11 @@ export type Route =
   | { name: "inbox" }
   | { name: "review"; owner: string; repo: string; number: number };
 
-// ---- last-route persistence ("resume where you left off") --------------------
-// We remember the inbox/review screen you were last on (never the token/loading
-// screens) so the next launch reopens it instead of always landing on the inbox.
+/**
+ * We remember the inbox/review screen you were last on (never the token/loading
+ * screens) so the next launch reopens it instead of always landing on the inbox.
+ */
+
 const LAST_ROUTE_KEY = "pr-flow:lastRoute";
 type ResumableRoute = Extract<Route, { name: "inbox" } | { name: "review" }>;
 
@@ -54,7 +56,6 @@ export function loadLastRoute(): ResumableRoute | null {
   return null;
 }
 
-// ---- viewed-file persistence (debounced write to the Rust JSON file) ----
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingViewed: ViewedMap | null = null;
 function schedulePersistViewed(map: ViewedMap) {
@@ -73,12 +74,10 @@ function flushPersistViewed() {
     api.setViewedMap(map).catch((e) => console.error("persist viewed failed", e));
   }
 }
-// Best-effort flush of a pending write before the window goes away.
 if (typeof window !== "undefined") {
   window.addEventListener("beforeunload", flushPersistViewed);
 }
 
-// ---- last-seen tracking (local-only unread indicator, stored in localStorage) ----
 const LAST_SEEN_KEY = "pr-flow:lastSeen";
 function loadLastSeen(): Record<string, string> {
   try {
@@ -96,10 +95,12 @@ function saveLastSeen(map: Record<string, string>) {
   }
 }
 
-// ---- archived PRs ("e" in the inbox) -----------------------------------------
-// Archiving hides a PR from the inbox *until it updates again* — the Superhuman
-// "done" move. We store the updatedAt seen at archive time; any newer activity
-// resurfaces the PR on its own.
+/**
+ * Archiving hides a PR from the inbox *until it updates again* — the Superhuman
+ * "done" move. We store the updatedAt seen at archive time; any newer activity
+ * resurfaces the PR on its own.
+ */
+
 const DISMISSED_KEY = "pr-flow:dismissed";
 function loadDismissed(): Record<string, string> {
   try {
@@ -117,9 +118,11 @@ function saveDismissed(map: Record<string, string>) {
   }
 }
 
-// ---- pending review comments (drafts batched until submit) -------------------
-// Kept in the store (and localStorage) so leaving the review screen — or the
-// app — never loses a drafted comment.
+/**
+ * Kept in the store (and localStorage) so leaving the review screen — or the
+ * app — never loses a drafted comment.
+ */
+
 const PENDING_KEY = "pr-flow:pendingComments";
 function loadPending(): Record<string, PendingComment[]> {
   try {
@@ -138,7 +141,6 @@ function savePending(map: Record<string, PendingComment[]>) {
 }
 let pendingIdCounter = 0;
 
-// ---- issue tracker bases (per account) ---------------------------------------
 const TRACKERS_KEY = "pr-flow:issueTrackers";
 function loadTrackers(): Record<string, string> {
   try {
@@ -164,7 +166,6 @@ interface AppState {
   searchOpen: boolean;
   viewed: ViewedMap;
   lastSeen: Record<string, string>;
-  // Inbox view state, kept here so it survives navigating into/out of a PR.
   inboxTab: InboxTabKey;
   /** prKey of the highlighted PR, so the cursor follows the PR (not an index). */
   inboxSelectedKey: string | null;
@@ -176,14 +177,12 @@ interface AppState {
   inboxPaneVisible: boolean;
   setInboxPaneVisible: (visible: boolean) => void;
 
-  // navigation
   setRoute: (route: Route) => void;
   openReview: (owner: string, repo: string, number: number) => void;
   goInbox: () => void;
   setInboxTab: (tab: InboxTabKey) => void;
   setInboxSelectedKey: (key: string | null) => void;
 
-  // overlays
   openPalette: () => void;
   closePalette: () => void;
   togglePalette: () => void;
@@ -192,7 +191,6 @@ interface AppState {
   setSearchOpen: (open: boolean) => void;
   toggleSearch: () => void;
 
-  // viewed-file state
   setViewed: (map: ViewedMap) => void;
   isViewed: (prKey: string, file: string) => boolean;
   /**
@@ -213,11 +211,9 @@ interface AppState {
   ) => string[];
   viewedCount: (prKey: string) => number;
 
-  // unread tracking
   markSeen: (prKey: string, updatedAt: string) => void;
   isUnread: (prKey: string, updatedAt: string) => boolean;
 
-  // archive ("done until it updates")
   dismissed: Record<string, string>;
   /** The most recent archive, so `z` can undo it. */
   lastDismissedKey: string | null;
@@ -225,14 +221,12 @@ interface AppState {
   undoDismiss: () => void;
   isDismissed: (prKey: string, updatedAt: string) => boolean;
 
-  // accounts
   accounts: AccountInfo[];
   activeAccountId: string | null;
   setAccounts: (info: AccountsInfo) => void;
   /** Switch the backend's active account, then reload so every cache swaps. */
   switchAccount: (id: string) => void;
 
-  // pending review comments, keyed by prKey
   pendingComments: Record<string, PendingComment[]>;
   addPendingComment: (
     prKey: string,
@@ -340,7 +334,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   isUnread: (prKey, updatedAt) => {
     const seen = get().lastSeen[prKey];
-    // Unseen entirely, or updated since we last opened it.
     if (!seen) return true;
     return new Date(updatedAt).getTime() > new Date(seen).getTime();
   },
@@ -362,7 +355,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   isDismissed: (prKey, updatedAt) => {
     const at = get().dismissed[prKey];
-    // Archived, and the PR hasn't updated since — newer activity resurfaces it.
     if (!at) return false;
     return new Date(updatedAt).getTime() <= new Date(at).getTime();
   },
@@ -415,8 +407,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ accounts: info.accounts, activeAccountId: info.activeId }),
   switchAccount: (id) => {
     if (get().activeAccountId === id) return;
-    // Land on the inbox after the reload — the previous account's last route
-    // (e.g. a PR) doesn't exist in the new one.
     saveLastRoute({ name: "inbox" });
     api
       .setActiveAccount(id)

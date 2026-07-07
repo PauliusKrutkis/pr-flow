@@ -43,7 +43,6 @@ export default function App() {
   const inboxPaneVisible = useAppStore((s) => s.inboxPaneVisible);
   const [trackerOpen, setTrackerOpen] = useState(false);
 
-  // Toasts self-dismiss (archive undo, failed optimistic actions, …).
   useEffect(() => {
     if (!toast) return;
     const t = window.setTimeout(() => setToast(null), 8_000);
@@ -52,14 +51,11 @@ export default function App() {
 
   useLoadViewed();
 
-  // Re-apply the persisted zoom factor on boot.
   useEffect(() => {
     const z = loadZoom();
     if (z !== 1) void applyZoom(z);
   }, []);
 
-  // Overlay scrollbars: thumbs are invisible until their container actually
-  // scrolls (see index.css). Capture-phase so every scroll container reports.
   useEffect(() => {
     const timers = new WeakMap<Element, number>();
     function onScroll(e: Event) {
@@ -77,8 +73,6 @@ export default function App() {
     return () => window.removeEventListener("scroll", onScroll, true);
   }, []);
 
-  // Boot: token gate, or resume the screen you were last on (falling back to
-  // the inbox). `setRoute` here intentionally restores the persisted route.
   useEffect(() => {
     api
       .hasToken()
@@ -89,7 +83,8 @@ export default function App() {
     api.listAccounts().then(setAccounts).catch(() => {});
   }, [setRoute, setAccounts]);
 
-  // Accounts in the palette: ⌘1…⌘9 switch, plus an "Add account" entry.
+  /** Accounts in the palette: ⌘1…⌘9 switch, plus an "Add account" entry. */
+
   const accountBindings: Binding[] = [
     ...accounts.slice(0, 9).map(
       (a, i): Binding => ({
@@ -114,7 +109,6 @@ export default function App() {
     },
   ];
 
-  // Shortcuts available everywhere (registered without changing active scope).
   useHotkeys(
     "global",
     [
@@ -181,8 +175,11 @@ export default function App() {
 
   const baseScope = route.name === "review" ? "review" : "inbox";
 
-  // macOS runs with titleBarStyle: Overlay — the traffic lights float over our
-  // canvas, and this slim strip gives them room and acts as the drag handle.
+  /**
+   * macOS runs with titleBarStyle: Overlay — the traffic lights float over our
+   * canvas, and this slim strip gives them room and acts as the drag handle.
+   */
+
   const isMac = navigator.userAgent.includes("Macintosh");
 
   return (

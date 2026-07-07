@@ -14,14 +14,17 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { Check, Copy } from "lucide-react";
 import { cn } from "../lib/cn";
 
-// GitHub PR/issue bodies routinely contain raw HTML (Dependabot's <details>
-// release notes, <blockquote>, tables, etc.) and treat single newlines as
-// line breaks. Plain react-markdown + remark-gfm renders neither, which made
-// such descriptions look malformed. So we:
-//   - remark-breaks: soft line breaks -> <br> (GitHub-style)
-//   - rehype-raw: actually render embedded HTML
-//   - rehype-sanitize: strip anything unsafe (GitHub-like allowlist),
-//     extended to permit <details>/<summary> collapsibles.
+/**
+ * GitHub PR/issue bodies routinely contain raw HTML (Dependabot's <details>
+ * release notes, <blockquote>, tables, etc.) and treat single newlines as
+ * line breaks. Plain react-markdown + remark-gfm renders neither, which made
+ * such descriptions look malformed. So we:
+ * - remark-breaks: soft line breaks -> <br> (GitHub-style)
+ * - rehype-raw: actually render embedded HTML
+ * - rehype-sanitize: strip anything unsafe (GitHub-like allowlist),
+ * extended to permit <details>/<summary> collapsibles.
+ */
+
 const sanitizeSchema = {
   ...defaultSchema,
   tagNames: [...(defaultSchema.tagNames ?? []), "details", "summary"],
@@ -41,14 +44,6 @@ function Anchor({ href, children, node: _node, ...rest }: AnchorProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// ```suggestion fences (GitHub) and GitLab's ```suggestion:-0+0 variants are
-// proposed replacements for the commented line(s), not code samples — render
-// them as a distinct card instead of a plain code block. The fence language
-// survives sanitization because the default schema keeps /^language-./
-// classNames on <code>.
-// ---------------------------------------------------------------------------
-
 /** The fence language of a hast <code> node, or null. */
 function fenceLang(node: unknown): string | null {
   const cls = (node as { properties?: { className?: unknown } } | undefined)
@@ -61,7 +56,6 @@ function fenceLang(node: unknown): string | null {
 }
 
 function isSuggestionLang(lang: string | null): boolean {
-  // "suggestion" or GitLab's ranged form "suggestion:-0+2".
   return lang != null && (lang === "suggestion" || lang.startsWith("suggestion:"));
 }
 
@@ -85,7 +79,8 @@ function SuggestionCard({ text }: { text: string }) {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
-  // An empty suggestion body is a valid "delete these lines" proposal.
+  /** An empty suggestion body is a valid "delete these lines" proposal. */
+
   const body = text.replace(/\n$/, "");
   const lines = body.split("\n");
   return (

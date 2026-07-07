@@ -36,7 +36,6 @@ function toCaps(combo: string): string[] {
   if (combo.includes("+")) {
     return combo.split("+").filter(Boolean);
   }
-  // A bare two-character token (no named key) is a vim-style sequence.
   if (combo.length === 2 && !NAMED[combo.toLowerCase()]) {
     return [combo[0], combo[1]];
   }

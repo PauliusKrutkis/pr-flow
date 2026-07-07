@@ -1,28 +1,35 @@
-// Intraline (word-level) diff emphasis — the GitHub convention where a
-// modified line's −/+ pair emphasizes only the spans that actually differ:
-// `return retryCount` → `return retryLimit` emphasizes `Count`/`Limit`, not
-// the whole line. This module is pure: it pairs del/add rows within a hunk,
-// token-diffs each pair, and reports per-side changed column ranges. The
-// render side layers them as marks (see highlight.ts / DiffViewer).
+/**
+ * Intraline (word-level) diff emphasis — the GitHub convention where a
+ * modified line's −/+ pair emphasizes only the spans that actually differ:
+ * `return retryCount` → `return retryLimit` emphasizes `Count`/`Limit`, not
+ * the whole line. This module is pure: it pairs del/add rows within a hunk,
+ * token-diffs each pair, and reports per-side changed column ranges. The
+ * render side layers them as marks (see highlight.ts / DiffViewer).
+ */
 
 import type { DiffHunk, DiffRow } from "./diff";
 
 /** Changed [start, end) column ranges within one line's content. */
 export type IntralineRanges = Array<[number, number]>;
 
-// ---- noise guards -----------------------------------------------------------
-// Emphasizing everything is worse than emphasizing nothing: a rewritten line
-// wearing wall-to-wall emphasis is pure noise. So a pair only qualifies when
-// the lines are mostly the same:
-//  - at least 40% of the busier side's substantive (non-whitespace) tokens
-//    must be common to both lines, else the "diff" is really a replacement;
-//  - at most 8 changed spans per side — beyond that the emphasis reads as
-//    confetti even when the ratio passes (e.g. every argument renamed);
-//  - empty/whitespace-only lines never pair meaningfully.
+/**
+ * Emphasizing everything is worse than emphasizing nothing: a rewritten line
+ * wearing wall-to-wall emphasis is pure noise. So a pair only qualifies when
+ * the lines are mostly the same:
+ * - at least 40% of the busier side's substantive (non-whitespace) tokens
+ * must be common to both lines, else the "diff" is really a replacement;
+ * - at most 8 changed spans per side — beyond that the emphasis reads as
+ * confetti even when the ratio passes (e.g. every argument renamed);
+ * - empty/whitespace-only lines never pair meaningfully.
+ */
+
 const MIN_COMMON_RATIO = 0.4;
 const MAX_SPANS = 8;
-// Token-count product cap for the O(n·m) LCS — past this the line is minified
-// or generated, where intraline emphasis has no audience anyway.
+/**
+ * Token-count product cap for the O(n·m) LCS — past this the line is minified
+ * or generated, where intraline emphasis has no audience anyway.
+ */
+
 const MAX_LCS_WORK = 10_000;
 
 interface Token {
@@ -34,11 +41,14 @@ interface Token {
   ws: boolean;
 }
 
-// A line tiles completely into: identifier pieces, whitespace runs, and single
-// symbols. Word runs (\w+) are further split at camelCase humps and
-// underscores so a rename like retryCount → retryLimit isolates `Count`, which
-// is both what a reviewer wants emphasized and what keeps the common-token
-// ratio honest (`retry` counts as common).
+/**
+ * A line tiles completely into: identifier pieces, whitespace runs, and single
+ * symbols. Word runs (\w+) are further split at camelCase humps and
+ * underscores so a rename like retryCount → retryLimit isolates `Count`, which
+ * is both what a reviewer wants emphasized and what keeps the common-token
+ * ratio honest (`retry` counts as common).
+ */
+
 const RUN_RE = /\w+|\s+|[^\w\s]/g;
 const WORD_PIECE_RE = /[a-z0-9]+|[A-Z]+(?![a-z])|[A-Z][a-z0-9]*|_+/g;
 
@@ -73,7 +83,8 @@ export function tokenize(line: string): Token[] {
 function lcsCommon(a: Token[], b: Token[]): { a: boolean[]; b: boolean[] } {
   const n = a.length;
   const m = b.length;
-  // dp[i][j] = LCS length of a[i..] vs b[j..], flattened.
+  /** dp[i][j] = LCS length of a[i..] vs b[j..], flattened. */
+
   const dp = new Uint16Array((n + 1) * (m + 1));
   const at = (i: number, j: number) => i * (m + 1) + j;
   for (let i = n - 1; i >= 0; i--) {
@@ -134,7 +145,6 @@ export function intralineDiff(
   if (a.length * b.length > MAX_LCS_WORK) return null;
   const substantiveA = a.filter((t) => !t.ws).length;
   const substantiveB = b.filter((t) => !t.ws).length;
-  // Empty or whitespace-only on either side: nothing to compare against.
   if (substantiveA === 0 || substantiveB === 0) return null;
 
   const common = lcsCommon(a, b);
@@ -147,8 +157,6 @@ export function intralineDiff(
 
   const del = changedRanges(a, common.a);
   const add = changedRanges(b, common.b);
-  // Identical lines (or whitespace-only churn the ratio let through with
-  // nothing substantive changed): no emphasis to draw.
   if (del.length === 0 && add.length === 0) return null;
   if (del.length > MAX_SPANS || add.length > MAX_SPANS) return null;
   return { del, add };

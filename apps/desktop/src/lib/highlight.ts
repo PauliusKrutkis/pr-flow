@@ -3,9 +3,11 @@ import { parsePatch } from "./diff";
 import { findMatchRangesInLine } from "./findInDiff";
 import { occurrenceRangesInLine } from "./occurrences";
 
-// Best-effort, per-line syntax highlighting for the diff viewer. Highlighting
-// is done line-by-line (so diff backgrounds can layer behind tokens), memoized,
-// and degrades gracefully to escaped plain text when the language is unknown.
+/**
+ * Best-effort, per-line syntax highlighting for the diff viewer. Highlighting
+ * is done line-by-line (so diff backgrounds can layer behind tokens), memoized,
+ * and degrades gracefully to escaped plain text when the language is unknown.
+ */
 
 const LANG_BY_EXT: Record<string, string> = {
   ts: "typescript",
@@ -91,9 +93,12 @@ function escapeHtml(s: string): string {
 
 const cache = new Map<string, string>();
 
-// Languages whose block comments continue as ` * …` lines. Highlighting is
-// per-line, so a continuation line has no `/*` opener and would otherwise be
-// tokenized as code (identifiers, operators) instead of reading as a comment.
+/**
+ * Languages whose block comments continue as ` * …` lines. Highlighting is
+ * per-line, so a continuation line has no `/*` opener and would otherwise be
+ * tokenized as code (identifiers, operators) instead of reading as a comment.
+ */
+
 const C_BLOCK_COMMENT_LANGS = new Set([
   "typescript",
   "javascript",
@@ -114,7 +119,8 @@ const C_BLOCK_COMMENT_LANGS = new Set([
   "protobuf",
 ]);
 
-// `* text`, a bare `*`, or a closing star-slash — a block-comment continuation.
+/** `* text`, a bare `*`, or a closing star-slash — a block-comment continuation. */
+
 const COMMENT_CONTINUATION = /^\s*\*(?:$|[\s/])/;
 
 /**
@@ -141,8 +147,6 @@ export function highlightLine(code: string, filename: string): string {
     html = escapeHtml(code);
   }
 
-  // Sized so the idle warm-up below can hold a large PR's every line at once
-  // (a wholesale clear mid-warm would thrash); entries are short HTML strings.
   if (cache.size > 30_000) cache.clear();
   cache.set(key, html);
   return html;
@@ -178,7 +182,8 @@ export function warmHighlightCache(
 
   function pump(deadline?: IdleDeadline) {
     if (cancelled) return;
-    // Without requestIdleCallback (WebKit), take small fixed bites instead.
+    /** Without requestIdleCallback (WebKit), take small fixed bites instead. */
+
     const budgetEnd = performance.now() + 6;
     while (i < queue.length) {
       const out =
@@ -251,7 +256,8 @@ function wrapMarkRanges(html: string, ranges: MarkRange[]): string {
     const len = node.data.length;
     const start = offset;
     offset += len;
-    // Overlaps of the match ranges with this text node, in local coordinates.
+    /** Overlaps of the match ranges with this text node, in local coordinates. */
+
     const local: MarkRange[] = [];
     for (const r of ranges) {
       const s = Math.max(r.start - start, 0);

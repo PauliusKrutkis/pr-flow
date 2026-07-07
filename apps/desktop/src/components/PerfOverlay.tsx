@@ -1,7 +1,9 @@
 import { usePerfStore } from "../lib/perf";
 
-// Dev-only perceived-performance HUD: "⚡ PR open 84 ms · file 4 ms".
-// Tree-shaken out of release builds via the import.meta.env.DEV guard.
+/**
+ * Dev-only perceived-performance HUD: "⚡ PR open 84 ms · file 4 ms".
+ * Tree-shaken out of release builds via the import.meta.env.DEV guard.
+ */
 
 function fmt(ms: number | null): string {
   if (ms == null) return "—";

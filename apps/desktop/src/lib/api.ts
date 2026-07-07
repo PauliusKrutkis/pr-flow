@@ -14,11 +14,12 @@ import type {
   ViewedMap,
 } from "../types";
 
-// Thin, typed wrappers over the Rust Tauri commands. Argument keys are
-// camelCase; Tauri converts them to the snake_case Rust parameters.
+/**
+ * Thin, typed wrappers over the Rust Tauri commands. Argument keys are
+ * camelCase; Tauri converts them to the snake_case Rust parameters.
+ */
 
 export const api = {
-  // ---- auth ----
   hasToken: () => invoke<boolean>("has_token"),
   isOAuthConfigured: () => invoke<boolean>("is_oauth_configured"),
   loginWithGithub: () => invoke<GitHubUser>("login_with_github"),
@@ -34,25 +35,21 @@ export const api = {
   clearToken: () => invoke<void>("clear_token"),
   getCurrentUser: () => invoke<GitHubUser>("get_current_user"),
 
-  // ---- accounts ----
   listAccounts: () => invoke<AccountsInfo>("list_accounts"),
   addAccount: (args: { provider: string; host?: string | null; token: string }) =>
     invoke<AccountInfo>("add_account", args),
   setActiveAccount: (id: string) => invoke<void>("set_active_account", { id }),
   removeAccount: (id: string) => invoke<AccountsInfo>("remove_account", { id }),
 
-  // ---- inbox (all tabs in one GraphQL request) ----
   listInbox: () => invoke<InboxData>("list_inbox"),
   getCachedInbox: () => invoke<InboxData | null>("get_cached_inbox"),
 
-  // ---- watched repositories ("Watching" tab) ----
   searchRepos: (query: string) => invoke<RepoHit[]>("search_repos", { query }),
   getWatchedRepos: () => invoke<string[]>("get_watched_repos"),
   setWatchedRepos: (repos: string[]) => invoke<void>("set_watched_repos", { repos }),
   listSubscribed: () => invoke<InboxBucket>("list_subscribed"),
   getCachedSubscribed: () => invoke<InboxBucket | null>("get_cached_subscribed"),
 
-  // ---- pull request detail ----
   getPullRequestDetail: (owner: string, repo: string, number: number) =>
     invoke<PullRequestDetail>("get_pull_request_detail", { owner, repo, number }),
   getCachedPullRequestDetail: (owner: string, repo: string, number: number) =>
@@ -62,7 +59,6 @@ export const api = {
       number,
     }),
 
-  // ---- comments ----
   createReviewComment: (args: {
     owner: string;
     repo: string;
@@ -111,17 +107,14 @@ export const api = {
     }[];
   }) => invoke<void>("submit_review", args),
 
-  // ---- file blobs (image diffs) ----
   getFileBlob: (owner: string, repo: string, path: string, ref: string) =>
     invoke<FileBlob>("get_file_blob", { owner, repo, path, ref }),
 
-  // ---- viewed-file state (local only) ----
   /** Raw persisted JSON — may still be the legacy `prKey -> string[]` shape
    *  on older installs; callers run it through normalizeViewedMap. */
   getViewedMap: () => invoke<unknown>("get_viewed_map"),
   setViewedMap: (map: ViewedMap) => invoke<void>("set_viewed_map", { map }),
 
-  // ---- auto-update ----
   checkForUpdate: () => invoke<UpdateInfo | null>("check_for_update"),
   installUpdate: () => invoke<void>("install_update"),
 };

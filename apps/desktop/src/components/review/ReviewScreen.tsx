@@ -85,6 +85,19 @@ import { PrSearch } from "./PrSearch";
 import { FindBar } from "./FindBar";
 import { OverviewRuler } from "./OverviewRuler";
 
+/**
+ * Full-screen PR review: a virtualized diff list, keyboard cursor, multi-line
+ * selection, find-in-diff, and inline comment threads.
+ *
+ * Interaction model:
+ * - The line cursor (j/k, hover, jumps) is the source of truth for the active
+ *   file — wheel scrolling alone does not move it.
+ * - Collapsed hunks and open composers feed the flattened item model.
+ * - Multi-line selection (shift+j/k, gutter drag) is independent of the
+ *   cursor once created; plain cursor moves collapse it.
+ * - Find-in-diff (mod+f) seeds from the viewport, not the top of the PR.
+ */
+
 interface ReviewScreenProps {
   owner: string;
   repo: string;
@@ -127,91 +140,56 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const detail = data;
   const pr = detail?.pr;
 
-  // Resume position for this PR (captured once per mount, before edits).
   const [initialMem] = useState(() => getReviewMemory(keyValue));
 
-  // The "current" file: what the keyboard talks to and the sidebar highlights.
-  // The CURSOR is the source of truth — it moves via j/k, hover, file
-  // navigation, and search. Plain wheel-scrolling deliberately does NOT move
-  // it: a scroll-derived highlight flaps at boundaries, and you haven't
-  // committed to a file until you touch it (the sticky group header always
-  // names what's on screen).
   const [activeIndex, setActiveIndex] = useState(initialMem?.fileIndex ?? 0);
-  // The info drawer starts closed — the diff dominates until `i` opens it.
   const [rightOpen, setRightOpen] = useState(false);
   const rightOpenRef = useLatest(rightOpen);
   const [commentIndex, setCommentIndex] = useState(0);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [prSearch, setPrSearch] = useState<null | "files" | "text">(null);
-  // Files whose content moved out from under a viewed mark. Feeds the quiet
-  // per-file "updated" affordances (sidebar dot, header chip) instead of a
-  // sticky banner — the signal lives ON the files it's about, and marking a
-  // file viewed again acknowledges it away.
   const [changedSinceViewed, setChangedSinceViewed] = useState<Set<string>>(
     () => new Set(),
   );
-  // A pending "open this thread's reply composer" request (the `r` key),
-  // mirroring the jump/seed nonce pattern so repeats on the same thread
-  // re-fire. Routed to the FileSection whose file matches `path`.
   const [replyReq, setReplyReq] = useState<
     { rootId: number; path: string; nonce: number } | null
   >(null);
 
-  // ---- the flattened list's interaction state --------------------------------
-  // Collapsed hunks and open composers feed the item model (collapsing removes
-  // rows from the list; an open composer IS an item), so they live here, keyed
-  // by file.
   const [collapsed, setCollapsed] = useState<
     ReadonlyMap<number, ReadonlySet<number>>
   >(EMPTY_COLLAPSED);
   const [openBoxes, setOpenBoxes] = useState<ReadonlyMap<string, number | null>>(
     () => new Map<string, number | null>(),
   );
-  // The line cursor (j/k, hover, jumps) — tracked by (file, anchor) so it
-  // stays on the same logical line when hunks collapse or the list rebuilds.
   const [cursor, setCursor] = useState<CursorPos | null>(null);
-  // The multi-line comment range (shift+j/k, gutter drag). Independent of the
-  // cursor once created, so hover can't tear it — but any plain cursor move
-  // (j/k), file jump, or composer close collapses it, editor-style.
   const [selection, setSelection] = useState<LineSelection | null>(null);
-  // A gutter drag is in flight — the "+" travels with the range's moving end
-  // while this is true (state, not a ref: the rows must repaint with it).
   const [dragging, setDragging] = useState(false);
-  // Last input modality — drives which single "+" affordance shows (cursor
-  // row vs hovered row) so there's never two.
   const [inputMode, setInputMode] = useState<"keyboard" | "mouse">("keyboard");
-  // The row briefly lit after a search/find jump (fileAnchorKey).
   const [flashKey, setFlashKey] = useState<string | null>(null);
-  // Group-header path copy confirmation (which file index, if any).
   const [copiedPathIndex, setCopiedPathIndex] = useState<number | null>(null);
 
-  // Find-in-diff (mod+f): an editor-style bar over the diff, not a modal.
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState("");
   const [findCase, setFindCase] = useState(false);
-  // The concrete match position once the user has navigated (Enter/arrows);
-  // null means "not navigated yet — derive the current match from the
-  // viewport seed", which is what makes find start from what you're looking
-  // at instead of the top of the PR (editor/browser convention).
   const [findIndex, setFindIndex] = useState<number | null>(null);
-  // The first rendered item index when the query last changed — the seed the
-  // current match derives from. Item indexes come straight from the
-  // virtualizer, so no layout reads are involved.
   const [findSeed, setFindSeed] = useState<number | null>(null);
-  // Bumped when mod+f fires while the bar is already open → refocus/select.
   const [findFocusSeq, setFindFocusSeq] = useState(0);
-  // The first Enter lands on the match already counted as current (the
-  // viewport-seeded one, say "9/17"); only subsequent presses advance.
+  /**
+   * The first Enter lands on the match already counted as current (the
+   * viewport-seeded one, say "9/17"); only subsequent presses advance.
+   */
+
   const findJumpedRef = useRef(false);
   const findOpenRef = useLatest(findOpen);
 
-  // Selection-occurrence highlighting: click or select a token in the diff
-  // and its other occurrences in THAT FILE light up (editor convention).
   const [occSpec, setOccSpec] = useState<OccState | null>(null);
   const occSpecRef = useLatest(occSpec);
-  // Repainting rows with marks replaces their text nodes, which would kill
-  // the very selection that triggered the marks. The selection's position is
-  // captured before the spec applies and restored after the repaint.
+  /**
+   * Repainting rows with marks replaces their text nodes, which would kill
+   * the very selection that triggered the marks. The selection's position is
+   * captured before the spec applies and restored after the repaint.
+   */
+
   const occRestoreRef = useRef<CapturedSelection | null>(null);
   const occNavRef = useRef(-1);
   const occOriginRef = useRef<{ anchor: string; column: number } | null>(null);
@@ -222,17 +200,24 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveStateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replyNonceRef = useRef(0);
-  // The thread `r` replies to: whatever the pointer is over, or the last stop
-  // of ]c/[c. A ref (not state) — hover must never re-render the screen.
+  /**
+   * The thread `r` replies to: whatever the pointer is over, or the last stop
+   * of ]c/[c. A ref (not state) — hover must never re-render the screen.
+   */
+
   const activeThreadRef = useRef<{ rootId: number; path: string } | null>(null);
 
   const goInbox = useAppStore((s) => s.goInbox);
   const toggleViewed = useAppStore((s) => s.toggleViewed);
   const reconcileViewed = useAppStore((s) => s.reconcileViewed);
-  // Subscribe to the viewed map so the sidebar and headers stay reactive.
+  /** Subscribe to the viewed map so the sidebar and headers stay reactive. */
+
   const viewed = useAppStore((s) => s.viewed);
-  // Pending review comments live in the store, so leaving the screen (or the
-  // app) never drops a draft.
+  /**
+   * Pending review comments live in the store, so leaving the screen (or the
+   * app) never drops a draft.
+   */
+
   const pendingMap = useAppStore((s) => s.pendingComments);
   const pending = pendingMap[keyValue] ?? EMPTY_PENDING;
   const addPendingStore = useAppStore((s) => s.addPendingComment);
@@ -257,7 +242,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const clampedIndex = Math.min(activeIndex, Math.max(fileCount - 1, 0));
   const activeFile = files[clampedIndex];
 
-  // Live refs so rAF-coalesced handlers and stable callbacks read fresh state.
   const activeIndexRef = useLatest(clampedIndex);
   const fileCountRef = useLatest(fileCount);
   const filesRef = useLatest(files);
@@ -265,13 +249,10 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     detail?.comments ?? EMPTY_COMMENTS,
   );
 
-  // A changed file list can re-anchor or drop threads — stale reply targets
-  // must not survive it.
   useEffect(() => {
     activeThreadRef.current = null;
   }, [files]);
 
-  // Per-file comment buckets for the item model.
   const commentsByFile = useMemo(() => {
     const m = new Map<string, ReviewComment[]>();
     for (const c of detail?.comments ?? []) {
@@ -291,9 +272,12 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     return m;
   }, [pending]);
 
-  // The whole PR as ONE flattened, virtualized list (see lib/reviewItems).
-  // Plain computation — the React Compiler caches it on its inputs; the
-  // blocking react-doctor gate flags any future compile bailout.
+  /**
+   * The whole PR as ONE flattened, virtualized list (see lib/reviewItems).
+   * Plain computation — the React Compiler caches it on its inputs; the
+   * blocking react-doctor gate flags any future compile bailout.
+   */
+
   const model: ReviewListModel = buildReviewItems({
     files,
     isImage: isImageFile,
@@ -304,16 +288,22 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   });
   const modelRef = useLatest(model);
 
-  // A cursor orphaned by a collapse simply stops APPLYING (derived, not
-  // cleared in an effect) — it reappears from the viewport on the next j/k.
+  /**
+   * A cursor orphaned by a collapse simply stops APPLYING (derived, not
+   * cleared in an effect) — it reappears from the viewport on the next j/k.
+   */
+
   const liveCursor =
     cursor && model.navIndexOf.has(fileAnchorKey(cursor.fileIndex, cursor.anchor))
       ? cursor
       : null;
 
-  // Same doctrine for the selection: if either end no longer resolves (hunk
-  // collapsed, file list changed), it stops applying. Normalized to item
-  // order here — the list paints [fromItem..toItem], `c` anchors at the end.
+  /**
+   * Same doctrine for the selection: if either end no longer resolves (hunk
+   * collapsed, file list changed), it stops applying. Normalized to item
+   * order here — the list paints [fromItem..toItem], `c` anchors at the end.
+   */
+
   const liveSelection = (() => {
     if (!selection) return null;
     const a = model.anchorItem.get(
@@ -329,22 +319,17 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       hunkIndex: selection.hunkIndex,
       fromItem: Math.min(a, b),
       toItem: Math.max(a, b),
-      // The MOVING end (un-normalized) — where the traveling "+" paints.
       endItem: b,
     };
   })();
   const selectionRef = useLatest(selection);
   const liveSelectionRef = useLatest(liveSelection);
 
-  // Warm the per-line highlight cache in idle time: rows highlight as they
-  // render into the viewport, and a warm cache keeps fast scrolling smooth.
   useEffect(() => {
     if (files.length === 0) return;
     return warmHighlightCache(files);
   }, [files]);
 
-  // Seed the head sha on open (recording open latency), then only speak up if
-  // the PR's head *moves while you're reviewing it*.
   useEffect(() => {
     if (!pr) return;
     const seen = mountShaRef.current;
@@ -357,8 +342,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     if (pr.headSha && pr.headSha !== seen) {
       mountShaRef.current = pr.headSha;
       updateReviewMemory(keyValue, { headSha: pr.headSha });
-      // Transient by design: "new code arrived" is an event, not a state —
-      // the durable signal is the per-file "updated" marks.
       setToast({
         title: "Pull request updated",
         message: "Showing the latest changes.",
@@ -366,9 +349,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     }
   }, [pr, keyValue, setToast]);
 
-  // When the inbox heartbeat (60s poll / window focus) sees this PR move past
-  // what the detail payload knows, refetch the detail right away. The ref
-  // gates one nudge per observed updatedAt.
   const { data: inboxHeartbeat } = useInbox();
   const nudgedForRef = useRef("");
   useEffect(() => {
@@ -402,10 +382,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     }
   }, [inboxHeartbeat, pr, owner, repo, number]);
 
-  // Auto-unview: a viewed mark vouches for the content you saw — whenever
-  // detail data lands, each mark's stored fingerprint is checked against the
-  // current diff; mismatches are unviewed and announced. Idempotent, so the
-  // re-run its own write triggers settles immediately.
   useEffect(() => {
     if (!pr || files.length === 0) return;
     const unviewed = reconcileViewed(keyValue, files, pr.headSha);
@@ -425,21 +401,21 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     }
   }, [pr, files, viewedFiles, keyValue, reconcileViewed, setToast]);
 
-  // Persist the current file for resume — but only once the real file list is
-  // known, so the placeholder index 0 (while detail loads) can't clobber a
-  // saved position if the user quits mid-load.
   useEffect(() => {
     if (!detail || fileCount === 0) return;
     updateReviewMemory(keyValue, { fileIndex: clampedIndex });
   }, [detail, fileCount, clampedIndex, keyValue]);
 
-  // Anchor-exact resume correction: restoreStateFrom applies the snapshot at
-  // mount, but its scrollTop replays against height ESTIMATES — an engine or
-  // font that measures rows differently shows a spot several rows off (the
-  // webkit CI leg caught a deterministic 183px). A settle loop measures the
-  // saved top row's REAL position each frame and nudges scrollTop by the
-  // delta until it holds — geometry-exact, and immune to the virtualizer's
-  // own late restore adjustments (which clobbered a one-shot correction).
+  /**
+   * Anchor-exact resume correction: restoreStateFrom applies the snapshot at
+   * mount, but its scrollTop replays against height ESTIMATES — an engine or
+   * font that measures rows differently shows a spot several rows off (the
+   * webkit CI leg caught a deterministic 183px). A settle loop measures the
+   * saved top row's REAL position each frame and nudges scrollTop by the
+   * delta until it holds — geometry-exact, and immune to the virtualizer's
+   * own late restore adjustments (which clobbered a one-shot correction).
+   */
+
   const resumeCorrectedRef = useRef(false);
   useEffect(() => {
     if (resumeCorrectedRef.current) return;
@@ -460,7 +436,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         `[data-anchor="${t.anchor}"][data-file-index="${t.fileIndex}"]`,
       );
       if (!row) {
-        // Snapshot landed too far for the row to be rendered — jump close.
         if (idx != null) listRef.current?.scrollItemTo(idx, t.top);
       } else {
         const delta =
@@ -482,7 +457,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     return () => cancelAnimationFrame(raf);
   }, [detail, initialMem, modelRef]);
 
-  // Record file-switch latency after the paint that follows the switch.
   useEffect(() => {
     requestAnimationFrame(() => usePerfStore.getState().completeFile());
   }, [clampedIndex]);
@@ -500,8 +474,11 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Scroll → debounce → snapshot the virtualizer state into review memory.
-  // The snapshot IS the resume position (restoreStateFrom on next mount).
+  /**
+   * Scroll → debounce → snapshot the virtualizer state into review memory.
+   * The snapshot IS the resume position (restoreStateFrom on next mount).
+   */
+
   function handleListScroll() {
     if (saveStateTimerRef.current) clearTimeout(saveStateTimerRef.current);
     saveStateTimerRef.current = setTimeout(() => {
@@ -517,20 +494,27 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     if (el) el.scrollBy({ top: dir * el.clientHeight * 0.85 });
   }
 
-  // ---- the line cursor (j/k, hover) ------------------------------------------
-  // One cursor for the whole PR: the flattened nav list makes cross-file
-  // movement ordinary stepping (the seed/exit handoff the per-file viewers
-  // needed is gone).
+  /**
+   * One cursor for the whole PR: the flattened nav list makes cross-file
+   * movement ordinary stepping (the seed/exit handoff the per-file viewers
+   * needed is gone).
+   */
 
   const cursorRef = useLatest(liveCursor);
-  // Only auto-scroll the cursor into view for explicit user moves — never for
-  // hover sync or auto-correction, so the mouse never fights the view.
+  /**
+   * Only auto-scroll the cursor into view for explicit user moves — never for
+   * hover sync or auto-correction, so the mouse never fights the view.
+   */
+
   const userMovedCursorRef = useRef(false);
 
-  // Pointer-intent gate. Scrolling under a stationary pointer fires hover
-  // events with unchanged coordinates, which would steal the cursor right
-  // back after every j/k or jump. While a keyboard action "holds" the cursor,
-  // hover only wins once the pointer has genuinely moved (> 6px).
+  /**
+   * Pointer-intent gate. Scrolling under a stationary pointer fires hover
+   * events with unchanged coordinates, which would steal the cursor right
+   * back after every j/k or jump. While a keyboard action "holds" the cursor,
+   * hover only wins once the pointer has genuinely moved (> 6px).
+   */
+
   const keyboardHoldRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
   const isRealPointer = (x: number, y: number): boolean => {
@@ -551,16 +535,22 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     return false;
   };
 
-  // Cursor movement is coalesced per animation frame: rapid key-repeats (and
-  // direction changes) accumulate a net delta applied once. Holding j/k
-  // accelerates: ~¼s of key-repeat moves 3 lines per repeat, ~¾s six.
+  /**
+   * Cursor movement is coalesced per animation frame: rapid key-repeats (and
+   * direction changes) accumulate a net delta applied once. Holding j/k
+   * accelerates: ~¼s of key-repeat moves 3 lines per repeat, ~¾s six.
+   */
+
   const pendingDeltaRef = useRef(0);
   const cursorRafRef = useRef<number | null>(null);
   const heldRepeatsRef = useRef(0);
 
-  // buildCursorMover is stateless over refs (like buildOccNav): instances
-  // are interchangeable and built at event time in the hotkey handlers, so
-  // nothing render-scoped is captured by the rAF-coalesced flush.
+  /**
+   * buildCursorMover is stateless over refs (like buildOccNav): instances
+   * are interchangeable and built at event time in the hotkey handlers, so
+   * nothing render-scoped is captured by the rAF-coalesced flush.
+   */
+
   const cursorMoverRefs = {
     modelRef,
     cursorRef,
@@ -576,11 +566,12 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     setInputMode,
   };
 
-  // ---- multi-line selection (shift+j/k, gutter drag) --------------------------
+  /**
+   * shift+j/k: grow (or shrink) the range one row at a time. The moving end
+   * follows the keyboard; the cursor rides along so the accent and any
+   * follow-up `c` agree about where you are.
+   */
 
-  // shift+j/k: grow (or shrink) the range one row at a time. The moving end
-  // follows the keyboard; the cursor rides along so the accent and any
-  // follow-up `c` agree about where you are.
   function extendSelection(delta: 1 | -1) {
     const m = modelRef.current;
     keyboardHoldRef.current = true;
@@ -596,7 +587,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         delta,
       );
       if (!next) return;
-      // Shrinking back over the fixed end collapses the range entirely.
       if (next === sel.from) {
         setSelection(null);
         setCursor({ fileIndex: sel.fileIndex, anchor: next });
@@ -608,10 +598,10 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       if (itemIndex != null) listRef.current?.nudgeItemIntoView(itemIndex);
       return;
     }
-    // No range yet: seed one from the cursor row (side/hunk come from it).
+    /** No range yet: seed one from the cursor row (side/hunk come from it). */
+
     const cur = cursorRef.current;
     if (!cur) {
-      // No cursor either — shift+j just reveals it, like a plain j.
       buildCursorMover(cursorMoverRefs).move(delta, false);
       return;
     }
@@ -638,10 +628,13 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     if (itemIndex != null) listRef.current?.nudgeItemIntoView(itemIndex);
   }
 
-  // Gutter drag (press the "+" and pull): the same range state as shift+j/k.
-  // Pointer capture keeps events on the button, so the target row comes from
-  // hit-testing — and the cursor is steered here (rows get no mouseenter
-  // while captured).
+  /**
+   * Gutter drag (press the "+" and pull): the same range state as shift+j/k.
+   * Pointer capture keeps events on the button, so the target row comes from
+   * hit-testing — and the cursor is steered here (rows get no mouseenter
+   * while captured).
+   */
+
   const dragRef = useRef<{
     fileIndex: number;
     side: string;
@@ -649,7 +642,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     from: string;
   } | null>(null);
 
-  // Hovering a row moves the cursor (without scrolling) and claims the file.
+  /** Hovering a row moves the cursor (without scrolling) and claims the file. */
+
   const cbRef = useLatest({
     onRowEnter(fileIndex: number, anchor: string, x: number, y: number) {
       if (!isRealPointer(x, y)) return;
@@ -672,10 +666,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         next.delete(fileAnchorKey(fileIndex, anchor));
         return next;
       });
-      // Closing the composer retires the range it was anchored to.
       setSelection(null);
     },
-    // ---- gutter drag → range selection ----
     onPlusDragStart(fileIndex: number, anchor: string) {
       const m = modelRef.current;
       const item = m.items[m.anchorItem.get(fileAnchorKey(fileIndex, anchor)) ?? -1];
@@ -696,9 +688,12 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         setSelection(null);
         return;
       }
-      // Walk from the fixed end toward the pointer row, one selectable step
-      // at a time; a break (hunk/side/file) clamps the range at the last
-      // valid row instead of jumping past it.
+      /**
+       * Walk from the fixed end toward the pointer row, one selectable step
+       * at a time; a break (hunk/side/file) clamps the range at the last
+       * valid row instead of jumping past it.
+       */
+
       const m = modelRef.current;
       const fromIdx = m.navIndexOf.get(fileAnchorKey(fileIndex, d.from));
       const toIdx = m.navIndexOf.get(fileAnchorKey(fileIndex, anchor));
@@ -737,7 +732,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       const live = liveSelectionRef.current;
       const m = modelRef.current;
       if (live && live.fileIndex === d.fileIndex) {
-        // Open the composer under the range's END row, carrying the start.
         const endItem = m.items[live.toItem];
         const startItem = m.items[live.fromItem];
         if (endItem?.kind === "row" && endItem.anchor && startItem?.kind === "row") {
@@ -749,7 +743,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
           return;
         }
       }
-      // No range formed — the press was a click: single-line composer.
       cbRef.current.onOpenBox(d.fileIndex, d.from);
     },
     onToggleHunk(fileIndex: number, hunkIndex: number) {
@@ -819,8 +812,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       setInputMode((mo) => (mo === "mouse" ? mo : "mouse"));
     },
   });
-  // Stable callback identities (built once, dispatching to the latest
-  // implementations) so the memoized rows never repaint over handler churn.
   const [listCallbacks] = useState<ReviewListCallbacks>(() => {
     const r = cbRef;
     return {
@@ -846,8 +837,11 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   function commentAtCursor() {
     const m = modelRef.current;
-    // A live range wins: the composer opens under its END row and carries
-    // the start line (the multi-line anchor both hosts expect).
+    /**
+     * A live range wins: the composer opens under its END row and carries
+     * the start line (the multi-line anchor both hosts expect).
+     */
+
     const sel = liveSelectionRef.current;
     if (sel) {
       const endItem = m.items[sel.toItem];
@@ -877,28 +871,23 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     cbRef.current.onOpenBox(entry.fileIndex, entry.anchor);
   }
 
-  // ---- file navigation --------------------------------------------------------
-
   function scrollToFile(i: number) {
     if (fileCountRef.current === 0) return;
     const target = Math.min(Math.max(i, 0), fileCountRef.current - 1);
     usePerfStore.getState().markFileStart();
     setActiveIndex(target);
-    // Eager ref sync: the useLatest write lands after React commits, but the
-    // next rAF-coalesced file move can flush BEFORE that — rapid r/t presses
-    // were reading the stale index and losing steps.
     activeIndexRef.current = target;
     setCommentIndex(0);
-    // Navigating away is moving on — stale occurrence marks would just be
-    // mystery highlights with their selection off-screen. Same for a line
-    // range left behind in another file.
     setOccSpec(null);
     setSelection(null);
     listRef.current?.scrollToFileStart(target);
   }
 
-  // r/t/Tab are coalesced per animation frame, mirroring the line cursor:
-  // holding the key accumulates a net delta applied once per frame.
+  /**
+   * r/t/Tab are coalesced per animation frame, mirroring the line cursor:
+   * holding the key accumulates a net delta applied once per frame.
+   */
+
   const fileDeltaRef = useRef(0);
   const fileRafRef = useRef<number | null>(null);
   function flushFileMove() {
@@ -918,15 +907,19 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const nextFile = () => moveFile(1);
   const prevFile = () => moveFile(-1);
 
-  // Tab cycles with wrap-around: past the last file it returns to the first.
+  /** Tab cycles with wrap-around: past the last file it returns to the first. */
+
   function cycleFile(dir: number) {
     const n = fileCountRef.current;
     if (n === 0) return;
     scrollToFile((activeIndexRef.current + dir + n) % n);
   }
 
-  // From file search: open the file and seat the cursor on its first line,
-  // so `c` (and j/k) work immediately without a hover.
+  /**
+   * From file search: open the file and seat the cursor on its first line,
+   * so `c` (and j/k) work immediately without a hover.
+   */
+
   function selectFileFromSearch(fileIndex: number) {
     scrollToFile(fileIndex);
     const entry = modelRef.current.nav.find((n) => n.fileIndex === fileIndex);
@@ -937,7 +930,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     }
   }
 
-  // From text search / find / occurrence jumps: land on the matched line.
+  /** From text search / find / occurrence jumps: land on the matched line. */
+
   function selectLine(
     fileIndex: number,
     anchor: string,
@@ -949,10 +943,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     setActiveIndex(fileIndex);
     activeIndexRef.current = fileIndex; // eager — see scrollToFile
     setCommentIndex(0);
-    // A search jump is navigation too — drop stale occurrence marks. Two
-    // exceptions: with the find bar open the occurrence state is frozen (and
-    // suppressed), and occurrence NAVIGATION rides selectLine to move BETWEEN
-    // the marks — clearing would tear them down mid-walk.
     if (!findOpenRef.current && !opts.keepOccurrences) setOccSpec(null);
     keyboardHoldRef.current = true;
     setInputMode("keyboard");
@@ -963,14 +953,18 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     const itemIndex = m.anchorItem.get(key);
     if (itemIndex != null) listRef.current?.centerItem(itemIndex);
   }
-  // Ref'd so the mount-once click handler (occurrence-mark jumps) never calls
-  // a stale closure.
+  /**
+   * Ref'd so the mount-once click handler (occurrence-mark jumps) never calls
+   * a stale closure.
+   */
+
   const selectLineRef = useLatest(selectLine);
 
-  // ---- find in diff (mod+f) ---------------------------------------------------
+  /**
+   * Matches come from the PATCH TEXT (lib/findInDiff), so rows far outside
+   * the rendered window count too; only rendered rows pay for highlighting.
+   */
 
-  // Matches come from the PATCH TEXT (lib/findInDiff), so rows far outside
-  // the rendered window count too; only rendered rows pay for highlighting.
   const findMatches =
     findOpen && findQuery
       ? findInDiff(files, findQuery, { caseSensitive: findCase })
@@ -982,24 +976,34 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     setFindSeed(listRef.current?.firstVisibleRowItem() ?? null);
   }
 
-  // The first match at/after the captured viewport position, wrapping to the
-  // top when everything is behind you (editors anchor find to the caret; ours
-  // is the viewport). Matches inside collapsed hunks have no item index and
-  // are skipped for seeding purposes.
+  /**
+   * The first match at/after the captured viewport position, wrapping to the
+   * top when everything is behind you (editors anchor find to the caret; ours
+   * is the viewport). Matches inside collapsed hunks have no item index and
+   * are skipped for seeding purposes.
+   */
+
   const findSeededIndex = seededMatchIndex(findMatches, model, findSeed);
 
-  // The file list can change under an open bar (PR head moved) — stay valid.
+  /** The file list can change under an open bar (PR head moved) — stay valid. */
+
   const findSafeIndex =
     findMatches.length > 0
       ? Math.min(findIndex ?? findSeededIndex, findMatches.length - 1)
       : 0;
 
-  // The current match as (row anchor, occurrence ordinal). Matches on one
-  // line are adjacent in the list, so the ordinal is the run-length behind.
+  /**
+   * The current match as (row anchor, occurrence ordinal). Matches on one
+   * line are adjacent in the list, so the ordinal is the run-length behind.
+   */
+
   const findCurrent = currentMatchAt(findMatches, findSafeIndex);
 
-  // Every query edit re-anchors to the viewport: after a jump the viewport IS
-  // the last match, so typing more keeps searching from where you are.
+  /**
+   * Every query edit re-anchors to the viewport: after a jump the viewport IS
+   * the last match, so typing more keeps searching from where you are.
+   */
+
   function changeFindQuery(q: string) {
     captureFindSeed();
     setFindQuery(q);
@@ -1014,26 +1018,31 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   }
   function openFind() {
     if (!findOpenRef.current) {
-      // Reopening with a kept query still re-seeds from wherever you are now.
       captureFindSeed();
       setFindIndex(null);
       findJumpedRef.current = false;
       setFindOpen(true);
-      // Browser convention: selected diff text seeds the query on open.
+      /** Browser convention: selected diff text seeds the query on open. */
+
       const selected =
         window.getSelection()?.toString().split("\n")[0].trim() ?? "";
       if (selected) changeFindQuery(selected);
     }
-    // Already open: just refocus and select the input (FindBar effect).
     setFindFocusSeq((s) => s + 1);
   }
-  // Closing clears the find highlights (marks fall back to the selection's
-  // occurrences, if any); focus falls back to the document — j/k works.
+  /**
+   * Closing clears the find highlights (marks fall back to the selection's
+   * occurrences, if any); focus falls back to the document — j/k works.
+   */
+
   function closeFind() {
     setFindOpen(false);
   }
-  // Enter/next/prev: the first press jumps to the CURRENT match, later ones
-  // step (with wrap-around).
+  /**
+   * Enter/next/prev: the first press jumps to the CURRENT match, later ones
+   * step (with wrap-around).
+   */
+
   function findStep(dir: 1 | -1) {
     const n = findMatches.length;
     if (n === 0) return;
@@ -1046,14 +1055,18 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     selectLine(m.fileIndex, m.anchor);
   }
 
-  // The occurrence spec's matches across its WHOLE file, from the patch text.
+  /** The occurrence spec's matches across its WHOLE file, from the patch text. */
+
   const occMatchList = occSpec
     ? occurrenceMatches(files[occSpec.fileIndex] ?? {}, occSpec)
     : EMPTY_OCC;
   const occMatchListRef = useLatest(occMatchList);
 
-  // Occurrence navigation: buildOccNav is stateless over refs, so instances
-  // are interchangeable and built where they're used.
+  /**
+   * Occurrence navigation: buildOccNav is stateless over refs, so instances
+   * are interchangeable and built where they're used.
+   */
+
   const occNavRefs = {
     occMatchListRef,
     occSpecRef,
@@ -1062,12 +1075,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     selectLineRef,
   };
 
-  // ---- selection → occurrence highlights --------------------------------------
-
-  // Two ways in, VS Code-style: a single CLICK on a token marks its other
-  // occurrences, and a drag/double-click SELECTION marks arbitrary selected
-  // text. The selectionchange listener is debounced and only ever SETS marks —
-  // clearing belongs to clicks on non-word code, Esc, and file navigation.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const occNav = buildOccNav({
@@ -1078,8 +1085,11 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       selectLineRef,
     });
 
-    // Skip identity-preserving updates entirely: no repaint on selection
-    // noise, and no pointless selection restore.
+    /**
+     * Skip identity-preserving updates entirely: no repaint on selection
+     * noise, and no pointless selection restore.
+     */
+
     function commit(next: OccState | null) {
       const prev = occSpecRef.current;
       occOriginRef.current = next ? occurrenceOriginFromDom() : null;
@@ -1118,7 +1128,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       const container = sel.getRangeAt(0).commonAncestorContainer;
       const el =
         container instanceof Element ? container : container.parentElement;
-      // Only selections inside ONE diff code line qualify.
+      /** Only selections inside ONE diff code line qualify. */
+
       const code = codeAround(el);
       if (!code) return null;
       const fileIndex = fileIndexOf(code);
@@ -1158,8 +1169,11 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       if (!code) return null;
       const fileIndex = fileIndexOf(code);
       if (fileIndex == null) return null;
-      // Expand over the WHOLE LINE's text, not the caret's text node: marks
-      // fragment a line into many text nodes.
+      /**
+       * Expand over the WHOLE LINE's text, not the caret's text node: marks
+       * fragment a line into many text nodes.
+       */
+
       const text = code.textContent ?? "";
       const nodeStart = codeColumnOf(code, node);
       if (nodeStart == null) return null;
@@ -1169,8 +1183,11 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       while (s > 0 && /\w/.test(text[s - 1])) s -= 1;
       while (e < text.length && /\w/.test(text[e])) e += 1;
       if (s === e) return null;
-      // The word's glyph box must actually contain the click point:
-      // caret-from-point snaps to the NEAREST text position.
+      /**
+       * The word's glyph box must actually contain the click point:
+       * caret-from-point snaps to the NEAREST text position.
+       */
+
       const start = codePositionAt(code, s);
       const end = codePositionAt(code, e);
       if (!start || !end) return null;
@@ -1187,12 +1204,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
     function apply() {
       timer = null;
-      // While the find bar is open its marks own the diff — freeze occurrence
-      // state instead of updating it.
       if (findOpenRef.current) return;
       const sel = window.getSelection();
-      // A collapsed selection is silence, not a clear: the click that
-      // collapsed it decides what happens.
       if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
       commit(specFromDomSelection());
     }
@@ -1204,18 +1217,21 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
     function onClick(e: MouseEvent) {
       if (findOpenRef.current) return;
-      // The later clicks of a double-click ride the selection path instead.
       if (e.detail > 1) return;
       const target = e.target instanceof Element ? e.target : null;
-      // Clicks outside code lines (gutters, sidebar, buttons) leave the marks
-      // alone — Esc and navigation are their exits.
       if (!codeAround(target)) return;
-      // A click that ends a drag-select carries the selection — that path
-      // owns it.
+      /**
+       * A click that ends a drag-select carries the selection — that path
+       * owns it.
+       */
+
       const sel = window.getSelection();
       if (sel && !sel.isCollapsed) return;
-      // Clicking an EXISTING occurrence mark navigates instead of
-      // re-committing the same spec.
+      /**
+       * Clicking an EXISTING occurrence mark navigates instead of
+       * re-committing the same spec.
+       */
+
       const mark = target?.closest("mark.qf-occ-mark");
       if (mark && occSpecRef.current) {
         const code = codeAround(mark);
@@ -1238,23 +1254,22 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       document.removeEventListener("click", onClick);
       if (timer != null) clearTimeout(timer);
     };
-    // All deps are refs (compiler-stable): attaches once in practice.
   }, [findOpenRef, occSpecRef, occMatchListRef, occNavRef, occOriginRef, selectLineRef]);
 
-  // Re-select what the user had selected, over the row's freshly-painted text
-  // nodes, before the browser paints — so the selection appears to simply
-  // survive the marks appearing under it.
   useLayoutEffect(() => {
     const captured = occRestoreRef.current;
     occRestoreRef.current = null;
     if (captured) restoreCodeSelection(captured);
   }, [occSpec]);
 
-  // One marks identity, changing only with the query. Find wins while its bar
-  // is open (even with an empty query): two mark systems at once is noise.
-  // With the list virtualized, marks flow to every RENDERED row — a viewport-
-  // sized set — so the per-section gating the windowed implementation needed
-  // no longer exists.
+  /**
+   * One marks identity, changing only with the query. Find wins while its bar
+   * is open (even with an empty query): two mark systems at once is noise.
+   * With the list virtualized, marks flow to every RENDERED row — a viewport-
+   * sized set — so the per-section gating the windowed implementation needed
+   * no longer exists.
+   */
+
   const marks: MarkSpec | null = findOpen
     ? findQuery
       ? { kind: "find", query: findQuery, caseSensitive: findCase }
@@ -1268,8 +1283,11 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         }
       : null;
 
-  // Overview ruler ticks: item-index fractions of the whole list. Matches
-  // inside collapsed hunks have no item and simply don't tick.
+  /**
+   * Overview ruler ticks: item-index fractions of the whole list. Matches
+   * inside collapsed hunks have no item and simply don't tick.
+   */
+
   const rulerFractions: number[] =
     model.items.length === 0
       ? EMPTY_FRACTIONS
@@ -1289,12 +1307,18 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
             })
           : EMPTY_FRACTIONS;
 
-  // Declared above the closures that read it: the PR head sha, ref'd so
-  // stable callbacks stamp the CURRENT head.
+  /**
+   * Declared above the closures that read it: the PR head sha, ref'd so
+   * stable callbacks stamp the CURRENT head.
+   */
+
   const headShaRef = useLatest(pr?.headSha ?? "");
 
-  // Marks are stamped with the file's current content fingerprint, so a later
-  // push that touches the file can drop the mark (see the reconcile effect).
+  /**
+   * Marks are stamped with the file's current content fingerprint, so a later
+   * push that touches the file can drop the mark (see the reconcile effect).
+   */
+
   const toggleViewedWithFp = (f: ChangedFile) => {
     toggleViewed(keyValue, f.filename, fingerprintFile(f, headShaRef.current));
     setChangedSinceViewed((prev) => {
@@ -1308,15 +1332,19 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   function toggleViewedFile() {
     if (activeFile) toggleViewedWithFp(activeFile);
   }
-  // `e`: toggle the current file's viewed state. Marking advances to the next
-  // file; UNmarking stays put (you're revisiting, not moving on).
+  /**
+   * `e`: toggle the current file's viewed state. Marking advances to the next
+   * file; UNmarking stays put (you're revisiting, not moving on).
+   */
+
   function markViewedAndNext() {
     if (!activeFile) return;
     const wasViewed = viewedSet.has(activeFile.filename);
     toggleViewedWithFp(activeFile);
     if (!wasViewed) scrollToFile(activeIndexRef.current + 1);
   }
-  // Both copies confirm through the shared toast host.
+  /** Both copies confirm through the shared toast host. */
+
   function copyLink() {
     if (!pr?.url) return;
     void navigator.clipboard?.writeText(pr.url).catch(() => {});
@@ -1328,7 +1356,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     setToast({ title: "Copied file path", message: activeFile.filename });
   }
 
-  // After submitting, jump to the next review-requested PR (or back to inbox).
+  /** After submitting, jump to the next review-requested PR (or back to inbox). */
+
   function advanceAfterSubmit() {
     const inbox = queryClient.getQueryData<InboxData>(queryKeys.inbox);
     const list = inbox?.reviewRequested.prs ?? [];
@@ -1350,11 +1379,14 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     }
   }
 
-  // From the drawer's "Code discussion" index: close it and land on the
-  // thread's comment block. The item model knows every comment (rendered or
-  // not); the flash retries briefly because the centered item needs a frame
-  // to render into the window. Outdated threads whose file isn't in this
-  // diff have nowhere to go — no-op.
+  /**
+   * From the drawer's "Code discussion" index: close it and land on the
+   * thread's comment block. The item model knows every comment (rendered or
+   * not); the flash retries briefly because the centered item needs a frame
+   * to render into the window. Outdated threads whose file isn't in this
+   * diff have nowhere to go — no-op.
+   */
+
   const threadFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   function jumpToThread(path: string, rootId: number) {
     const m = modelRef.current;
@@ -1397,17 +1429,23 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     requestAnimationFrame(land);
   }
 
-  // ]c/[c walk the comment blocks by ITEM index — virtualization means
-  // off-screen comments have no DOM to query, but the model knows them all.
+  /**
+   * ]c/[c walk the comment blocks by ITEM index — virtualization means
+   * off-screen comments have no DOM to query, but the model knows them all.
+   */
+
   function goToComment(delta: number) {
     const list = modelRef.current.commentItems;
     if (list.length === 0) return;
     const next = (commentIndex + delta + list.length) % list.length;
     setCommentIndex(next);
     listRef.current?.centerItem(list[next]);
-    // The stop becomes the `r` reply target — the item model knows the
-    // thread root directly (pending-only blocks carry no threads and clear
-    // the target).
+    /**
+     * The stop becomes the `r` reply target — the item model knows the
+     * thread root directly (pending-only blocks carry no threads and clear
+     * the target).
+     */
+
     const item = modelRef.current.items[list[next]];
     activeThreadRef.current =
       item?.kind === "comments" && item.threads.length > 0
@@ -1418,9 +1456,12 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         : null;
   }
 
-  // `r`: reply to the hovered/]c-focused thread when there is one (and its
-  // root still exists in the cache — it may have vanished on a refetch);
-  // otherwise keep its historical meaning, next file.
+  /**
+   * `r`: reply to the hovered/]c-focused thread when there is one (and its
+   * root still exists in the cache — it may have vanished on a refetch);
+   * otherwise keep its historical meaning, next file.
+   */
+
   function replyToActiveThreadOrNextFile() {
     const t = activeThreadRef.current;
     if (t && commentsRef.current.some((c) => c.id === t.rootId)) {
@@ -1431,10 +1472,13 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     nextFile();
   }
 
-  // `x`: flip the hovered/]c-focused thread's resolved state. Same target as
-  // `r`, but no fallback meaning — with no thread under aim, nothing happens.
-  // The root is re-read from the cache: threadId/resolved must be current, and
-  // the thread may have vanished on a refetch.
+  /**
+   * `x`: flip the hovered/]c-focused thread's resolved state. Same target as
+   * `r`, but no fallback meaning — with no thread under aim, nothing happens.
+   * The root is re-read from the cache: threadId/resolved must be current, and
+   * the thread may have vanished on a refetch.
+   */
+
   function resolveActiveThread() {
     const t = activeThreadRef.current;
     if (!t) return;
@@ -1448,7 +1492,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     setSubmitOpen(true);
   }
 
-  // Optimistic: close + advance immediately; the network settles behind you.
+  /** Optimistic: close + advance immediately; the network settles behind you. */
+
   function handleSubmitReview(event: ReviewEvent, body: string) {
     const payload = {
       event,
@@ -1481,7 +1526,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       group: "Navigation",
       icon: ArrowDown,
       run: (e) => {
-        // Plain movement collapses the range, editor-style.
         setSelection(null);
         buildCursorMover(cursorMoverRefs).move(1, e.repeat);
       },
@@ -1532,8 +1576,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       run: prevFile,
     },
     {
-      // Tab is repurposed Superhuman-style: instead of wandering focus, it
-      // cycles files with wrap-around (Shift+Tab goes back).
       keys: "tab",
       description: "Cycle files",
       group: "Files",
@@ -1603,7 +1645,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       icon: ExternalLink,
       run: () => {
         if (!pr) return;
-        // GitHub's files tab is /files; GitLab's is /diffs.
+        /** GitHub's files tab is /files; GitLab's is /diffs. */
+
         const files = pr.url.includes("/-/merge_requests/") ? "/diffs" : "/files";
         void openUrl(pr.url + files);
       },
@@ -1616,7 +1659,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       run: copyLink,
     },
     {
-      // The editor convention (VS Code's "copy path" chord family).
       keys: "mod+shift+c",
       description: "Copy file path",
       group: "Files",
@@ -1651,8 +1693,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       icon: TextSearch,
       run: openFind,
     },
-    // While the find bar is open, Enter / F3 / mod+g step through matches even
-    // after focus has returned to the diff.
     ...(findOpen
       ? ([
           {
@@ -1669,7 +1709,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
           },
         ] satisfies Binding[])
       : []),
-    // While a token's occurrences are marked, n/p walk between them.
     ...(occSpec
       ? ([
           {
@@ -1687,8 +1726,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         ] satisfies Binding[])
       : []),
     {
-      // Esc walks out one layer at a time: line selection, find bar, the
-      // info drawer, then the inbox.
       keys: "esc",
       description: "Close panel / back to inbox",
       group: "Navigation",
@@ -1702,8 +1739,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     },
   ]);
 
-  // No detail yet: either still loading, or the fetch failed with nothing
-  // cached — show an escape hatch instead of a forever spinner.
   if (!detail || !pr) {
     if (isError) {
       return (
@@ -1725,8 +1760,11 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         </div>
       );
     }
-    // Cold cache: no full-screen loader — paint the review shell with what the
-    // inbox already knows and skeleton the rest.
+    /**
+     * Cold cache: no full-screen loader — paint the review shell with what the
+     * inbox already knows and skeleton the rest.
+     */
+
     const cached = findCachedInboxPr(owner, repo, number);
     return (
       <div className="dir-quiet relative flex h-full min-h-0 overflow-hidden">
@@ -1818,16 +1856,16 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const viewedNow = viewedSet.size;
   const isOwnPr = !!activeLogin && pr.author === activeLogin;
   const reviews = detail.reviews ?? [];
-  // The i-button badge counts everything the drawer can show: PR-level
-  // comments, review verdicts that said something, and inline thread roots —
-  // so a "quiet-looking" PR still advertises its conversation.
+  /**
+   * The i-button badge counts everything the drawer can show: PR-level
+   * comments, review verdicts that said something, and inline thread roots —
+   * so a "quiet-looking" PR still advertises its conversation.
+   */
+
   const convoCount =
     (detail.issueComments?.length ?? 0) +
     reviews.filter((r) => r.body.trim().length > 0).length +
     detail.comments.filter((c) => c.inReplyToId == null).length;
-  // Design principle: no loading states — mutations are optimistic, so the
-  // composers never enter a busy mode.
-
   return (
     <div className="dir-quiet relative flex h-full min-h-0 overflow-hidden">
       <aside className="w-[300px] shrink-0 border-r border-line">
@@ -2060,9 +2098,6 @@ function buildCursorMover(refs: {
     const curIdx = cur
       ? m.navIndexOf.get(fileAnchorKey(cur.fileIndex, cur.anchor))
       : undefined;
-    // First move (or a cursor orphaned by a collapse) just reveals the
-    // cursor — on the first row still visible in the viewport, so a mid-file
-    // reader isn't yanked anywhere.
     if (curIdx === undefined) {
       const start = refs.listRef.current?.firstVisibleRowItem() ?? 0;
       const entry = m.nav.find((n) => n.itemIndex >= start) ?? m.nav[0];
@@ -2134,7 +2169,6 @@ function buildOccNav(refs: {
     if (at < 0) {
       const origin = occOriginRef.current;
       const found = origin ? indexAt(origin.anchor, origin.column) : -1;
-      // No resolvable origin: n starts at the first match, p at the last.
       at = found >= 0 ? found : dir > 0 ? -1 : 0;
     }
     jumpTo(at + dir);
@@ -2262,8 +2296,6 @@ function captureCodeSelection(): CapturedSelection | null {
     if (node === range.endContainer) end = offset + range.endOffset;
     offset += node.data.length;
   }
-  // Boundaries on elements (not text nodes) don't happen for text selections
-  // we care about — bail rather than guess.
   if (start < 0 || end < 0 || start >= end) return null;
   return { code, start, end };
 }
@@ -2315,7 +2347,6 @@ function findCachedInboxPr(
       if (hit) return hit;
     }
   }
-  // PRs from watched repos live in their own bucket, not the inbox payload.
   return queryClient
     .getQueryData<InboxBucket>(queryKeys.subscribed)
     ?.prs.find(match);

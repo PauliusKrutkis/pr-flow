@@ -37,7 +37,6 @@ test("tab cycles tabs; digits jump directly", async ({ page }) => {
     "data-state",
     "active",
   );
-  // Watching is empty in fixtures → the full-bleed zero state with its action.
   await expect(page.getByRole("button", { name: /Watch a repository/ })).toBeVisible();
   await page.keyboard.press("1");
 });

@@ -1,12 +1,18 @@
-// Minimal, dependency-free markdown renderer — enough for PR descriptions and
-// comment bodies in the mock: headings, paragraphs, lists, blockquotes, fenced
-// code, and inline code / bold / italic / links. Emits semantic tags inside a
-// `.md` wrapper so each direction can style prose in its own voice.
+/**
+ * Minimal, dependency-free markdown renderer — enough for PR descriptions and
+ * comment bodies in the mock: headings, paragraphs, lists, blockquotes, fenced
+ * code, and inline code / bold / italic / links. Emits semantic tags inside a
+ * `.md` wrapper so each direction can style prose in its own voice.
+ */
+
 import { Fragment, type ReactNode } from "react";
 
 function inline(text: string, keyBase: string): ReactNode[] {
-  // Order matters: code first (so we don't format inside it), then links,
-  // bold, italic.
+  /**
+   * Order matters: code first (so we don't format inside it), then links,
+   * bold, italic.
+   */
+
   const out: ReactNode[] = [];
   const re =
     /(`[^`]+`)|(\[[^\]]+\]\([^)]+\))|(\*\*[^*]+\*\*)|(\*[^*]+\*)|(_[^_]+_)/g;
@@ -101,7 +107,6 @@ export function Markdown({
       const level = heading[1].length;
       const content = inline(heading[2], `h${key}`);
       const k = key++;
-      // Map md levels to h2–h4 (h1 is reserved for the page chrome).
       if (level <= 1) blocks.push(<h2 key={k}>{content}</h2>);
       else if (level === 2) blocks.push(<h3 key={k}>{content}</h3>);
       else blocks.push(<h4 key={k}>{content}</h4>);

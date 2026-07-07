@@ -2,10 +2,12 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "./test";
 import { setupApp } from "./bridge";
 
-// The rich composer: a WYSIWYG surface that submits markdown. ⌘B/⌘I/⌘E
-// toggle real formatting (no symbols on the surface), ⌘K links the selection
-// through an inline url input, markdown typing shortcuts autoconvert, and the
-// suggestion block round-trips to the ```suggestion fence both hosts apply.
+/**
+ * The rich composer: a WYSIWYG surface that submits markdown. ⌘B/⌘I/⌘E
+ * toggle real formatting (no symbols on the surface), ⌘K links the selection
+ * through an inline url input, markdown typing shortcuts autoconvert, and the
+ * suggestion block round-trips to the ```suggestion fence both hosts apply.
+ */
 
 function box(page: Page) {
   return page.getByRole("textbox", { name: "Add a review comment…" });
@@ -16,7 +18,6 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByRole("option").first()).toBeVisible();
   await page.keyboard.press("Enter");
   await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
-  // Open the line composer on the first visible row of fuzzy.ts.
   await page.keyboard.press("j");
   await page.keyboard.press("c");
   await expect(box(page)).toBeFocused();
@@ -29,7 +30,6 @@ test("mod+b bolds the selection for real — no symbols on the surface", async (
   await page.keyboard.press("Control+b");
   await expect(ed.locator("strong")).toHaveText("make this bold");
   await expect(ed).not.toContainText("**");
-  // The hint-bar toggle lights with the selection.
   await expect(page.getByRole("button", { name: "Bold" })).toHaveAttribute(
     "aria-pressed",
     "true",
@@ -49,7 +49,6 @@ test("mod+k links the selection via the inline url input", async ({ page }) => {
   await page.keyboard.type("docs");
   await page.keyboard.press("Control+a");
   await page.keyboard.press("Control+k");
-  // ⌘K stays in the composer — the command palette must NOT have opened.
   await expect(page.locator(".qc-input")).toHaveCount(0);
   const url = page.getByLabel("Link URL");
   await expect(url).toBeFocused();
@@ -64,7 +63,6 @@ test("rich text serializes to markdown on submit — bold survives the wire", as
   await page.keyboard.press("Control+b");
   await page.keyboard.press("Control+Enter"); // batch: "Add to review"
   await expect(page.getByText("Pending")).toBeVisible();
-  // The pending card renders from the markdown body the editor produced.
   await expect(page.locator(".qf-pending strong")).toHaveText("ship it");
 });
 
@@ -74,11 +72,8 @@ test("the suggestion block round-trips: insert, edit in place, pending card", as
   const sugg = ed.locator("pre code.language-suggestion");
   await expect(sugg).toHaveText("export function alpha() {");
   await expect(ed).toBeFocused();
-  // The prefilled line is selected — typing replaces it in place.
   await page.keyboard.type("export function alpha(): number {");
   await expect(sugg).toHaveText("export function alpha(): number {");
-  // Submit → serialized to a ```suggestion fence → the pending card's
-  // markdown renders it as the suggestion card.
   await page.keyboard.press("Control+Enter");
   await expect(page.getByText("Pending")).toBeVisible();
   await expect(page.locator(".qf-pending .md-suggestion-line")).toHaveText(

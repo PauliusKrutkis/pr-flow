@@ -1,4 +1,4 @@
-// Deterministic backend fixtures for the mocked Tauri bridge.
+/** Deterministic backend fixtures for the mocked Tauri bridge. */
 
 export const makePr = (
   n: number,
@@ -29,7 +29,6 @@ export const makePr = (
   deletions: 3,
   changedFiles: 2,
   body: "A **fixture** pull request.",
-  // PRs with comments also carry a reading-pane teaser, like the live list.
   lastComment:
     n === 1
       ? {
@@ -107,9 +106,6 @@ export const DETAIL = {
       additions: 5,
       deletions: 0,
       changes: 5,
-      // The last line deliberately ends in a WORD character (no semicolon):
-      // clicking the blank space right of it exercises the caret-snap guard
-      // in the occurrence-highlight click handler.
       patch: `@@ -0,0 +1,5 @@
 +export function search(q: string) {
 +  const gamma = q.trim();
@@ -124,14 +120,6 @@ export const DETAIL = {
       additions: 36,
       deletions: 1,
       changes: 37,
-      // Hunk 1 is a clean one-token rename: the −/+ pair passes the intraline
-      // noise guard, so exactly "Count"/"Limit" carry word-diff emphasis.
-      // (fuzzy.ts above pairs "return 1;" with a comment — that pair must
-      // FAIL the guard and render without emphasis.) Hunk 2 is a long pure-add
-      // run (no del run → no intraline pairs) that exercises the sticky hunk
-      // header, and its `@@` line carries the enclosing function the way git
-      // emits it. Keep this file free of the tokens other tests count across
-      // files: return/gamma/beta/alpha/search.
       patch: `@@ -1,4 +1,4 @@
  export function withRetry(fn: () => Promise<void>) {
 -  const retryCount = 3;
@@ -197,8 +185,6 @@ export const DETAIL = {
       threadId: "T100",
       resolved: false,
     },
-    // A reply carrying a ```suggestion fence — renders as the suggestion card.
-    // (Same thread: keeps the drawer's thread count stable for other tests.)
     {
       id: 101,
       path: "src/lib/fuzzy.ts",
@@ -260,8 +246,6 @@ export const DETAIL_CHANGED = {
  export const beta = true;`,
       sha: "f1b",
     },
-    // The push only reworks fuzzy.ts — search.ts and retry.ts are untouched,
-    // so their viewed marks must survive the reconcile.
     DETAIL.files[1],
     DETAIL.files[2],
   ],

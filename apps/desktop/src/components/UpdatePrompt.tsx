@@ -3,10 +3,12 @@ import { Download, RefreshCw } from "lucide-react";
 import { api } from "../lib/api";
 import type { UpdateInfo } from "../types";
 
-// "Update available" prompt. Checks the release feed on launch, then every few
-// hours and on window focus (best-effort — silent when the feed is
-// unreachable), so a long-running app still notices new releases. When a newer
-// signed build exists it offers a one-click install + relaunch.
+/**
+ * "Update available" prompt. Checks the release feed on launch, then every few
+ * hours and on window focus (best-effort — silent when the feed is
+ * unreachable), so a long-running app still notices new releases. When a newer
+ * signed build exists it offers a one-click install + relaunch.
+ */
 
 const RECHECK_MS = 4 * 60 * 60 * 1000;
 
@@ -31,7 +33,8 @@ export function UpdatePrompt() {
     }
     check();
     const timer = window.setInterval(() => check(), RECHECK_MS);
-    // Refocusing after a while is the natural "came back to the app" moment.
+    /** Refocusing after a while is the natural "came back to the app" moment. */
+
     const onFocus = () => check(30 * 60 * 1000);
     window.addEventListener("focus", onFocus);
     return () => {
@@ -47,8 +50,6 @@ export function UpdatePrompt() {
     setInstalling(true);
     setError(null);
     try {
-      // On success the backend relaunches into the new version, so control
-      // never returns here.
       await api.installUpdate();
     } catch (e) {
       setError(String(e));

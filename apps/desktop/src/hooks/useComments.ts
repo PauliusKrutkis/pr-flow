@@ -4,10 +4,12 @@ import { queryClient, queryKeys } from "../lib/queryClient";
 import { useAppStore } from "../store/appStore";
 import type { PullRequestDetail, ReviewComment, ReviewEvent } from "../types";
 
-// Comment mutations for a PR — OPTIMISTIC by design principle ("no loading
-// states"): the comment appears in the cached detail the moment you act, the
-// network reconciles in the background, and a failure rolls back + surfaces a
-// flash message instead of ever blocking the UI.
+/**
+ * Comment mutations for a PR — OPTIMISTIC by design principle ("no loading
+ * states"): the comment appears in the cached detail the moment you act, the
+ * network reconciles in the background, and a failure rolls back + surfaces a
+ * flash message instead of ever blocking the UI.
+ */
 
 let tempId = -1;
 
@@ -93,7 +95,8 @@ export function useCommentMutations(
     mutationFn: (args: { body: string; inReplyTo: number }) =>
       api.replyToReviewComment({ owner, repo, number, ...args }),
     onMutate: (args) => {
-      // Anchor the optimistic reply under its thread root.
+      /** Anchor the optimistic reply under its thread root. */
+
       const detail = queryClient.getQueryData<PullRequestDetail>(detailKey);
       const root = detail?.comments.find((c) => c.id === args.inReplyTo);
       return insertOptimistic(
@@ -143,9 +146,12 @@ export function useCommentMutations(
     onSettled: invalidate,
   });
 
-  // Optimistic thread resolution: every comment carrying the thread's handle
-  // flips at once (the state is mirrored across the thread), so the collapsed
-  // card appears instantly; failure rolls the flip back with a flash.
+  /**
+   * Optimistic thread resolution: every comment carrying the thread's handle
+   * flips at once (the state is mirrored across the thread), so the collapsed
+   * card appears instantly; failure rolls the flip back with a flash.
+   */
+
   const resolveThread = useMutation({
     mutationFn: (args: { threadId: string; resolved: boolean }) =>
       api.resolveThread({ owner, repo, number, ...args }),

@@ -1,16 +1,10 @@
 import { cn } from "../../lib/cn";
 
-// The overview ruler: a slim column of tick marks along the diff's right edge
-// showing where the active matches (find or selection occurrences) live in
-// the WHOLE scroll range — the distribution at a glance, like an editor's
-// scrollbar annotations.
-//
-// With the review scroll virtualized, positions come straight from the item
-// model: a match's fraction is its item index over the total item count. No
-// layout reads, no observers — the windowed implementation needed both.
+/**
+ * Past this many ticks the ruler is a solid bar, not a distribution — sample
+ * evenly instead (the current match always survives sampling).
+ */
 
-// Past this many ticks the ruler is a solid bar, not a distribution — sample
-// evenly instead (the current match always survives sampling).
 const MAX_TICKS = 200;
 
 interface OverviewRulerProps {

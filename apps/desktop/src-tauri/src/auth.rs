@@ -69,8 +69,8 @@ pub async fn login_with_github(app: AppHandle) -> Result<GitHubUser, String> {
     let (client_id, client_secret) = oauth_credentials()?;
     let state = make_state();
 
-    // Bind the loopback listener BEFORE opening the browser so the redirect
-    // never races a closed port.
+    /// Bind the loopback listener BEFORE opening the browser so the redirect
+    /// never races a closed port.
     let listener = TcpListener::bind(("127.0.0.1", OAUTH_PORT)).map_err(|e| {
         format!("Couldn't start the local sign-in listener on port {OAUTH_PORT}: {e}")
     })?;
@@ -85,7 +85,7 @@ pub async fn login_with_github(app: AppHandle) -> Result<GitHubUser, String> {
         .append_pair("state", &state);
     open_in_browser(authorize.as_str())?;
 
-    // Wait for the redirect on a blocking thread so we don't stall the runtime.
+    /// Wait for the redirect on a blocking thread so we don't stall the runtime.
     let wait_state = state.clone();
     let code = tokio::task::spawn_blocking(move || wait_for_code(listener, &wait_state))
         .await
@@ -109,14 +109,11 @@ fn focus_main(app: &AppHandle) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// GitLab (gitlab.com) — OAuth authorization-code flow WITH PKCE. GitLab
-// supports public clients, so no client secret is involved; only a client id
-// (register the app on gitlab.com with redirect http://127.0.0.1:8765/callback,
-// scope `api`, "Confidential" OFF and "Expire access tokens" OFF).
-// Self-managed instances need their own registered app, so they use a PAT.
-// ---------------------------------------------------------------------------
-
+/// GitLab (gitlab.com) — OAuth authorization-code flow WITH PKCE. GitLab
+/// supports public clients, so no client secret is involved; only a client id
+/// (register the app on gitlab.com with redirect http://127.0.0.1:8765/callback,
+/// scope `api`, "Confidential" OFF and "Expire access tokens" OFF).
+/// Self-managed instances need their own registered app, so they use a PAT.
 fn gitlab_client_id() -> Result<String, String> {
     let id = env_or_baked("NOD_GITLAB_CLIENT_ID", option_env!("NOD_GITLAB_CLIENT_ID"));
     if id.trim().is_empty() {
@@ -227,7 +224,7 @@ pub async fn login_with_gitlab(
         .await
         .map_err(|e| format!("sign-in task failed: {e}"))??;
 
-    // Exchange the code — PKCE verifier instead of a client secret.
+    /// Exchange the code — PKCE verifier instead of a client secret.
     let client = reqwest::Client::new();
     let resp = client
         .post(format!("{host}/oauth/token"))
@@ -256,7 +253,7 @@ pub async fn login_with_gitlab(
         .map(|s| s.to_string())
         .ok_or_else(|| "GitLab did not return an access token".to_string())?;
 
-    // Validate + store as a first-class account.
+    /// Validate + store as a first-class account.
     let platform = GitLabPlatform::new(&host, &token)?;
     let user = platform.current_user().await?;
     accounts::upsert(
@@ -340,7 +337,6 @@ fn wait_for_code(listener: TcpListener, expected_state: &str) -> Result<String, 
                 stream.set_nonblocking(false).ok();
                 match handle_connection(&mut stream, expected_state) {
                     Ok(Some(code)) => return Ok(code),
-                    // Not the callback (e.g. a favicon request) — keep waiting.
                     Ok(None) => continue,
                     Err(e) => return Err(e),
                 }
@@ -361,7 +357,7 @@ fn handle_connection(
     let n = stream.read(&mut buf).map_err(|e| e.to_string())?;
     let req = String::from_utf8_lossy(&buf[..n]);
     let first_line = req.lines().next().unwrap_or("");
-    // "GET /callback?code=...&state=... HTTP/1.1"
+    /// "GET /callback?code=...&state=... HTTP/1.1"
     let path = first_line.split_whitespace().nth(1).unwrap_or("");
 
     if !path.starts_with("/callback") {

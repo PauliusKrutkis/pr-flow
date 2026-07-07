@@ -27,12 +27,10 @@ export default function SearchPane({
   const results = useMemo(() => searchPRs(query), [query]);
   const showing = query.trim() ? results : RECENT_PRS;
 
-  // Reset selection whenever the query changes; keep it in range.
   useEffect(() => setSel(0), [query]);
   useEffect(() => {
     listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: "nearest" });
   }, [sel]);
-  // Fresh query each time the pane opens.
   useEffect(() => {
     if (open) { setQuery(""); setSel(0); }
   }, [open]);
@@ -177,7 +175,6 @@ const CSS = `
 .qsp-foot-scope { margin-left: auto; font-family: var(--font-mono); }
 `;
 
-// The pane styles are global (portalled content lives outside .dir-quiet); inject once.
 if (typeof document !== "undefined" && !document.getElementById("qsp-style")) {
   const el = document.createElement("style");
   el.id = "qsp-style";

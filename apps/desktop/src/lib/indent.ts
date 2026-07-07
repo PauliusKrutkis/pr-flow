@@ -1,11 +1,13 @@
-// Indent guides for the diff viewer — faint vertical lines at each indent
-// level, the honest substitute for bracket matching when all you have is a
-// patch fragment. This module is the pure half: detecting a file's indent
-// unit from its patch rows, and counting a line's indent levels. The render
-// side paints the guides as a row-level ::before gradient sized by those
-// levels (see .qf-code::before in quiet.css) — guides never enter the text
-// flow, so they can't fragment text nodes or interact with selection,
-// clicks, or the mark layers.
+/**
+ * Indent guides for the diff viewer — faint vertical lines at each indent
+ * level, the honest substitute for bracket matching when all you have is a
+ * patch fragment. This module is the pure half: detecting a file's indent
+ * unit from its patch rows, and counting a line's indent levels. The render
+ * side paints the guides as a row-level ::before gradient sized by those
+ * levels (see .qf-code::before in quiet.css) — guides never enter the text
+ * flow, so they can't fragment text nodes or interact with selection,
+ * clicks, or the mark layers.
+ */
 
 import type { DiffHunk } from "./diff";
 
@@ -16,11 +18,14 @@ export interface IndentUnit {
   chars: number;
 }
 
-// Tab handling: a tab is one indent level, and the diff renders tabs at the
-// CSS `tab-size` (pinned to the browser default of 8 in quiet.css so this
-// stays a contract, not a coincidence). So tab files get an 8ch gradient
-// period — one guide per rendered tab stop — while the level threshold below
-// counts tab CHARS. Files mixing tabs and spaces count as tab-indented.
+/**
+ * Tab handling: a tab is one indent level, and the diff renders tabs at the
+ * CSS `tab-size` (pinned to the browser default of 8 in quiet.css so this
+ * stays a contract, not a coincidence). So tab files get an 8ch gradient
+ * period — one guide per rendered tab stop — while the level threshold below
+ * counts tab CHARS. Files mixing tabs and spaces count as tab-indented.
+ */
+
 const TAB_UNIT: IndentUnit = { ch: 8, chars: 1 };
 
 const LEADING_WS = /^[\t ]*/;
@@ -37,7 +42,6 @@ export function detectIndentUnit(hunks: DiffHunk[]): IndentUnit {
     for (const row of hunk.rows) {
       if (row.type === "hunk") continue;
       const ws = LEADING_WS.exec(row.content)![0];
-      // Unindented rows say nothing; whitespace-only rows are trailing junk.
       if (ws.length === 0 || ws.length === row.content.length) continue;
       if (ws.includes("\t")) return TAB_UNIT;
       minSpaces = Math.min(minSpaces, ws.length);
@@ -64,7 +68,6 @@ export function guideLevelsForHunk(
   const own = rows.map((row) => {
     if (row.type === "hunk") return null;
     const ws = LEADING_WS.exec(row.content)![0];
-    // Whitespace-only lines have no indentation of their own — bridged below.
     if (ws.length === row.content.length) return null;
     return Math.floor(ws.length / unit.chars);
   });

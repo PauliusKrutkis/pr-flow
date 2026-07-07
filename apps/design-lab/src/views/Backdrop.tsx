@@ -1,7 +1,10 @@
-// A static, non-interactive snapshot of the review screen, used behind the
-// overlay views (palette, help, submit) so they read as real moments in the app
-// rather than floating cards. It is aria-hidden and pointer-events:none — the
-// live overlay owns focus and interaction.
+/**
+ * A static, non-interactive snapshot of the review screen, used behind the
+ * overlay views (palette, help, submit) so they read as real moments in the app
+ * rather than floating cards. It is aria-hidden and pointer-events:none — the
+ * live overlay owns focus and interaction.
+ */
+
 import { Avatar, StatePill } from "../primitives";
 import { REVIEW } from "../mock";
 

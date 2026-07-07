@@ -39,7 +39,6 @@ export function SubmitReviewModal({
     }
   }, [open]);
 
-  // Make "submit" the active scope so the review shortcuts don't fire behind it.
   useHotkeys(
     "submit",
     [{ keys: "esc", description: "Close", hidden: true, run: onClose }],
@@ -48,7 +47,8 @@ export function SubmitReviewModal({
 
   if (!open) return null;
 
-  // GitHub rejects an empty COMMENT review (needs a body or pending comments).
+  /** GitHub rejects an empty COMMENT review (needs a body or pending comments). */
+
   const needsBody = event === "COMMENT" && pendingCount === 0;
   const canSubmit = !busy && (!needsBody || body.trim().length > 0);
 
@@ -75,8 +75,6 @@ export function SubmitReviewModal({
       e.preventDefault();
       submit();
     } else if (e.key === "Tab") {
-      // Tab cycles the verdict (Comment → Approve → Request changes) without
-      // leaving the summary field.
       e.preventDefault();
       cycleEvent(e.shiftKey ? -1 : 1);
     } else if (e.key === "Escape") {

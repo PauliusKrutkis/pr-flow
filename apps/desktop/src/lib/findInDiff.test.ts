@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { findInDiff, findMatchRangesInLine, patchMayMatch } from "./findInDiff";
 import { parsePatch, rowAnchor } from "./diff";
 
-// @@ -1,3 +1,4 @@ resolves to: context old1/new1, del old2, add new2, add new3.
+/** @@ -1,3 +1,4 @@ resolves to: context old1/new1, del old2, add new2, add new3. */
+
 const PATCH = `@@ -1,3 +1,4 @@
  const alpha = 1;
 -const beta = alpha + alpha;
@@ -96,10 +97,13 @@ describe("findInDiff", () => {
   });
 
   it("agrees with the per-line matcher when a periodic needle overlaps the marker column", () => {
-    // The raw-text sweep sees "-a-a" spanning the del marker at offset 0 and
-    // must reject it WITHOUT skipping the real hit one column later — the hit
-    // the per-line matcher (and thus the rendered marks) finds at content
-    // column 1.
+    /**
+     * The raw-text sweep sees "-a-a" spanning the del marker at offset 0 and
+     * must reject it WITHOUT skipping the real hit one column later — the hit
+     * the per-line matcher (and thus the rendered marks) finds at content
+     * column 1.
+     */
+
     const files = [{ patch: "@@ -1,1 +1,1 @@\n-a-a-a" }];
     expect(findInDiff(files, "-a-a")).toEqual([
       { fileIndex: 0, anchor: "LEFT:1", start: 1, end: 5 },
@@ -108,8 +112,6 @@ describe("findInDiff", () => {
   });
 
   it("column offsets and hits agree with the per-line matcher row by row", () => {
-    // Property check over the fixture: the sweep's (anchor, start, end) set
-    // must be exactly what running the per-line matcher over each row yields.
     for (const query of ["const", "a", "@@", "foo", "Beta", " = "]) {
       for (const caseSensitive of [false, true]) {
         const matches = findInDiff(FILES, query, { caseSensitive });
@@ -138,7 +140,6 @@ function contentAt(patch: string, anchor: string): string {
 
 describe("patchMayMatch", () => {
   it("is a conservative superset — never false when a row matches", () => {
-    // Everything findInDiff finds must pass the gate (per file).
     for (const query of ["const", "beta", "foo", "@@"]) {
       const hits = new Set(findInDiff(FILES, query).map((m) => m.fileIndex));
       for (const i of hits) {

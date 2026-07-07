@@ -26,18 +26,12 @@ export function WatchReposDialog({
   const [hits, setHits] = useState<RepoHit[]>([]);
   const [sel, setSel] = useState(0);
   const [searching, setSearching] = useState(false);
-  // Tab arms an action (a row's "stop watching" or Done) without moving DOM
-  // focus — the comment-form pattern: active styling, no focus ring, Enter
-  // fires it. null = Enter means "watch the picked result / pasted repo".
   const [armed, setArmed] = useState<number | "done" | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<number | null>(null);
   const requestSeq = useRef(0);
 
-  // Interaction state resets when the dialog opens; the repo list syncs from
-  // the query on its own. One effect for both would wipe typing and the armed
-  // cursor whenever a fetch settles — persist() itself writes the query back.
   useEffect(() => {
     if (open) {
       setInput("");
@@ -57,7 +51,6 @@ export function WatchReposDialog({
       ?.scrollIntoView({ block: "nearest" });
   }, [armed]);
 
-  // Debounced provider search while typing.
   useEffect(() => {
     if (!open) return;
     const q = input.trim();
@@ -101,8 +94,6 @@ export function WatchReposDialog({
   function stopWatching(repo: string) {
     const next = repos.filter((x) => x !== repo);
     persist(next);
-    // Keep the armed cursor useful: stay on the row that slid into this slot,
-    // clamp at the end, disarm when the list empties.
     setArmed((a) =>
       typeof a === "number"
         ? next.length === 0
@@ -115,7 +106,6 @@ export function WatchReposDialog({
 
   function persist(next: string[]) {
     setRepos(next);
-    // Optimistic per design principle — write-through, then refresh the tab.
     void api
       .setWatchedRepos(next)
       .then(() => {
@@ -138,7 +128,8 @@ export function WatchReposDialog({
   }
 
   function cycleArmed(dir: 1 | -1) {
-    // null → each watched row → Done → null (reversed for shift+tab).
+    /** null → each watched row → Done → null (reversed for shift+tab). */
+
     const order: (number | "done" | null)[] = [
       null,
       ...repos.map((_, i) => i),
@@ -169,7 +160,6 @@ export function WatchReposDialog({
         if (repo) stopWatching(repo);
       } else {
         const hit = hits[sel];
-        // A result wins; otherwise accept a verbatim owner/repo or URL paste.
         watch(hit ? hit.fullName : input);
       }
     } else if (e.key === "Escape") {

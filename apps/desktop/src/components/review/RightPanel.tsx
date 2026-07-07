@@ -64,12 +64,6 @@ export function RightPanel({
 
   const panelRef = useRef<HTMLElement>(null);
 
-  // Focus follows the drawer. Opening moves focus into the panel container so
-  // Esc lands on a predictable, non-editable target; closing releases any
-  // focus stranded in the (now off-canvas) subtree — a focused-but-hidden
-  // textarea swallows every single-key shortcut and the app feels dead until
-  // the user clicks. The `inert` attribute below guards the same hole for
-  // mouse/tab re-entry while closed.
   useEffect(() => {
     const el = panelRef.current;
     if (!el) return;
@@ -83,10 +77,13 @@ export function RightPanel({
     }
   }, [open]);
 
-  // PR-level comments and review verdicts interleave into one timeline.
-  // ISO-8601 timestamps compare lexicographically, and optimistic comments are
-  // stamped "now", so they land at the tail the instant they're typed.
-  // (Plain computations, not useMemo — the React Compiler caches them.)
+  /**
+   * PR-level comments and review verdicts interleave into one timeline.
+   * ISO-8601 timestamps compare lexicographically, and optimistic comments are
+   * stamped "now", so they land at the tail the instant they're typed.
+   * (Plain computations, not useMemo — the React Compiler caches them.)
+   */
+
   const timeline: TimelineEntry[] = [
     ...conversation.map((c) => ({
       kind: "comment" as const,
@@ -100,9 +97,12 @@ export function RightPanel({
     })),
   ].sort((a, b) => a.at.localeCompare(b.at));
 
-  // Inline comments grouped into threads: roots carry no inReplyToId, replies
-  // point at their root. The drawer only indexes them — the full thread lives
-  // in the diff, which is where the row jumps.
+  /**
+   * Inline comments grouped into threads: roots carry no inReplyToId, replies
+   * point at their root. The drawer only indexes them — the full thread lives
+   * in the diff, which is where the row jumps.
+   */
+
   const replyCounts = new Map<number, number>();
   for (const c of inlineComments) {
     if (c.inReplyToId != null) {
@@ -256,7 +256,6 @@ export function RightPanel({
           <section className="qf-drawer-section">
             <AddCommentBox
               onSubmit={(text) => {
-                // Optimistic — appears in the conversation instantly.
                 void onAddIssueComment(text);
               }}
               onCancel={onClose}

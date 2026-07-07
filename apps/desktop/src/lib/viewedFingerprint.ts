@@ -1,13 +1,15 @@
-// Content fingerprints for "viewed" file marks.
-//
-// A viewed mark belongs to the content you actually looked at. We stamp each
-// mark with a cheap fingerprint of the file's diff; when the PR's head moves
-// and the file's diff no longer matches, the mark is dropped automatically
-// (see reconcileViewedEntry) instead of silently vouching for code you never
-// saw.
-//
-// All functions here are pure — the store and ReviewScreen call them, and the
-// vitest suite exercises them without touching localStorage or Tauri.
+/**
+ * Content fingerprints for "viewed" file marks.
+ *
+ * A viewed mark belongs to the content you actually looked at. We stamp each
+ * mark with a cheap fingerprint of the file's diff; when the PR's head moves
+ * and the file's diff no longer matches, the mark is dropped automatically
+ * (see reconcileViewedEntry) instead of silently vouching for code you never
+ * saw.
+ *
+ * All functions here are pure — the store and ReviewScreen call them, and the
+ * vitest suite exercises them without touching localStorage or Tauri.
+ */
 
 import type { ChangedFile, ViewedFileMap, ViewedMap } from "../types";
 
@@ -26,7 +28,6 @@ function fnv1a(input: string): string {
   let hash = 0x811c9dc5;
   for (let i = 0; i < input.length; i++) {
     hash ^= input.charCodeAt(i);
-    // hash *= 16777619, in 32-bit arithmetic without BigInt.
     hash = (hash + ((hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24))) >>> 0;
   }
   return hash.toString(16).padStart(8, "0");

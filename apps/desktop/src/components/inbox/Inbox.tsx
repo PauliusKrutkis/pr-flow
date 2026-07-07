@@ -57,17 +57,18 @@ export function Inbox() {
   const openReview = useAppStore((s) => s.openReview);
   const markSeen = useAppStore((s) => s.markSeen);
   const isUnread = useAppStore((s) => s.isUnread);
-  // Tab + selected PR live in the store so they survive opening/closing a PR.
+  /** Tab + selected PR live in the store so they survive opening/closing a PR. */
+
   const tab = useAppStore((s) => s.inboxTab);
   const setTab = useAppStore((s) => s.setInboxTab);
   const selectedKey = useAppStore((s) => s.inboxSelectedKey);
   const setSelectedKey = useAppStore((s) => s.setInboxSelectedKey);
 
   const listRef = useRef<HTMLDivElement>(null);
-  // Whether the cursor is being driven by keyboard or pointer (gates hover wash).
   const [listMode, setListMode] = useState<"keyboard" | "mouse">("mouse");
 
-  // Archived PRs stay hidden until they update again (see appStore.dismiss).
+  /** Archived PRs stay hidden until they update again (see appStore.dismiss). */
+
   const dismissed = useAppStore((s) => s.dismissed);
   const dismiss = useAppStore((s) => s.dismiss);
   const undoDismiss = useAppStore((s) => s.undoDismiss);
@@ -88,8 +89,11 @@ export function Inbox() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [inbox, subscribedData, tab, dismissed],
   );
-  // Tab counters reflect archives: server count minus the archived-and-quiet
-  // PRs among the fetched page.
+  /**
+   * Tab counters reflect archives: server count minus the archived-and-quiet
+   * PRs among the fetched page.
+   */
+
   const visibleCounts = useMemo(() => {
     const m = {} as Record<InboxTabKey, number>;
     for (const t of TABS) {
@@ -103,15 +107,17 @@ export function Inbox() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inbox, subscribedData, dismissed]);
 
-  // Resolve the selected PR key to a position in the current list (follows the
-  // PR through reorders/filtering; falls back to the top if it's gone).
+  /**
+   * Resolve the selected PR key to a position in the current list (follows the
+   * PR through reorders/filtering; falls back to the top if it's gone).
+   */
+
   const selectedIndex = useMemo(() => {
     if (!selectedKey) return 0;
     const i = filtered.findIndex((pr) => keyFor(pr) === selectedKey);
     return i < 0 ? 0 : i;
   }, [filtered, selectedKey]);
 
-  // Scroll the selected item into view.
   useEffect(() => {
     const el = listRef.current?.querySelector<HTMLElement>(
       `[data-index="${selectedIndex}"]`,
@@ -119,7 +125,6 @@ export function Inbox() {
     el?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
-  // Prefetch the selected PR + neighbors once the cursor settles.
   useEffect(() => {
     const timer = setTimeout(() => {
       for (const offset of [0, 1, -1]) {
@@ -154,8 +159,11 @@ export function Inbox() {
     const pr = filtered[index];
     if (pr) setSelectedKey(keyFor(pr));
   };
-  // Keyboard nav flips the list into "keyboard mode" so a stale pointer :hover
-  // doesn't leave a second row lit under the cursor.
+  /**
+   * Keyboard nav flips the list into "keyboard mode" so a stale pointer :hover
+   * doesn't leave a second row lit under the cursor.
+   */
+
   const next = () => {
     setListMode("keyboard");
     moveTo(Math.min(selectedIndex + 1, filtered.length - 1));
@@ -165,7 +173,8 @@ export function Inbox() {
     moveTo(Math.max(selectedIndex - 1, 0));
   };
 
-  // `e` — archive the selected PR (hidden until it updates), cursor stays put.
+  /** `e` — archive the selected PR (hidden until it updates), cursor stays put. */
+
   const archiveSelected = () => {
     const pr = filtered[selectedIndex];
     if (!pr) return;
@@ -185,8 +194,11 @@ export function Inbox() {
     setToast(null);
   };
 
-  // `y` — copy the selected PR's URL, mirroring the review screen's `y`. The
-  // toast is the proof-of-copy; a silent shortcut reads as "does nothing".
+  /**
+   * `y` — copy the selected PR's URL, mirroring the review screen's `y`. The
+   * toast is the proof-of-copy; a silent shortcut reads as "does nothing".
+   */
+
   const copySelectedLink = () => {
     const pr = filtered[selectedIndex];
     if (!pr) return;
@@ -249,8 +261,11 @@ export function Inbox() {
   const activeTab = TABS.find((t) => t.key === tab) ?? TABS[0];
   const selectedPR = filtered[selectedIndex];
 
-  // Report whether the reading pane is actually rendered (not just "we're on
-  // the inbox route") so the toast host only dodges a pane that exists.
+  /**
+   * Report whether the reading pane is actually rendered (not just "we're on
+   * the inbox route") so the toast host only dodges a pane that exists.
+   */
+
   const setInboxPaneVisible = useAppStore((s) => s.setInboxPaneVisible);
   const paneVisible =
     !!selectedPR && !(isLoading && !data) && !(isError && !data);
@@ -305,7 +320,6 @@ export function Inbox() {
           </div>
         </div>
       ) : filtered.length === 0 ? (
-        // Empty tab: no list, no reading pane — one calm full-bleed state.
         <InboxZero
           title={
             tab === "reviewRequested"
@@ -326,7 +340,6 @@ export function Inbox() {
           }
         />
       ) : (
-        // Two-pane: a dense list left, a reading pane for the selected PR right.
         <div className="grid min-h-0 flex-1 grid-cols-[1fr_380px] max-[900px]:grid-cols-1">
           <div
             ref={listRef}
@@ -346,7 +359,6 @@ export function Inbox() {
                   unread={isUnread(keyFor(pr), pr.updatedAt)}
                   onOpen={() => open(i)}
                   onHover={() => {
-                    // Hover moves the cursor (and the reading pane); click opens.
                     setSelectedKey(keyFor(pr));
                     prefetchPullRequest(pr.owner, pr.name, pr.number);
                   }}

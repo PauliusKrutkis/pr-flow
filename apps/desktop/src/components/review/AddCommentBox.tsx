@@ -45,8 +45,6 @@ export function AddCommentBox({
   suggestionText,
 }: AddCommentBoxProps) {
   const [mode, setMode] = useState<"batch" | "now">("batch");
-  // Mirrors the editor's emptiness so the submit affordance reacts without
-  // the parent owning the text.
   const [empty, setEmpty] = useState(true);
   const editorRef = useRef<ComposerEditorHandle>(null);
   const canSubmit = !pending && !empty;

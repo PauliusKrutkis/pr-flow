@@ -67,8 +67,11 @@ const GROUPS: ScopeGroup[] = [
 ];
 
 const byScope = (s: string) => GROUPS.find((g) => g.scope === s)!;
-// Two balanced columns: the tall active scope (review) stands alone on the
-// right; the three short scopes stack on the left so neither column trails off.
+/**
+ * Two balanced columns: the tall active scope (review) stands alone on the
+ * right; the three short scopes stack on the left so neither column trails off.
+ */
+
 const COLUMN_LEFT: ScopeGroup[] = [byScope("global"), byScope("inbox"), byScope("palette")];
 const COLUMN_RIGHT: ScopeGroup[] = [byScope("review")];
 

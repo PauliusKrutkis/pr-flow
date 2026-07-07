@@ -1,6 +1,9 @@
-// Shared, theme-agnostic syntax renderer. Each token gets a `tk-<type>` class;
-// every direction themes those classes inside its own scoped stylesheet, so the
-// highlighting logic is shared while the colours stay per-direction.
+/**
+ * Shared, theme-agnostic syntax renderer. Each token gets a `tk-<type>` class;
+ * every direction themes those classes inside its own scoped stylesheet, so the
+ * highlighting logic is shared while the colours stay per-direction.
+ */
+
 import { Fragment } from "react";
 import { tokenize, type TokenType } from "./mock";
 

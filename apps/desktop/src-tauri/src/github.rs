@@ -12,11 +12,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const API: &str = "https://api.github.com";
 const GRAPHQL_URL: &str = "https://api.github.com/graphql";
 
-// ---------------------------------------------------------------------------
-// Data model (serialized as camelCase for the TypeScript frontend). Shared by
-// every platform implementation — providers map their payloads onto these.
-// ---------------------------------------------------------------------------
-
+/// Data model (serialized as camelCase for the TypeScript frontend). Shared by
+/// every platform implementation — providers map their payloads onto these.
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GitHubUser {
@@ -207,11 +204,6 @@ pub struct ReviewCommentInput {
     pub start_line: Option<u64>,
 }
 
-// ---------------------------------------------------------------------------
-// Small JSON extraction helpers — never panic, always fall back to a default.
-// Shared with other platform impls.
-// ---------------------------------------------------------------------------
-
 pub(crate) fn fstr(v: &Value, key: &str) -> String {
     v.get(key)
         .and_then(Value::as_str)
@@ -253,10 +245,6 @@ pub(crate) fn now_millis() -> u64 {
         .unwrap_or(0)
 }
 
-// ---------------------------------------------------------------------------
-// HTTP plumbing (shared with other platform impls)
-// ---------------------------------------------------------------------------
-
 pub(crate) fn net_err(e: reqwest::Error) -> String {
     format!("network error: {e}")
 }
@@ -296,7 +284,6 @@ pub(crate) async fn read_body(resp: reqwest::Response) -> Result<Value, String> 
             .and_then(|v| v.get("message").and_then(Value::as_str))
             .map(|s| s.to_string())
             .unwrap_or_else(|| text.clone());
-        // GitHub's 422s carry the actual reason in `errors` — surface it.
         if let Some(errors) = parsed.as_ref().and_then(|v| v.get("errors")) {
             if !errors.is_null() {
                 msg = format!("{msg} — {errors}");
@@ -352,10 +339,6 @@ pub(crate) async fn fetch_user(client: &reqwest::Client) -> Result<GitHubUser, S
         name: fstr(&v, "name"),
     })
 }
-
-// ---------------------------------------------------------------------------
-// GitHub mappers: GitHub JSON -> our structs
-// ---------------------------------------------------------------------------
 
 /// Everything the inbox list AND its reading pane need: the diff-stat scalars
 /// and body are cheap to include, and `comments(last: 1)` doubles as the
@@ -511,17 +494,12 @@ fn comment_from(v: &Value) -> ReviewComment {
         user_avatar_url: nstr(v, "user", "avatar_url"),
         created_at: fstr(v, "created_at"),
         in_reply_to_id: fopt_u64(v, "in_reply_to_id"),
-        // REST doesn't expose thread identity/resolution — pr_detail stamps
-        // these from a GraphQL pass afterwards (best-effort).
         thread_id: None,
         resolved: false,
     }
 }
 
-// ---------------------------------------------------------------------------
-// The GitHub platform
-// ---------------------------------------------------------------------------
-
+/// The GitHub platform implementation.
 pub struct GitHubPlatform {
     client: reqwest::Client,
 }
@@ -553,7 +531,6 @@ impl GitHubPlatform {
         }
         let v: Value = serde_json::from_str(&text)
             .map_err(|e| format!("could not parse GraphQL response: {e}"))?;
-        // GraphQL reports query-level problems in a top-level `errors` array (HTTP 200).
         if let Some(errors) = v.get("errors").and_then(Value::as_array) {
             if !errors.is_empty() {
                 let msg = errors
@@ -673,10 +650,6 @@ impl GitHubPlatform {
         .await?;
         let mut comments: Vec<ReviewComment> = comments_v.iter().map(comment_from).collect();
 
-        // REST comments carry no thread identity or resolved state — overlay
-        // them from GraphQL. Best-effort: a fine-grained token without GraphQL
-        // access (or any other failure) just leaves thread_id = None, which
-        // hides the resolve affordance instead of breaking the detail fetch.
         match self.review_threads(owner, repo, number).await {
             Ok(map) => {
                 for c in comments.iter_mut() {
@@ -717,14 +690,9 @@ impl GitHubPlatform {
             .filter_map(|v| {
                 let state = fstr(v, "state");
                 let body = fstr(v, "body");
-                // PENDING is the viewer's own unsubmitted draft — not conversation.
                 if state == "PENDING" {
                     return None;
                 }
-                // A body-less COMMENTED review is just the container GitHub wraps
-                // around inline comments (which we fetch separately) — showing it
-                // would be an empty row. Body-less verdicts (approve / request
-                // changes / dismissed) still carry meaning on their own.
                 if body.trim().is_empty()
                     && !matches!(state.as_str(), "APPROVED" | "CHANGES_REQUESTED" | "DISMISSED")
                 {
@@ -777,7 +745,7 @@ impl GitHubPlatform {
 }"#;
         let mut map = std::collections::HashMap::new();
         let mut cursor: Option<String> = None;
-        // Same page cap as get_all_pages — a runaway cursor never loops forever.
+        /// Same page cap as get_all_pages — a runaway cursor never loops forever.
         let mut pages = 0u32;
         loop {
             pages += 1;
@@ -860,8 +828,6 @@ impl GitHubPlatform {
             "line": line,
             "side": side,
         });
-        // Multi-line comment: GitHub wants the range start alongside the end
-        // (`line`), with its own side — ranges here are always one-sided.
         if let Some(start) = start_line {
             payload["start_line"] = json!(start);
             payload["start_side"] = json!(side);
@@ -971,7 +937,7 @@ impl GitHubPlatform {
     ) -> Result<FileBlob, String> {
         use base64::{engine::general_purpose::STANDARD, Engine as _};
 
-        // Build via Url so exotic path characters are percent-encoded safely.
+        /// Build via Url so exotic path characters are percent-encoded safely.
         let mut u = url::Url::parse(API).map_err(|e| e.to_string())?;
         u.set_path(&format!("repos/{owner}/{repo}/contents/{path}"));
         u.query_pairs_mut().append_pair("ref", r#ref);

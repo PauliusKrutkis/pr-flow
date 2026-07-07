@@ -1,7 +1,9 @@
-// Scored fuzzy matching for every search surface. A match is a subsequence of
-// the query in the text, scored so that the rankings feel like an editor's
-// file picker: word-boundary hits, consecutive runs, and early matches rank
-// above scattered character soup.
+/**
+ * Scored fuzzy matching for every search surface. A match is a subsequence of
+ * the query in the text, scored so that the rankings feel like an editor's
+ * file picker: word-boundary hits, consecutive runs, and early matches rank
+ * above scattered character soup.
+ */
 
 export interface FuzzyResult {
   score: number;
@@ -15,7 +17,6 @@ function isBoundaryStart(text: string, i: number): boolean {
   if (i === 0) return true;
   const prev = text[i - 1];
   if (BOUNDARY.test(prev)) return true;
-  // camelCase / PascalCase edges
   return prev === prev.toLowerCase() && text[i] === text[i].toUpperCase();
 }
 
@@ -28,7 +29,8 @@ function matchTerm(term: string, text: string): FuzzyResult | null {
   const lowerText = text.toLowerCase();
   const lowerTerm = term.toLowerCase();
 
-  // Exact substring is the strongest possible match — check it first.
+  /** Exact substring is the strongest possible match — check it first. */
+
   const sub = lowerText.indexOf(lowerTerm);
   if (sub !== -1) {
     const indices = Array.from({ length: term.length }, (_, k) => sub + k);
@@ -39,20 +41,19 @@ function matchTerm(term: string, text: string): FuzzyResult | null {
     return { score, indices };
   }
 
-  // Subsequence match, preferring word-boundary characters.
+  /** Subsequence match, preferring word-boundary characters. */
+
   const indices: number[] = [];
   let ti = 0;
   for (let qi = 0; qi < lowerTerm.length; qi++) {
     const c = lowerTerm[qi];
     let found = -1;
-    // First pass: next boundary-start occurrence.
     for (let j = ti; j < lowerText.length; j++) {
       if (lowerText[j] === c && isBoundaryStart(text, j)) {
         found = j;
         break;
       }
     }
-    // Fallback: next occurrence anywhere.
     if (found === -1) found = lowerText.indexOf(c, ti);
     if (found === -1) return null;
     indices.push(found);

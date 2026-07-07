@@ -1,7 +1,10 @@
-// Inbox mock — a spread of PRs across the four tabs so the list, its density,
-// unread dots, and the zero-state can all be designed against realistic data.
-// Reuses the same people as the Review mock; times are relative to the same
-// fixed NOW (see mock.ts).
+/**
+ * Inbox mock — a spread of PRs across the four tabs so the list, its density,
+ * unread dots, and the zero-state can all be designed against realistic data.
+ * Reuses the same people as the Review mock; times are relative to the same
+ * fixed NOW (see mock.ts).
+ */
+
 import { PEOPLE, type MockUser, type ReviewerStatus } from "./mock";
 
 const { mira, theo, dann, you } = PEOPLE;
@@ -252,8 +255,6 @@ export function forTab(tab: InboxTab): InboxPR[] {
 }
 
 export function tabCount(tab: InboxTab): number {
-  // The count badge tracks unread — the number that actually needs attention,
-  // not the total (which would just be noise on a busy inbox).
   return forTab(tab).filter((pr) => pr.unread).length;
 }
 

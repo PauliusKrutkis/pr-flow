@@ -1,9 +1,11 @@
-// Selection-driven occurrence highlighting — the editor convention where
-// selecting a token quietly lights up its other occurrences. This module is
-// the pure half (no DOM): deciding whether a selection qualifies as an
-// occurrence query, and finding that query's occurrences within one line.
-// ReviewScreen owns the DOM half (selectionchange listening + "is the
-// selection inside a single diff code line" gating).
+/**
+ * Selection-driven occurrence highlighting — the editor convention where
+ * selecting a token quietly lights up its other occurrences. This module is
+ * the pure half (no DOM): deciding whether a selection qualifies as an
+ * occurrence query, and finding that query's occurrences within one line.
+ * ReviewScreen owns the DOM half (selectionchange listening + "is the
+ * selection inside a single diff code line" gating).
+ */
 
 import { parsePatch, rowAnchor } from "./diff";
 import { findMatchRangesInLine } from "./findInDiff";
@@ -19,14 +21,20 @@ export interface OccurrenceSpec {
   wholeWord: boolean;
 }
 
-// Under 2 chars marks half the screen; over 64 the user is grabbing a block,
-// not a token — neither reads as "show me this elsewhere".
+/**
+ * Under 2 chars marks half the screen; over 64 the user is grabbing a block,
+ * not a token — neither reads as "show me this elsewhere".
+ */
+
 const MIN_LEN = 2;
 const MAX_LEN = 64;
 
 const WORD = /^\w+$/;
-// At least one letter or digit — selections of pure whitespace/punctuation
-// (`) {`, `===`) would mark structural noise everywhere.
+/**
+ * At least one letter or digit — selections of pure whitespace/punctuation
+ * (`) {`, `===`) would mark structural noise everywhere.
+ */
+
 const HAS_SUBSTANCE = /[\p{L}\p{N}]/u;
 
 /**

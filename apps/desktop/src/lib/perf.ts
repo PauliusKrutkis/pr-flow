@@ -1,16 +1,10 @@
 import { create } from "zustand";
 
-// Tiny perceived-performance instrumentation for the dev overlay (the perf
-// budget "north star" in the backlog). Records how long the two hot actions
-// take — opening a PR and switching files — from the moment the action fires
-// to the first paint that follows. DEV-only; never rendered in a release build.
-
 interface PerfState {
   lastPROpenMs: number | null;
   lastFileSwitchMs: number | null;
   visible: boolean;
 
-  // internal start stamps (performance.now())
   _openStart: number | null;
   _fileStart: number | null;
 

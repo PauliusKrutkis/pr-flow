@@ -1,18 +1,19 @@
-// ---------------------------------------------------------------------------
-// The Quiet design system, extracted from the Review screen (directions/quiet.tsx)
-// into a shared base so every other view speaks the same language.
-//
-// Two rules make this safe to share:
-//   1. Tokens live on :root (not .dir-quiet), so Radix portals — which mount on
-//      document.body, outside any view root — still resolve var(--accent).
-//   2. Shared primitives use a flat `q-` prefix and are unscoped, so they apply
-//      to portalled content too. View-specific classes use their own prefixes
-//      (qi- inbox, qc- palette, qh- help, qs- submit, qg- gate, qb- chrome).
-//
-// The palette, type, motion, and focus ring are copied verbatim from Quiet so
-// the two are indistinguishable. Quiet keeps its own hermetic copy (it predates
-// this file); this is the reference for everything new.
-// ---------------------------------------------------------------------------
+/**
+ * The Quiet design system, extracted from the Review screen (directions/quiet.tsx)
+ * into a shared base so every other view speaks the same language.
+ *
+ * Two rules make this safe to share:
+ * 1. Tokens live on :root (not .dir-quiet), so Radix portals — which mount on
+ * document.body, outside any view root — still resolve var(--accent).
+ * 2. Shared primitives use a flat `q-` prefix and are unscoped, so they apply
+ * to portalled content too. View-specific classes use their own prefixes
+ * (qi- inbox, qc- palette, qh- help, qs- submit, qg- gate, qb- chrome).
+ *
+ * The palette, type, motion, and focus ring are copied verbatim from Quiet so
+ * the two are indistinguishable. Quiet keeps its own hermetic copy (it predates
+ * this file); this is the reference for everything new.
+ * ---------------------------------------------------------------------------
+ */
 
 export const BASE_CSS = `
 :root {

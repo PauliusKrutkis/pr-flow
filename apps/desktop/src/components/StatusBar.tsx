@@ -1,9 +1,5 @@
 import type { ReactNode } from "react";
 
-// A persistent footer legend so the keyboard shortcuts are discoverable without
-// having to know to press `?`. Shows context-relevant keys for the active
-// screen, plus the always-available Shortcuts / Palette entries.
-
 interface Hint {
   keys: string[];
   label: string;

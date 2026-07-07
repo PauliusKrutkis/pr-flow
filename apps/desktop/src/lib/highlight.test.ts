@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import {
   highlightLine,
@@ -32,7 +31,6 @@ describe("highlightLine", () => {
   });
 
   it("treats block-comment continuation lines as comments (per-line quirk)", () => {
-    // ` * text` has no /* opener on its own line — the heuristic catches it.
     for (const line of [" * Registers keyboard bindings", " */", "*"]) {
       const html = highlightLine(line, "a.ts");
       expect(html).toContain("hljs-comment");
@@ -57,7 +55,8 @@ describe("highlightLineWithMatch", () => {
   });
 
   it("marks matches that span token boundaries", () => {
-    // "st x" crosses from the `const` keyword token into plain text.
+    /** "st x" crosses from the `const` keyword token into plain text. */
+
     const html = highlightLineWithMatch("const x = 1;", "a.ts", "st x");
     const text = html.replace(/<[^>]+>/g, "");
     expect(text).toBe("const x = 1;");
@@ -75,7 +74,8 @@ describe("highlightLineWithFind", () => {
     const html = highlightLineWithFind("foo(foo, foo)", "a.ts", "foo", false, 1);
     expect((html.match(/qf-find-mark/g) ?? []).length).toBe(3);
     expect((html.match(/qf-find-current/g) ?? []).length).toBe(1);
-    // The current class lands on the SECOND occurrence.
+    /** The current class lands on the SECOND occurrence. */
+
     const idx = html.split("qf-find-current")[0];
     expect((idx.match(/<mark/g) ?? []).length).toBe(2);
   });
@@ -110,7 +110,6 @@ describe("highlightLineWithIntra", () => {
   const code = "const retryLimit = 3;";
 
   it("wraps the given ranges in qf-intra-mark", () => {
-    // Columns of "Limit" in the code above.
     const html = highlightLineWithIntra(code, "a.ts", [[11, 16]]);
     expect(html).toContain('<mark class="qf-intra-mark">Limit</mark>');
     expect(html.replace(/<[^>]+>/g, "")).toBe(code);
@@ -126,9 +125,12 @@ describe("highlightLineWithIntra", () => {
   });
 
   it("find marks nest inside intraline marks (intra is layered first)", () => {
-    // The find hit ("Lim") lies inside the intraline span ("Limit") — the
-    // second pass walks text nodes inside the first pass's mark, so both
-    // marks coexist and the text stays byte-identical.
+    /**
+     * The find hit ("Lim") lies inside the intraline span ("Limit") — the
+     * second pass walks text nodes inside the first pass's mark, so both
+     * marks coexist and the text stays byte-identical.
+     */
+
     const html = highlightLineWithFind(code, "a.ts", "Lim", false, 0, [
       [11, 16],
     ]);
@@ -153,7 +155,6 @@ describe("highlightLineWithIntra", () => {
 describe("mark layering", () => {
   it("layers find marks over intraline emphasis with the text intact", () => {
     const code = "    const retryLimit = 3;";
-    // "Limit" spans columns [15, 20).
     const html = highlightLineWithFind(code, "a.ts", "Lim", false, 0, [[15, 20]]);
     expect(html).toContain("qf-intra-mark");
     expect(html).toContain("qf-find-mark");
@@ -169,7 +170,6 @@ describe("highlightLineWithOccurrences", () => {
       "id",
       true,
     );
-    // Two whole-word hits; the `id` buried in `width` stays unmarked.
     expect((html.match(/qf-occ-mark/g) ?? []).length).toBe(2);
     expect(html).not.toContain("qf-find-mark");
   });

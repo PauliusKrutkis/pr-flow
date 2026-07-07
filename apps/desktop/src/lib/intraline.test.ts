@@ -21,7 +21,6 @@ describe("tokenize", () => {
       ")",
       ";",
     ]);
-    // Tokens tile the string: no gaps, no overlaps.
     expect(tokens.map((t) => t.text).join("")).toBe("  foo(a, b);");
   });
 
@@ -75,8 +74,6 @@ describe("intralineDiff", () => {
   });
 
   it("bails when the lines share too little (common-token ratio < 0.4)", () => {
-    // The e2e fixture's del[0]↔add[0] pair: "return 1;" vs a comment — no
-    // substantive token in common, so emphasis would cover everything.
     expect(intralineDiff("  return 1;", "  // tuned")).toBeNull();
     expect(
       intralineDiff("const a = compute();", "let done = false;"),
@@ -93,8 +90,11 @@ describe("intralineDiff", () => {
   });
 
   it("bails past the span cap even when the ratio passes", () => {
-    // 9 renamed single-letter args among 9+ kept commas/parens: ratio is fine,
-    // but nine separate emphasis spans read as confetti.
+    /**
+     * 9 renamed single-letter args among 9+ kept commas/parens: ratio is fine,
+     * but nine separate emphasis spans read as confetti.
+     */
+
     const del = "f(a1, b1, c1, d1, e1, f1, g1, h1, i1)";
     const add = "f(a2, b2, c2, d2, e2, f2, g2, h2, i2)";
     expect(intralineDiff(del, add)).toBeNull();
@@ -129,14 +129,16 @@ describe("intralinePairs", () => {
     expect(slices(add0.content, map.get(add0)!)).toEqual(["Limit"]);
     expect(slices(del1.content, map.get(del1)!)).toEqual(["Count"]);
     expect(slices(add1.content, map.get(add1)!)).toEqual(["Limit"]);
-    // Context rows never carry emphasis.
     const ctx = rows.find((r) => r.type === "context")!;
     expect(map.has(ctx)).toBe(false);
   });
 
   it("leaves leftover rows of an unbalanced run unpaired", () => {
-    // One del, two adds (the e2e fixture's shape): del[0] pairs with add[0]
-    // ("// tuned" — fails the noise guard), add[1] has no partner.
+    /**
+     * One del, two adds (the e2e fixture's shape): del[0] pairs with add[0]
+     * ("// tuned" — fails the noise guard), add[1] has no partner.
+     */
+
     const hunks = parsePatch(
       ["@@ -1,2 +1,3 @@", "-  return 1;", "+  // tuned", "+  return 2;"].join(
         "\n",

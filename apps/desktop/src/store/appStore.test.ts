@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
 import { useAppStore } from "./appStore";
 
@@ -39,7 +38,6 @@ describe("archive (dismiss until update)", () => {
     const g = useAppStore.getState();
     expect(g.isDismissed("pr#2", "2026-07-01T11:00:00Z")).toBe(false);
     expect(g.isDismissed("pr#1", "2026-07-01T10:00:00Z")).toBe(true);
-    // A second undo is a no-op, not an error.
     useAppStore.getState().undoDismiss();
   });
 

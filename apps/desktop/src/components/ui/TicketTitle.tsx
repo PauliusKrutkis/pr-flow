@@ -1,10 +1,12 @@
 import { Fragment } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
-// Titles with issue-tracker links: ticket IDs (SCR-2891, ABC-42, …) become
-// links to the configured tracker — mirroring what GitLab's Jira integration
-// renders in its own UI (the API only hands us plain text, so the base URL is
-// configured once per account: ⌘K → "Issue tracker…").
+/**
+ * Titles with issue-tracker links: ticket IDs (SCR-2891, ABC-42, …) become
+ * links to the configured tracker — mirroring what GitLab's Jira integration
+ * renders in its own UI (the API only hands us plain text, so the base URL is
+ * configured once per account: ⌘K → "Issue tracker…").
+ */
 
 const TICKET_RE = /\b([A-Z][A-Z0-9]{1,9}-\d+)\b/g;
 
@@ -28,7 +30,6 @@ export function TicketTitle({
   return (
     <>
       {parts.map((part, i) =>
-        // split() with a capturing group interleaves: text, ticket, text, …
         i % 2 === 1 ? (
           <a
             key={i}

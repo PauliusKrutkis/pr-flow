@@ -4,9 +4,11 @@ import type { ChangedFile } from "../../types";
 import { api } from "../../lib/api";
 import { Spinner } from "../ui/Spinner";
 
-// Before/after panes for binary image files, which have no textual patch.
-// Bytes come through the backend (the token never reaches the webview) as
-// base64 and render as data: URLs.
+/**
+ * Before/after panes for binary image files, which have no textual patch.
+ * Bytes come through the backend (the token never reaches the webview) as
+ * base64 and render as data: URLs.
+ */
 
 const IMAGE_MIME: Record<string, string> = {
   png: "image/png",

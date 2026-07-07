@@ -20,8 +20,6 @@ describe("parsePatch", () => {
   });
 
   it("caches by patch string — same input, same array identity", () => {
-    // The find bar re-scans every patch per keystroke; the cache is what makes
-    // that an indexOf pass instead of a fresh parse. Identity is the contract.
     expect(parsePatch(PATCH)).toBe(parsePatch(PATCH));
   });
 
@@ -30,7 +28,6 @@ describe("parsePatch", () => {
     expect(hunks).toHaveLength(2);
     expect(hunks[0].header).toBe("@@ -1,4 +1,5 @@");
     expect(hunks[1].header).toBe("@@ -10,2 +11,2 @@ fn header() {");
-    // The header is also the first row of the hunk (type "hunk").
     expect(hunks[0].rows[0].type).toBe("hunk");
   });
 
@@ -92,11 +89,11 @@ describe("rowAnchor", () => {
 describe("anchorFractions", () => {
   it("places each anchor at its row's center within the patch", () => {
     const f = anchorFractions(PATCH);
-    // 10 rows total (2 headers + 8 lines); row i sits at (i + 0.5) / 10.
     expect(f.get("RIGHT:1")).toBeCloseTo(1.5 / 10);
     expect(f.get("LEFT:2")).toBeCloseTo(2.5 / 10);
     expect(f.get("RIGHT:12")).toBeCloseTo(9.5 / 10);
-    // Fractions are monotonically render-ordered and inside (0, 1).
+    /** Fractions are monotonically render-ordered and inside (0, 1). */
+
     const values = [...f.values()];
     expect(values).toEqual([...values].sort((a, b) => a - b));
     expect(values.every((v) => v > 0 && v < 1)).toBe(true);

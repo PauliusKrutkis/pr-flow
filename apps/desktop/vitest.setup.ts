@@ -1,5 +1,8 @@
-// jsdom (v29) no longer ships localStorage; the store layer persists through
-// it at module load, so install a Map-backed stand-in before anything imports.
+/**
+ * jsdom (v29) no longer ships localStorage; the store layer persists through
+ * it at module load, so install a Map-backed stand-in before anything imports.
+ */
+
 if (typeof globalThis.localStorage === "undefined") {
   const store = new Map<string, string>();
   const ls: Storage = {

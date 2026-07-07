@@ -6,10 +6,12 @@ import { prKey, type PullRequest } from "../types";
 import { Avatar } from "./ui/Avatar";
 import { Kbd } from "./ui/Kbd";
 
-// In-app "new review requested" notification (backlog: stronger than link
-// interception). Piggybacks on the existing 60s inbox poll — when a PR newly
-// appears in the Review-requests bucket, a keyboard-dismissable toast pops:
-// Enter opens it, Esc dismisses. No webhooks, no desktop-notification perms.
+/**
+ * In-app "new review requested" notification (backlog: stronger than link
+ * interception). Piggybacks on the existing 60s inbox poll — when a PR newly
+ * appears in the Review-requests bucket, a keyboard-dismissable toast pops:
+ * Enter opens it, Esc dismisses. No webhooks, no desktop-notification perms.
+ */
 
 const KNOWN_KEY = "pr-flow:knownReviewRequested";
 const AUTO_DISMISS_MS = 12_000;
@@ -44,9 +46,12 @@ export function ReviewNotifier() {
   const cardRef = useRef<HTMLDivElement>(null);
   const prevFocusRef = useRef<HTMLElement | null>(null);
 
-  // Known review-requested keys. A null stored value means "never seeded", so
-  // the first poll quietly records the existing backlog instead of announcing
-  // every open request at once.
+  /**
+   * Known review-requested keys. A null stored value means "never seeded", so
+   * the first poll quietly records the existing backlog instead of announcing
+   * every open request at once.
+   */
+
   const stored = useRef<Set<string> | null | undefined>(undefined);
   if (stored.current === undefined) stored.current = loadKnown();
 
@@ -67,7 +72,8 @@ export function ReviewNotifier() {
     saveKnown(current);
     if (fresh.length === 0) return;
 
-    // Don't announce a PR you're already looking at.
+    /** Don't announce a PR you're already looking at. */
+
     const route = useAppStore.getState().route;
     const candidates = fresh.filter(
       (pr) =>
@@ -82,15 +88,12 @@ export function ReviewNotifier() {
     setToast({ pr: candidates[candidates.length - 1], extra: candidates.length - 1 });
   }, [data]);
 
-  // Auto-dismiss so the toast never lingers / steals focus indefinitely.
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), AUTO_DISMISS_MS);
     return () => clearTimeout(t);
   }, [toast]);
 
-  // Take keyboard focus when shown (so Enter/Esc work) — but not if the user is
-  // typing somewhere — and restore the prior focus when the toast goes away.
   useEffect(() => {
     if (!toast) return;
     const active = document.activeElement;

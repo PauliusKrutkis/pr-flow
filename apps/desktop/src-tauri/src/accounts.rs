@@ -130,8 +130,6 @@ pub async fn load_migrated(app: &AppHandle) -> Result<AccountsFile, String> {
     let mut file = load(app)?;
     if file.accounts.is_empty() {
         if let Some(token) = storage::read_token(app)? {
-            // Best effort: resolve the identity now; offline installs still
-            // migrate (with a placeholder login corrected on next validate).
             let (login, avatar_url) = match GitHubPlatform::new(&token) {
                 Ok(p) => match p.current_user().await {
                     Ok(u) => (u.login, u.avatar_url),
@@ -212,10 +210,6 @@ pub fn upsert_github(
     )
 }
 
-// ---------------------------------------------------------------------------
-// Commands
-// ---------------------------------------------------------------------------
-
 #[tauri::command]
 pub async fn list_accounts(app: AppHandle) -> Result<AccountsInfo, String> {
     Ok(info_file(&load_migrated(&app).await?))
@@ -233,7 +227,7 @@ pub async fn add_account(
         return Err("Token is empty".to_string());
     }
     let host = normalize_host(&provider, host);
-    // Validate before persisting so we never store a bad token.
+    /// Validate before persisting so we never store a bad token.
     let probe = Account {
         id: String::new(),
         provider: provider.clone(),

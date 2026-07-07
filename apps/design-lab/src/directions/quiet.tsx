@@ -26,9 +26,10 @@ import { Markdown } from "../markdown";
  * is a <=150ms colour fade as a segment fills.
  */
 
-// ---------------------------------------------------------------------------
-// Small presentational helpers
-// ---------------------------------------------------------------------------
+/**
+ * Small presentational helpers
+ * ---------------------------------------------------------------------------
+ */
 
 function Avatar({ user, size = 22 }: { user: MockUser; size?: number }) {
   return (
@@ -78,9 +79,10 @@ function Kbd({ children }: { children: React.ReactNode }) {
   return <kbd className="qf-kbd">{children}</kbd>;
 }
 
-// ---------------------------------------------------------------------------
-// Diff row
-// ---------------------------------------------------------------------------
+/**
+ * Diff row
+ * ---------------------------------------------------------------------------
+ */
 
 function DiffLine({
   row,
@@ -127,9 +129,10 @@ function DiffLine({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Comment thread (built from file.comments) + pending comments
-// ---------------------------------------------------------------------------
+/**
+ * Comment thread (built from file.comments) + pending comments
+ * ---------------------------------------------------------------------------
+ */
 
 function Thread({
   root,
@@ -196,10 +199,6 @@ function PendingCard({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
-
 export default function Quiet({ review }: DirectionProps) {
   const { pr, files } = review;
 
@@ -207,7 +206,6 @@ export default function Quiet({ review }: DirectionProps) {
   const [viewedState, setViewedState] = useState<boolean[]>(() =>
     files.map((f) => f.viewed),
   );
-  // Local copy of pending comments so "Discard" feels live.
   const [pendingByFile, setPendingByFile] = useState<
     Record<number, PendingComment[]>
   >(() => {
@@ -218,20 +216,21 @@ export default function Quiet({ review }: DirectionProps) {
     return m;
   });
   const [infoOpen, setInfoOpen] = useState(false);
-  // Keyboard line-cursor: index into the *selectable* (non-hunk) rows.
   const [cursor, setCursor] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const file = files[selected];
   const hunks = useMemo(() => parsePatch(file.patch), [file.patch]);
 
-  // Flat list of selectable rows (skip hunk-header rows) for j/k navigation.
+  /** Flat list of selectable rows (skip hunk-header rows) for j/k navigation. */
+
   const selectableRows = useMemo(
     () => hunks.flatMap((h) => h.rows.filter((r) => r.type !== "hunk")),
     [hunks],
   );
 
-  // Threads for the current file: roots (inReplyToId === null) + sorted replies.
+  /** Threads for the current file: roots (inReplyToId === null) + sorted replies. */
+
   const threadsByLine = useMemo(() => {
     const roots = file.comments.filter((c) => c.inReplyToId === null);
     const byLineSide = new Map<
@@ -266,7 +265,6 @@ export default function Quiet({ review }: DirectionProps) {
   const viewedNow = viewedState.filter(Boolean).length;
   const comments = totalComments(review);
 
-  // --- selection helpers -------------------------------------------------
   const selectFile = useCallback((i: number) => {
     setSelected(i);
     setCursor(0);
@@ -292,12 +290,10 @@ export default function Quiet({ review }: DirectionProps) {
     [],
   );
 
-  // --- keyboard handlers (scope-aware, quiet) ----------------------------
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
-      // Let the lab chrome own 1–5 and ←/→; we take the review keys.
       switch (e.key) {
         case "n":
           e.preventDefault();
@@ -353,8 +349,11 @@ export default function Quiet({ review }: DirectionProps) {
     markViewedAndNext,
   ]);
 
-  // The keyboard cursor maps onto the absolute row position so the
-  // highlight tracks the same row the diff renders.
+  /**
+   * The keyboard cursor maps onto the absolute row position so the
+   * highlight tracks the same row the diff renders.
+   */
+
   const cursorRowKey = useMemo(() => {
     let count = 0;
     for (let hi = 0; hi < hunks.length; hi++) {
@@ -553,7 +552,6 @@ export default function Quiet({ review }: DirectionProps) {
                       active={isActive}
                       hasThread={hasAnchored}
                       onSelect={() => {
-                        // map this row back into the cursor index
                         let count = 0;
                         for (let h = 0; h < hunks.length; h++) {
                           for (let r = 0; r < hunks[h].rows.length; r++) {
@@ -658,9 +656,10 @@ export default function Quiet({ review }: DirectionProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Scoped, hermetic stylesheet — every rule under .dir-quiet
-// ---------------------------------------------------------------------------
+/**
+ * Scoped, hermetic stylesheet — every rule under .dir-quiet
+ * ---------------------------------------------------------------------------
+ */
 
 const CSS = `
 .dir-quiet {

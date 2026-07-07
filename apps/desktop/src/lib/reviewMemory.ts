@@ -1,12 +1,14 @@
 import type { StateSnapshot } from "react-virtuoso";
 
-// Per-PR review memory — the "resume where you left off" substrate.
-//
-// For each PR we remember the file you were on, your scroll position within it,
-// and the head commit SHA you last saw. This lets the app reopen exactly where
-// you left a review, and lets the review screen tell you when a PR changed since
-// you last looked. Stored in localStorage (local-only, like the unread map) and
-// written debounced so frequent scroll updates stay cheap.
+/**
+ * Per-PR review memory — the "resume where you left off" substrate.
+ *
+ * For each PR we remember the file you were on, your scroll position within it,
+ * and the head commit SHA you last saw. This lets the app reopen exactly where
+ * you left a review, and lets the review screen tell you when a PR changed since
+ * you last looked. Stored in localStorage (local-only, like the unread map) and
+ * written debounced so frequent scroll updates stay cheap.
+ */
 
 export interface ReviewMemory {
   /** index into the changed-files list */
@@ -76,7 +78,6 @@ export function updateReviewMemory(prKey: string, patch: Partial<ReviewMemory>) 
   schedule();
 }
 
-// Best-effort flush before the window goes away, so an in-flight debounce isn't lost.
 if (typeof window !== "undefined") {
   window.addEventListener("beforeunload", flush);
 }

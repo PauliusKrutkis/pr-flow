@@ -12,8 +12,11 @@ import { cn } from "../../lib/cn";
  * ignores non-modifier keys inside editable targets, so Enter / arrows / Esc
  * are handled right here while the input is focused.
  */
-// Buttons don't steal focus from the input (onMouseDown preventDefault), so
-// clicking a chevron then pressing Enter keeps stepping through matches.
+/**
+ * Buttons don't steal focus from the input (onMouseDown preventDefault), so
+ * clicking a chevron then pressing Enter keeps stepping through matches.
+ */
+
 const keepFocus = (e: React.MouseEvent) => e.preventDefault();
 
 export function FindBar({
@@ -45,8 +48,6 @@ export function FindBar({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Autofocus on open, with the query selected so typing replaces a stale one
-  // (the query is kept across close/reopen, browser-style).
   useEffect(() => {
     if (!open) return;
     inputRef.current?.focus();
@@ -71,7 +72,6 @@ export function FindBar({
       e.preventDefault();
       onClose();
     } else if (mod && e.key.toLowerCase() === "f") {
-      // Re-pressing the shortcut inside the bar just re-selects the query.
       e.preventDefault();
       e.currentTarget.select();
     }

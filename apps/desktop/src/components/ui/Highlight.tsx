@@ -1,9 +1,5 @@
 import { Fragment, type ReactNode } from "react";
 
-// Matched-text emphasis for the search surfaces. Both variants wrap the
-// matching characters in `.q-hl` (see quiet.css) and leave the rest untouched.
-// Match computation lives in lib/fuzzy.ts.
-
 /** Render `text` with the given character indices highlighted. */
 export function HighlightIndices({
   text,

@@ -1,6 +1,8 @@
-// Parses GitHub's per-file unified diff `patch` into hunks of rows with
-// resolved old/new line numbers, so the diff viewer can render gutters and
-// anchor inline comments to a line.
+/**
+ * Parses GitHub's per-file unified diff `patch` into hunks of rows with
+ * resolved old/new line numbers, so the diff viewer can render gutters and
+ * anchor inline comments to a line.
+ */
 
 export type DiffRowType = "hunk" | "context" | "add" | "del";
 
@@ -21,12 +23,15 @@ export interface DiffHunk {
 
 const HUNK_RE = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
 
-// Parses are cached by patch string: the find bar re-scans EVERY file's patch
-// on each keystroke, and the viewer/ruler/occurrence paths parse the same
-// patches again — all of them read-only. Callers must treat the result as
-// immutable. Keys are references to strings already held by the query cache,
-// so the map costs one array of row objects per distinct patch; cleared
-// wholesale past the cap like the highlight cache.
+/**
+ * Parses are cached by patch string: the find bar re-scans EVERY file's patch
+ * on each keystroke, and the viewer/ruler/occurrence paths parse the same
+ * patches again — all of them read-only. Callers must treat the result as
+ * immutable. Keys are references to strings already held by the query cache,
+ * so the map costs one array of row objects per distinct patch; cleared
+ * wholesale past the cap like the highlight cache.
+ */
+
 const parseCache = new Map<string, DiffHunk[]>();
 const PARSE_CACHE_MAX = 500;
 
@@ -65,7 +70,6 @@ function parsePatchUncached(patch: string): DiffHunk[] {
       hunks.push(current);
     }
 
-    // "\ No newline at end of file" and other metadata lines.
     if (line.startsWith("\\")) continue;
 
     const marker = line[0];
@@ -112,9 +116,6 @@ const fractionsCache = new Map<string, Map<string, number>>();
 export function anchorFractions(
   patch: string | null | undefined,
 ): Map<string, number> {
-  // Cached like parsePatch (callers treat the result as read-only): the
-  // overview ruler asks for the same file's fractions on every recompute and
-  // the find seed on every keystroke.
   if (patch) {
     const hit = fractionsCache.get(patch);
     if (hit !== undefined) return hit;

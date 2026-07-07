@@ -50,8 +50,6 @@ export function PRListItem({
           <span
             className={cn(
               "truncate text-sm",
-              // Weight/colour encode unread only — selection & hover are shown
-              // by background alone, so hovering never reflows the type.
               unread ? "font-semibold text-fg" : "font-medium text-muted",
             )}
           >

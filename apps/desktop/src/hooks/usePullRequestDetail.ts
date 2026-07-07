@@ -59,13 +59,6 @@ export function prefetchPullRequest(
   number: number,
 ): void {
   const key = queryKeys.prDetail(owner, repo, number);
-  // Seed from the on-disk cache too — the same seed usePullRequestDetail
-  // does, just EARLIER (on inbox hover/selection instead of after the review
-  // screen mounts), so a PR not fetched this session paints real content the
-  // instant it opens instead of skeleton-waiting on the IPC roundtrip. Only
-  // for cold entries; `cur ?? detail` keeps any network payload that landed
-  // meanwhile, and the prefetch below is already in flight before this seed
-  // resolves, so stale disk data can't suppress the fresh fetch.
   if (!queryClient.getQueryData(key)) {
     api
       .getCachedPullRequestDetail(owner, repo, number)

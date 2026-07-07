@@ -35,7 +35,8 @@ export function SearchPane({
     if (!q) {
       return prs.slice(0, 8).map((pr) => ({ pr, hl: {} as Record<string, number[]> }));
     }
-    // Fuzzy across every visible field; rank by the best-matching field.
+    /** Fuzzy across every visible field; rank by the best-matching field. */
+
     const out: { pr: PullRequest; hl: Record<string, number[]>; score: number }[] = [];
     for (const pr of prs) {
       const m = fuzzyMatchFields(q, {

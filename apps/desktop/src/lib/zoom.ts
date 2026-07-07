@@ -1,9 +1,11 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 
-// App zoom — the desktop convention: mod +/- steps, mod 0 resets. The factor
-// persists per device and re-applies on boot. Native webview zoom behaves like
-// browser zoom (transparent to layout math); if the platform webview refuses,
-// CSS zoom on the root element is the fallback.
+/**
+ * App zoom — the desktop convention: mod +/- steps, mod 0 resets. The factor
+ * persists per device and re-applies on boot. Native webview zoom behaves like
+ * browser zoom (transparent to layout math); if the platform webview refuses,
+ * CSS zoom on the root element is the fallback.
+ */
 
 const KEY = "pr-flow:zoom";
 export const ZOOM_MIN = 0.5;
@@ -28,7 +30,6 @@ export async function applyZoom(factor: number): Promise<void> {
   try {
     await getCurrentWebview().setZoom(factor);
   } catch {
-    // Platform webview without native zoom — CSS zoom is close enough.
     (document.documentElement.style as CSSStyleDeclaration & { zoom: string }).zoom =
       factor === 1 ? "" : String(factor);
   }

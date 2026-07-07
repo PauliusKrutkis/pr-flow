@@ -1,10 +1,12 @@
 import { GitPullRequestArrow, X } from "lucide-react";
 import { cn } from "../../lib/cn";
 
-// A slim, inset banner at the top of the diff area. Two uses:
-//  • orient ("3 files changed · +120 −8") shown briefly when a PR opens
-//  • update ("This PR changed while you were reviewing") when the head moves
-// Skipped entirely when there's nothing worth saying (ReviewScreen decides).
+/**
+ * A slim, inset banner at the top of the diff area. Two uses:
+ * • orient ("3 files changed · +120 −8") shown briefly when a PR opens
+ * • update ("This PR changed while you were reviewing") when the head moves
+ * Skipped entirely when there's nothing worth saying (ReviewScreen decides).
+ */
 
 export function OrientBanner({
   message,

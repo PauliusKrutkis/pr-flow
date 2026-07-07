@@ -6,12 +6,6 @@ import { useAppStore } from "../store/appStore";
 import { useHotkeys } from "../keyboard";
 import { Spinner } from "./ui/Spinner";
 
-// The gate — sign-in and "add account" alike. Design rule: the gate shows
-// IDENTITY, never configuration. One stack of "continue as…" rows (GitHub,
-// GitLab, remembered self-hosted instances); anything that needs input lives
-// one quiet link away, asks a single question, and collapses back into a row
-// in the stack the next time.
-
 type View = "identity" | "selfhosted" | "token";
 type Busy = "idle" | "oauth" | "probe" | "pat";
 
@@ -69,11 +63,9 @@ export function TokenGate() {
   const [busyLabel, setBusyLabel] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  // self-hosted step
   const [hostInput, setHostInput] = useState("");
   const [probedHost, setProbedHost] = useState<string | null>(null);
   const [appId, setAppId] = useState("");
-  // token step
   const [tokenProvider, setTokenProvider] = useState<"github" | "gitlab">("github");
   const [tokenHost, setTokenHost] = useState("");
   const [token, setToken] = useState("");
@@ -89,7 +81,8 @@ export function TokenGate() {
       .catch(() => setGlOauthReady(false));
   }, []);
 
-  // Remembered instances: localStorage entries + hosts of existing accounts.
+  /** Remembered instances: localStorage entries + hosts of existing accounts. */
+
   const instances: GitlabInstance[] = (() => {
     const list = loadInstances();
     for (const a of accounts) {
@@ -110,7 +103,6 @@ export function TokenGate() {
     setView(next);
   }
 
-  // Esc walks back: sub-view → identity → inbox (when there is one).
   useHotkeys("token", [
     {
       keys: "esc",
@@ -124,7 +116,8 @@ export function TokenGate() {
     },
   ]);
 
-  // A new active account: reload so every cache belongs to it.
+  /** A new active account: reload so every cache belongs to it. */
+
   function finish() {
     goInbox();
     window.location.reload();
@@ -164,7 +157,6 @@ export function TokenGate() {
     if (inst.clientId) {
       void signInGitlab(inst.host, inst.clientId);
     } else {
-      // No one-click sign-in known for this host — finish its setup instead.
       setHostInput(shortHost(inst.host));
       setProbedHost(inst.host);
       setAppId("");

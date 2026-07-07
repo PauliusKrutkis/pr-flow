@@ -78,8 +78,6 @@ const ComposerKeys = Extension.create({
       },
       "Mod-k": ({ editor }) =>
         HANDLERS.get(editor)?.openLink(editor) ?? false,
-      // Tab keeps its composer meaning (flip batch/now) except inside a
-      // list, where indenting is what an editor user expects.
       Tab: ({ editor }) => {
         const flip = HANDLERS.get(editor)?.flip;
         if (!flip || editor.isActive("listItem")) return false;
@@ -114,13 +112,15 @@ export function ComposerEditor({
   onModeFlip,
   onEmptyChange,
 }: ComposerEditorProps) {
-  // ⌘K swaps the hint bar for a URL input aimed at the current selection.
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkHref, setLinkHref] = useState("");
 
-  // Needs something to link — a selection, or an existing link to edit. Takes
-  // the editor as an argument (not from scope) so the keymap, which is built
-  // before the editor exists, can call it.
+  /**
+   * Needs something to link — a selection, or an existing link to edit. Takes
+   * the editor as an argument (not from scope) so the keymap, which is built
+   * before the editor exists, can call it.
+   */
+
   function openLink(ed: Editor): boolean {
     if (ed.state.selection.empty && !ed.isActive("link")) return false;
     setLinkHref((ed.getAttributes("link").href as string | undefined) ?? "");
@@ -131,7 +131,6 @@ export function ComposerEditor({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        // Underline has no markdown form; links must not navigate in-app.
         underline: false,
         link: { openOnClick: false },
       }),
@@ -150,8 +149,6 @@ export function ComposerEditor({
         "aria-label": placeholder,
       },
       handleKeyDown: (_view, event) => {
-        // The global hotkey listener honors mod-combos even from editable
-        // targets — the editor's ⌘K must not reach it (palette).
         if (
           (event.metaKey || event.ctrlKey) &&
           !event.shiftKey &&
@@ -164,8 +161,6 @@ export function ComposerEditor({
     },
   });
 
-  // Keep this editor's keymap handlers current — insertion effects run
-  // before any user event, so shortcuts never see a stale closure.
   useInsertionEffect(() => {
     HANDLERS.set(editor, {
       submit: onSubmitRequest,
@@ -186,7 +181,8 @@ export function ComposerEditor({
     [editor],
   );
 
-  // Lit states for the hint-bar toggles, updated per transaction.
+  /** Lit states for the hint-bar toggles, updated per transaction. */
+
   const active = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -197,9 +193,12 @@ export function ComposerEditor({
     }),
   });
 
-  // A real block, rendered like the shipped suggestion card and serialized to
-  // the ```suggestion fence both hosts apply natively. The prefilled line is
-  // left selected so typing replaces it in place.
+  /**
+   * A real block, rendered like the shipped suggestion card and serialized to
+   * the ```suggestion fence both hosts apply natively. The prefilled line is
+   * left selected so typing replaces it in place.
+   */
+
   function insertSuggestion() {
     const line = suggestionText ?? "";
     editor
@@ -220,8 +219,11 @@ export function ComposerEditor({
   function applyLink() {
     setLinkOpen(false);
     const href = linkHref.trim();
-    // focus() restores the selection the input borrowed; extendMarkRange
-    // covers editing an existing link from a caret inside it.
+    /**
+     * focus() restores the selection the input borrowed; extendMarkRange
+     * covers editing an existing link from a caret inside it.
+     */
+
     const chain = editor.chain().focus().extendMarkRange("link");
     if (href) {
       chain.setLink({ href }).run();

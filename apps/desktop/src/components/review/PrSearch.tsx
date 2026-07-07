@@ -90,14 +90,14 @@ export function PrSearch({
       return out;
     }
 
-    // text mode
     if (!q) return [];
     const out: Item[] = [];
     for (let i = 0; i < files.length && out.length < MAX_LINES; i++) {
       const f = files[i];
       if (!f.patch) continue;
       for (const hunk of parsePatch(f.patch)) {
-        // Rows minus the "@@" header, so snippet neighbours are real lines.
+        /** Rows minus the "@@" header, so snippet neighbours are real lines. */
+
         const rows = hunk.rows.filter((r) => r.type !== "hunk");
         for (let ri = 0; ri < rows.length; ri++) {
           const row = rows[ri];

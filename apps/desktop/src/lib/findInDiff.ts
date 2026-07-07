@@ -1,13 +1,15 @@
-// Matching for the editor-style find-in-diff bar (mod+f). Matches are computed
-// from the PATCH TEXT, not the DOM — so every changed file counts, whether or
-// not its diff section is currently rendered (sections mount lazily). Each
-// match carries the same "SIDE:line" anchor the diff viewer keys its rows by,
-// so navigation can reuse the existing selectLine/jump machinery unchanged.
-//
-// The scan runs on every keystroke, so it works on the raw patch string with
-// one indexOf sweep per file — no per-row slicing or lowercasing. Everything
-// it needs (lowered text, line offsets, per-line anchors) is cached by patch
-// identity; the per-keystroke cost is the sweep itself plus O(hits).
+/**
+ * Matching for the editor-style find-in-diff bar (mod+f). Matches are computed
+ * from the PATCH TEXT, not the DOM — so every changed file counts, whether or
+ * not its diff section is currently rendered (sections mount lazily). Each
+ * match carries the same "SIDE:line" anchor the diff viewer keys its rows by,
+ * so navigation can reuse the existing selectLine/jump machinery unchanged.
+ *
+ * The scan runs on every keystroke, so it works on the raw patch string with
+ * one indexOf sweep per file — no per-row slicing or lowercasing. Everything
+ * it needs (lowered text, line offsets, per-line anchors) is cached by patch
+ * identity; the per-keystroke cost is the sweep itself plus O(hits).
+ */
 
 import { parsePatch, rowAnchor, type DiffRow } from "./diff";
 
@@ -31,9 +33,12 @@ export interface FindOptions {
   maxMatches?: number;
 }
 
-// A one-letter query over a huge PR can explode; past this the counter stops
-// being useful anyway, so we cap the navigable list (rendered highlights are
-// computed per line and are unaffected).
+/**
+ * A one-letter query over a huge PR can explode; past this the counter stops
+ * being useful anyway, so we cap the navigable list (rendered highlights are
+ * computed per line and are unaffected).
+ */
+
 const MAX_MATCHES = 5000;
 
 /**
@@ -56,10 +61,11 @@ export function findMatchRangesInLine(
   return out;
 }
 
-// ---- per-patch scan caches --------------------------------------------------
-// All keyed by strings the query cache already holds (or their cached lowered
-// forms), so entries cost no text copies beyond the lowered one; cleared
-// wholesale past a cap, like the parse cache in diff.ts.
+/**
+ * All keyed by strings the query cache already holds (or their cached lowered
+ * forms), so entries cost no text copies beyond the lowered one; cleared
+ * wholesale past a cap, like the parse cache in diff.ts.
+ */
 
 const CACHE_MAX = 500;
 
@@ -158,9 +164,6 @@ export function findInDiff(
   query: string,
   opts: FindOptions = {},
 ): FindMatch[] {
-  // The find input is single-line; a needle containing a newline can never
-  // sit inside one row's content, and letting it into the raw-text sweep
-  // would fabricate cross-line hits.
   if (!query || query.includes("\n")) return [];
   const caseSensitive = opts.caseSensitive ?? false;
   const max = opts.maxMatches ?? MAX_MATCHES;
@@ -174,28 +177,27 @@ export function findInDiff(
     const hay = caseSensitive ? patch : lowered(patch);
     const starts = lineStarts(hay);
     const anchors = lineAnchors(patch);
-    // Hits arrive in increasing offset, so the current line index only ever
-    // moves forward — no binary search.
+    /**
+     * Hits arrive in increasing offset, so the current line index only ever
+     * moves forward — no binary search.
+     */
+
     let li = 0;
     for (let o = hay.indexOf(needle); o !== -1; ) {
       while (li + 1 < starts.length && starts[li + 1] <= o) li++;
       const anchor = anchors[li];
-      // Content starts one past the +/-/space marker; the needle has no
-      // newline, so a hit that matched at all fits inside its line.
+      /**
+       * Content starts one past the +/-/space marker; the needle has no
+       * newline, so a hit that matched at all fits inside its line.
+       */
+
       const col = o - starts[li] - 1;
       if (anchor == null || col < 0) {
-        // A hit on a header/metadata line, or one overlapping the marker
-        // column, isn't a match. Step ONE character, not a needle length: a
-        // periodic needle ("-a-a") rejected at the marker can still have a
-        // real hit one column later — one the per-line matcher (which the
-        // rendered marks use) WILL find, and the two must never disagree.
         o = hay.indexOf(needle, o + 1);
         continue;
       }
       out.push({ fileIndex, anchor, start: col, end: col + needle.length });
       if (out.length >= max) return out;
-      // Accepted hits step a full needle length — the same non-overlap rule
-      // findMatchRangesInLine applies within a line.
       o = hay.indexOf(needle, o + needle.length);
     }
   }

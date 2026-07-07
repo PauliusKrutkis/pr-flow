@@ -1,5 +1,7 @@
-// Shared data model. These mirror exactly the camelCase structs returned by
-// the Rust backend (see src-tauri/src/github.rs).
+/**
+ * Shared data model. These mirror exactly the camelCase structs returned by
+ * the Rust backend (see src-tauri/src/github.rs).
+ */
 
 export interface GitHubUser {
   login: string;

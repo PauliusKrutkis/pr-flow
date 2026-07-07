@@ -76,7 +76,8 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
   const idRef = useRef(0);
   const [version, setVersion] = useState(0);
 
-  // Sequence buffer for vim-style two-key bindings ("]c", "gg").
+  /** Sequence buffer for vim-style two-key bindings ("]c", "gg"). */
+
   const seqRef = useRef("");
   const seqTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -126,10 +127,13 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  // Collect bindings eligible to fire right now: those in the active scope, or
-  // marked global. Reads the scope from the STACK REF, not state — the keydown
-  // listener is bound once, and closured state can lag a screen switch (the
-  // e2e suite caught Escape being dropped right after inbox → review).
+  /**
+   * Collect bindings eligible to fire right now: those in the active scope, or
+   * marked global. Reads the scope from the STACK REF, not state — the keydown
+   * listener is bound once, and closured state can lag a screen switch (the
+   * e2e suite caught Escape being dropped right after inbox → review).
+   */
+
   const eligibleBindings = useCallback((): RegisteredBinding[] => {
     const stack = scopeStackRef.current;
     const active = stack.length ? stack[stack.length - 1].scope : "global";
@@ -174,11 +178,8 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
       const hasMod = e.metaKey || e.ctrlKey;
       const key = normalizeKey(e);
 
-      // While typing in a field, only global modifier-combos (e.g. ⌘K) may
-      // fire; the field handles its own Esc / Enter / arrows / plain typing.
       if (editable && !hasMod) return;
 
-      // Modifier combos and alt bypass the sequence buffer entirely.
       if (hasMod || e.altKey) {
         clearSeq();
         if (key === "meta" || key === "control" || key === "alt" || key === "shift") {
@@ -190,10 +191,10 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
         if (e.shiftKey) parts.push("shift");
         parts.push(key);
         const combo = parts.join("+");
-        // Also accept the combo without an explicit "shift+" (e.g. "mod+k").
+        /** Also accept the combo without an explicit "shift+" (e.g. "mod+k"). */
+
         const altCombo = combo.replace("shift+", "");
         let match = findByKey(bindings, combo) ?? findByKey(bindings, altCombo);
-        // From within an editable field, only honor global bindings.
         if (editable && match && !match.global) match = undefined;
         if (match) {
           e.preventDefault();
@@ -202,12 +203,8 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Bare modifier keys: ignore.
       if (key === "shift") return;
 
-      // Bare shift+key descriptors (e.g. "shift+j" extends the selection) —
-      // matched only when a scope explicitly binds one, so shifted CHARACTERS
-      // ("]", "?", "+") keep resolving through their produced key like always.
       if (e.shiftKey) {
         const shifted = findByKey(bindings, `shift+${key}`);
         if (shifted) {
@@ -218,7 +215,6 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // ---- single keys & two-key sequences ----
       const buf = seqRef.current + key;
 
       const exact = findByKey(bindings, buf);
@@ -239,7 +235,6 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Buffer didn't extend into anything — restart from this key alone.
       clearSeq();
       const single = findByKey(bindings, key);
       if (single) {
@@ -248,9 +243,6 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Unbound Tab outside a field: swallow it. This is a keyboard-first app —
-      // focus jumping between arbitrary elements (and its focus rings) reads as
-      // noise, so Tab only ever does what a scope explicitly binds it to.
       if (key === "tab") e.preventDefault();
     }
 
