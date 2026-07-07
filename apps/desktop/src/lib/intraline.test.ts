@@ -1,10 +1,47 @@
+// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { describe, expect, it } from "vitest";
+import type { DiffRow } from "./diff.ts";
 import { parsePatch } from "./diff.ts";
-import { intralineDiff, intralinePairs, tokenize } from "./intraline.ts";
+import {
+  type IntralinePair,
+  intralineDiff,
+  intralinePairs,
+  tokenize,
+} from "./intraline.ts";
 
 /** The emphasized substrings, for readable assertions. */
-function slices(text: string, ranges: Array<[number, number]>): string[] {
+function slices(text: string, ranges: [number, number][]): string[] {
   return ranges.map(([s, e]) => text.slice(s, e));
+}
+
+function mustDiff(del: string, add: string): IntralinePair {
+  const d = intralineDiff(del, add);
+  expect(d).not.toBeNull();
+  if (!d) {
+    throw new Error("expected diff");
+  }
+  return d;
+}
+
+function rowByContent(rows: DiffRow[], content: string): DiffRow {
+  const row = rows.find((r) => r.content === content);
+  expect(row).toBeDefined();
+  if (!row) {
+    throw new Error("row not found");
+  }
+  return row;
+}
+
+function mustRanges(
+  map: Map<DiffRow, [number, number][]>,
+  row: DiffRow
+): [number, number][] {
+  const ranges = map.get(row);
+  expect(ranges).toBeDefined();
+  if (!ranges) {
+    throw new Error("expected ranges");
+  }
+  return ranges;
 }
 
 describe("tokenize", () => {
@@ -48,27 +85,24 @@ describe("tokenize", () => {
 
 describe("intralineDiff", () => {
   it("emphasizes only the changed identifier piece in a rename", () => {
-    const d = intralineDiff(
-      "  const retryCount = 3;",
-      "  const retryLimit = 3;"
-    )!;
+    const d = mustDiff("  const retryCount = 3;", "  const retryLimit = 3;");
     expect(slices("  const retryCount = 3;", d.del)).toEqual(["Count"]);
     expect(slices("  const retryLimit = 3;", d.add)).toEqual(["Limit"]);
   });
 
   it("handles pure insertions (one side has no changed span)", () => {
-    const d = intralineDiff("foo(a)", "foo(a, b)")!;
+    const d = mustDiff("foo(a)", "foo(a, b)");
     expect(d.del).toEqual([]);
     expect(slices("foo(a, b)", d.add)).toEqual([", b"]);
   });
 
   it("merges adjacent changed tokens into one span", () => {
-    const d = intralineDiff("call(x)", "call(y.z)")!;
+    const d = mustDiff("call(x)", "call(y.z)");
     expect(slices("call(y.z)", d.add)).toEqual(["y.z"]);
   });
 
   it("keeps separate spans when an unchanged token sits between changes", () => {
-    const d = intralineDiff("f(alpha, beta)", "f(gamma, delta)")!;
+    const d = mustDiff("f(alpha, beta)", "f(gamma, delta)");
     expect(slices("f(gamma, delta)", d.add)).toEqual(["gamma", "delta"]);
     expect(slices("f(alpha, beta)", d.del)).toEqual(["alpha", "beta"]);
   });
@@ -96,7 +130,7 @@ describe("intralineDiff", () => {
   });
 
   it("counts whitespace changes as changed spans but not toward the ratio", () => {
-    const d = intralineDiff("a = b;", "a   = b;")!;
+    const d = mustDiff("a = b;", "a   = b;");
     expect(slices("a   = b;", d.add)).toEqual(["   "]);
   });
 });
@@ -113,19 +147,21 @@ describe("intralinePairs", () => {
   ].join("\n");
 
   it("pairs a del run with the following add run index-wise", () => {
-    const hunks = parsePatch(patch);
-    const map = intralinePairs(hunks);
-    const rows = hunks[0].rows;
-    const del0 = rows.find((r) => r.content === "  const retryCount = 3;")!;
-    const add0 = rows.find((r) => r.content === "  const retryLimit = 3;")!;
-    const del1 = rows.find((r) => r.content === "  return retryCount;")!;
-    const add1 = rows.find((r) => r.content === "  return retryLimit;")!;
-    expect(slices(del0.content, map.get(del0)!)).toEqual(["Count"]);
-    expect(slices(add0.content, map.get(add0)!)).toEqual(["Limit"]);
-    expect(slices(del1.content, map.get(del1)!)).toEqual(["Count"]);
-    expect(slices(add1.content, map.get(add1)!)).toEqual(["Limit"]);
-    const ctx = rows.find((r) => r.type === "context")!;
-    expect(map.has(ctx)).toBe(false);
+    const [{ rows }] = parsePatch(patch);
+    const map = intralinePairs(parsePatch(patch));
+    const del0 = rowByContent(rows, "  const retryCount = 3;");
+    const add0 = rowByContent(rows, "  const retryLimit = 3;");
+    const del1 = rowByContent(rows, "  return retryCount;");
+    const add1 = rowByContent(rows, "  return retryLimit;");
+    expect(slices(del0.content, mustRanges(map, del0))).toEqual(["Count"]);
+    expect(slices(add0.content, mustRanges(map, add0))).toEqual(["Limit"]);
+    expect(slices(del1.content, mustRanges(map, del1))).toEqual(["Count"]);
+    expect(slices(add1.content, mustRanges(map, add1))).toEqual(["Limit"]);
+    const ctx = rows.find((r) => r.type === "context");
+    expect(ctx).toBeDefined();
+    if (ctx) {
+      expect(map.has(ctx)).toBe(false);
+    }
   });
 
   it("leaves leftover rows of an unbalanced run unpaired", () => {

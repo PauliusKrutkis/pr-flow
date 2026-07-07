@@ -32,9 +32,9 @@ watch mode.
 | --- | --- |
 | `lib/diff.ts` | `parsePatch`: hunk headers, add/del/context numbering, `\ No newline` metadata, empty/undefined patch, multi-hunk offsets, `changedRowCount` |
 | `lib/highlight.ts` | language resolution by extension/basename; block-comment continuation heuristic (`* …`, `*/`, false-positive guard for `*ptr`); `highlightLineWithMatch` mark wrapping across token boundaries; HTML escaping of un-highlightable input |
-| `components/ui/Highlight.tsx` | `fuzzyIndices` (match/no-match/empty query); `HighlightMatch` multi-occurrence segmentation |
-| `store/appStore.ts` | archive semantics (`dismiss`/`undoDismiss`/`isDismissed` resurfacing on newer `updatedAt`); unread (`markSeen`/`isUnread`); route persistence (`loadLastRoute` validation of malformed JSON) |
-| `lib/reviewMemory.ts` | debounced write, merge-on-update, corrupt-storage fallback |
+| `components/ui/highlight.tsx` | `fuzzyIndices` (match/no-match/empty query); `HighlightMatch` multi-occurrence segmentation |
+| `store/app-store.ts` | archive semantics (`dismiss`/`undoDismiss`/`isDismissed` resurfacing on newer `updatedAt`); unread (`markSeen`/`isUnread`); route persistence (`loadLastRoute` validation of malformed JSON) |
+| `lib/review-memory.ts` | debounced write, merge-on-update, corrupt-storage fallback |
 | `lib/time.ts` | relative formatting boundaries |
 
 ### Priority 2 — keyboard & interaction model (component/integration)
@@ -44,7 +44,7 @@ invisible to typecheck.
 
 | Area | What to pin down |
 | --- | --- |
-| `keyboard/KeyboardProvider.tsx` | scope precedence (active vs global), two-key sequences (`]c`) + timeout, editable-target bypass, modifier combos (`mod+k`, shift-stripped alt combo), unbound-Tab swallowing, first-match-wins source ordering |
+| `keyboard/keyboard-provider.tsx` | scope precedence (active vs global), two-key sequences (`]c`) + timeout, editable-target bypass, modifier combos (`mod+k`, shift-stripped alt combo), unbound-Tab swallowing, first-match-wins source ordering |
 | `DiffViewer` cursor model | rAF-coalesced j/k (fake timers), hover→cursor sync, pointer-intent gate (hover with unmoved coordinates is ignored while a keyboard hold is active), boundary exit → `onCursorExit`, seed placement (`first`/`last`), jump landing + flash |
 | `ReviewScreen` file navigation | active-index hysteresis (eager down / reluctant up), Tab wrap-around, `e` mark-viewed-and-advance, windowing set only grows |
 | `Inbox` | archive flow end-to-end with the store (row disappears, cursor lands on neighbor, `z` restores), tab cycling incl. Shift |

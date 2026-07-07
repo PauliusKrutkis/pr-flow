@@ -1,7 +1,7 @@
-import type { Page } from "@playwright/test";
 import { setupApp } from "./bridge.ts";
 import { makeBigDetail, perfBudget } from "./fixtures.ts";
 import { expect, test } from "./test.ts";
+import type { Page } from "./types.ts";
 
 test.describe.configure({ retries: 2 });
 
@@ -30,10 +30,22 @@ const BIG_DETAIL = makeBigDetail(FILES, LINES, (f, i) =>
 /** Dispatch one real (React-visible) keystroke into the find input ("\b" =
  *  backspace) and return [elapsed ms to the second following frame, distinct
  *  .qf-code repainted]. */
-async function keystroke(page: Page, ch: string): Promise<[number, number]> {
-  return page.evaluate(async (ch) => {
-    const input =
-      document.querySelector<HTMLInputElement>(".qf-findbar-input")!;
+async function forEachCharSequential(
+  chars: string,
+  fn: (ch: string) => Promise<void>
+): Promise<void> {
+  for (const ch of chars) {
+    // biome-ignore lint/performance/noAwaitInLoops: sequential keystrokes measure find perf
+    await fn(ch);
+  }
+}
+
+function keystroke(page: Page, ch: string): Promise<[number, number]> {
+  return page.evaluate(async (keyChar) => {
+    const input = document.querySelector<HTMLInputElement>(".qf-findbar-input");
+    if (!input) {
+      throw new Error("find bar input not found");
+    }
     const mutated = new Set<Element>();
     const observer = new MutationObserver((muts) => {
       for (const m of muts) {
@@ -53,14 +65,17 @@ async function keystroke(page: Page, ch: string): Promise<[number, number]> {
     const setValue = Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
       "value"
-    )!.set!;
+    )?.set;
+    if (!setValue) {
+      throw new Error("HTMLInputElement value setter not found");
+    }
     const t0 = performance.now();
     input.dispatchEvent(
-      new KeyboardEvent("keydown", { bubbles: true, key: ch })
+      new KeyboardEvent("keydown", { bubbles: true, key: keyChar })
     );
     setValue.call(
       input,
-      ch === "\b" ? input.value.slice(0, -1) : input.value + ch
+      keyChar === "\b" ? input.value.slice(0, -1) : input.value + keyChar
     );
     input.dispatchEvent(new Event("input", { bubbles: true }));
     await new Promise((r) =>
@@ -91,26 +106,26 @@ test("typing in the find bar repaints the viewport, not the PR", async ({
   await page.keyboard.press("Control+f");
   await expect(page.getByPlaceholder("Find in diff")).toBeFocused();
 
-  for (const ch of "zz") {
-    await keystroke(page, ch);
-  }
+  await forEachCharSequential("zz", (ch) =>
+    keystroke(page, ch).then(() => undefined)
+  );
   await keystroke(page, "\b");
   await keystroke(page, "\b");
   await page.waitForTimeout(300);
 
   const times: number[] = [];
-  for (const ch of "zebra") {
+  await forEachCharSequential("zebra", async (ch) => {
     const [ms, repainted] = await keystroke(page, ch);
     times.push(ms);
     expect(repainted).toBeLessThanOrEqual(RENDERED_CAP);
-  }
+  });
   await expect(page.locator(".qf-findbar-count")).toHaveText(`1/${MATCH_ROWS}`);
 
-  for (const ch of "_1_7") {
+  await forEachCharSequential("_1_7", async (ch) => {
     const [ms, repainted] = await keystroke(page, ch);
     times.push(ms);
     expect(repainted).toBeLessThanOrEqual(RENDERED_CAP);
-  }
+  });
   await expect(page.locator(".qf-findbar-count")).toHaveText("1/1");
 
   const median = [...times].sort((a, b) => a - b)[Math.floor(times.length / 2)];
@@ -126,11 +141,11 @@ test("typing right after open stays smooth", async ({ page }) => {
   await expect(page.getByPlaceholder("Find in diff")).toBeFocused();
 
   const times: number[] = [];
-  for (const ch of "zebra_1_7") {
+  await forEachCharSequential("zebra_1_7", async (ch) => {
     const [ms] = await keystroke(page, ch);
     times.push(ms);
     await page.waitForTimeout(120); // human typing cadence
-  }
+  });
   const median = [...times].sort((a, b) => a - b)[Math.floor(times.length / 2)];
   console.log(
     `post-open keystrokes ms: [${times.map((t) => t.toFixed(1)).join(", ")}] median ${median.toFixed(1)}`
@@ -144,9 +159,9 @@ test("a keystroke that clears all matches repaints only the marked rows", async 
   test.setTimeout(60_000);
   await page.keyboard.press("Control+f");
   await expect(page.getByPlaceholder("Find in diff")).toBeFocused();
-  for (const ch of "zebra") {
-    await keystroke(page, ch);
-  }
+  await forEachCharSequential("zebra", (ch) =>
+    keystroke(page, ch).then(() => undefined)
+  );
   await page.keyboard.press("Enter");
   await expect(page.locator("mark.qf-find-mark").first()).toBeVisible();
   const marked = await page.locator("mark.qf-find-mark").count();

@@ -1,6 +1,8 @@
-import type { Page } from "@playwright/test";
 import { setupApp } from "./bridge.ts";
 import { expect, test } from "./test.ts";
+import type { Page } from "./types.ts";
+
+const REVIEW_REQUESTS = /Review requests/;
 
 test.beforeEach(async ({ page }) => {
   await setupApp(page);
@@ -16,21 +18,21 @@ test.beforeEach(async ({ page }) => {
  */
 async function tokenCenter(page: Page, section: number, token: string) {
   const rect = await page.evaluate(
-    ({ section, token }) => {
+    ({ section: fileSection, token: wordToken }) => {
       const codes = document.querySelectorAll(
-        `.qf-row[data-file-index="${section}"]:not(.qf-row-hunk) .qf-code`
+        `.qf-row[data-file-index="${fileSection}"]:not(.qf-row-hunk) .qf-code`
       );
       for (const code of codes) {
         const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
         while (walker.nextNode()) {
           const node = walker.currentNode as Text;
-          const i = node.data.indexOf(token);
+          const i = node.data.indexOf(wordToken);
           if (i === -1) {
             continue;
           }
           const range = document.createRange();
           range.setStart(node, i);
-          range.setEnd(node, i + token.length);
+          range.setEnd(node, i + wordToken.length);
           const r = range.getBoundingClientRect();
           return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
         }
@@ -55,22 +57,25 @@ async function dblclickToken(page: Page, section: number, token: string) {
 /** Programmatically select `text` inside a diff code line (fires selectionchange). */
 async function selectInCode(page: Page, section: number, text: string) {
   const ok = await page.evaluate(
-    ({ section, text }) => {
+    ({ section: fileSection, text: needle }) => {
       const codes = document.querySelectorAll(
-        `.qf-row[data-file-index="${section}"]:not(.qf-row-hunk) .qf-code`
+        `.qf-row[data-file-index="${fileSection}"]:not(.qf-row-hunk) .qf-code`
       );
       for (const code of codes) {
         const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
         while (walker.nextNode()) {
           const node = walker.currentNode as Text;
-          const i = node.data.indexOf(text);
+          const i = node.data.indexOf(needle);
           if (i === -1) {
             continue;
           }
           const range = document.createRange();
           range.setStart(node, i);
-          range.setEnd(node, i + text.length);
-          const sel = window.getSelection()!;
+          range.setEnd(node, i + needle.length);
+          const sel = window.getSelection();
+          if (!sel) {
+            return false;
+          }
           sel.removeAllRanges();
           sel.addRange(range);
           return true;
@@ -108,7 +113,7 @@ test("single-clicking a token marks its occurrences within that file", async ({
     .locator('.qf-row[data-file-index="0"]:not(.qf-row-hunk) .qf-code')
     .first()
     .boundingBox();
-  await page.mouse.click(row!.x + row!.width - 8, row!.y + row!.height / 2);
+  await page.mouse.click(row?.x + row?.width - 8, row?.y + row?.height / 2);
   await expect(occMarks(page)).toHaveCount(0);
 });
 
@@ -136,14 +141,17 @@ test("clicking blank space right of a line ending in a word clears, not highligh
       while (walker.nextNode()) {
         last = walker.currentNode as Text;
       }
+      if (!last) {
+        continue;
+      }
       const range = document.createRange();
-      range.selectNodeContents(last!);
+      range.selectNodeContents(last);
       const r = range.getBoundingClientRect();
       return { x: r.right, y: r.y + r.height / 2 };
     }
     return null;
   });
-  await page.mouse.click(lineEnd!.x + 60, lineEnd!.y);
+  await page.mouse.click(lineEnd?.x + 60, lineEnd?.y);
   await expect(occMarks(page)).toHaveCount(0);
 });
 
@@ -211,6 +219,6 @@ test("Esc goes straight to the inbox — occurrence marks don't consume it", asy
 
   await page.keyboard.press("Escape");
   await expect(
-    page.getByRole("button", { name: /Review requests/ })
+    page.getByRole("button", { name: REVIEW_REQUESTS })
   ).toBeVisible();
 });

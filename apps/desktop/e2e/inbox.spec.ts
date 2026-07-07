@@ -1,6 +1,11 @@
 import { setupApp } from "./bridge.ts";
 import { expect, test } from "./test.ts";
 
+const REVIEW_REQUESTS = /Review requests/;
+const ASSIGNED = /Assigned/;
+const WATCHING = /Watching/;
+const WATCH_A_REPOSITORY = /Watch a repository/;
+
 test.beforeEach(async ({ page }) => {
   await setupApp(page);
   await expect(page.getByRole("option").first()).toBeVisible();
@@ -9,7 +14,7 @@ test.beforeEach(async ({ page }) => {
 test("renders the review-requested list with counts", async ({ page }) => {
   await expect(page.getByRole("option")).toHaveCount(3);
   await expect(
-    page.getByRole("button", { name: /Review requests/ })
+    page.getByRole("button", { name: REVIEW_REQUESTS })
   ).toContainText("3");
   await expect(
     page.getByRole("listbox").getByText("Add fuzzy matching to search")
@@ -30,17 +35,17 @@ test("j/k move the selection; the reading pane follows", async ({ page }) => {
 
 test("tab cycles tabs; digits jump directly", async ({ page }) => {
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: /Assigned/ })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: ASSIGNED })).toHaveAttribute(
     "data-state",
     "active"
   );
   await page.keyboard.press("5");
-  await expect(page.getByRole("button", { name: /Watching/ })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: WATCHING })).toHaveAttribute(
     "data-state",
     "active"
   );
   await expect(
-    page.getByRole("button", { name: /Watch a repository/ })
+    page.getByRole("button", { name: WATCH_A_REPOSITORY })
   ).toBeVisible();
   await page.keyboard.press("1");
 });
@@ -52,7 +57,7 @@ test("e archives with an undo toast; z restores", async ({ page }) => {
   await expect(toast).toContainText("Archived");
   await expect(toast).toContainText("Add fuzzy matching to search");
   await expect(
-    page.getByRole("button", { name: /Review requests/ })
+    page.getByRole("button", { name: REVIEW_REQUESTS })
   ).toContainText("2");
   await page.keyboard.press("z");
   await expect(page.getByRole("option")).toHaveCount(3);

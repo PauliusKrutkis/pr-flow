@@ -41,7 +41,10 @@ export const makePr = (
 });
 
 export type PrFixture = ReturnType<typeof makePr>;
-export type BucketFixture = { count: number; prs: PrFixture[] };
+export interface BucketFixture {
+  count: number;
+  prs: PrFixture[];
+}
 export type InboxFixture = Record<
   "reviewRequested" | "assigned" | "created" | "involved",
   BucketFixture
@@ -312,7 +315,10 @@ export function makeBigDetail(
       filename: `src/mod${String(f).padStart(2, "0")}.ts`,
       patch: [
         `@@ -1,${lines} +1,${lines} @@`,
-        ...Array.from({ length: lines }, (_, i) => " " + lineAt(f, i + 1)),
+        ...Array.from(
+          { length: lines },
+          (_line, lineIndex) => ` ${lineAt(f, lineIndex + 1)}`
+        ),
       ].join("\n"),
       sha: `bf${f}`,
       status: "modified",

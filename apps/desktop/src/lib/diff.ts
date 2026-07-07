@@ -77,7 +77,7 @@ function parsePatchUncached(patch: string): DiffHunk[] {
       continue;
     }
 
-    const marker = line[0];
+    const [marker] = line;
     const text = line.slice(1);
 
     if (marker === "+") {
@@ -104,9 +104,9 @@ export function rowAnchor(row: DiffRow): string | null {
     return null;
   }
   if (row.type === "del") {
-    return row.oldLine == null ? null : `LEFT:${row.oldLine}`;
+    return row.oldLine === null ? null : `LEFT:${row.oldLine}`;
   }
-  return row.newLine == null ? null : `RIGHT:${row.newLine}`;
+  return row.newLine === null ? null : `RIGHT:${row.newLine}`;
 }
 
 /**
@@ -148,7 +148,7 @@ export function anchorFractions(
   for (const h of hunks) {
     for (const row of h.rows) {
       const anchor = rowAnchor(row);
-      if (anchor != null && !out.has(anchor)) {
+      if (anchor !== null && !out.has(anchor)) {
         out.set(anchor, (i + 0.5) / total);
       }
       i += 1;

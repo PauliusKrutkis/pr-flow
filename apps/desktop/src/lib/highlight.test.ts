@@ -1,3 +1,4 @@
+// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { describe, expect, it } from "vitest";
 import {
   highlightLine,
@@ -79,8 +80,8 @@ describe("highlightLineWithFind", () => {
     expect((html.match(/qf-find-mark/g) ?? []).length).toBe(3);
     expect((html.match(/qf-find-current/g) ?? []).length).toBe(1);
 
-    const idx = html.split("qf-find-current")[0];
-    expect((idx.match(/<mark/g) ?? []).length).toBe(2);
+    const [beforeCurrent] = html.split("qf-find-current");
+    expect((beforeCurrent.match(/<mark/g) ?? []).length).toBe(2);
   });
 
   it("no current mark when the current match is on another line", () => {

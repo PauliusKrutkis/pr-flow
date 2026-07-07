@@ -1,4 +1,5 @@
-import { test as base, expect } from "@playwright/test";
+// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
+import { test as base, expect as playwrightExpect } from "@playwright/test";
 
 /**
  * The suite-wide `test`: identical to Playwright's, plus an automatic guard
@@ -9,7 +10,9 @@ import { test as base, expect } from "@playwright/test";
  * not from "@playwright/test".
  */
 
-export const test = base.extend<{ pageErrorGuard: void }>({
+export const expect = playwrightExpect;
+
+export const test = base.extend<{ pageErrorGuard: undefined }>({
   pageErrorGuard: [
     async ({ page }, use) => {
       const errors: string[] = [];
@@ -32,5 +35,3 @@ export const test = base.extend<{ pageErrorGuard: void }>({
     { auto: true },
   ],
 });
-
-export { expect };

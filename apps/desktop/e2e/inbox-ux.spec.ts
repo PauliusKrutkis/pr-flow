@@ -3,6 +3,9 @@ import type { InboxFixture } from "./fixtures.ts";
 import { makePr, SUBSCRIBED } from "./fixtures.ts";
 import { expect, test } from "./test.ts";
 
+const SEARCH_REPOSITORIES = /Search repositories/;
+const IS_SCROLLING = /is-scrolling/;
+
 test("global search finds PRs that exist only in the watched bucket", async ({
   page,
 }) => {
@@ -132,7 +135,7 @@ test("watch dialog: Tab arms remove and Done without moving focus", async ({
   await expect(page.getByRole("option").first()).toBeVisible();
 
   await page.keyboard.press("w");
-  const input = page.getByPlaceholder(/Search repositories/);
+  const input = page.getByPlaceholder(SEARCH_REPOSITORIES);
   await expect(input).toBeFocused();
   await expect(page.locator(".qw-row")).toHaveCount(2);
 
@@ -162,7 +165,7 @@ test("watch dialog search shows a border sweep in flight, no empty box", async (
   await expect(page.getByRole("option").first()).toBeVisible();
 
   await page.keyboard.press("w");
-  const input = page.getByPlaceholder(/Search repositories/);
+  const input = page.getByPlaceholder(SEARCH_REPOSITORIES);
   await expect(input).toBeFocused();
   await input.fill("roc");
 
@@ -178,7 +181,7 @@ test("watch dialog input clears its leading icon", async ({ page }) => {
   await expect(page.getByRole("option").first()).toBeVisible();
 
   await page.keyboard.press("w");
-  const input = page.getByPlaceholder(/Search repositories/);
+  const input = page.getByPlaceholder(SEARCH_REPOSITORIES);
   await expect
     .poll(async () => input.evaluate((el) => getComputedStyle(el).paddingLeft))
     .toBe("34px");
@@ -212,9 +215,9 @@ test("scrollbar thumb is invisible at rest and themed while scrolling", async ({
   await list.evaluate((el) => {
     el.scrollTop = 200;
   });
-  await expect(list).toHaveClass(/is-scrolling/);
+  await expect(list).toHaveClass(IS_SCROLLING);
   expect(await thumbColor()).toBe("rgb(44, 44, 64)");
 
-  await expect(list).not.toHaveClass(/is-scrolling/, { timeout: 3000 });
+  await expect(list).not.toHaveClass(IS_SCROLLING, { timeout: 3000 });
   expect(await thumbColor()).toBe("rgba(0, 0, 0, 0)");
 });

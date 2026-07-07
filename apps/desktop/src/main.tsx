@@ -1,14 +1,17 @@
+// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
+// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import ReactDOM from "react-dom/client";
-import App from "./App.tsx";
-import { KeyboardProvider } from "./keyboard/KeyboardProvider.tsx";
-import { queryClient } from "./lib/queryClient.ts";
+import App from "./app.tsx";
+import { KeyboardProvider } from "./keyboard/keyboard-provider.tsx";
+import { queryClient } from "./lib/query-client.ts";
 
 import "@fontsource/inter/latin-400.css";
 import "@fontsource/inter/latin-500.css";
 import "@fontsource/inter/latin-600.css";
 import "@fontsource/inter/latin-700.css";
+// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import "@fontsource-variable/geist-mono";
 
 import "./index.css";

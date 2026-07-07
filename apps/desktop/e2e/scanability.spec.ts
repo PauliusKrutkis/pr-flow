@@ -1,6 +1,8 @@
-import type { Page } from "@playwright/test";
 import { setupApp } from "./bridge.ts";
 import { expect, test } from "./test.ts";
+import type { Page } from "./types.ts";
+
+const QF_LVL_ONE = /--qf-lvl:\s*1/;
 
 /**
  * Viewport-centre of `token`'s first occurrence within a real (non-hunk) diff
@@ -8,21 +10,21 @@ import { expect, test } from "./test.ts";
  */
 async function tokenCenter(page: Page, section: number, token: string) {
   const rect = await page.evaluate(
-    ({ section, token }) => {
+    ({ section: fileSection, token: wordToken }) => {
       const codes = document.querySelectorAll(
-        `.qf-row[data-file-index="${section}"]:not(.qf-row-hunk) .qf-code`
+        `.qf-row[data-file-index="${fileSection}"]:not(.qf-row-hunk) .qf-code`
       );
       for (const code of codes) {
         const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
         while (walker.nextNode()) {
           const node = walker.currentNode as Text;
-          const i = node.data.indexOf(token);
+          const i = node.data.indexOf(wordToken);
           if (i === -1) {
             continue;
           }
           const range = document.createRange();
           range.setStart(node, i);
-          range.setEnd(node, i + token.length);
+          range.setEnd(node, i + wordToken.length);
           const r = range.getBoundingClientRect();
           return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
         }
@@ -99,9 +101,9 @@ test("clicking inside an intraline-emphasized token still selects the whole word
     }
     return null;
   });
-  await page.mouse.move(pos!.x, pos!.y);
+  await page.mouse.move(pos?.x, pos?.y);
   await page.waitForTimeout(100);
-  await page.mouse.click(pos!.x, pos!.y);
+  await page.mouse.click(pos?.x, pos?.y);
 
   const marks = page.locator('.qf-row[data-file-index="2"] mark.qf-occ-mark');
   await expect(marks.first()).toBeVisible();
@@ -151,7 +153,7 @@ test("indent guides paint on deep lines' code element, and nothing else", async 
     })
     .first()
     .locator(".qf-code");
-  await expect(shallow).toHaveAttribute("style", /--qf-lvl:\s*1/);
+  await expect(shallow).toHaveAttribute("style", QF_LVL_ONE);
 
   const flat = page
     .locator('.qf-row[data-file-index="2"]:not(.qf-row-hunk)', {
@@ -210,7 +212,7 @@ test("overview ruler: find ticks map matches across the whole PR", async ({
     els.map((el) => el.getBoundingClientRect().y)
   );
   expect([...ys]).toEqual([...ys].sort((a, b) => a - b));
-  expect(ys[ys.length - 1] - ys[0]).toBeGreaterThan(50);
+  expect(ys.at(-1) - ys[0]).toBeGreaterThan(50);
 
   await page.keyboard.press("Escape");
   await expect(page.locator(".qf-ruler")).toHaveCount(0);
@@ -228,7 +230,7 @@ test("overview ruler: occurrence ticks on click, cleared by a blank click", asyn
     .locator('.qf-row[data-file-index="1"]:not(.qf-row-hunk) .qf-code')
     .first()
     .boundingBox();
-  await page.mouse.click(row!.x + row!.width - 8, row!.y + row!.height / 2);
+  await page.mouse.click(row?.x + row?.width - 8, row?.y + row?.height / 2);
   await expect(page.locator("mark.qf-occ-mark")).toHaveCount(0);
   await expect(page.locator(".qf-ruler")).toHaveCount(0);
 });
@@ -252,7 +254,10 @@ test("occurrence navigation: n/p and mark clicks jump between occurrences", asyn
   await page.keyboard.press("p");
   await expect(flash).toContainText("return gamma");
 
-  const markBox = (await marks.nth(1).boundingBox())!;
+  const markBox = await marks.nth(1).boundingBox();
+  if (!markBox) {
+    throw new Error("occurrence mark bounding box not found");
+  }
   await page.mouse.move(
     markBox.x + markBox.width / 2,
     markBox.y + markBox.height / 2

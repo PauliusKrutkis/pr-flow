@@ -10,7 +10,7 @@
 import type { DiffHunk, DiffRow } from "./diff.ts";
 
 /** Changed [start, end) column ranges within one line's content. */
-export type IntralineRanges = Array<[number, number]>;
+export type IntralineRanges = [number, number][];
 
 /**
  * Emphasizing everything is worse than emphasizing nothing: a rewritten line
@@ -49,19 +49,21 @@ interface Token {
 
 const RUN_RE = /\w+|\s+|[^\w\s]/g;
 const WORD_PIECE_RE = /[a-z0-9]+|[A-Z]+(?![a-z])|[A-Z][a-z0-9]*|_+/g;
+const WS_RUN_RE = /^\s/;
+const WORD_RUN_RE = /^\w/;
 
 export function tokenize(line: string): Token[] {
   const out: Token[] = [];
   for (const run of line.matchAll(RUN_RE)) {
-    const text = run[0];
-    const start = run.index;
-    if (/^\s/.test(text)) {
+    const [text] = run;
+    const start = run.index ?? 0;
+    if (WS_RUN_RE.test(text)) {
       out.push({ end: start + text.length, start, text, ws: true });
-    } else if (/^\w/.test(text)) {
+    } else if (WORD_RUN_RE.test(text)) {
       for (const piece of text.matchAll(WORD_PIECE_RE)) {
         out.push({
-          end: start + piece.index + piece[0].length,
-          start: start + piece.index,
+          end: start + (piece.index ?? 0) + piece[0].length,
+          start: start + (piece.index ?? 0),
           text: piece[0],
           ws: false,
         });
@@ -83,29 +85,29 @@ function lcsCommon(a: Token[], b: Token[]): { a: boolean[]; b: boolean[] } {
   const m = b.length;
 
   const dp = new Uint16Array((n + 1) * (m + 1));
-  const at = (i: number, j: number) => i * (m + 1) + j;
-  for (let i = n - 1; i >= 0; i--) {
-    for (let j = m - 1; j >= 0; j--) {
-      dp[at(i, j)] =
-        a[i].text === b[j].text
-          ? dp[at(i + 1, j + 1)] + 1
-          : Math.max(dp[at(i + 1, j)], dp[at(i, j + 1)]);
+  const at = (rowIdx: number, colIdx: number) => rowIdx * (m + 1) + colIdx;
+  for (let row = n - 1; row >= 0; row -= 1) {
+    for (let col = m - 1; col >= 0; col -= 1) {
+      dp[at(row, col)] =
+        a[row].text === b[col].text
+          ? dp[at(row + 1, col + 1)] + 1
+          : Math.max(dp[at(row + 1, col)], dp[at(row, col + 1)]);
     }
   }
   const commonA = new Array<boolean>(n).fill(false);
   const commonB = new Array<boolean>(m).fill(false);
-  let i = 0;
-  let j = 0;
-  while (i < n && j < m) {
-    if (a[i].text === b[j].text) {
-      commonA[i] = true;
-      commonB[j] = true;
-      i += 1;
-      j += 1;
-    } else if (dp[at(i + 1, j)] >= dp[at(i, j + 1)]) {
-      i += 1;
+  let row = 0;
+  let col = 0;
+  while (row < n && col < m) {
+    if (a[row].text === b[col].text) {
+      commonA[row] = true;
+      commonB[col] = true;
+      row += 1;
+      col += 1;
+    } else if (dp[at(row + 1, col)] >= dp[at(row, col + 1)]) {
+      row += 1;
     } else {
-      j += 1;
+      col += 1;
     }
   }
   return { a: commonA, b: commonB };
@@ -115,11 +117,11 @@ function lcsCommon(a: Token[], b: Token[]): { a: boolean[]; b: boolean[] } {
  *  index-adjacent means string-adjacent). */
 function changedRanges(tokens: Token[], common: boolean[]): IntralineRanges {
   const out: IntralineRanges = [];
-  for (let i = 0; i < tokens.length; i++) {
+  for (let i = 0; i < tokens.length; i += 1) {
     if (common[i]) {
       continue;
     }
-    const last = out[out.length - 1];
+    const last = out.at(-1);
     if (last && last[1] === tokens[i].start) {
       last[1] = tokens[i].end;
     } else {
@@ -155,7 +157,7 @@ export function intralineDiff(
 
   const common = lcsCommon(a, b);
   let commonSubstantive = 0;
-  for (let i = 0; i < a.length; i++) {
+  for (let i = 0; i < a.length; i += 1) {
     if (common.a[i] && !a[i].ws) {
       commonSubstantive += 1;
     }
@@ -176,6 +178,44 @@ export function intralineDiff(
   return { add, del };
 }
 
+function collectDelAddRuns(
+  rows: DiffRow[],
+  start: number
+): { dels: DiffRow[]; adds: DiffRow[]; next: number } {
+  const dels: DiffRow[] = [];
+  let i = start;
+  while (i < rows.length && rows[i].type === "del") {
+    dels.push(rows[i]);
+    i += 1;
+  }
+  const adds: DiffRow[] = [];
+  while (i < rows.length && rows[i].type === "add") {
+    adds.push(rows[i]);
+    i += 1;
+  }
+  return { adds, dels, next: i };
+}
+
+function applyIntralinePair(
+  out: Map<DiffRow, IntralineRanges>,
+  dels: DiffRow[],
+  adds: DiffRow[]
+): void {
+  const pairs = Math.min(dels.length, adds.length);
+  for (let k = 0; k < pairs; k += 1) {
+    const d = intralineDiff(dels[k].content, adds[k].content);
+    if (!d) {
+      continue;
+    }
+    if (d.del.length > 0) {
+      out.set(dels[k], d.del);
+    }
+    if (d.add.length > 0) {
+      out.set(adds[k], d.add);
+    }
+  }
+}
+
 /**
  * Intraline emphasis for a whole parsed patch, keyed by row object identity —
  * rows come from the same memoized parsePatch() result the viewer renders, so
@@ -188,34 +228,16 @@ export function intralinePairs(
 ): Map<DiffRow, IntralineRanges> {
   const out = new Map<DiffRow, IntralineRanges>();
   for (const hunk of hunks) {
-    const rows = hunk.rows;
+    const { rows } = hunk;
     let i = 0;
     while (i < rows.length) {
       if (rows[i].type !== "del") {
         i += 1;
         continue;
       }
-      const dels: DiffRow[] = [];
-      while (i < rows.length && rows[i].type === "del") {
-        dels.push(rows[i++]);
-      }
-      const adds: DiffRow[] = [];
-      while (i < rows.length && rows[i].type === "add") {
-        adds.push(rows[i++]);
-      }
-      const pairs = Math.min(dels.length, adds.length);
-      for (let k = 0; k < pairs; k++) {
-        const d = intralineDiff(dels[k].content, adds[k].content);
-        if (!d) {
-          continue;
-        }
-        if (d.del.length > 0) {
-          out.set(dels[k], d.del);
-        }
-        if (d.add.length > 0) {
-          out.set(adds[k], d.add);
-        }
-      }
+      const { dels, adds, next } = collectDelAddRuns(rows, i);
+      applyIntralinePair(out, dels, adds);
+      i = next;
     }
   }
   return out;

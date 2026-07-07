@@ -699,17 +699,6 @@ textarea.q-input {
 .hljs-bullet {
   color: #ffc48a;
 }
-/* comments read as one quiet gray block — including JSDoc tags (@param) and
-   anything hljs nests inside a comment */
-.hljs-comment,
-.hljs-quote,
-.hljs-doctag,
-.hljs-comment .hljs-keyword,
-.hljs-comment .hljs-type,
-.hljs-comment .hljs-variable {
-  font-style: italic;
-  color: var(--faint);
-}
 .hljs-title,
 .hljs-title.function_,
 .hljs-section,
@@ -728,6 +717,17 @@ textarea.q-input {
 .hljs-variable,
 .hljs-template-variable {
   color: #d6d6e6;
+}
+/* comments read as one quiet gray block — including JSDoc tags (@param) and
+   anything hljs nests inside a comment */
+.hljs-comment,
+.hljs-quote,
+.hljs-doctag,
+.hljs-comment .hljs-keyword,
+.hljs-comment .hljs-type,
+.hljs-comment .hljs-variable {
+  font-style: italic;
+  color: var(--faint);
 }
 .hljs-tag,
 .hljs-punctuation,
@@ -772,8 +772,6 @@ textarea.q-input {
 .dir-quiet .qf-sidebar {
   background: var(--surface);
 }
-.dir-quiet .qf-side-head {
-}
 .dir-quiet .qf-side-title {
   font-size: 12px;
   font-weight: 600;
@@ -788,8 +786,6 @@ textarea.q-input {
 }
 
 /* file list */
-.dir-quiet .qf-filelist {
-}
 .dir-quiet .qf-file {
   display: flex;
   gap: 9px;
@@ -965,6 +961,30 @@ textarea.q-input {
 }
 .dir-quiet .qf-arrow {
   color: var(--faint);
+}
+/* Unscoped svg accents — keep low-specificity rules before .dir-quiet descendants. */
+.qa-seg-on svg {
+  color: var(--accent);
+}
+.qa-tool-suggest svg {
+  color: var(--accent);
+}
+.qg-row svg {
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: color 120ms ease;
+}
+.qg-link svg {
+  color: var(--faint);
+}
+.qsp-empty svg {
+  margin-bottom: 4px;
+  color: var(--accent);
+  opacity: 0.8;
+}
+.qh-head-title svg {
+  flex-shrink: 0;
+  color: var(--accent);
 }
 /* branch names as copyable chips — click copies the name to the clipboard */
 .dir-quiet .qf-branch-chip {
@@ -1357,6 +1377,38 @@ textarea.q-input {
      what keeps scrolling stall-free instead — sections are built with real
      geometry before you arrive. */
 }
+.dir-quiet .qf-gutter {
+  padding-right: 12px;
+  font-size: 11px;
+  color: var(--faint);
+  text-align: right;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.dir-quiet .qf-marker {
+  color: var(--faint);
+  text-align: center;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* Ligatures stay OFF in diff code (VS Code's default too): a reviewer should
+   see the literal characters, and fonts with contextual ligatures (JetBrains
+   Mono, Fira Code) re-shape when a <mark> boundary splits a sequence — the
+   glyphs around a highlight would visibly shift as marks come and go.
+   geometricPrecision serves the same contract in WebKit, which otherwise
+   rounds text-run advances PER INLINE BOX: splitting a line's text nodes
+   with marks would nudge every glyph after them by accumulated subpixels. */
+.dir-quiet .qf-code {
+  position: relative;
+  font-variant-ligatures: none;
+  color: var(--fg);
+  word-break: break-word;
+  /* Pinned (it's also the browser default) because the indent guides assume
+     one tab = one 8ch stop — see lib/indent.ts. */
+  tab-size: 8;
+  white-space: pre-wrap;
+  text-rendering: geometricPrecision;
+}
 .dir-quiet .qf-row-hunk {
   width: 100%;
   padding-top: 4px;
@@ -1408,6 +1460,16 @@ textarea.q-input {
   background: var(--accent-soft);
   border-left-color: var(--accent);
 }
+/* Rows inside the multi-line comment range — the cursor's iris treatment
+   stretched over the run, in either input mode (a selection is a commitment,
+   not a hover). */
+.dir-quiet .qf-row-selected {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+}
+.dir-quiet .qf-row-selected .qf-gutter {
+  color: var(--fg);
+}
 .dir-quiet .qf-diff:not([data-mode="mouse"]) .qf-row-active .qf-gutter,
 .dir-quiet
   .qf-diff[data-mode="mouse"]
@@ -1418,17 +1480,6 @@ textarea.q-input {
 .dir-quiet .qf-row-threaded .qf-marker {
   color: var(--accent);
   opacity: 0.9;
-}
-
-/* Rows inside the multi-line comment range — the cursor's iris treatment
-   stretched over the run, in either input mode (a selection is a commitment,
-   not a hover). */
-.dir-quiet .qf-row-selected {
-  background: var(--accent-soft);
-  border-left-color: var(--accent);
-}
-.dir-quiet .qf-row-selected .qf-gutter {
-  color: var(--fg);
 }
 
 /* the row a search jump landed on — a brief iris flash that settles back */
@@ -1446,39 +1497,6 @@ textarea.q-input {
   100% {
     box-shadow: none;
   }
-}
-
-.dir-quiet .qf-gutter {
-  padding-right: 12px;
-  font-size: 11px;
-  color: var(--faint);
-  text-align: right;
-  -webkit-user-select: none;
-  user-select: none;
-}
-.dir-quiet .qf-marker {
-  color: var(--faint);
-  text-align: center;
-  -webkit-user-select: none;
-  user-select: none;
-}
-/* Ligatures stay OFF in diff code (VS Code's default too): a reviewer should
-   see the literal characters, and fonts with contextual ligatures (JetBrains
-   Mono, Fira Code) re-shape when a <mark> boundary splits a sequence — the
-   glyphs around a highlight would visibly shift as marks come and go.
-   geometricPrecision serves the same contract in WebKit, which otherwise
-   rounds text-run advances PER INLINE BOX: splitting a line's text nodes
-   with marks would nudge every glyph after them by accumulated subpixels. */
-.dir-quiet .qf-code {
-  position: relative;
-  font-variant-ligatures: none;
-  color: var(--fg);
-  word-break: break-word;
-  /* Pinned (it's also the browser default) because the indent guides assume
-     one tab = one 8ch stop — see lib/indent.ts. */
-  tab-size: 8;
-  white-space: pre-wrap;
-  text-rendering: geometricPrecision;
 }
 
 /* Indent guides: a hairline at each indent level, painted as a ::before
@@ -1985,7 +2003,7 @@ textarea.q-input {
   margin-top: 8px;
 }
 
-/* segmented "batch vs now" composer (from views/AddCommentBox.tsx) — unscoped
+/* segmented "batch vs now" composer (from views/add-comment-box.tsx) — unscoped
    so replies/issue composers reuse it too. */
 .qa-inline {
   font-family: var(--font-ui);
@@ -2149,9 +2167,6 @@ textarea.q-input {
   background: var(--surface-hi);
   box-shadow: inset 0 0 0 1px var(--line-2);
 }
-.qa-seg-on svg {
-  color: var(--accent);
-}
 .qa-actions {
   display: flex;
   gap: 8px;
@@ -2202,9 +2217,6 @@ textarea.q-input {
 }
 .qa-tool-suggest:hover {
   background: transparent;
-}
-.qa-tool-suggest svg {
-  color: var(--accent);
 }
 .qa-tool-on {
   color: var(--accent);
@@ -2406,6 +2418,11 @@ textarea.q-input {
   flex-direction: column;
   gap: 14px;
 }
+.qsp-title > :first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .dir-quiet .qf-convo-item {
   display: flex;
   gap: 10px;
@@ -2517,11 +2534,6 @@ textarea.q-input {
   cursor: default;
   opacity: 0.55;
 }
-.qg-row svg {
-  flex-shrink: 0;
-  color: var(--muted);
-  transition: color 120ms ease;
-}
 .qg-row:hover:not(:disabled) svg {
   color: var(--accent);
 }
@@ -2557,9 +2569,6 @@ textarea.q-input {
 }
 .qg-link:hover {
   color: var(--fg);
-}
-.qg-link svg {
-  color: var(--faint);
 }
 
 .qg-label {
@@ -3227,7 +3236,7 @@ textarea.q-input {
 }
 
 /* ===========================================================================
-   5. SEARCH PANE (from views/SearchPane.tsx) — global, portalled dialog.
+   5. SEARCH PANE (from views/search-pane.tsx) — global, portalled dialog.
    `/` opens a full pane over the inbox rather than an inline filter.
    =========================================================================== */
 .qsp-panel {
@@ -3330,11 +3339,6 @@ textarea.q-input {
   font-weight: 500;
   color: var(--fg);
 }
-.qsp-title > :first-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .qsp-meta {
   display: flex;
   gap: 6px;
@@ -3410,11 +3414,6 @@ textarea.q-input {
   color: var(--faint);
   text-align: center;
 }
-.qsp-empty svg {
-  margin-bottom: 4px;
-  color: var(--accent);
-  opacity: 0.8;
-}
 .qsp-empty p {
   font-size: 14px;
   color: var(--fg);
@@ -3444,7 +3443,7 @@ textarea.q-input {
 }
 
 /* ===========================================================================
-   6. HELP / SHORTCUTS (from views/HelpOverlay.tsx) — scope-aware cheatsheet.
+   6. HELP / SHORTCUTS (from views/help-overlay.tsx) — scope-aware cheatsheet.
    =========================================================================== */
 .qh-panel {
   width: min(720px, calc(100vw - 32px));
@@ -3462,10 +3461,6 @@ textarea.q-input {
   gap: 10px;
   align-items: center;
   min-width: 0;
-}
-.qh-head-title svg {
-  flex-shrink: 0;
-  color: var(--accent);
 }
 .qh-title {
   font-size: 14px;
@@ -3580,7 +3575,7 @@ textarea.q-input {
 }
 
 /* ===========================================================================
-   7. COMMAND PALETTE (from views/CommandPalette.tsx) — ⌘K actions.
+   7. COMMAND PALETTE (from views/command-palette.tsx) — ⌘K actions.
    =========================================================================== */
 .qc-panel {
   padding: 0;

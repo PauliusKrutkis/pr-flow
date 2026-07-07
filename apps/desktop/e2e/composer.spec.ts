@@ -1,6 +1,6 @@
-import type { Page } from "@playwright/test";
 import { setupApp } from "./bridge.ts";
 import { expect, test } from "./test.ts";
+import type { Page } from "./types.ts";
 
 /**
  * The rich composer: a WYSIWYG surface that submits markdown. ⌘B/⌘I/⌘E

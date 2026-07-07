@@ -1,3 +1,4 @@
+// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { describe, expect, it } from "vitest";
 import {
   anchorFractions,
@@ -80,7 +81,7 @@ describe("changedRowCount", () => {
 
 describe("rowAnchor", () => {
   it("anchors dels to the old side, everything else to the new side", () => {
-    const rows = parsePatch(PATCH)[0].rows;
+    const [{ rows }] = parsePatch(PATCH);
     expect(rows.map(rowAnchor)).toEqual([
       null, // the hunk header row
       "RIGHT:1",

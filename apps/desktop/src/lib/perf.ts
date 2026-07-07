@@ -1,3 +1,4 @@
+// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { create } from "zustand";
 
 interface PerfState {
@@ -21,14 +22,14 @@ export const usePerfStore = create<PerfState>((set, get) => ({
   _openStart: null,
   completeFile: () => {
     const start = get()._fileStart;
-    if (start == null) {
+    if (start === null) {
       return;
     }
     set({ _fileStart: null, lastFileSwitchMs: performance.now() - start });
   },
   completeOpen: () => {
     const start = get()._openStart;
-    if (start == null) {
+    if (start === null) {
       return;
     }
     set({ _openStart: null, lastPROpenMs: performance.now() - start });

@@ -1,6 +1,6 @@
-import type { Page } from "@playwright/test";
 import type { BucketFixture, InboxFixture } from "./fixtures.ts";
 import { ACCOUNT, DETAIL, INBOX } from "./fixtures.ts";
+import type { Page } from "./types.ts";
 
 /**
  * The mocked Tauri bridge. @tauri-apps/api routes every call through
@@ -52,7 +52,11 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
       {
         check_for_update: () => null,
         create_issue_comment: () =>
-          cfg.hangIssueComment ? new Promise(() => {}) : null,
+          cfg.hangIssueComment
+            ? new Promise(() => {
+                /* intentionally pending */
+              })
+            : null,
         create_review_comment: (args) => ({
           body: args.body,
           createdAt: new Date().toISOString(),
@@ -71,8 +75,11 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
         get_cached_inbox: () => null,
         get_cached_pull_request_detail: () => null,
         get_cached_subscribed: () => null,
-        get_pull_request_detail: () =>
-          seq(cfg.detailByCall, detailCalls++, detail),
+        get_pull_request_detail: () => {
+          const result = seq(cfg.detailByCall, detailCalls, detail);
+          detailCalls += 1;
+          return result;
+        },
         get_viewed_map: () =>
           JSON.parse(localStorage.getItem("e2e:viewed") ?? "{}"),
         get_watched_repos: () => cfg.watchedRepos,
@@ -83,7 +90,11 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
           cfg.hasToken
             ? { accounts: [cfg.account], activeId: cfg.account.id }
             : { accounts: [], activeId: null },
-        list_inbox: () => seq(cfg.inboxByCall, inboxCalls++, cfg.inbox),
+        list_inbox: () => {
+          const result = seq(cfg.inboxByCall, inboxCalls, cfg.inbox);
+          inboxCalls += 1;
+          return result;
+        },
         list_subscribed: () => cfg.subscribed,
         "plugin:opener|open": () => null,
         "plugin:opener|open_url": () => null,
@@ -130,7 +141,10 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
         },
         transformCallback: (() => {
           let id = 0;
-          return () => ++id;
+          return () => {
+            id += 1;
+            return id;
+          };
         })(),
       },
     });

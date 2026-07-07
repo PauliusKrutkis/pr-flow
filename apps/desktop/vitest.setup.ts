@@ -12,8 +12,12 @@ if (typeof globalThis.localStorage?.clear !== "function") {
     get length() {
       return store.size;
     },
-    removeItem: (k: string) => void store.delete(k),
-    setItem: (k: string, v: string) => void store.set(k, String(v)),
+    removeItem: (k: string) => {
+      store.delete(k);
+    },
+    setItem: (k: string, v: string) => {
+      store.set(k, String(v));
+    },
   };
   Object.defineProperty(globalThis, "localStorage", {
     value: ls,

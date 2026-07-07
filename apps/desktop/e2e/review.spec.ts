@@ -1,6 +1,12 @@
 import { setupApp } from "./bridge.ts";
 import { expect, test } from "./test.ts";
 
+const SUBMIT_REVIEW = /Submit review/;
+const COPY_FILE_PATH = /Copy file path/;
+const COPY_PR_LINK = /Copy PR link/;
+const REVIEW_REQUESTS = /Review requests/;
+const QF_ROW_FLASH = /qf-row-flash/;
+
 test.beforeEach(async ({ page }) => {
   await setupApp(page);
   await expect(page.getByRole("option").first()).toBeVisible();
@@ -43,9 +49,9 @@ test("c opens the composer; adding batches a pending card", async ({
   await page.getByRole("button", { name: "Add to review" }).click();
   await expect(page.getByText("Pending")).toBeVisible();
   await expect(page.getByText("Tighten this up?")).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /Submit review/ })
-  ).toContainText("1");
+  await expect(page.getByRole("button", { name: SUBMIT_REVIEW })).toContainText(
+    "1"
+  );
 });
 
 test("pending drafts survive leaving and reopening the PR", async ({
@@ -126,8 +132,11 @@ test("next file lands cleanly: current file's header pinned, no previous rows pe
     return pinned?.dataset.fileIndex === "1";
   });
   const prevPeeking = await page.evaluate(() => {
-    const host = document.querySelector(".qf-scrollhost")!;
-    const top = host.getBoundingClientRect().top;
+    const host = document.querySelector(".qf-scrollhost");
+    if (!host) {
+      return false;
+    }
+    const { top } = host.getBoundingClientRect();
     return Array.from(
       document.querySelectorAll('.qf-row[data-file-index="0"]')
     ).some((r) => r.getBoundingClientRect().bottom > top + 2);
@@ -150,19 +159,28 @@ test("resume: reopening paints the spot you left — no visible jump after", asy
   const fileRow = page.locator('.qf-row[data-file-index="2"]').first();
   await expect(fileRow).toBeVisible();
   await page.waitForFunction(() => {
-    const host = document.querySelector(".qf-scrollhost")!;
-    const row = document.querySelector('.qf-row[data-file-index="2"]')!;
+    const host = document.querySelector(".qf-scrollhost");
+    const row = document.querySelector('.qf-row[data-file-index="2"]');
+    if (!(host && row)) {
+      return false;
+    }
     const d =
       row.getBoundingClientRect().top - host.getBoundingClientRect().top;
     return d >= 0 && d < 120;
   });
   await page.evaluate(() => {
-    document.querySelector(".qf-scrollhost")!.scrollTop += 120;
+    const host = document.querySelector(".qf-scrollhost");
+    if (host) {
+      host.scrollTop += 120;
+    }
   });
 
   const before = await page.evaluate(() => {
-    const host = document.querySelector(".qf-scrollhost")!;
-    const row = document.querySelector('[data-anchor][data-file-index="2"]')!;
+    const host = document.querySelector(".qf-scrollhost");
+    const row = document.querySelector('[data-anchor][data-file-index="2"]');
+    if (!(host && row)) {
+      return null;
+    }
     return row.getBoundingClientRect().top - host.getBoundingClientRect().top;
   });
   await page.waitForTimeout(900);
@@ -175,16 +193,17 @@ test("resume: reopening paints the spot you left — no visible jump after", asy
 
   const measure = () =>
     page.evaluate(() => {
-      const host = document.querySelector(".qf-scrollhost")!;
+      const host = document.querySelector(".qf-scrollhost");
       const row = document.querySelector('[data-anchor][data-file-index="2"]');
-      if (!row) {
+      if (!(host && row)) {
         return null;
       }
       return row.getBoundingClientRect().top - host.getBoundingClientRect().top;
     });
   const after = await measure();
   expect(after).not.toBeNull();
-  expect(Math.abs((after as number) - before)).toBeLessThan(40);
+  expect(before).not.toBeNull();
+  expect(Math.abs(after - before)).toBeLessThan(40);
   await page.waitForTimeout(700);
   const settled = await measure();
   expect(Math.abs((settled as number) - (after as number))).toBeLessThan(24);
@@ -198,8 +217,11 @@ test("find seeds from the viewport: the current match is the one near you, not t
     page.locator('.qf-row[data-file-index="1"]').first()
   ).toBeVisible();
   await page.waitForFunction(() => {
-    const host = document.querySelector(".qf-scrollhost")!;
-    const row = document.querySelector('.qf-row[data-file-index="1"]')!;
+    const host = document.querySelector(".qf-scrollhost");
+    const row = document.querySelector('.qf-row[data-file-index="1"]');
+    if (!(host && row)) {
+      return false;
+    }
     const d =
       row.getBoundingClientRect().top - host.getBoundingClientRect().top;
     return d >= 0 && d < 120;
@@ -288,17 +310,15 @@ test("the palette lists the copy actions in review scope", async ({ page }) => {
   await page.keyboard.press("Control+k");
   await page.getByPlaceholder("Run a command…").fill("copy");
   await expect(
-    page.getByRole("button", { name: /Copy file path/ })
+    page.getByRole("button", { name: COPY_FILE_PATH })
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /Copy PR link/ })
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: COPY_PR_LINK })).toBeVisible();
 });
 
 test("esc returns to the inbox", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(
-    page.getByRole("button", { name: /Review requests/ })
+    page.getByRole("button", { name: REVIEW_REQUESTS })
   ).toBeVisible();
 });
 
@@ -330,7 +350,7 @@ test("info code discussion lists inline threads; a row jumps to the diff", async
   );
   const thread = page.locator('[data-comment-root="100"]');
   await expect(thread).toBeVisible();
-  await expect(thread).toHaveClass(/qf-row-flash/);
+  await expect(thread).toHaveClass(QF_ROW_FLASH);
 });
 
 test("the i button advertises how much conversation the drawer holds", async ({

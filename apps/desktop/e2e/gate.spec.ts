@@ -1,6 +1,8 @@
 import { setupApp } from "./bridge.ts";
 import { expect, test } from "./test.ts";
 
+const REVIEW_REQUESTS = /Review requests/;
+
 test("no accounts boots into the identity gate", async ({ page }) => {
   await setupApp(page, { hasToken: false });
   await expect(
@@ -26,11 +28,13 @@ test("self-hosted step asks exactly one question", async ({ page }) => {
 test("a stored account boots into the inbox", async ({ page }) => {
   await setupApp(page);
   await expect(
-    page.getByRole("button", { name: /Review requests/ })
+    page.getByRole("button", { name: REVIEW_REQUESTS })
   ).toBeVisible();
 });
 
 test.describe("todo", () => {
   test.fixme(true, "needs a mocked OAuth round-trip");
-  test("oauth loopback captures the token and lands in the inbox", async () => {});
+  test("oauth loopback captures the token and lands in the inbox", async () => {
+    /* fixme: needs a mocked OAuth round-trip */
+  });
 });

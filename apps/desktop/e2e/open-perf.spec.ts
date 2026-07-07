@@ -1,7 +1,7 @@
-import type { Page } from "@playwright/test";
 import { setupApp } from "./bridge.ts";
 import { makeBigDetail, perfBudget } from "./fixtures.ts";
 import { expect, test } from "./test.ts";
+import type { Page } from "./types.ts";
 
 test.describe.configure({ retries: 2 });
 
@@ -43,6 +43,18 @@ async function armOpenTimer(page: Page) {
   });
 }
 
+async function repeatSequential<T>(
+  count: number,
+  fn: () => Promise<T>
+): Promise<T[]> {
+  const results: T[] = [];
+  for (let i = 0; i < count; i += 1) {
+    // biome-ignore lint/performance/noAwaitInLoops: warm opens must run sequentially
+    results.push(await fn());
+  }
+  return results;
+}
+
 async function openMs(page: Page): Promise<number> {
   await armOpenTimer(page);
   await page.keyboard.press("Enter");
@@ -60,10 +72,7 @@ test("opening a PR from cache stays fast", async ({ page }) => {
   await expect(page.getByRole("option").first()).toBeVisible();
 
   const cold = await openMs(page);
-  const warm: number[] = [];
-  for (let i = 0; i < 3; i++) {
-    warm.push(await openMs(page));
-  }
+  const warm = await repeatSequential(3, () => openMs(page));
   const avg = warm.reduce((a, b) => a + b, 0) / warm.length;
   console.log(
     `PR open ms: cold ${cold.toFixed(0)}, warm [${warm.map((w) => w.toFixed(0)).join(", ")}] avg ${avg.toFixed(0)}`

@@ -1,6 +1,7 @@
+// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import hljs from "highlight.js";
 import { parsePatch } from "./diff.ts";
-import { findMatchRangesInLine } from "./findInDiff.ts";
+import { findMatchRangesInLine } from "./find-in-diff.ts";
 import { occurrenceRangesInLine } from "./occurrences.ts";
 
 /**
@@ -78,7 +79,8 @@ function langForFilename(filename: string): string | null {
   if (base === "makefile") {
     return "makefile";
   }
-  const ext = base.includes(".") ? base.split(".").pop()! : "";
+  const parts = base.split(".");
+  const ext = parts.length > 1 ? (parts.at(-1) ?? "") : "";
   const lang = LANG_BY_EXT[ext];
   if (!lang) {
     return null;
@@ -175,7 +177,7 @@ export function highlightLine(code: string, filename: string): string {
 export function warmHighlightCache(
   files: ReadonlyArray<{ filename: string; patch?: string | null }>
 ): () => void {
-  const queue: Array<[code: string, filename: string]> = [];
+  const queue: [code: string, filename: string][] = [];
   for (const f of files) {
     if (!(f.patch && isHighlightable(f.filename))) {
       continue;
@@ -203,7 +205,7 @@ export function warmHighlightCache(
     const budgetEnd = performance.now() + 6;
     while (i < queue.length) {
       const out =
-        deadline == null
+        deadline === null
           ? performance.now() > budgetEnd
           : deadline.timeRemaining() < 2;
       if (out) {
@@ -238,7 +240,7 @@ interface MarkRange {
 }
 
 /** Intraline word-diff ranges (lib/intraline), as [start, end) code columns. */
-export type IntraRanges = ReadonlyArray<[number, number]> | null;
+export type IntraRanges = readonly [number, number][] | null;
 
 /**
  * Layers intraline emphasis under the search/occurrence marks. The layering

@@ -1,5 +1,15 @@
+// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { describe, expect, it } from "vitest";
-import { fuzzyMatch, fuzzyMatchFields } from "./fuzzy.ts";
+import { type FuzzyResult, fuzzyMatch, fuzzyMatchFields } from "./fuzzy.ts";
+
+function mustMatch(query: string, text: string): FuzzyResult {
+  const m = fuzzyMatch(query, text);
+  expect(m).not.toBeNull();
+  if (!m) {
+    throw new Error("expected match");
+  }
+  return m;
+}
 
 describe("fuzzyMatch", () => {
   it("empty query matches everything with no highlights", () => {
@@ -17,19 +27,19 @@ describe("fuzzyMatch", () => {
   });
 
   it("substring beats scattered subsequence", () => {
-    const sub = fuzzyMatch("view", "DiffViewer.tsx")!;
-    const scattered = fuzzyMatch("view", "va_i_e_w_stuff")!;
+    const sub = mustMatch("view", "DiffViewer.tsx");
+    const scattered = mustMatch("view", "va_i_e_w_stuff");
     expect(sub.score).toBeGreaterThan(scattered.score);
   });
 
   it("word-boundary start beats mid-word", () => {
-    const boundary = fuzzyMatch("side", "file-sidebar.tsx")!;
-    const mid = fuzzyMatch("side", "beside.tsx")!;
+    const boundary = mustMatch("side", "file-sidebar.tsx");
+    const mid = mustMatch("side", "beside.tsx");
     expect(boundary.score).toBeGreaterThan(mid.score);
   });
 
   it("returns contiguous indices for substring matches", () => {
-    const m = fuzzyMatch("bar", "sidebar")!;
+    const m = mustMatch("bar", "sidebar");
     expect(m.indices).toEqual([4, 5, 6]);
   });
 
@@ -39,7 +49,7 @@ describe("fuzzyMatch", () => {
   });
 
   it("merges indices across terms", () => {
-    const m = fuzzyMatch("a b", "a b")!;
+    const m = mustMatch("a b", "a b");
     expect(m.indices).toEqual([0, 2]);
   });
 });
@@ -53,7 +63,11 @@ describe("fuzzyMatchFields", () => {
     const m = fuzzyMatchFields("titleword", {
       author: "someone",
       title: "titleword here",
-    })!;
+    });
+    expect(m).not.toBeNull();
+    if (!m) {
+      throw new Error("expected match");
+    }
     expect(m.indices.title).toBeDefined();
     expect(m.indices.author).toBeUndefined();
     expect(m.score).toBeGreaterThan(0);

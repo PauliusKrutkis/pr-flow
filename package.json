@@ -1,6 +1,8 @@
 {
   "devDependencies": {
     "@biomejs/biome": "2.5.2",
+    "@types/node": "^26.1.0",
+    "knip": "^6.25.0",
     "react-doctor": "^0.7.1",
     "typescript": "~5.8.3",
     "ultracite": "7.9.2"
@@ -13,7 +15,8 @@
     "tauri": "pnpm --filter @pr-flow/desktop tauri",
     "typecheck": "pnpm -r typecheck",
     "check": "ultracite check",
-    "fix": "ultracite fix"
+    "fix": "ultracite fix",
+    "knip": "knip"
   },
   "type": "module",
   "version": "0.1.0",

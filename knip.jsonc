@@ -1,0 +1,21 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
+  // Suppress exports tagged @lintignore in source (see knip docs).
+  "tags": ["-lintignore"],
+  // Rust/Tauri build output — not part of the JS/TS project graph.
+  "ignoreFiles": ["**/src-tauri/target/**"],
+  "workspaces": {
+    ".": {
+      // Biome is invoked via the ultracite CLI, not imported directly.
+      "ignoreDependencies": ["@biomejs/biome"]
+    },
+    "apps/desktop": {
+      // Workspace packages scaffolded for migration; not imported yet.
+      "ignoreDependencies": ["@pr-flow/core", "@pr-flow/ui"]
+    },
+    "packages/ui": {
+      // Peer-typed React package; types are needed once components land.
+      "ignoreDependencies": ["@types/react", "@types/react-dom"]
+    }
+  }
+}

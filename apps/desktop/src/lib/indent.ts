@@ -28,6 +28,16 @@ const TAB_UNIT: IndentUnit = { ch: 8, chars: 1 };
 
 const LEADING_WS = /^[\t ]*/;
 
+function pickIndentChars(minSpaces: number): number {
+  if (minSpaces >= 8) {
+    return 8;
+  }
+  if (minSpaces >= 4) {
+    return 4;
+  }
+  return 2;
+}
+
 /**
  * The file's indent unit, from its patch rows' leading whitespace: the
  * smallest nonzero space indent, clamped to 2/4/8 (real codebases use nothing
@@ -41,7 +51,7 @@ export function detectIndentUnit(hunks: DiffHunk[]): IndentUnit {
       if (row.type === "hunk") {
         continue;
       }
-      const ws = LEADING_WS.exec(row.content)![0];
+      const ws = LEADING_WS.exec(row.content)?.[0];
       if (ws.length === 0 || ws.length === row.content.length) {
         continue;
       }
@@ -54,7 +64,7 @@ export function detectIndentUnit(hunks: DiffHunk[]): IndentUnit {
   if (!Number.isFinite(minSpaces)) {
     return { ch: 2, chars: 2 };
   }
-  const unit = minSpaces >= 8 ? 8 : minSpaces >= 4 ? 4 : 2;
+  const unit = pickIndentChars(minSpaces);
   return { ch: unit, chars: unit };
 }
 
@@ -75,26 +85,26 @@ export function guideLevelsForHunk(
     if (row.type === "hunk") {
       return null;
     }
-    const ws = LEADING_WS.exec(row.content)![0];
+    const ws = LEADING_WS.exec(row.content)?.[0];
     if (ws.length === row.content.length) {
       return null;
     }
     return Math.floor(ws.length / unit.chars);
   });
   const out: Array<number | null> = own.slice();
-  for (let i = 0; i < rows.length; i++) {
+  for (let i = 0; i < rows.length; i += 1) {
     if (rows[i].type === "hunk" || own[i] !== null) {
       continue;
     }
     let prev: number | null = null;
-    for (let j = i - 1; j >= 0 && rows[j].type !== "hunk"; j--) {
+    for (let j = i - 1; j >= 0 && rows[j].type !== "hunk"; j -= 1) {
       if (own[j] !== null) {
         prev = own[j];
         break;
       }
     }
     let next: number | null = null;
-    for (let j = i + 1; j < rows.length && rows[j].type !== "hunk"; j++) {
+    for (let j = i + 1; j < rows.length && rows[j].type !== "hunk"; j += 1) {
       if (own[j] !== null) {
         next = own[j];
         break;

@@ -8,7 +8,7 @@
  */
 
 import { parsePatch, rowAnchor } from "./diff.ts";
-import { findMatchRangesInLine } from "./findInDiff.ts";
+import { findMatchRangesInLine } from "./find-in-diff.ts";
 
 export interface OccurrenceSpec {
   query: string;
@@ -64,7 +64,7 @@ const WORD_CHAR = /\w/;
 export function occurrenceRangesInLine(
   text: string,
   spec: OccurrenceSpec
-): Array<[number, number]> {
+): [number, number][] {
   const ranges = findMatchRangesInLine(text, spec.query, true);
   if (!spec.wholeWord) {
     return ranges;
@@ -97,7 +97,7 @@ export function occurrenceMatches(
   for (const hunk of parsePatch(file.patch)) {
     for (const row of hunk.rows) {
       const anchor = rowAnchor(row);
-      if (anchor == null) {
+      if (anchor === null) {
         continue;
       }
       for (const [start, end] of occurrenceRangesInLine(row.content, spec)) {

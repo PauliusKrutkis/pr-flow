@@ -4,6 +4,7 @@
   width="512"
   xmlns="http://www.w3.org/2000/svg"
 >
+  <title>PR Flow</title>
   <!-- Nod app icon — the keycap. One key, one action: hit return, give it a nod.
        Source of truth for src-tauri/icons/* (regenerate: export 1024px PNG,
        then `pnpm tauri icon <png>`). -->

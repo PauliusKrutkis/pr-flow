@@ -11,6 +11,7 @@ export interface FuzzyResult {
 }
 
 const BOUNDARY = /[\s/\-_.#:]/;
+const TERM_SPLIT = /\s+/;
 
 function isBoundaryStart(text: string, i: number): boolean {
   if (i === 0) {
@@ -21,6 +22,77 @@ function isBoundaryStart(text: string, i: number): boolean {
     return true;
   }
   return prev === prev.toLowerCase() && text[i] === text[i].toUpperCase();
+}
+
+function matchSubstring(
+  term: string,
+  text: string,
+  lowerText: string,
+  lowerTerm: string
+): FuzzyResult {
+  const sub = lowerText.indexOf(lowerTerm);
+  const indices = Array.from({ length: term.length }, (_, k) => sub + k);
+  let score = 100 + term.length * 8;
+  if (isBoundaryStart(text, sub)) {
+    score += 40;
+  }
+  if (sub === 0) {
+    score += 20;
+  }
+  score -= Math.min(sub, 20);
+  return { indices, score };
+}
+
+function findSubsequenceChar(
+  c: string,
+  lowerText: string,
+  text: string,
+  start: number
+): number {
+  for (let j = start; j < lowerText.length; j += 1) {
+    if (lowerText[j] === c && isBoundaryStart(text, j)) {
+      return j;
+    }
+  }
+  return lowerText.indexOf(c, start);
+}
+
+function scoreSubsequence(
+  term: string,
+  text: string,
+  indices: number[]
+): FuzzyResult {
+  let score = term.length * 4;
+  for (let k = 0; k < indices.length; k += 1) {
+    const i = indices[k];
+    if (isBoundaryStart(text, i)) {
+      score += 12;
+    }
+    if (k > 0 && indices[k - 1] === i - 1) {
+      score += 10;
+    }
+    score -= Math.floor(i / 24);
+  }
+  return { indices, score };
+}
+
+function matchSubsequence(
+  term: string,
+  text: string,
+  lowerText: string,
+  lowerTerm: string
+): FuzzyResult | null {
+  const indices: number[] = [];
+  let ti = 0;
+  for (const c of lowerTerm) {
+    const found = findSubsequenceChar(c, lowerText, text, ti);
+    if (found === -1) {
+      return null;
+    }
+    indices.push(found);
+    ti = found + 1;
+  }
+  return scoreSubsequence(term, text, indices);
 }
 
 /**
@@ -34,53 +106,10 @@ function matchTerm(term: string, text: string): FuzzyResult | null {
   const lowerText = text.toLowerCase();
   const lowerTerm = term.toLowerCase();
 
-  const sub = lowerText.indexOf(lowerTerm);
-  if (sub !== -1) {
-    const indices = Array.from({ length: term.length }, (_, k) => sub + k);
-    let score = 100 + term.length * 8;
-    if (isBoundaryStart(text, sub)) {
-      score += 40;
-    }
-    if (sub === 0) {
-      score += 20;
-    }
-    score -= Math.min(sub, 20); // earlier is better
-    return { indices, score };
+  if (lowerText.includes(lowerTerm)) {
+    return matchSubstring(term, text, lowerText, lowerTerm);
   }
-
-  const indices: number[] = [];
-  let ti = 0;
-  for (let qi = 0; qi < lowerTerm.length; qi++) {
-    const c = lowerTerm[qi];
-    let found = -1;
-    for (let j = ti; j < lowerText.length; j++) {
-      if (lowerText[j] === c && isBoundaryStart(text, j)) {
-        found = j;
-        break;
-      }
-    }
-    if (found === -1) {
-      found = lowerText.indexOf(c, ti);
-    }
-    if (found === -1) {
-      return null;
-    }
-    indices.push(found);
-    ti = found + 1;
-  }
-
-  let score = term.length * 4;
-  for (let k = 0; k < indices.length; k++) {
-    const i = indices[k];
-    if (isBoundaryStart(text, i)) {
-      score += 12;
-    }
-    if (k > 0 && indices[k - 1] === i - 1) {
-      score += 10; // consecutive run
-    }
-    score -= Math.floor(i / 24); // light penalty for late matches
-  }
-  return { indices, score };
+  return matchSubsequence(term, text, lowerText, lowerTerm);
 }
 
 /**
@@ -89,7 +118,7 @@ function matchTerm(term: string, text: string): FuzzyResult | null {
  * Returns null when any term misses.
  */
 export function fuzzyMatch(query: string, text: string): FuzzyResult | null {
-  const terms = query.trim().split(/\s+/).filter(Boolean);
+  const terms = query.trim().split(TERM_SPLIT).filter(Boolean);
   if (terms.length === 0) {
     return { indices: [], score: 0 };
   }
