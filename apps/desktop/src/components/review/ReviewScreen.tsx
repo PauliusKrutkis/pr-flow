@@ -144,13 +144,13 @@ export function ReviewScreen({ routeKey }: ReviewScreenProps) {
   const rightOpenRef = useLatest(rightOpen);
   const [commentIndex, setCommentIndex] = useState(0);
   const [submitOpen, setSubmitOpen] = useState(false);
-    const [prSearch, setPrSearch] = useState<null | "files" | "text">(null);
-    const [changedSinceViewed, setChangedSinceViewed] = useState<Set<string>>(
-      () => new Set()
-    );
-    const [replyReq, setReplyReq] = useState<{
-      rootId: number;
-      path: string;
+  const [prSearch, setPrSearch] = useState<null | "files" | "text">(null);
+  const [changedSinceViewed, setChangedSinceViewed] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [replyReq, setReplyReq] = useState<{
+    rootId: number;
+    path: string;
     nonce: number;
   } | null>(null);
 
