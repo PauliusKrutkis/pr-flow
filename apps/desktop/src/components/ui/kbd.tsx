@@ -17,8 +17,7 @@ const NAMED: Record<string, string> = {
   up: "↑",
 };
 
-/** Turn one descriptor part into a display label. */
-function renderPart(part: string): string {
+function capLabel(part: string): string {
   const lower = part.toLowerCase();
   if (NAMED[lower]) {
     return NAMED[lower];
@@ -45,6 +44,10 @@ function toCaps(combo: string): string[] {
   return [combo];
 }
 
+function KbdCap({ part }: { part: string }) {
+  return <kbd className={capClass}>{capLabel(part)}</kbd>;
+}
+
 export function Kbd({
   combo,
   className,
@@ -59,9 +62,7 @@ export function Kbd({
   return (
     <span className={cn("inline-flex items-center gap-0.5", className)}>
       {caps.map((part) => (
-        <kbd className={capClass} key={part}>
-          {renderPart(part)}
-        </kbd>
+        <KbdCap key={part} part={part} />
       ))}
     </span>
   );

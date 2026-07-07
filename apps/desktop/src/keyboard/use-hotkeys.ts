@@ -20,7 +20,9 @@ export function useHotkeys(
   const { enabled = true, activate = true } = options;
   const { registerSource, pushScope } = useKeyboard();
   const ref = useRef(bindings);
-  ref.current = bindings;
+  useEffect(() => {
+    ref.current = bindings;
+  });
 
   useEffect(() => {
     if (!enabled) {

@@ -58,7 +58,7 @@ export function adjacentSelectableAnchor(
   delta: 1 | -1
 ): string | null {
   const idx = m.navIndexOf.get(fileAnchorKey(fileIndex, fromAnchor));
-  if (idx === null) {
+  if (idx === undefined) {
     return null;
   }
   const next = m.nav[idx + delta];
@@ -79,7 +79,7 @@ export function adjacentSelectableAnchor(
  * Group flat review comments into threads (root first, then replies) and
  * index each thread by the anchor of its root comment.
  */
-export function buildThreads(
+function buildThreads(
   comments: ReviewComment[]
 ): Map<string, ReviewComment[][]> {
   const byId = new Map<number, ReviewComment>();

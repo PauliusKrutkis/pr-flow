@@ -47,6 +47,9 @@ test("scrolling a large PR stays smooth, with a bounded DOM", async ({
       maxRows = Math.max(maxRows, document.querySelectorAll(".qf-row").length);
     }
     frames.sort((a, b) => a - b);
+    if (frames.length === 0) {
+      throw new Error("no scroll frames captured");
+    }
     return {
       max: frames.at(-1),
       maxRows,

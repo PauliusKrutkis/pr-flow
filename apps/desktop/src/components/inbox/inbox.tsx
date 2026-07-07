@@ -9,7 +9,7 @@ import {
   Undo2,
   // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useInbox } from "../../hooks/use-inbox.ts";
 import { prefetchPullRequest } from "../../hooks/use-pull-request-detail.ts";
 import { useSubscribed } from "../../hooks/use-subscribed.ts";
@@ -17,12 +17,7 @@ import { useHotkeys } from "../../keyboard/use-hotkeys.ts";
 import { cn } from "../../lib/cn.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
 import { useAppStore } from "../../store/app-store.ts";
-import type {
-  InboxBucket,
-  InboxData,
-  InboxTabKey,
-  PullRequest,
-} from "../../types.ts";
+import type { InboxData, InboxTabKey, PullRequest } from "../../types.ts";
 import { prKey } from "../../types.ts";
 import { Markdown } from "../markdown.tsx";
 import { Avatar } from "../ui/avatar.tsx";
@@ -118,20 +113,16 @@ export function Inbox() {
   const { data: subscribedData } = useSubscribed();
   const [watchOpen, setWatchOpen] = useState(false);
 
-  const buckets = useMemo(
-    (): Record<InboxTabKey, InboxBucket> => ({
-      ...(data ?? EMPTY),
-      subscribed: subscribedData ?? { count: 0, prs: [] },
-    }),
-    [data, subscribedData]
+  const buckets = {
+    ...(data ?? EMPTY),
+    subscribed: subscribedData ?? { count: 0, prs: [] },
+  };
+
+  const filtered = buckets[tab].prs.filter(
+    (pr) => !isHidden(pr, dismissed[keyFor(pr)])
   );
 
-  const filtered = useMemo(
-    () => buckets[tab].prs.filter((pr) => !isHidden(pr, dismissed[keyFor(pr)])),
-    [tab, dismissed, buckets]
-  );
-
-  const visibleCounts = useMemo(() => {
+  const visibleCounts = (() => {
     const m = {} as Record<InboxTabKey, number>;
     for (const t of TABS) {
       const bucket = buckets[t.key];
@@ -141,73 +132,58 @@ export function Inbox() {
       m[t.key] = Math.max(0, bucket.count - hidden);
     }
     return m;
-  }, [dismissed, buckets]);
+  })();
 
-  const selectedIndex = useMemo(() => {
+  const selectedIndex = (() => {
     if (!selectedKey) {
       return 0;
     }
     const i = filtered.findIndex((pr) => keyFor(pr) === selectedKey);
     return i < 0 ? 0 : i;
-  }, [filtered, selectedKey]);
+  })();
 
-  const openPR = useCallback(
-    (pr: PullRequest) => {
+  const openPR = (pr: PullRequest) => {
+    setSelectedKey(keyFor(pr));
+    markSeen(keyFor(pr), pr.updatedAt);
+    openReview(pr.owner, pr.name, pr.number);
+  };
+
+  const open = (index: number) => {
+    const pr = filtered[index];
+    if (pr) {
+      openPR(pr);
+    }
+  };
+
+  const selectTab = (key: InboxTabKey) => {
+    setTab(key);
+    setSelectedKey(null);
+  };
+
+  const cycleTab = (dir: number) => {
+    const order = TABS.map((t) => t.key);
+    const i = order.indexOf(tab);
+    selectTab(order[(i + dir + order.length) % order.length]);
+  };
+
+  const moveTo = (index: number) => {
+    const pr = filtered[index];
+    if (pr) {
       setSelectedKey(keyFor(pr));
-      markSeen(keyFor(pr), pr.updatedAt);
-      openReview(pr.owner, pr.name, pr.number);
-    },
-    [markSeen, openReview, setSelectedKey]
-  );
+    }
+  };
 
-  const open = useCallback(
-    (index: number) => {
-      const pr = filtered[index];
-      if (pr) {
-        openPR(pr);
-      }
-    },
-    [filtered, openPR]
-  );
-
-  const selectTab = useCallback(
-    (key: InboxTabKey) => {
-      setTab(key);
-      setSelectedKey(null);
-    },
-    [setSelectedKey, setTab]
-  );
-
-  const cycleTab = useCallback(
-    (dir: number) => {
-      const order = TABS.map((t) => t.key);
-      const i = order.indexOf(tab);
-      selectTab(order[(i + dir + order.length) % order.length]);
-    },
-    [selectTab, tab]
-  );
-
-  const moveTo = useCallback(
-    (index: number) => {
-      const pr = filtered[index];
-      if (pr) {
-        setSelectedKey(keyFor(pr));
-      }
-    },
-    [filtered, setSelectedKey]
-  );
-
-  const next = useCallback(() => {
+  const next = () => {
     setListMode("keyboard");
     moveTo(Math.min(selectedIndex + 1, filtered.length - 1));
-  }, [filtered.length, moveTo, selectedIndex]);
+  };
 
-  const prev = useCallback(() => {
+  const prev = () => {
     setListMode("keyboard");
     moveTo(Math.max(selectedIndex - 1, 0));
-  }, [moveTo, selectedIndex]);
+  };
 
-  const archiveSelected = useCallback(() => {
+  const archiveSelected = () => {
     const pr = filtered[selectedIndex];
     if (!pr) {
       return;
@@ -222,37 +198,37 @@ export function Inbox() {
       note: "Back when it updates",
       title: "Archived",
     });
-  }, [dismiss, filtered, selectedIndex, setSelectedKey, setToast, undoDismiss]);
+  };
 
-  const undoArchive = useCallback(() => {
+  const undoArchive = () => {
     undoDismiss();
     setToast(null);
-  }, [setToast, undoDismiss]);
+  };
 
-  const copySelectedLink = useCallback(() => {
+  const copySelectedLink = () => {
     const pr = filtered[selectedIndex];
     if (!pr) {
       return;
     }
     navigator.clipboard?.writeText(pr.url).catch(() => undefined);
     setToast({ message: pr.url, title: "Copied PR link" });
-  }, [filtered, selectedIndex, setToast]);
+  };
 
-  const openSelected = useCallback(() => {
+  const openSelected = () => {
     open(selectedIndex);
-  }, [open, selectedIndex]);
+  };
 
-  const openWatchDialog = useCallback(() => {
+  const openWatchDialog = () => {
     setWatchOpen(true);
-  }, []);
+  };
 
-  const closeWatchDialog = useCallback(() => {
+  const closeWatchDialog = () => {
     setWatchOpen(false);
-  }, []);
+  };
 
-  const handleRetry = useCallback(() => {
+  const handleRetry = () => {
     refetch();
-  }, [refetch]);
+  };
 
   useInboxHotkeys({
     archiveSelected,
@@ -303,11 +279,7 @@ export function Inbox() {
 
       <InboxMainContent
         activeTab={activeTab}
-        error={error}
         filtered={filtered}
-        hasData={data !== null}
-        isError={isError}
-        isLoading={isLoading}
         isUnread={isUnread}
         listMode={listMode}
         listRef={listRef}
@@ -319,6 +291,13 @@ export function Inbox() {
         selectedIndex={selectedIndex}
         selectedPR={selectedPR}
         tab={tab}
+        view={inboxMainView(
+          isLoading,
+          isError,
+          data !== null,
+          filtered.length,
+          error
+        )}
       />
 
       <WatchReposDialog onClose={closeWatchDialog} open={watchOpen} />
@@ -347,21 +326,24 @@ function useInboxHotkeys({
   selectTab: (key: InboxTabKey) => void;
   openWatchDialog: () => void;
 }) {
-  const selectReviewRequested = useCallback(
-    () => selectTab("reviewRequested"),
-    [selectTab]
-  );
-  const selectAssigned = useCallback(() => selectTab("assigned"), [selectTab]);
-  const selectCreated = useCallback(() => selectTab("created"), [selectTab]);
-  const selectInvolved = useCallback(() => selectTab("involved"), [selectTab]);
-  const selectSubscribed = useCallback(
-    () => selectTab("subscribed"),
-    [selectTab]
-  );
-  const cycleTabForward = useCallback(
-    (e: KeyboardEvent) => cycleTab(e.shiftKey ? -1 : 1),
-    [cycleTab]
-  );
+  const selectReviewRequested = () => {
+    selectTab("reviewRequested");
+  };
+  const selectAssigned = () => {
+    selectTab("assigned");
+  };
+  const selectCreated = () => {
+    selectTab("created");
+  };
+  const selectInvolved = () => {
+    selectTab("involved");
+  };
+  const selectSubscribed = () => {
+    selectTab("subscribed");
+  };
+  const cycleTabForward = (e: KeyboardEvent) => {
+    cycleTab(e.shiftKey ? -1 : 1);
+  };
 
   useHotkeys("inbox", [
     {
@@ -491,9 +473,9 @@ function InboxTabButton({
   count: number;
   onSelectTab: (key: InboxTabKey) => void;
 }) {
-  const handleClick = useCallback(() => {
+  const handleClick = () => {
     onSelectTab(tabDef.key);
-  }, [onSelectTab, tabDef.key]);
+  };
 
   return (
     <button
@@ -509,11 +491,31 @@ function InboxTabButton({
   );
 }
 
+function inboxMainView(
+  isLoading: boolean,
+  isError: boolean,
+  hasData: boolean,
+  filteredLength: number,
+  error: unknown
+):
+  | { kind: "loading" }
+  | { kind: "error"; error: unknown }
+  | { kind: "empty" }
+  | { kind: "list" } {
+  if (isLoading && !hasData) {
+    return { kind: "loading" };
+  }
+  if (isError && !hasData) {
+    return { error, kind: "error" };
+  }
+  if (filteredLength === 0) {
+    return { kind: "empty" };
+  }
+  return { kind: "list" };
+}
+
 function InboxMainContent({
-  isLoading,
-  isError,
-  error,
-  hasData,
+  view,
   filtered,
   tab,
   activeTab,
@@ -528,10 +530,11 @@ function InboxMainContent({
   onOpenAt,
   isUnread,
 }: {
-  isLoading: boolean;
-  isError: boolean;
-  error: unknown;
-  hasData: boolean;
+  view:
+    | { kind: "loading" }
+    | { kind: "error"; error: unknown }
+    | { kind: "empty" }
+    | { kind: "list" };
   filtered: PullRequest[];
   tab: InboxTabKey;
   activeTab: (typeof TABS)[number];
@@ -546,7 +549,7 @@ function InboxMainContent({
   onOpenAt: (index: number) => void;
   isUnread: (key: string, updatedAt: string) => boolean;
 }) {
-  if (isLoading && !hasData) {
+  if (view.kind === "loading") {
     return (
       <div className="flex flex-1 items-center justify-center">
         <Spinner label="Loading pull requests…" />
@@ -554,14 +557,16 @@ function InboxMainContent({
     );
   }
 
-  if (isError && !hasData) {
+  if (view.kind === "error") {
     return (
       <div className="flex flex-1 items-center justify-center px-6">
         <div className="max-w-md text-center">
           <p className="font-medium text-danger text-sm">
             Couldn't load pull requests
           </p>
-          <p className="mt-1 break-words text-muted text-xs">{String(error)}</p>
+          <p className="mt-1 break-words text-muted text-xs">
+            {String(view.error)}
+          </p>
           <button
             className="q-btn q-btn-quiet mt-3"
             onClick={onRetry}
@@ -574,7 +579,7 @@ function InboxMainContent({
     );
   }
 
-  if (filtered.length === 0) {
+  if (view.kind === "empty") {
     return (
       <InboxZero
         action={
@@ -635,18 +640,15 @@ function InboxListPane({
   onOpenAt: (index: number) => void;
   isUnread: (key: string, updatedAt: string) => boolean;
 }) {
-  const handleListMouseMove = useCallback(() => {
+  const handleListMouseMove = () => {
     if (listMode !== "mouse") {
       onSetListMode("mouse");
     }
-  }, [listMode, onSetListMode]);
+  };
 
-  const handleSelectPr = useCallback(
-    (pr: PullRequest) => {
-      onSelectPr(keyFor(pr));
-    },
-    [onSelectPr]
-  );
+  const handleSelectPr = (pr: PullRequest) => {
+    onSelectPr(keyFor(pr));
+  };
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[1fr_380px] max-[900px]:grid-cols-1">
@@ -657,6 +659,7 @@ function InboxListPane({
         onMouseMove={handleListMouseMove}
         ref={listRef}
         role="listbox"
+        tabIndex={0}
       >
         {filtered.map((pr, i) => (
           <InboxPrRow
@@ -671,7 +674,7 @@ function InboxListPane({
         ))}
       </div>
 
-      {selectedPR === null ? null : <InboxDetail pr={selectedPR} />}
+      {selectedPR === undefined ? null : <InboxDetail pr={selectedPR} />}
     </div>
   );
 }
@@ -691,14 +694,14 @@ function InboxPrRow({
   onOpenAt: (index: number) => void;
   unread: boolean;
 }) {
-  const handleHover = useCallback(() => {
+  const handleHover = () => {
     onSelectPr(pr);
     prefetchPullRequest(pr.owner, pr.name, pr.number);
-  }, [onSelectPr, pr]);
+  };
 
-  const handleOpen = useCallback(() => {
+  const handleOpen = () => {
     onOpenAt(index);
-  }, [index, onOpenAt]);
+  };
 
   return (
     <div data-index={index}>
@@ -756,7 +759,7 @@ function InboxZero({
       </div>
       <p className="qz-title">{title}</p>
       <p className="qz-hint">{hint}</p>
-      {action == null ? null : (
+      {action ? (
         <button
           className="q-btn q-btn-quiet q-focus mt-5"
           onClick={action.onClick}
@@ -764,7 +767,7 @@ function InboxZero({
         >
           {action.label} <Kbd combo={action.kbd} />
         </button>
-      )}
+      ) : null}
     </div>
   );
 }

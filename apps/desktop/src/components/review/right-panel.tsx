@@ -1,6 +1,6 @@
 // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { CheckCircle2 } from "lucide-react";
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { cn } from "../../lib/cn.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
 import { useAppStore } from "../../store/app-store.ts";
@@ -101,23 +101,17 @@ export function RightPanel({
     .filter((c) => c.inReplyToId === null)
     .map((root) => ({ replyCount: replyCounts.get(root.id) ?? 0, root }));
 
-  const handleJumpToThread = useCallback(
-    (e: React.MouseEvent<HTMLButtonElement>) => {
-      const path = e.currentTarget.dataset.threadPath;
-      const rootId = Number(e.currentTarget.dataset.threadRoot);
-      if (path && Number.isFinite(rootId)) {
-        onJumpToThread(path, rootId);
-      }
-    },
-    [onJumpToThread]
-  );
+  const handleJumpToThread = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const path = e.currentTarget.dataset.threadPath;
+    const rootId = Number(e.currentTarget.dataset.threadRoot);
+    if (path && Number.isFinite(rootId)) {
+      onJumpToThread(path, rootId);
+    }
+  };
 
-  const handleAddIssueComment = useCallback(
-    (text: string) => {
-      onAddIssueComment(text);
-    },
-    [onAddIssueComment]
-  );
+  const handleAddIssueComment = (text: string) => {
+    onAddIssueComment(text);
+  };
 
   return (
     <>

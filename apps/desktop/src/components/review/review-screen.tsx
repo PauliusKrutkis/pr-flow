@@ -25,14 +25,7 @@ import {
   TextSearch,
   // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useCommentMutations } from "../../hooks/use-comments.ts";
 import { useInboxDetailNudge } from "../../hooks/use-inbox-detail-nudge.ts";
 import { useLatest } from "../../hooks/use-latest.ts";
@@ -44,6 +37,7 @@ import { useHotkeys } from "../../keyboard/use-hotkeys.ts";
 import { cn } from "../../lib/cn.ts";
 import { type FindMatch, findInDiff } from "../../lib/find-in-diff.ts";
 import { warmHighlightCache } from "../../lib/highlight.ts";
+import { isImageFile } from "../../lib/image-file.ts";
 import {
   type OccurrenceMatch,
   type OccurrenceSpec,
@@ -80,7 +74,6 @@ import { Kbd } from "../ui/kbd.tsx";
 import { TicketTitle } from "../ui/ticket-title.tsx";
 import { FileSidebar } from "./file-sidebar.tsx";
 import { FindBar } from "./find-bar.tsx";
-import { isImageFile } from "./image-diff.tsx";
 import { OverviewRuler } from "./overview-ruler.tsx";
 import { PrSearch } from "./pr-search.tsx";
 import {
@@ -183,7 +176,7 @@ function resolveRulerFractions(
   if (findOpen && findQuery) {
     return findMatches.map((m) => {
       const idx = model.anchorItem.get(fileAnchorKey(m.fileIndex, m.anchor));
-      return idx === null ? -1 : idx / model.items.length;
+      return idx === undefined ? -1 : idx / model.items.length;
     });
   }
   if (occSpec) {
@@ -191,7 +184,7 @@ function resolveRulerFractions(
       const idx = model.anchorItem.get(
         fileAnchorKey(occSpec.fileIndex, m.anchor)
       );
-      return idx === null ? -1 : idx / model.items.length;
+      return idx === undefined ? -1 : idx / model.items.length;
     });
   }
   return EMPTY_FRACTIONS;
@@ -360,7 +353,7 @@ function extendExistingSelection(
   m: ReviewListModel,
   listRef: React.RefObject<ReviewListHandle | null>,
   setSelection: (s: LineSelection | null) => void,
-  setCursor: (c: CursorPos) => void
+  setCursor: React.Dispatch<React.SetStateAction<CursorPos | null>>
 ): boolean {
   const next = adjacentSelectableAnchor(
     m,
@@ -381,7 +374,7 @@ function extendExistingSelection(
   setSelection({ ...sel, to: next });
   setCursor({ anchor: next, fileIndex: sel.fileIndex });
   const itemIndex = m.anchorItem.get(fileAnchorKey(sel.fileIndex, next));
-  if (itemIndex !== null) {
+  if (itemIndex !== undefined) {
     listRef.current?.nudgeItemIntoView(itemIndex);
   }
   return true;
@@ -393,7 +386,7 @@ function startSelectionFromCursor(
   m: ReviewListModel,
   listRef: React.RefObject<ReviewListHandle | null>,
   setSelection: (s: LineSelection) => void,
-  setCursor: (c: CursorPos) => void
+  setCursor: React.Dispatch<React.SetStateAction<CursorPos | null>>
 ): void {
   const item =
     m.items[m.anchorItem.get(fileAnchorKey(cur.fileIndex, cur.anchor)) ?? -1];
@@ -420,7 +413,7 @@ function startSelectionFromCursor(
   });
   setCursor({ anchor: next, fileIndex: cur.fileIndex });
   const itemIndex = m.anchorItem.get(fileAnchorKey(cur.fileIndex, next));
-  if (itemIndex !== null) {
+  if (itemIndex !== undefined) {
     listRef.current?.nudgeItemIntoView(itemIndex);
   }
 }
@@ -604,9 +597,18 @@ function isRealPointer(
   return false;
 }
 
-function useReviewListCallbacks(args: {
+interface ReviewListCallbackArgs {
   activeThreadRef: React.RefObject<{ rootId: number; path: string } | null>;
-  addPendingStore: (key: string, c: PendingComment) => void;
+  addPendingStore: (
+    key: string,
+    c: {
+      path: string;
+      line: number;
+      side: string;
+      body: string;
+      startLine?: number;
+    }
+  ) => void;
   addReviewComment: ReturnType<typeof useCommentMutations>["addReviewComment"];
   copyTimerRef: React.RefObject<ReturnType<typeof setTimeout> | null>;
   dragRef: React.RefObject<{
@@ -619,8 +621,8 @@ function useReviewListCallbacks(args: {
   handleListScroll: () => void;
   headShaRef: React.RefObject<string>;
   isRealPointerAt: (x: number, y: number) => boolean;
-  keyValue: string;
   keyboardHoldRef: React.RefObject<boolean>;
+  keyValue: string;
   lastPointRef: React.RefObject<{ x: number; y: number } | null>;
   liveSelectionRef: React.RefObject<{
     endItem: number;
@@ -635,20 +637,177 @@ function useReviewListCallbacks(args: {
   reply: ReturnType<typeof useCommentMutations>["reply"];
   resolveThread: ReturnType<typeof useCommentMutations>["resolveThread"];
   setActiveIndex: React.Dispatch<React.SetStateAction<number>>;
+  setChangedSinceViewed: React.Dispatch<React.SetStateAction<Set<string>>>;
   setCollapsed: React.Dispatch<
     React.SetStateAction<ReadonlyMap<number, ReadonlySet<number>>>
   >;
   setCopiedPathIndex: React.Dispatch<React.SetStateAction<number | null>>;
-  setCursor: (c: CursorPos) => void;
+  setCursor: React.Dispatch<React.SetStateAction<CursorPos | null>>;
   setDragging: React.Dispatch<React.SetStateAction<boolean>>;
   setInputMode: React.Dispatch<React.SetStateAction<"keyboard" | "mouse">>;
   setOpenBoxes: React.Dispatch<
     React.SetStateAction<ReadonlyMap<string, number | null>>
   >;
   setSelection: (s: LineSelection | null) => void;
-  setChangedSinceViewed: React.Dispatch<React.SetStateAction<Set<string>>>;
   toggleViewed: (key: string, filename: string, fingerprint: string) => void;
-}): ReviewListCallbacks {
+}
+
+function reviewListOnCopyPath(
+  args: ReviewListCallbackArgs,
+  fileIndex: number
+): void {
+  const f = args.filesRef.current[fileIndex];
+  if (!f) {
+    return;
+  }
+  copyTextToClipboard(f.filename);
+  args.setCopiedPathIndex(fileIndex);
+  if (args.copyTimerRef.current) {
+    clearTimeout(args.copyTimerRef.current);
+  }
+  args.copyTimerRef.current = setTimeout(
+    () => args.setCopiedPathIndex(null),
+    1200
+  );
+}
+
+function reviewListOnPlusDragEnd(
+  args: ReviewListCallbackArgs,
+  openBox: (fileIndex: number, anchor: string, startLine?: number) => void
+): void {
+  const d = args.dragRef.current;
+  args.dragRef.current = null;
+  args.setDragging(false);
+  if (!d) {
+    return;
+  }
+  const live = args.liveSelectionRef.current;
+  const m = args.modelRef.current;
+  if (live && live.fileIndex === d.fileIndex) {
+    const endItem = m.items[live.toItem];
+    const startItem = m.items[live.fromItem];
+    if (
+      endItem?.kind === "row" &&
+      endItem.anchor &&
+      startItem?.kind === "row"
+    ) {
+      openBox(
+        d.fileIndex,
+        endItem.anchor,
+        anchorLine(startItem.anchor ?? endItem.anchor)
+      );
+      return;
+    }
+  }
+  openBox(d.fileIndex, d.from);
+}
+
+function reviewListOnPlusDragStart(
+  args: ReviewListCallbackArgs,
+  fileIndex: number,
+  anchor: string
+): void {
+  const m = args.modelRef.current;
+  const item =
+    m.items[m.anchorItem.get(fileAnchorKey(fileIndex, anchor)) ?? -1];
+  if (item?.kind !== "row" || item.target === null) {
+    return;
+  }
+  args.dragRef.current = {
+    fileIndex,
+    from: anchor,
+    hunkIndex: item.hunkIndex,
+    side: item.target.side,
+  };
+  args.setDragging(true);
+}
+
+function reviewListOnThreadHover(
+  args: ReviewListCallbackArgs,
+  t: { rootId: number; path: string } | null
+): void {
+  args.activeThreadRef.current = t;
+}
+
+function syncActiveIndexRef(
+  activeIndexRef: React.RefObject<number>,
+  target: number
+): void {
+  activeIndexRef.current = target;
+}
+
+function markKeyboardNavigation(args: {
+  keyboardHoldRef: React.RefObject<boolean>;
+  setInputMode: React.Dispatch<React.SetStateAction<"keyboard" | "mouse">>;
+}): void {
+  args.keyboardHoldRef.current = true;
+  args.setInputMode("keyboard");
+}
+
+function reviewListOnOpenBox(
+  args: ReviewListCallbackArgs,
+  fileIndex: number,
+  anchor: string,
+  startLine?: number
+): void {
+  args.setOpenBoxes((prev) =>
+    new Map(prev).set(fileAnchorKey(fileIndex, anchor), startLine ?? null)
+  );
+}
+
+function reviewListOnPlusDragOver(
+  args: ReviewListCallbackArgs,
+  fileIndex: number,
+  anchor: string
+): void {
+  const d = args.dragRef.current;
+  if (!d || fileIndex !== d.fileIndex) {
+    return;
+  }
+  args.setCursor({ anchor, fileIndex });
+  if (anchor === d.from) {
+    args.setSelection(null);
+    return;
+  }
+
+  const m = args.modelRef.current;
+  const fromIdx = m.navIndexOf.get(fileAnchorKey(fileIndex, d.from));
+  const toIdx = m.navIndexOf.get(fileAnchorKey(fileIndex, anchor));
+  if (fromIdx === undefined || toIdx === undefined) {
+    return;
+  }
+  const delta = toIdx > fromIdx ? (1 as const) : (-1 as const);
+  let last = d.from;
+  while (last !== anchor) {
+    const next = adjacentSelectableAnchor(
+      m,
+      d.fileIndex,
+      d.side,
+      d.hunkIndex,
+      last,
+      delta
+    );
+    if (!next) {
+      break;
+    }
+    last = next;
+  }
+  if (last === d.from) {
+    args.setSelection(null);
+    return;
+  }
+  args.setSelection({
+    fileIndex: d.fileIndex,
+    from: d.from,
+    hunkIndex: d.hunkIndex,
+    side: d.side,
+    to: last,
+  });
+}
+
+function useReviewListCallbacks(
+  args: ReviewListCallbackArgs
+): ReviewListCallbacks {
   const cbRef = useLatest({
     async onAddComment(a: {
       path: string;
@@ -684,19 +843,7 @@ function useReviewListCallbacks(args: {
       args.setSelection(null);
     },
     onCopyPath(fileIndex: number) {
-      const f = args.filesRef.current[fileIndex];
-      if (!f) {
-        return;
-      }
-      copyTextToClipboard(f.filename);
-      args.setCopiedPathIndex(fileIndex);
-      if (args.copyTimerRef.current) {
-        clearTimeout(args.copyTimerRef.current);
-      }
-      args.copyTimerRef.current = setTimeout(
-        () => args.setCopiedPathIndex(null),
-        1200
-      );
+      reviewListOnCopyPath(args, fileIndex);
     },
     onMouseMove(x: number, y: number) {
       if (!args.isRealPointerAt(x, y)) {
@@ -705,96 +852,18 @@ function useReviewListCallbacks(args: {
       args.setInputMode((mo) => (mo === "mouse" ? mo : "mouse"));
     },
     onOpenBox(fileIndex: number, anchor: string, startLine?: number) {
-      args.setOpenBoxes((prev) =>
-        new Map(prev).set(fileAnchorKey(fileIndex, anchor), startLine ?? null)
-      );
+      reviewListOnOpenBox(args, fileIndex, anchor, startLine);
     },
     onPlusDragEnd() {
-      const d = args.dragRef.current;
-      args.dragRef.current = null;
-      args.setDragging(false);
-      if (!d) {
-        return;
-      }
-      const live = args.liveSelectionRef.current;
-      const m = args.modelRef.current;
-      if (live && live.fileIndex === d.fileIndex) {
-        const endItem = m.items[live.toItem];
-        const startItem = m.items[live.fromItem];
-        if (
-          endItem?.kind === "row" &&
-          endItem.anchor &&
-          startItem?.kind === "row"
-        ) {
-          cbRef.current.onOpenBox(
-            d.fileIndex,
-            endItem.anchor,
-            anchorLine(startItem.anchor ?? endItem.anchor)
-          );
-          return;
-        }
-      }
-      cbRef.current.onOpenBox(d.fileIndex, d.from);
+      reviewListOnPlusDragEnd(args, (fi, a, sl) =>
+        cbRef.current.onOpenBox(fi, a, sl)
+      );
     },
     onPlusDragOver(fileIndex: number, anchor: string) {
-      const d = args.dragRef.current;
-      if (!d || fileIndex !== d.fileIndex) {
-        return;
-      }
-      args.setCursor({ anchor, fileIndex });
-      if (anchor === d.from) {
-        args.setSelection(null);
-        return;
-      }
-
-      const m = args.modelRef.current;
-      const fromIdx = m.navIndexOf.get(fileAnchorKey(fileIndex, d.from));
-      const toIdx = m.navIndexOf.get(fileAnchorKey(fileIndex, anchor));
-      if (fromIdx === null || toIdx === null) {
-        return;
-      }
-      const delta = toIdx > fromIdx ? (1 as const) : (-1 as const);
-      let last = d.from;
-      while (last !== anchor) {
-        const next = adjacentSelectableAnchor(
-          m,
-          d.fileIndex,
-          d.side,
-          d.hunkIndex,
-          last,
-          delta
-        );
-        if (!next) {
-          break;
-        }
-        last = next;
-      }
-      if (last === d.from) {
-        args.setSelection(null);
-        return;
-      }
-      args.setSelection({
-        fileIndex: d.fileIndex,
-        from: d.from,
-        hunkIndex: d.hunkIndex,
-        side: d.side,
-        to: last,
-      });
+      reviewListOnPlusDragOver(args, fileIndex, anchor);
     },
     onPlusDragStart(fileIndex: number, anchor: string) {
-      const m = args.modelRef.current;
-      const item =
-        m.items[m.anchorItem.get(fileAnchorKey(fileIndex, anchor)) ?? -1];
-      if (item?.kind !== "row" || item.target === null) {
-        return;
-      }
-      args.dragRef.current = {
-        fileIndex,
-        from: anchor,
-        hunkIndex: item.hunkIndex,
-        side: item.target.side,
-      };
-      args.setDragging(true);
+      reviewListOnPlusDragStart(args, fileIndex, anchor);
     },
     onRemovePending(id: string) {
       args.removePendingStore(args.keyValue, id);
@@ -809,8 +878,10 @@ function useReviewListCallbacks(args: {
       if (!args.isRealPointerAt(x, y)) {
         return;
       }
-      args.setInputMode((mo) => (mo === "mouse" ? mo : "mouse"));
-      args.setCursor((cur) =>
+      args.setInputMode((mo: "keyboard" | "mouse") =>
+        mo === "mouse" ? mo : "mouse"
+      );
+      args.setCursor((cur: CursorPos | null) =>
         cur && cur.fileIndex === fileIndex && cur.anchor === anchor
           ? cur
           : { anchor, fileIndex }
@@ -821,7 +892,7 @@ function useReviewListCallbacks(args: {
       args.handleListScroll();
     },
     onThreadHover(t: { rootId: number; path: string } | null) {
-      args.activeThreadRef.current = t;
+      reviewListOnThreadHover(args, t);
     },
     onToggleHunk(fileIndex: number, hunkIndex: number) {
       args.setCollapsed((prev) => {
@@ -903,7 +974,7 @@ function resolveLiveSelection(
   const b = model.anchorItem.get(
     fileAnchorKey(selection.fileIndex, selection.to)
   );
-  if (a === null || b === null || a === b) {
+  if (a === undefined || b === undefined || a === b) {
     return null;
   }
   return {
@@ -921,7 +992,7 @@ function commentAtCursorPos(
   liveSelectionRef: React.RefObject<ReturnType<typeof resolveLiveSelection>>,
   cursorRef: React.RefObject<CursorPos | null>,
   activeIndexRef: React.RefObject<number>,
-  setCursor: (c: CursorPos) => void,
+  setCursor: React.Dispatch<React.SetStateAction<CursorPos | null>>,
   setActiveIndex: React.Dispatch<React.SetStateAction<number>>,
   onOpenBox: ReviewListCallbacks["onOpenBox"]
 ): void {
@@ -1001,7 +1072,7 @@ function useReviewResumeScroll(args: {
             return;
           }
         }
-      } else if (idx !== null) {
+      } else if (idx !== undefined) {
         listRef.current?.scrollItemTo(idx, t.top);
       }
       tries += 1;
@@ -1153,227 +1224,224 @@ function useReviewHotkeys(config: {
   setSelection: (s: LineSelection | null) => void;
   toggleViewedFile: () => void;
 }): void {
-  const bindings = useMemo(
-    () => [
-      {
-        description: "Next line",
-        group: "Navigation",
-        icon: ArrowDown,
-        keys: ["j", "down"],
-        run: (e: KeyboardEvent) => {
+  const bindings = [
+    {
+      description: "Next line",
+      group: "Navigation",
+      icon: ArrowDown,
+      keys: ["j", "down"],
+      run: (e: KeyboardEvent) => {
+        config.setSelection(null);
+        buildCursorMover(config.cursorMoverRefs).move(1, e.repeat);
+      },
+    },
+    {
+      description: "Previous line",
+      group: "Navigation",
+      icon: ArrowUp,
+      keys: ["k", "up"],
+      run: (e: KeyboardEvent) => {
+        config.setSelection(null);
+        buildCursorMover(config.cursorMoverRefs).move(-1, e.repeat);
+      },
+    },
+    {
+      description: "Extend selection down",
+      group: "Comments",
+      icon: ArrowDown,
+      keys: ["shift+j", "shift+down"],
+      run: () => config.extendSelection(1),
+    },
+    {
+      description: "Extend selection up",
+      group: "Comments",
+      icon: ArrowUp,
+      keys: ["shift+k", "shift+up"],
+      run: () => config.extendSelection(-1),
+    },
+    {
+      description: "Comment on line / selection",
+      group: "Comments",
+      icon: MessageSquarePlus,
+      keys: "c",
+      run: config.commentAtCursor,
+    },
+    {
+      description: "Reply to comment / next file",
+      group: "Files",
+      icon: ChevronRight,
+      keys: ["r"],
+      run: config.replyToActiveThreadOrNextFile,
+    },
+    {
+      description: "Previous file",
+      group: "Files",
+      icon: ChevronLeft,
+      keys: ["t"],
+      run: config.prevFile,
+    },
+    {
+      description: "Cycle files",
+      group: "Files",
+      icon: ArrowLeftRight,
+      keys: "tab",
+      run: (e: KeyboardEvent) => config.cycleFile(e.shiftKey ? -1 : 1),
+    },
+    {
+      description: "Page down",
+      group: "Navigation",
+      icon: ChevronsDown,
+      keys: ["space", "pagedown"],
+      run: () => config.pageScroll(1),
+    },
+    {
+      description: "Page up",
+      group: "Navigation",
+      icon: ChevronsUp,
+      keys: ["pageup"],
+      run: () => config.pageScroll(-1),
+    },
+    {
+      description: "Next comment",
+      group: "Comments",
+      icon: MessageSquare,
+      keys: "]c",
+      run: () => config.goToComment(1),
+    },
+    {
+      description: "Previous comment",
+      group: "Comments",
+      icon: MessageSquare,
+      keys: "[c",
+      run: () => config.goToComment(-1),
+    },
+    {
+      description: "Resolve / unresolve comment",
+      group: "Comments",
+      icon: CheckCircle2,
+      keys: "x",
+      run: config.resolveActiveThread,
+    },
+    {
+      description: "Mark viewed & next",
+      group: "Files",
+      icon: CheckCheck,
+      keys: "e",
+      run: config.markViewedAndNext,
+    },
+    {
+      description: "Toggle file viewed",
+      group: "Files",
+      icon: Check,
+      keys: "v",
+      run: config.toggleViewedFile,
+    },
+    {
+      description: "Submit review",
+      group: "Review",
+      icon: Send,
+      keys: "s",
+      run: config.openSubmit,
+    },
+    {
+      description: "Open files in the browser",
+      group: "General",
+      icon: ExternalLink,
+      keys: "o",
+      run: config.openPrFiles,
+    },
+    {
+      description: "Copy PR link",
+      group: "General",
+      icon: Link,
+      keys: "y",
+      run: config.copyLink,
+    },
+    {
+      description: "Copy file path",
+      group: "Files",
+      icon: Copy,
+      keys: "mod+shift+c",
+      run: config.copyFilePath,
+    },
+    {
+      description: "Toggle info panel",
+      group: "General",
+      icon: Info,
+      keys: "i",
+      run: () => config.setRightOpen((open) => !open),
+    },
+    {
+      description: "Find a file",
+      group: "Navigation",
+      icon: FileSearch,
+      keys: "mod+t",
+      run: () => config.setPrSearch("files"),
+    },
+    {
+      description: "Search code",
+      group: "Navigation",
+      icon: Search,
+      keys: "mod+r",
+      run: () => config.setPrSearch("text"),
+    },
+    {
+      description: "Find in diff",
+      group: "Navigation",
+      icon: TextSearch,
+      keys: "mod+f",
+      run: config.openFind,
+    },
+    ...(config.findOpen
+      ? ([
+          {
+            description: "Next find match",
+            hidden: true,
+            keys: ["enter", "f3"],
+            run: (e: KeyboardEvent) => config.findStep(e.shiftKey ? -1 : 1),
+          },
+          {
+            description: "Next find match",
+            hidden: true,
+            keys: "mod+g",
+            run: (e: KeyboardEvent) => config.findStep(e.shiftKey ? -1 : 1),
+          },
+        ] satisfies Binding[])
+      : []),
+    ...(config.occSpec
+      ? ([
+          {
+            description: "Next occurrence",
+            hidden: true,
+            keys: "n",
+            run: () => buildOccNav(config.occNavRefs).step(1),
+          },
+          {
+            description: "Previous occurrence",
+            hidden: true,
+            keys: "p",
+            run: () => buildOccNav(config.occNavRefs).step(-1),
+          },
+        ] satisfies Binding[])
+      : []),
+    {
+      description: "Close panel / back to inbox",
+      group: "Navigation",
+      icon: Inbox,
+      keys: "esc",
+      run: () => {
+        if (config.selectionRef.current) {
           config.setSelection(null);
-          buildCursorMover(config.cursorMoverRefs).move(1, e.repeat);
-        },
+        } else if (config.findOpenRef.current) {
+          config.closeFind();
+        } else if (config.rightOpenRef.current) {
+          config.setRightOpen(false);
+        } else {
+          config.goInbox();
+        }
       },
-      {
-        description: "Previous line",
-        group: "Navigation",
-        icon: ArrowUp,
-        keys: ["k", "up"],
-        run: (e: KeyboardEvent) => {
-          config.setSelection(null);
-          buildCursorMover(config.cursorMoverRefs).move(-1, e.repeat);
-        },
-      },
-      {
-        description: "Extend selection down",
-        group: "Comments",
-        icon: ArrowDown,
-        keys: ["shift+j", "shift+down"],
-        run: () => config.extendSelection(1),
-      },
-      {
-        description: "Extend selection up",
-        group: "Comments",
-        icon: ArrowUp,
-        keys: ["shift+k", "shift+up"],
-        run: () => config.extendSelection(-1),
-      },
-      {
-        description: "Comment on line / selection",
-        group: "Comments",
-        icon: MessageSquarePlus,
-        keys: "c",
-        run: config.commentAtCursor,
-      },
-      {
-        description: "Reply to comment / next file",
-        group: "Files",
-        icon: ChevronRight,
-        keys: ["r"],
-        run: config.replyToActiveThreadOrNextFile,
-      },
-      {
-        description: "Previous file",
-        group: "Files",
-        icon: ChevronLeft,
-        keys: ["t"],
-        run: config.prevFile,
-      },
-      {
-        description: "Cycle files",
-        group: "Files",
-        icon: ArrowLeftRight,
-        keys: "tab",
-        run: (e: KeyboardEvent) => config.cycleFile(e.shiftKey ? -1 : 1),
-      },
-      {
-        description: "Page down",
-        group: "Navigation",
-        icon: ChevronsDown,
-        keys: ["space", "pagedown"],
-        run: () => config.pageScroll(1),
-      },
-      {
-        description: "Page up",
-        group: "Navigation",
-        icon: ChevronsUp,
-        keys: ["pageup"],
-        run: () => config.pageScroll(-1),
-      },
-      {
-        description: "Next comment",
-        group: "Comments",
-        icon: MessageSquare,
-        keys: "]c",
-        run: () => config.goToComment(1),
-      },
-      {
-        description: "Previous comment",
-        group: "Comments",
-        icon: MessageSquare,
-        keys: "[c",
-        run: () => config.goToComment(-1),
-      },
-      {
-        description: "Resolve / unresolve comment",
-        group: "Comments",
-        icon: CheckCircle2,
-        keys: "x",
-        run: config.resolveActiveThread,
-      },
-      {
-        description: "Mark viewed & next",
-        group: "Files",
-        icon: CheckCheck,
-        keys: "e",
-        run: config.markViewedAndNext,
-      },
-      {
-        description: "Toggle file viewed",
-        group: "Files",
-        icon: Check,
-        keys: "v",
-        run: config.toggleViewedFile,
-      },
-      {
-        description: "Submit review",
-        group: "Review",
-        icon: Send,
-        keys: "s",
-        run: config.openSubmit,
-      },
-      {
-        description: "Open files in the browser",
-        group: "General",
-        icon: ExternalLink,
-        keys: "o",
-        run: config.openPrFiles,
-      },
-      {
-        description: "Copy PR link",
-        group: "General",
-        icon: Link,
-        keys: "y",
-        run: config.copyLink,
-      },
-      {
-        description: "Copy file path",
-        group: "Files",
-        icon: Copy,
-        keys: "mod+shift+c",
-        run: config.copyFilePath,
-      },
-      {
-        description: "Toggle info panel",
-        group: "General",
-        icon: Info,
-        keys: "i",
-        run: () => config.setRightOpen((open) => !open),
-      },
-      {
-        description: "Find a file",
-        group: "Navigation",
-        icon: FileSearch,
-        keys: "mod+t",
-        run: () => config.setPrSearch("files"),
-      },
-      {
-        description: "Search code",
-        group: "Navigation",
-        icon: Search,
-        keys: "mod+r",
-        run: () => config.setPrSearch("text"),
-      },
-      {
-        description: "Find in diff",
-        group: "Navigation",
-        icon: TextSearch,
-        keys: "mod+f",
-        run: config.openFind,
-      },
-      ...(config.findOpen
-        ? ([
-            {
-              description: "Next find match",
-              hidden: true,
-              keys: ["enter", "f3"],
-              run: (e: KeyboardEvent) => config.findStep(e.shiftKey ? -1 : 1),
-            },
-            {
-              description: "Next find match",
-              hidden: true,
-              keys: "mod+g",
-              run: (e: KeyboardEvent) => config.findStep(e.shiftKey ? -1 : 1),
-            },
-          ] satisfies Binding[])
-        : []),
-      ...(config.occSpec
-        ? ([
-            {
-              description: "Next occurrence",
-              hidden: true,
-              keys: "n",
-              run: () => buildOccNav(config.occNavRefs).step(1),
-            },
-            {
-              description: "Previous occurrence",
-              hidden: true,
-              keys: "p",
-              run: () => buildOccNav(config.occNavRefs).step(-1),
-            },
-          ] satisfies Binding[])
-        : []),
-      {
-        description: "Close panel / back to inbox",
-        group: "Navigation",
-        icon: Inbox,
-        keys: "esc",
-        run: () => {
-          if (config.selectionRef.current) {
-            config.setSelection(null);
-          } else if (config.findOpenRef.current) {
-            config.closeFind();
-          } else if (config.rightOpenRef.current) {
-            config.setRightOpen(false);
-          } else {
-            config.goInbox();
-          }
-        },
-      },
-    ],
-    [config]
-  );
+    },
+  ];
   useHotkeys("review", bindings);
 }
 
@@ -1453,60 +1521,54 @@ function useReviewThreadActions(args: {
   setRightOpen: React.Dispatch<React.SetStateAction<boolean>>;
   threadFlashRef: React.RefObject<ReturnType<typeof setTimeout> | null>;
 }) {
-  const jumpToThread = useCallback(
-    (path: string, rootId: number) => {
-      const m = args.modelRef.current;
-      const fileIndex = args.filesRef.current.findIndex(
-        (f) => f.filename === path
+  const jumpToThread = (path: string, rootId: number) => {
+    const m = args.modelRef.current;
+    const fileIndex = args.filesRef.current.findIndex(
+      (f) => f.filename === path
+    );
+    if (fileIndex < 0) {
+      return;
+    }
+    args.setRightOpen(false);
+    usePerfStore.getState().markFileStart();
+    args.setActiveIndex(fileIndex);
+    args.activeIndexRef.current = fileIndex;
+    const itemIndex = m.commentItems.find((i) => {
+      const it = m.items[i];
+      return (
+        it.kind === "comments" &&
+        it.fileIndex === fileIndex &&
+        it.threads.some((t) => t[0]?.id === rootId)
       );
-      if (fileIndex < 0) {
-        return;
-      }
-      args.setRightOpen(false);
-      usePerfStore.getState().markFileStart();
-      args.setActiveIndex(fileIndex);
-      args.activeIndexRef.current = fileIndex;
-      const itemIndex = m.commentItems.find((i) => {
-        const it = m.items[i];
-        return (
-          it.kind === "comments" &&
-          it.fileIndex === fileIndex &&
-          it.threads.some((t) => t[0]?.id === rootId)
-        );
-      });
-      if (itemIndex === null) {
-        args.listRef.current?.scrollToFileStart(fileIndex);
-        return;
-      }
-      args.listRef.current?.centerItem(itemIndex);
-      flashCommentThread(args.listRef, args.threadFlashRef, rootId);
-    },
-    [args]
-  );
+    });
+    if (itemIndex === undefined) {
+      args.listRef.current?.scrollToFileStart(fileIndex);
+      return;
+    }
+    args.listRef.current?.centerItem(itemIndex);
+    flashCommentThread(args.listRef, args.threadFlashRef, rootId);
+  };
 
-  const goToComment = useCallback(
-    (delta: number) => {
-      const list = args.modelRef.current.commentItems;
-      if (list.length === 0) {
-        return;
-      }
-      const next = (args.commentIndex + delta + list.length) % list.length;
-      args.setCommentIndex(next);
-      args.listRef.current?.centerItem(list[next]);
+  const goToComment = (delta: number) => {
+    const list = args.modelRef.current.commentItems;
+    if (list.length === 0) {
+      return;
+    }
+    const next = (args.commentIndex + delta + list.length) % list.length;
+    args.setCommentIndex(next);
+    args.listRef.current?.centerItem(list[next]);
 
-      const item = args.modelRef.current.items[list[next]];
-      args.activeThreadRef.current =
-        item?.kind === "comments" && item.threads.length > 0
-          ? {
-              path: args.filesRef.current[item.fileIndex]?.filename ?? "",
-              rootId: item.threads[0][0].id,
-            }
-          : null;
-    },
-    [args]
-  );
+    const item = args.modelRef.current.items[list[next]];
+    args.activeThreadRef.current =
+      item?.kind === "comments" && item.threads.length > 0
+        ? {
+            path: args.filesRef.current[item.fileIndex]?.filename ?? "",
+            rootId: item.threads[0][0].id,
+          }
+        : null;
+  };
 
-  const replyToActiveThreadOrNextFile = useCallback(() => {
+  const replyToActiveThreadOrNextFile = () => {
     const t = args.activeThreadRef.current;
     if (t && args.commentsRef.current.some((c) => c.id === t.rootId)) {
       args.replyNonceRef.current += 1;
@@ -1514,9 +1576,9 @@ function useReviewThreadActions(args: {
       return;
     }
     args.nextFile();
-  }, [args]);
+  };
 
-  const resolveActiveThread = useCallback(() => {
+  const resolveActiveThread = () => {
     const t = args.activeThreadRef.current;
     if (!t) {
       return;
@@ -1529,7 +1591,7 @@ function useReviewThreadActions(args: {
       resolved: !root.resolved,
       threadId: root.threadId,
     });
-  }, [args]);
+  };
 
   return {
     goToComment,
@@ -1596,24 +1658,21 @@ function useReviewFind(args: {
       : 0;
   const findCurrent = currentMatchAt(findMatches, findSafeIndex);
 
-  const changeFindQuery = useCallback(
-    (q: string) => {
-      setFindSeed(listRef.current?.firstVisibleRowItem() ?? null);
-      setFindQuery(q);
-      setFindIndex(null);
-      findJumpedRef.current = false;
-    },
-    [listRef]
-  );
+  const changeFindQuery = (q: string) => {
+    setFindSeed(listRef.current?.firstVisibleRowItem() ?? null);
+    setFindQuery(q);
+    setFindIndex(null);
+    findJumpedRef.current = false;
+  };
 
-  const toggleFindCase = useCallback(() => {
+  const toggleFindCase = () => {
     setFindSeed(listRef.current?.firstVisibleRowItem() ?? null);
     setFindCase((c) => !c);
     setFindIndex(null);
     findJumpedRef.current = false;
-  }, [listRef]);
+  };
 
-  const openFind = useCallback(() => {
+  const openFind = () => {
     if (!findOpenRef.current) {
       setFindSeed(listRef.current?.firstVisibleRowItem() ?? null);
       setFindIndex(null);
@@ -1626,31 +1685,28 @@ function useReviewFind(args: {
       }
     }
     setFindFocusSeq((s) => s + 1);
-  }, [changeFindQuery, findOpenRef, listRef]);
+  };
 
-  const closeFind = useCallback(() => {
+  const closeFind = () => {
     setFindOpen(false);
-  }, []);
+  };
 
-  const findStep = useCallback(
-    (dir: 1 | -1) => {
-      const n = findMatches.length;
-      if (n === 0) {
-        return;
-      }
-      const next = findJumpedRef.current
-        ? (findSafeIndex + dir + n) % n
-        : findSafeIndex;
-      findJumpedRef.current = true;
-      setFindIndex(next);
-      const m = findMatches[next];
-      selectLine(m.fileIndex, m.anchor);
-    },
-    [findMatches, findSafeIndex, selectLine]
-  );
+  const findStep = (dir: 1 | -1) => {
+    const n = findMatches.length;
+    if (n === 0) {
+      return;
+    }
+    const next = findJumpedRef.current
+      ? (findSafeIndex + dir + n) % n
+      : findSafeIndex;
+    findJumpedRef.current = true;
+    setFindIndex(next);
+    const m = findMatches[next];
+    selectLine(m.fileIndex, m.anchor);
+  };
 
-  const onFindNext = useCallback(() => findStep(1), [findStep]);
-  const onFindPrev = useCallback(() => findStep(-1), [findStep]);
+  const onFindNext = () => findStep(1);
+  const onFindPrev = () => findStep(-1);
 
   return {
     changeFindQuery,
@@ -1681,34 +1737,33 @@ function useReviewFileNavigation(args: {
   listRef: React.RefObject<ReviewListHandle | null>;
   liveSelectionRef: React.RefObject<ReturnType<typeof resolveLiveSelection>>;
   modelRef: React.RefObject<ReviewListModel>;
+  persistFileIndex: (index: number) => void;
   selectionRef: React.RefObject<LineSelection | null>;
   setActiveIndex: React.Dispatch<React.SetStateAction<number>>;
   setCommentIndex: React.Dispatch<React.SetStateAction<number>>;
-  setCursor: (c: CursorPos) => void;
+  setCursor: React.Dispatch<React.SetStateAction<CursorPos | null>>;
   setInputMode: React.Dispatch<React.SetStateAction<"keyboard" | "mouse">>;
   setOccSpec: (next: OccState | null) => void;
   setSelection: (s: LineSelection | null) => void;
 }) {
-  const scrollToFile = useCallback(
-    (i: number) => {
-      if (args.fileCountRef.current === 0) {
-        return;
-      }
-      const target = Math.min(Math.max(i, 0), args.fileCountRef.current - 1);
-      usePerfStore.getState().markFileStart();
-      args.setActiveIndex(target);
-      args.activeIndexRef.current = target;
-      args.setCommentIndex(0);
-      args.setOccSpec(null);
-      args.setSelection(null);
-      args.listRef.current?.scrollToFileStart(target);
-    },
-    [args]
-  );
+  const scrollToFile = (i: number) => {
+    if (args.fileCountRef.current === 0) {
+      return;
+    }
+    const target = Math.min(Math.max(i, 0), args.fileCountRef.current - 1);
+    usePerfStore.getState().markFileStart();
+    args.setActiveIndex(target);
+    syncActiveIndexRef(args.activeIndexRef, target);
+    args.persistFileIndex(target);
+    args.setCommentIndex(0);
+    args.setOccSpec(null);
+    args.setSelection(null);
+    args.listRef.current?.scrollToFileStart(target);
+  };
 
   const fileDeltaRef = useRef(0);
   const fileRafRef = useRef<number | null>(null);
-  const flushFileMove = useCallback(() => {
+  const flushFileMove = () => {
     fileRafRef.current = null;
     const delta = fileDeltaRef.current;
     fileDeltaRef.current = 0;
@@ -1716,80 +1771,67 @@ function useReviewFileNavigation(args: {
       return;
     }
     scrollToFile(args.activeIndexRef.current + delta);
-  }, [args.activeIndexRef, scrollToFile]);
+  };
 
-  const moveFile = useCallback(
-    (delta: number) => {
-      if (args.fileCountRef.current === 0) {
-        return;
-      }
-      fileDeltaRef.current += delta;
-      if (fileRafRef.current === null) {
-        fileRafRef.current = requestAnimationFrame(flushFileMove);
-      }
-    },
-    [args.fileCountRef, flushFileMove]
-  );
+  const moveFile = (delta: number) => {
+    if (args.fileCountRef.current === 0) {
+      return;
+    }
+    fileDeltaRef.current += delta;
+    if (fileRafRef.current === null) {
+      fileRafRef.current = requestAnimationFrame(flushFileMove);
+    }
+  };
 
-  const nextFile = useCallback(() => moveFile(1), [moveFile]);
-  const prevFile = useCallback(() => moveFile(-1), [moveFile]);
+  const nextFile = () => moveFile(1);
+  const prevFile = () => moveFile(-1);
 
-  const cycleFile = useCallback(
-    (dir: number) => {
-      const n = args.fileCountRef.current;
-      if (n === 0) {
-        return;
-      }
-      scrollToFile((args.activeIndexRef.current + dir + n) % n);
-    },
-    [args.activeIndexRef, args.fileCountRef, scrollToFile]
-  );
+  const cycleFile = (dir: number) => {
+    const n = args.fileCountRef.current;
+    if (n === 0) {
+      return;
+    }
+    scrollToFile((args.activeIndexRef.current + dir + n) % n);
+  };
 
-  const pageScroll = useCallback(
-    (dir: number) => {
-      const el = args.listRef.current?.scroller();
-      if (el) {
-        el.scrollBy({ top: dir * el.clientHeight * 0.85 });
-      }
-    },
-    [args.listRef]
-  );
+  const pageScroll = (dir: number) => {
+    const el = args.listRef.current?.scroller();
+    if (el) {
+      el.scrollBy({ top: dir * el.clientHeight * 0.85 });
+    }
+  };
 
-  const extendSelection = useCallback(
-    (delta: 1 | -1) => {
-      const m = args.modelRef.current;
-      args.keyboardHoldRef.current = true;
-      args.setInputMode("keyboard");
-      const sel = args.selectionRef.current;
-      if (sel) {
-        extendExistingSelection(
-          sel,
-          delta,
-          m,
-          args.listRef,
-          args.setSelection,
-          args.setCursor
-        );
-        return;
-      }
-      const cur = args.cursorRef.current;
-      if (!cur) {
-        buildCursorMover(args.cursorMoverRefs).move(delta, false);
-        return;
-      }
-      startSelectionFromCursor(
-        cur,
+  const extendSelection = (delta: 1 | -1) => {
+    const m = args.modelRef.current;
+    markKeyboardNavigation(args);
+    const sel = args.selectionRef.current;
+    if (sel) {
+      extendExistingSelection(
+        sel,
         delta,
         m,
         args.listRef,
         args.setSelection,
         args.setCursor
       );
-    },
-    [args]
-  );
+      return;
+    }
+    const cur = args.cursorRef.current;
+    if (!cur) {
+      buildCursorMover(args.cursorMoverRefs).move(delta, false);
+      return;
+    }
+    startSelectionFromCursor(
+      cur,
+      delta,
+      m,
+      args.listRef,
+      args.setSelection,
+      args.setCursor
+    );
+  };
 
-  const commentAtCursor = useCallback(() => {
+  const commentAtCursor = () => {
     commentAtCursorPos(
       args.modelRef,
       args.liveSelectionRef,
@@ -1799,22 +1841,18 @@ function useReviewFileNavigation(args: {
       args.setActiveIndex,
       args.listCallbacks.onOpenBox
     );
-  }, [args]);
+  };
 
-  const selectFileFromSearch = useCallback(
-    (fileIndex: number) => {
-      scrollToFile(fileIndex);
-      const entry = args.modelRef.current.nav.find(
-        (n) => n.fileIndex === fileIndex
-      );
-      if (entry) {
-        args.keyboardHoldRef.current = true;
-        args.setInputMode("keyboard");
-        args.setCursor({ anchor: entry.anchor, fileIndex: entry.fileIndex });
-      }
-    },
-    [args, scrollToFile]
-  );
+  const selectFileFromSearch = (fileIndex: number) => {
+    scrollToFile(fileIndex);
+    const entry = args.modelRef.current.nav.find(
+      (n) => n.fileIndex === fileIndex
+    );
+    if (entry) {
+      markKeyboardNavigation(args);
+      args.setCursor({ anchor: entry.anchor, fileIndex: entry.fileIndex });
+    }
+  };
 
   return {
     commentAtCursor,
@@ -1849,13 +1887,13 @@ function useReviewSubmitActions(args: {
   toggleViewedWithFp: (f: ChangedFile) => void;
   viewedSet: Set<string>;
 }) {
-  const toggleViewedFile = useCallback(() => {
+  const toggleViewedFile = () => {
     if (args.activeFile) {
       args.toggleViewedWithFp(args.activeFile);
     }
-  }, [args]);
+  };
 
-  const markViewedAndNext = useCallback(() => {
+  const markViewedAndNext = () => {
     if (!args.activeFile) {
       return;
     }
@@ -1864,17 +1902,17 @@ function useReviewSubmitActions(args: {
     if (!wasViewed) {
       args.scrollToFile(args.activeIndexRef.current + 1);
     }
-  }, [args]);
+  };
 
-  const copyLink = useCallback(() => {
+  const copyLink = () => {
     if (!args.prUrl) {
       return;
     }
     copyTextToClipboard(args.prUrl);
     args.setToast({ message: args.prUrl, title: "Copied PR link" });
-  }, [args]);
+  };
 
-  const copyFilePath = useCallback(() => {
+  const copyFilePath = () => {
     if (!args.activeFile) {
       return;
     }
@@ -1883,40 +1921,37 @@ function useReviewSubmitActions(args: {
       message: args.activeFile.filename,
       title: "Copied file path",
     });
-  }, [args]);
+  };
 
-  const openSubmit = useCallback(() => {
+  const openSubmit = () => {
     args.submitReview.reset();
     args.setSubmitOpen(true);
-  }, [args]);
+  };
 
-  const handleSubmitReview = useCallback(
-    (event: ReviewEvent, body: string) => {
-      const payload = {
-        body,
-        comments: args.pending.map((p) => ({
-          body: p.body,
-          line: p.line,
-          path: p.path,
-          side: p.side,
-          startLine: p.startLine,
-        })),
-        commitId: args.pr?.headSha ?? "",
-        event,
-      };
-      args.setSubmitOpen(false);
-      args.advanceAfterSubmit();
-      args.submitReview
-        .mutateAsync(payload)
-        .then(() => args.clearPendingComments(args.keyValue))
-        .catch((e) => {
-          args.setFlash(
-            `Review for ${args.owner}/${args.repo}#${args.number} didn't submit — your comments are still pending. ${String(e)}`
-          );
-        });
-    },
-    [args]
-  );
+  const handleSubmitReview = (event: ReviewEvent, body: string) => {
+    const payload = {
+      body,
+      comments: args.pending.map((p) => ({
+        body: p.body,
+        line: p.line,
+        path: p.path,
+        side: p.side,
+        startLine: p.startLine,
+      })),
+      commitId: args.pr?.headSha ?? "",
+      event,
+    };
+    args.setSubmitOpen(false);
+    args.advanceAfterSubmit();
+    args.submitReview
+      .mutateAsync(payload)
+      .then(() => args.clearPendingComments(args.keyValue))
+      .catch((e) => {
+        args.setFlash(
+          `Review for ${args.owner}/${args.repo}#${args.number} didn't submit — your comments are still pending. ${String(e)}`
+        );
+      });
+  };
 
   return {
     copyFilePath,
@@ -2016,34 +2051,28 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     s.activeAccountId ? s.issueTrackers[s.activeAccountId] : undefined
   );
   const viewedFiles = viewed[keyValue];
-  const viewedSet = useMemo(
-    () => new Set(Object.keys(viewedFiles ?? {})),
-    [viewedFiles]
-  );
+  const viewedSet = new Set(Object.keys(viewedFiles ?? {}));
 
-  const files = useMemo(() => detail?.files ?? [], [detail]);
+  const files = detail?.files ?? [];
   const fileCount = files.length;
   const clampedIndex = Math.min(activeIndex, Math.max(fileCount - 1, 0));
   const activeFile = files[clampedIndex];
 
-  const toggleViewedWithFp = useCallback(
-    (f: ChangedFile) => {
-      toggleViewed(
-        keyValue,
-        f.filename,
-        fingerprintFile(f, headShaRef.current)
-      );
-      setChangedSinceViewed((prev) => {
-        if (!prev.has(f.filename)) {
-          return prev;
-        }
-        const next = new Set(prev);
-        next.delete(f.filename);
-        return next;
-      });
-    },
-    [headShaRef, keyValue, toggleViewed]
-  );
+  const toggleViewedWithFp = (f: ChangedFile) => {
+    toggleViewed(keyValue, f.filename, fingerprintFile(f, headShaRef.current));
+    setChangedSinceViewed((prev) => {
+      if (!prev.has(f.filename)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.delete(f.filename);
+      return next;
+    });
+  };
+
+  const persistFileIndex = (index: number) => {
+    updateReviewMemory(keyValue, { fileIndex: index });
+  };
 
   const activeIndexRef = useLatest(clampedIndex);
   const fileCountRef = useLatest(fileCount);
@@ -2056,11 +2085,10 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     activeThreadRef.current = null;
   }, []);
 
-  const commentsByFile = useMemo(
-    () => buildCommentsByFile(detail?.comments ?? EMPTY_COMMENTS),
-    [detail?.comments]
+  const commentsByFile = buildCommentsByFile(
+    detail?.comments ?? EMPTY_COMMENTS
   );
-  const pendingByFile = useMemo(() => buildPendingByFile(pending), [pending]);
+  const pendingByFile = buildPendingByFile(pending);
 
   const model: ReviewListModel = buildReviewItems({
     collapsed,
@@ -2113,46 +2141,49 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     selectLine: (...args) => selectLineRef.current(...args),
   });
 
-  const selectLine = useCallback(
-    (
-      fileIndex: number,
-      anchor: string,
-      opts: { keepOccurrences?: boolean } = {}
-    ) => {
-      const m = modelRef.current;
-      const key = fileAnchorKey(fileIndex, anchor);
-      usePerfStore.getState().markFileStart();
-      setActiveIndex(fileIndex);
-      activeIndexRef.current = fileIndex;
-      setCommentIndex(0);
-      if (!(findOpenRef.current || opts.keepOccurrences)) {
-        setOccSpec(null);
-      }
-      keyboardHoldRef.current = true;
-      setInputMode("keyboard");
-      setCursor({ anchor, fileIndex });
-      setFlashKey(key);
-      if (flashTimerRef.current) {
-        clearTimeout(flashTimerRef.current);
-      }
-      flashTimerRef.current = setTimeout(() => setFlashKey(null), 1600);
-      const itemIndex = m.anchorItem.get(key);
-      if (itemIndex !== null) {
-        listRef.current?.centerItem(itemIndex);
-      }
-    },
-    [activeIndexRef, findOpenRef, modelRef]
-  );
+  const selectLine = (
+    fileIndex: number,
+    anchor: string,
+    opts: { keepOccurrences?: boolean } = {}
+  ) => {
+    const m = modelRef.current;
+    const key = fileAnchorKey(fileIndex, anchor);
+    usePerfStore.getState().markFileStart();
+    setActiveIndex(fileIndex);
+    activeIndexRef.current = fileIndex;
+    persistFileIndex(fileIndex);
+    setCommentIndex(0);
+    if (!(findOpenRef.current || opts.keepOccurrences)) {
+      setOccSpec(null);
+    }
+    keyboardHoldRef.current = true;
+    setInputMode("keyboard");
+    setCursor({ anchor, fileIndex });
+    setFlashKey(key);
+    if (flashTimerRef.current) {
+      clearTimeout(flashTimerRef.current);
+    }
+    flashTimerRef.current = setTimeout(() => setFlashKey(null), 1600);
+    const itemIndex = m.anchorItem.get(key);
+    if (itemIndex !== undefined) {
+      listRef.current?.centerItem(itemIndex);
+    }
+  };
 
-  selectLineRef.current = selectLine;
+  useLayoutEffect(() => {
+    selectLineRef.current = selectLine;
+  });
   const selectLineLatestRef = useLatest(selectLine);
 
+  const filesForHighlightRef = useLatest(files);
+
   useEffect(() => {
-    if (files.length === 0) {
+    const cachedFiles = filesForHighlightRef.current;
+    if (cachedFiles.length === 0) {
       return;
     }
-    return warmHighlightCache(files);
-  }, [files]);
+    return warmHighlightCache(cachedFiles);
+  }, [filesForHighlightRef]);
 
   useReviewHeadShaSync(keyValue, pr, setToast);
   useInboxDetailNudge(keyValue, pr);
@@ -2160,18 +2191,10 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     keyValue,
     pr,
     files,
-    viewedFiles,
     reconcileViewed,
     setChangedSinceViewed,
     setToast
   );
-
-  useEffect(() => {
-    if (!detail || fileCount === 0) {
-      return;
-    }
-    updateReviewMemory(keyValue, { fileIndex: clampedIndex });
-  }, [detail, fileCount, clampedIndex, keyValue]);
 
   const resumeCorrectedRef = useRef(false);
   useReviewResumeScroll({
@@ -2206,11 +2229,8 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
   const userMovedCursorRef = useRef(false);
 
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
-  const isRealPointerAt = useCallback(
-    (x: number, y: number) =>
-      isRealPointer(x, y, keyboardHoldRef, lastPointRef),
-    []
-  );
+  const isRealPointerAt = (x: number, y: number) =>
+    isRealPointer(x, y, keyboardHoldRef, lastPointRef);
 
   const pendingDeltaRef = useRef(0);
   const cursorRafRef = useRef<number | null>(null);
@@ -2288,6 +2308,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     listRef,
     liveSelectionRef,
     modelRef,
+    persistFileIndex,
     selectionRef,
     setActiveIndex,
     setCommentIndex,
@@ -2297,29 +2318,42 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     setSelection,
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only cleanup for refs
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only cleanup for timer/raf refs
   useEffect(
     () => () => {
-      if (flashTimerRef.current) {
-        clearTimeout(flashTimerRef.current);
+      const flashTimer = flashTimerRef.current;
+      const threadFlash = threadFlashRef.current;
+      const copyTimer = copyTimerRef.current;
+      const saveStateTimer = saveStateTimerRef.current;
+      const fileRaf = fileRafRef.current;
+      const cursorRaf = cursorRafRef.current;
+      if (flashTimer) {
+        clearTimeout(flashTimer);
       }
-      if (threadFlashRef.current) {
-        clearTimeout(threadFlashRef.current);
+      if (threadFlash) {
+        clearTimeout(threadFlash);
       }
-      if (copyTimerRef.current) {
-        clearTimeout(copyTimerRef.current);
+      if (copyTimer) {
+        clearTimeout(copyTimer);
       }
-      if (saveStateTimerRef.current) {
-        clearTimeout(saveStateTimerRef.current);
+      if (saveStateTimer) {
+        clearTimeout(saveStateTimer);
       }
-      if (fileRafRef.current !== null) {
-        cancelAnimationFrame(fileRafRef.current);
+      if (fileRaf !== null) {
+        cancelAnimationFrame(fileRaf);
       }
-      if (cursorRafRef.current !== null) {
-        cancelAnimationFrame(cursorRafRef.current);
+      if (cursorRaf !== null) {
+        cancelAnimationFrame(cursorRaf);
       }
     },
-    []
+    [
+      copyTimerRef,
+      cursorRafRef,
+      fileRafRef,
+      flashTimerRef,
+      saveStateTimerRef,
+      threadFlashRef,
+    ]
   );
 
   const occMatchList = occSpec
@@ -2365,10 +2399,8 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     occMatchList
   );
 
-  const advanceAfterSubmit = useCallback(
-    () => advanceToNextReview(owner, repo, number, goInbox),
-    [goInbox, number, owner, repo]
-  );
+  const advanceAfterSubmit = () =>
+    advanceToNextReview(owner, repo, number, goInbox);
 
   const {
     goToComment,
@@ -2421,36 +2453,33 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     viewedSet,
   });
 
-  const onOpenPrUrl = useCallback(() => {
+  const onOpenPrUrl = () => {
     if (pr?.url) {
       openUrl(pr.url);
     }
-  }, [pr?.url]);
+  };
 
-  const onToggleRightPanel = useCallback(() => {
+  const onToggleRightPanel = () => {
     setRightOpen((open) => !open);
-  }, []);
+  };
 
-  const onCloseRightPanel = useCallback(() => {
+  const onCloseRightPanel = () => {
     setRightOpen(false);
-  }, []);
+  };
 
-  const onCloseSubmitModal = useCallback(() => {
+  const onCloseSubmitModal = () => {
     setSubmitOpen(false);
-  }, []);
+  };
 
-  const onClosePrSearch = useCallback(() => {
+  const onClosePrSearch = () => {
     setPrSearch(null);
-  }, []);
+  };
 
-  const onAddIssueComment = useCallback(
-    async (body: string) => {
-      await addIssueComment.mutateAsync({ body });
-    },
-    [addIssueComment]
-  );
+  const onAddIssueComment = async (body: string) => {
+    await addIssueComment.mutateAsync({ body });
+  };
 
-  const onOpenPrFiles = useCallback(() => {
+  const onOpenPrFiles = () => {
     if (!pr?.url) {
       return;
     }
@@ -2458,7 +2487,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
       ? "/diffs"
       : "/files";
     openUrl(pr.url + urlFilesPath);
-  }, [pr?.url]);
+  };
 
   useReviewHotkeys({
     closeFind,
@@ -2722,7 +2751,7 @@ function buildCursorMover(refs: {
   keyboardHoldRef: React.RefObject<boolean>;
   userMovedCursorRef: React.RefObject<boolean>;
   listRef: React.RefObject<ReviewListHandle | null>;
-  setCursor: (c: CursorPos) => void;
+  setCursor: React.Dispatch<React.SetStateAction<CursorPos | null>>;
   setActiveIndex: (i: number) => void;
   setInputMode: (m: "keyboard" | "mouse") => void;
 }): { move: (delta: number, isRepeat: boolean) => void } {
@@ -2869,7 +2898,7 @@ function seededMatchIndex(
   for (let i = 0; i < matches.length; i += 1) {
     const m = matches[i];
     const idx = model.anchorItem.get(fileAnchorKey(m.fileIndex, m.anchor));
-    if (idx !== null && idx >= seedItemIndex) {
+    if (idx !== undefined && idx >= seedItemIndex) {
       return i;
     }
   }
@@ -3080,14 +3109,14 @@ function BranchChip({ name, label }: { name: string; label: string }) {
     },
     []
   );
-  const onCopy = useCallback(() => {
+  const onCopy = () => {
     copyTextToClipboard(name);
     setCopied(true);
     if (timerRef.current) {
       clearTimeout(timerRef.current);
     }
     timerRef.current = setTimeout(() => setCopied(false), 1200);
-  }, [name]);
+  };
   return (
     <button
       className={cn("qf-branch-chip", copied && "qf-branch-copied")}

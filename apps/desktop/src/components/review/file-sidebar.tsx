@@ -1,6 +1,6 @@
 // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { Check } from "lucide-react";
-import { type MouseEvent, useCallback, useMemo, useRef } from "react";
+import { type MouseEvent, useRef } from "react";
 import { cn } from "../../lib/cn.ts";
 import { useAppStore } from "../../store/app-store.ts";
 import type {
@@ -64,14 +64,11 @@ export function FileSidebar({
   changed,
 }: FileSidebarProps) {
   const viewedFiles = useAppStore((s) => s.viewed[prKeyValue]);
-  const viewedSet = useMemo(
-    () => new Set(Object.keys(viewedFiles ?? {})),
-    [viewedFiles]
-  );
+  const viewedSet = new Set(Object.keys(viewedFiles ?? {}));
 
   const listRef = useRef<HTMLDivElement>(null);
 
-  const threadCounts = useMemo(() => {
+  const threadCounts = (() => {
     const m = new Map<string, number>();
     for (const c of comments) {
       if (c.inReplyToId !== null) {
@@ -80,19 +77,16 @@ export function FileSidebar({
       m.set(c.path, (m.get(c.path) ?? 0) + 1);
     }
     return m;
-  }, [comments]);
-  const pendingCounts = useMemo(() => {
+  })();
+  const pendingCounts = (() => {
     const m = new Map<string, number>();
     for (const p of pending) {
       m.set(p.path, (m.get(p.path) ?? 0) + 1);
     }
     return m;
-  }, [pending]);
+  })();
 
-  const indexed = useMemo(
-    () => files.map((file, index) => ({ file, index })),
-    [files]
-  );
+  const indexed = files.map((file, index) => ({ file, index }));
 
   function revealInList(el: HTMLElement | null) {
     if (!el) {
@@ -113,13 +107,10 @@ export function FileSidebar({
     }
   }
 
-  const handleFileClick = useCallback(
-    (e: MouseEvent<HTMLButtonElement>) => {
-      const index = Number(e.currentTarget.dataset.fileIndex);
-      onSelect(index);
-    },
-    [onSelect]
-  );
+  const handleFileClick = (e: MouseEvent<HTMLButtonElement>) => {
+    const index = Number(e.currentTarget.dataset.fileIndex);
+    onSelect(index);
+  };
 
   return (
     <div className="qf-sidebar flex h-full flex-col">

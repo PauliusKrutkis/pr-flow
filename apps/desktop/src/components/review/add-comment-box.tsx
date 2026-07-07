@@ -1,6 +1,6 @@
 // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { Layers, Send } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Kbd } from "../ui/kbd.tsx";
 import {
   ComposerEditor,
@@ -46,40 +46,37 @@ export function AddCommentBox({
   const primaryLabel =
     onSecondary && mode === "now" ? secondaryLabel : submitLabel;
 
-  const run = useCallback(
-    async (action: (body: string) => Promise<void> | void) => {
-      if (pending) {
-        return;
-      }
-      const body = editorRef.current?.getMarkdown().trim() ?? "";
-      if (!body) {
-        return;
-      }
-      await action(body);
-      editorRef.current?.clear();
-    },
-    [pending]
-  );
+  const run = async (action: (body: string) => Promise<void> | void) => {
+    if (pending) {
+      return;
+    }
+    const body = editorRef.current?.getMarkdown().trim() ?? "";
+    if (!body) {
+      return;
+    }
+    await action(body);
+    editorRef.current?.clear();
+  };
 
-  const handleSubmitRequest = useCallback(() => {
+  const handleSubmitRequest = () => {
     run(primaryAction);
-  }, [primaryAction, run]);
+  };
 
-  const handleBatchMode = useCallback(() => {
+  const handleBatchMode = () => {
     setMode("batch");
-  }, []);
+  };
 
-  const handleNowMode = useCallback(() => {
+  const handleNowMode = () => {
     setMode("now");
-  }, []);
+  };
 
-  const handlePrimaryClick = useCallback(() => {
+  const handlePrimaryClick = () => {
     run(primaryAction);
-  }, [primaryAction, run]);
+  };
 
-  const handleModeFlip = useCallback(() => {
+  const handleModeFlip = () => {
     setMode((m) => (m === "batch" ? "now" : "batch"));
-  }, []);
+  };
 
   return (
     <div className="qa-inline">

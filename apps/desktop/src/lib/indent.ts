@@ -52,7 +52,7 @@ export function detectIndentUnit(hunks: DiffHunk[]): IndentUnit {
         continue;
       }
       const ws = LEADING_WS.exec(row.content)?.[0];
-      if (ws.length === 0 || ws.length === row.content.length) {
+      if (!ws || ws.length === 0 || ws.length === row.content.length) {
         continue;
       }
       if (ws.includes("\t")) {
@@ -86,7 +86,7 @@ export function guideLevelsForHunk(
       return null;
     }
     const ws = LEADING_WS.exec(row.content)?.[0];
-    if (ws.length === row.content.length) {
+    if (!ws || ws.length === row.content.length) {
       return null;
     }
     return Math.floor(ws.length / unit.chars);

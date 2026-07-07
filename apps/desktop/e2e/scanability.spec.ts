@@ -212,7 +212,11 @@ test("overview ruler: find ticks map matches across the whole PR", async ({
     els.map((el) => el.getBoundingClientRect().y)
   );
   expect([...ys]).toEqual([...ys].sort((a, b) => a - b));
-  expect(ys.at(-1) - ys[0]).toBeGreaterThan(50);
+  const [firstY] = ys;
+  const lastY = ys.at(-1);
+  expect(firstY).toBeDefined();
+  expect(lastY).toBeDefined();
+  expect(lastY - firstY).toBeGreaterThan(50);
 
   await page.keyboard.press("Escape");
   await expect(page.locator(".qf-ruler")).toHaveCount(0);
@@ -230,7 +234,8 @@ test("overview ruler: occurrence ticks on click, cleared by a blank click", asyn
     .locator('.qf-row[data-file-index="1"]:not(.qf-row-hunk) .qf-code')
     .first()
     .boundingBox();
-  await page.mouse.click(row?.x + row?.width - 8, row?.y + row?.height / 2);
+  expect(row).not.toBeNull();
+  await page.mouse.click(row.x + row.width - 8, row.y + row.height / 2);
   await expect(page.locator("mark.qf-occ-mark")).toHaveCount(0);
   await expect(page.locator(".qf-ruler")).toHaveCount(0);
 });

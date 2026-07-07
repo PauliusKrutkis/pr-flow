@@ -14,7 +14,6 @@ import {
   type ChangeEvent,
   type KeyboardEvent,
   type Ref,
-  useCallback,
   useImperativeHandle,
   useInsertionEffect,
   useState,
@@ -122,14 +121,14 @@ export function ComposerEditor({
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkHref, setLinkHref] = useState("");
 
-  const openLink = useCallback((ed: Editor): boolean => {
+  const openLink = (ed: Editor) => {
     if (ed.state.selection.empty && !ed.isActive("link")) {
       return false;
     }
     setLinkHref((ed.getAttributes("link").href as string | undefined) ?? "");
     setLinkOpen(true);
     return true;
-  }, []);
+  };
 
   const editor = useEditor({
     autofocus: autoFocus ? "end" : false,
@@ -200,7 +199,7 @@ export function ComposerEditor({
    * left selected so typing replaces it in place.
    */
 
-  const insertSuggestion = useCallback(() => {
+  const insertSuggestion = () => {
     const line = suggestionText ?? "";
     editor
       .chain()
@@ -218,9 +217,9 @@ export function ComposerEditor({
         to: selectionEnd,
       });
     }
-  }, [editor, suggestionText]);
+  };
 
-  const applyLink = useCallback(() => {
+  const applyLink = () => {
     setLinkOpen(false);
     const href = linkHref.trim();
 
@@ -230,48 +229,45 @@ export function ComposerEditor({
     } else {
       chain.unsetLink().run();
     }
-  }, [editor, linkHref]);
+  };
 
-  const closeLink = useCallback(() => {
+  const closeLink = () => {
     setLinkOpen(false);
     editor.commands.focus();
-  }, [editor]);
+  };
 
-  const handleLinkChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+  const handleLinkChange = (e: ChangeEvent<HTMLInputElement>) => {
     setLinkHref(e.target.value);
-  }, []);
+  };
 
-  const handleLinkKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        applyLink();
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        closeLink();
-      }
-    },
-    [applyLink, closeLink]
-  );
+  const handleLinkKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      applyLink();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      closeLink();
+    }
+  };
 
-  const handleToggleBold = useCallback(() => {
+  const handleToggleBold = () => {
     editor.chain().focus().toggleBold().run();
-  }, [editor]);
+  };
 
-  const handleToggleItalic = useCallback(() => {
+  const handleToggleItalic = () => {
     editor.chain().focus().toggleItalic().run();
-  }, [editor]);
+  };
 
-  const handleToggleCode = useCallback(() => {
+  const handleToggleCode = () => {
     editor.chain().focus().toggleCode().run();
-  }, [editor]);
+  };
 
-  const handleToggleLink = useCallback(() => {
+  const handleToggleLink = () => {
     if (!openLink(editor)) {
       editor.commands.focus();
     }
-  }, [editor, openLink]);
+  };
 
   return (
     <div className="qa-editor">

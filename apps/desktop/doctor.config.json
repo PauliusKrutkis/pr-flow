@@ -1,6 +1,3 @@
 {
-  "$schema": "https://react.doctor/schema/config.json",
-  "rules": {
-    "react-doctor/prefer-useReducer": "off"
-  }
+  "$schema": "https://react.doctor/schema/config.json"
 }

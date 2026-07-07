@@ -5,7 +5,6 @@ import { Check, Copy } from "lucide-react";
 import {
   type ComponentPropsWithoutRef,
   type MouseEvent,
-  useCallback,
   useEffect,
   useRef,
   useState,
@@ -39,15 +38,12 @@ const TRAILING_NEWLINE_RE = /\n$/;
 type AnchorProps = ComponentPropsWithoutRef<"a"> & { node?: unknown };
 
 function Anchor({ href, children, node: _node, ...rest }: AnchorProps) {
-  const onClick = useCallback(
-    (e: MouseEvent<HTMLAnchorElement>) => {
-      e.preventDefault();
-      if (href) {
-        openUrl(href).catch(() => undefined);
-      }
-    },
-    [href]
-  );
+  const onClick = (e: MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    if (href) {
+      openUrl(href).catch(() => undefined);
+    }
+  };
   return (
     <a {...rest} href={href} onClick={onClick}>
       {children}
@@ -105,16 +101,15 @@ function SuggestionCard({ text }: { text: string }) {
   const body = text.replace(TRAILING_NEWLINE_RE, "");
   const lines = body.split("\n");
 
-  const onCopy = useCallback(() => {
+  const onCopy = () => {
     navigator.clipboard?.writeText(body).catch(() => undefined);
     setCopied(true);
     if (timerRef.current) {
       clearTimeout(timerRef.current);
     }
     timerRef.current = setTimeout(() => setCopied(false), 1200);
-  }, [body]);
+  };
 
-  let lineOffset = 0;
   return (
     <div className="md-suggestion">
       <div className="md-suggestion-head">
@@ -133,15 +128,11 @@ function SuggestionCard({ text }: { text: string }) {
         </button>
       </div>
       <div className="md-suggestion-body">
-        {lines.map((line) => {
-          const key = lineOffset;
-          lineOffset += line.length + 1;
-          return (
-            <div className="md-suggestion-line" key={key}>
-              {line}
-            </div>
-          );
-        })}
+        {lines.map((line) => (
+          <div className="md-suggestion-line" key={line}>
+            {line}
+          </div>
+        ))}
       </div>
     </div>
   );

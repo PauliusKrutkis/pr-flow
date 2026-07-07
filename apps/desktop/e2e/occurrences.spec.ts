@@ -113,7 +113,8 @@ test("single-clicking a token marks its occurrences within that file", async ({
     .locator('.qf-row[data-file-index="0"]:not(.qf-row-hunk) .qf-code')
     .first()
     .boundingBox();
-  await page.mouse.click(row?.x + row?.width - 8, row?.y + row?.height / 2);
+  expect(row).not.toBeNull();
+  await page.mouse.click(row.x + row.width - 8, row.y + row.height / 2);
   await expect(occMarks(page)).toHaveCount(0);
 });
 
@@ -151,7 +152,8 @@ test("clicking blank space right of a line ending in a word clears, not highligh
     }
     return null;
   });
-  await page.mouse.click(lineEnd?.x + 60, lineEnd?.y);
+  expect(lineEnd).not.toBeNull();
+  await page.mouse.click(lineEnd.x + 60, lineEnd.y);
   await expect(occMarks(page)).toHaveCount(0);
 });
 

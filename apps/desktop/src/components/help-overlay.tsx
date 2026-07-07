@@ -1,6 +1,6 @@
 // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { Command, X } from "lucide-react";
-import { type MouseEvent, useCallback, useMemo } from "react";
+import { useModalDialog } from "../hooks/use-modal-dialog.ts";
 import { useKeyboard } from "../keyboard/keyboard-provider.tsx";
 import type { KeyboardContextValue } from "../keyboard/types.ts";
 import { useHotkeys } from "../keyboard/use-hotkeys.ts";
@@ -74,6 +74,9 @@ export function HelpOverlay({ baseScope }: { baseScope: string }) {
   const helpOpen = useAppStore((s) => s.helpOpen);
   const setHelpOpen = useAppStore((s) => s.setHelpOpen);
   const { getBindings } = useKeyboard();
+  const { dialogRef, onDialogCancel, onDialogClose } = useModalDialog(() => {
+    setHelpOpen(false);
+  });
 
   useHotkeys(
     "help",
@@ -88,23 +91,11 @@ export function HelpOverlay({ baseScope }: { baseScope: string }) {
     { enabled: helpOpen }
   );
 
-  const sections = useMemo<ScopeSection[]>(() => {
-    if (!helpOpen) {
-      return [];
-    }
-    return buildSections(baseScope, getBindings);
-  }, [helpOpen, baseScope, getBindings]);
+  const sections = helpOpen ? buildSections(baseScope, getBindings) : [];
 
-  const onOverlayMouseDown = useCallback(
-    (e: MouseEvent<HTMLDivElement>) => {
-      if (e.target === e.currentTarget) {
-        setHelpOpen(false);
-      }
-    },
-    [setHelpOpen]
-  );
-
-  const onClose = useCallback(() => setHelpOpen(false), [setHelpOpen]);
+  const onClose = () => {
+    setHelpOpen(false);
+  };
 
   if (!helpOpen) {
     return null;
@@ -114,74 +105,73 @@ export function HelpOverlay({ baseScope }: { baseScope: string }) {
   const right = sections.filter((s) => s.active);
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: backdrop dismisses on outside click
-    <div
-      className="q-overlay"
-      onMouseDown={onOverlayMouseDown}
-      role="presentation"
+    <dialog
+      aria-label="Keyboard shortcuts"
+      className="q-dialog qh-panel"
+      onCancel={onDialogCancel}
+      onClose={onDialogClose}
+      ref={dialogRef}
     >
-      <div aria-modal="true" className="q-dialog qh-panel" role="dialog">
-        <header className="qh-head">
-          <div className="qh-head-title">
-            <Command aria-hidden size={15} />
-            <span className="qh-title">Keyboard</span>
-            <span className="qh-head-note">
-              Scope-aware — only the screen you're on responds
-            </span>
-          </div>
-          <button
-            aria-label="Close"
-            className="qh-close q-focus"
-            onClick={onClose}
-            type="button"
-          >
-            <X aria-hidden size={16} />
-          </button>
-        </header>
-
-        <div className="qh-grid">
-          {(
-            [
-              ["inactive", left],
-              ["active", right],
-            ] as const
-          ).map(([colKey, col]) => (
-            <div className="qh-col" key={colKey}>
-              {col.map((g) => (
-                <section
-                  className={`qh-scope${g.active ? "qh-scope-active" : ""}`}
-                  key={g.scope}
-                >
-                  <div className="qh-scope-head">
-                    <span className="qh-scope-name">{g.scope}</span>
-                    {g.active ? (
-                      <span className="qh-scope-tag">active</span>
-                    ) : null}
-                    {g.note ? (
-                      <span className="qh-scope-note">{g.note}</span>
-                    ) : null}
-                  </div>
-                  <dl className="qh-rows">
-                    {g.bindings.map((b) => (
-                      <div className="qh-row" key={`${g.scope}-${b.combo}`}>
-                        <dt className="qh-keys">
-                          <Kbd combo={b.combo} />
-                        </dt>
-                        <dd className="qh-label">{b.description}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </section>
-              ))}
-            </div>
-          ))}
+      <header className="qh-head">
+        <div className="qh-head-title">
+          <Command aria-hidden size={15} />
+          <span className="qh-title">Keyboard</span>
+          <span className="qh-head-note">
+            Scope-aware — only the screen you're on responds
+          </span>
         </div>
+        <button
+          aria-label="Close"
+          className="qh-close q-focus"
+          onClick={onClose}
+          type="button"
+        >
+          <X aria-hidden size={16} />
+        </button>
+      </header>
 
-        <footer className="qh-foot">
-          Generated from the live bindings — the legend, the palette, and this
-          sheet can never drift.
-        </footer>
+      <div className="qh-grid">
+        {(
+          [
+            ["inactive", left],
+            ["active", right],
+          ] as const
+        ).map(([colKey, col]) => (
+          <div className="qh-col" key={colKey}>
+            {col.map((g) => (
+              <section
+                className={`qh-scope${g.active ? "qh-scope-active" : ""}`}
+                key={g.scope}
+              >
+                <div className="qh-scope-head">
+                  <span className="qh-scope-name">{g.scope}</span>
+                  {g.active ? (
+                    <span className="qh-scope-tag">active</span>
+                  ) : null}
+                  {g.note ? (
+                    <span className="qh-scope-note">{g.note}</span>
+                  ) : null}
+                </div>
+                <dl className="qh-rows">
+                  {g.bindings.map((b) => (
+                    <div className="qh-row" key={`${g.scope}-${b.combo}`}>
+                      <dt className="qh-keys">
+                        <Kbd combo={b.combo} />
+                      </dt>
+                      <dd className="qh-label">{b.description}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            ))}
+          </div>
+        ))}
       </div>
-    </div>
+
+      <footer className="qh-foot">
+        Generated from the live bindings — the legend, the palette, and this
+        sheet can never drift.
+      </footer>
+    </dialog>
   );
 }

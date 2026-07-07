@@ -34,38 +34,3 @@ export function HighlightIndices({
   }
   return <>{nodes}</>;
 }
-
-/** Render `text` with every case-insensitive occurrence of `query` highlighted. */
-export function HighlightMatch({
-  text,
-  query,
-}: {
-  text: string;
-  query: string;
-}) {
-  const q = query.trim().toLowerCase();
-  if (!q) {
-    return <>{text}</>;
-  }
-  const lower = text.toLowerCase();
-  const nodes: ReactNode[] = [];
-  let pos = 0;
-  for (let idx = lower.indexOf(q); idx !== -1; idx = lower.indexOf(q, pos)) {
-    if (idx > pos) {
-      nodes.push(<span key={pos}>{text.slice(pos, idx)}</span>);
-    }
-    nodes.push(
-      <mark className="q-hl" key={idx}>
-        {text.slice(idx, idx + q.length)}
-      </mark>
-    );
-    pos = idx + q.length;
-  }
-  if (nodes.length === 0) {
-    return <>{text}</>;
-  }
-  if (pos < text.length) {
-    nodes.push(<span key={pos}>{text.slice(pos)}</span>);
-  }
-  return <>{nodes}</>;
-}

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 /** Deterministic avatar background for the initials fallback. */
 const COLORS = [
@@ -27,7 +27,8 @@ function initials(name: string): string {
   if (parts.length === 1) {
     return parts[0].slice(0, 2).toUpperCase();
   }
-  return (parts[0][0] + parts.at(-1)[0]).toUpperCase();
+  const last = parts.at(-1);
+  return (parts[0][0] + (last?.[0] ?? "")).toUpperCase();
 }
 
 /**
@@ -46,7 +47,9 @@ export function Avatar({
 }) {
   const [broken, setBroken] = useState(false);
   const showImage = !!url && !broken;
-  const onError = useCallback(() => setBroken(true), []);
+  const onError = () => {
+    setBroken(true);
+  };
 
   if (showImage) {
     return (

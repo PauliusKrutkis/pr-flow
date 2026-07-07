@@ -349,6 +349,17 @@ textarea.q-input {
 .q-dialog:focus {
   outline: none;
 }
+dialog.q-dialog {
+  max-width: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+}
+dialog.q-dialog::backdrop {
+  background: rgba(6, 6, 12, 0.62);
+  backdrop-filter: blur(2px);
+  animation: q-fade 120ms ease;
+}
 .q-dialog-top {
   top: 14vh;
   width: min(620px, calc(100vw - 32px));

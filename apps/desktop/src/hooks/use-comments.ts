@@ -63,9 +63,6 @@ export function useCommentMutations(
 ) {
   const detailKey = queryKeys.prDetail(owner, repo, number);
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: detailKey });
-
   const insertOptimistic = async (comment: ReviewComment) => {
     await queryClient.cancelQueries({ queryKey: detailKey });
     const before = queryClient.getQueryData<PullRequestDetail>(detailKey);
@@ -122,7 +119,12 @@ export function useCommentMutations(
           side: args.side,
         })
       ),
-    onSettled: invalidate,
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
   });
 
   const reply = useMutation<
@@ -149,7 +151,12 @@ export function useCommentMutations(
         })
       );
     },
-    onSettled: invalidate,
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
   });
 
   const addIssueComment = useMutation<
@@ -185,7 +192,12 @@ export function useCommentMutations(
       );
       return before;
     },
-    onSettled: invalidate,
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
   });
 
   const resolveThread = useMutation<
@@ -215,7 +227,12 @@ export function useCommentMutations(
       );
       return before;
     },
-    onSettled: invalidate,
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
   });
 
   const submitReview = useMutation({
@@ -225,7 +242,12 @@ export function useCommentMutations(
       commitId: string;
       comments: { path: string; line: number; side: string; body: string }[];
     }) => api.submitReview({ number, owner, repo, ...args }),
-    onSettled: invalidate,
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
   });
 
   return {

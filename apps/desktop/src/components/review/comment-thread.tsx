@@ -1,6 +1,6 @@
 // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { CheckCircle2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
 import type { ReviewComment } from "../../types.ts";
 import { Markdown } from "../markdown.tsx";
@@ -49,38 +49,35 @@ export function CommentThread({
     return () => cancelAnimationFrame(raf);
   }, [replyRequest, rootId]);
 
-  const submitReply = useCallback(
-    (body: string) => {
-      if (rootId !== undefined) {
-        onReply({ body, inReplyTo: rootId });
-      }
-      setReplying(false);
-    },
-    [onReply, rootId]
-  );
-
-  const handleExpand = useCallback(() => {
-    setExpanded(true);
-  }, []);
-
-  const handleCollapse = useCallback(() => {
-    setExpanded(false);
-  }, []);
-
-  const handleCancelReply = useCallback(() => {
+  const submitReply = (body: string) => {
+    if (rootId !== undefined) {
+      onReply({ body, inReplyTo: rootId });
+    }
     setReplying(false);
-  }, []);
+  };
 
-  const handleStartReply = useCallback(() => {
+  const handleExpand = () => {
+    setExpanded(true);
+  };
+
+  const handleCollapse = () => {
+    setExpanded(false);
+  };
+
+  const handleCancelReply = () => {
+    setReplying(false);
+  };
+
+  const handleStartReply = () => {
     setReplying(true);
-  }, []);
+  };
 
-  const handleResolve = useCallback(() => {
+  const handleResolve = () => {
     if (threadId !== null && onResolve) {
       onResolve({ resolved: !resolved, threadId });
       setExpanded(resolved);
     }
-  }, [onResolve, resolved, threadId]);
+  };
 
   if (comments.length === 0 || !root) {
     return null;

@@ -1,8 +1,9 @@
 // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
+import { useQuery } from "@tanstack/react-query";
+// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { Download, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "../lib/api.ts";
-import type { UpdateInfo } from "../types.ts";
 
 /**
  * "Update available" prompt. Checks the release feed on launch, then every few
@@ -12,45 +13,29 @@ import type { UpdateInfo } from "../types.ts";
  */
 
 const RECHECK_MS = 4 * 60 * 60 * 1000;
+const FOCUS_STALE_MS = 30 * 60 * 1000;
 
 export function UpdatePrompt() {
-  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [dismissed, setDismissed] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    let lastCheck = 0;
-    function check(minGapMs = 0) {
-      const now = Date.now();
-      if (now - lastCheck < minGapMs) {
-        return;
-      }
-      lastCheck = now;
-      api
-        .checkForUpdate()
-        .then((u) => {
-          if (!cancelled && u) {
-            setUpdate(u);
-          }
-        })
-        .catch(() => undefined);
-    }
-    check();
-    const timer = window.setInterval(() => check(), RECHECK_MS);
+  const { data: available } = useQuery({
+    queryFn: () => api.checkForUpdate().catch(() => null),
+    queryKey: ["app-update"],
+    refetchInterval: RECHECK_MS,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
+    staleTime: FOCUS_STALE_MS,
+  });
 
-    const onFocus = () => check(30 * 60 * 1000);
-    window.addEventListener("focus", onFocus);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, []);
+  const update = dismissed ? null : (available ?? null);
 
-  const dismiss = useCallback(() => setUpdate(null), []);
+  const dismiss = () => {
+    setDismissed(true);
+  };
 
-  const install = useCallback(async () => {
+  const install = async () => {
     setInstalling(true);
     setError(null);
     try {
@@ -59,7 +44,7 @@ export function UpdatePrompt() {
       setError(String(e));
       setInstalling(false);
     }
-  }, []);
+  };
 
   if (!update) {
     return null;

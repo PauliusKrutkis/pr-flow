@@ -1,6 +1,5 @@
 // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useCallback } from "react";
 
 /**
  * Titles with issue-tracker links: ticket IDs (SCR-2891, ABC-42, …) become
@@ -13,22 +12,42 @@ const TICKET_RE = /\b([A-Z][A-Z0-9]{1,9}-\d+)\b/g;
 const TRAILING_SLASH_RE = /\/$/;
 
 /** `<base><id>`, or the {id} placeholder replaced when the template has one. */
-export function ticketUrl(base: string, id: string): string {
+function ticketUrl(base: string, id: string): string {
   return base.includes("{id}")
     ? base.replace("{id}", id)
     : `${base.replace(TRAILING_SLASH_RE, "")}/${id}`;
 }
 
+interface TitleSegment {
+  kind: "text" | "ticket";
+  value: string;
+}
+
+function parseTitleSegments(title: string): TitleSegment[] {
+  const parts = title.split(TICKET_RE);
+  if (parts.length === 1) {
+    return [{ kind: "text", value: title }];
+  }
+  const segments: TitleSegment[] = [];
+  let expectTicket = false;
+  for (const part of parts) {
+    if (expectTicket) {
+      segments.push({ kind: "ticket", value: part });
+    } else if (part) {
+      segments.push({ kind: "text", value: part });
+    }
+    expectTicket = !expectTicket;
+  }
+  return segments;
+}
+
 function TicketLink({ id, trackerBase }: { id: string; trackerBase: string }) {
   const href = ticketUrl(trackerBase, id);
-  const onClick = useCallback(
-    (e: React.MouseEvent<HTMLButtonElement>) => {
-      e.preventDefault();
-      e.stopPropagation();
-      openUrl(href).catch(() => undefined);
-    },
-    [href]
-  );
+  const onClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openUrl(href).catch(() => undefined);
+  };
   return (
     <button className="q-ticket" onClick={onClick} title={href} type="button">
       {id}
@@ -46,24 +65,23 @@ export function TicketTitle({
   if (!trackerBase) {
     return <>{title}</>;
   }
-  const parts = title.split(TICKET_RE);
-  if (parts.length === 1) {
+  const segments = parseTitleSegments(title);
+  if (segments.length === 1 && segments[0]?.kind === "text") {
     return <>{title}</>;
   }
-  let expectTicket = false;
-  let offset = 0;
   return (
     <>
-      {parts.map((part) => {
-        const key = offset;
-        offset += part.length;
-        if (expectTicket) {
-          expectTicket = false;
-          return <TicketLink id={part} key={key} trackerBase={trackerBase} />;
-        }
-        expectTicket = true;
-        return <span key={key}>{part}</span>;
-      })}
+      {segments.map((segment) =>
+        segment.kind === "ticket" ? (
+          <TicketLink
+            id={segment.value}
+            key={`ticket-${segment.value}`}
+            trackerBase={trackerBase}
+          />
+        ) : (
+          <span key={`text-${segment.value}`}>{segment.value}</span>
+        )
+      )}
     </>
   );
 }

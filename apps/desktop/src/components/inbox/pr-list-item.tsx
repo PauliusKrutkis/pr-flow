@@ -1,6 +1,6 @@
 // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { MessageSquare } from "lucide-react";
-import { useCallback } from "react";
+
 import { cn } from "../../lib/cn.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
 import type { PullRequest } from "../../types.ts";
@@ -22,15 +22,12 @@ export function PRListItem({
   onOpen,
   onHover,
 }: PRListItemProps) {
-  const onKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        onOpen();
-      }
-    },
-    [onOpen]
-  );
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onOpen();
+    }
+  };
 
   return (
     <div

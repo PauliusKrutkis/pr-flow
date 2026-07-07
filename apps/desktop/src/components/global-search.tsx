@@ -1,4 +1,3 @@
-import { useCallback, useMemo } from "react";
 import { useInbox } from "../hooks/use-inbox.ts";
 import { useSubscribed } from "../hooks/use-subscribed.ts";
 import { useAppStore } from "../store/app-store.ts";
@@ -20,7 +19,7 @@ export function GlobalSearch() {
   const markSeen = useAppStore((s) => s.markSeen);
   const setSelectedKey = useAppStore((s) => s.setInboxSelectedKey);
 
-  const allPrs = useMemo(() => {
+  const allPrs = (() => {
     const seen = new Set<string>();
     const out: PullRequest[] = [];
     const add = (pr: PullRequest) => {
@@ -46,17 +45,14 @@ export function GlobalSearch() {
       add(pr);
     }
     return out;
-  }, [data, subscribed]);
+  })();
 
-  const openPR = useCallback(
-    (pr: PullRequest) => {
-      const key = prKey({ name: pr.name, number: pr.number, owner: pr.owner });
-      setSelectedKey(key);
-      markSeen(key, pr.updatedAt);
-      openReview(pr.owner, pr.name, pr.number);
-    },
-    [setSelectedKey, markSeen, openReview]
-  );
+  const openPR = (pr: PullRequest) => {
+    const key = prKey({ name: pr.name, number: pr.number, owner: pr.owner });
+    setSelectedKey(key);
+    markSeen(key, pr.updatedAt);
+    openReview(pr.owner, pr.name, pr.number);
+  };
 
   return (
     <SearchPane

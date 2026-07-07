@@ -1,4 +1,5 @@
-import { type KeyboardEvent, useCallback, useEffect, useState } from "react";
+import { type KeyboardEvent, useState } from "react";
+import { useModalDialog } from "../../hooks/use-modal-dialog.ts";
 import { useHotkeys } from "../../keyboard/use-hotkeys.ts";
 import { cn } from "../../lib/cn.ts";
 import type { ReviewEvent } from "../../types.ts";
@@ -42,201 +43,174 @@ export function SubmitReviewModal({
   onClose,
   onSubmit,
 }: Props) {
+  if (!open) {
+    return null;
+  }
+  return (
+    <SubmitReviewModalContent
+      busy={busy}
+      error={error}
+      onClose={onClose}
+      onSubmit={onSubmit}
+      ownPr={ownPr}
+      pendingCount={pendingCount}
+    />
+  );
+}
+
+function SubmitReviewModalContent({
+  ownPr,
+  pendingCount,
+  busy,
+  error,
+  onClose,
+  onSubmit,
+}: Omit<Props, "open">) {
   const [event, setEvent] = useState<ReviewEvent>("COMMENT");
   const [body, setBody] = useState("");
-
-  useEffect(() => {
-    if (open) {
-      setEvent("COMMENT");
-      setBody("");
-    }
-  }, [open]);
+  const { dialogRef, onDialogCancel, onDialogClose } = useModalDialog(onClose);
 
   useHotkeys(
     "submit",
     [{ description: "Close", hidden: true, keys: "esc", run: onClose }],
-    { enabled: open }
+    { enabled: true }
   );
 
-  const disabledEvent = useCallback(
-    (value: ReviewEvent) => ownPr && value !== "COMMENT",
-    [ownPr]
-  );
+  const disabledEvent = (value: ReviewEvent) => ownPr && value !== "COMMENT";
 
-  const cycleEvent = useCallback(
-    (dir: number) => {
-      setEvent((cur) => {
-        let i = EVENTS.findIndex((ev) => ev.value === cur);
-        for (const _ev of EVENTS) {
-          i = (i + dir + EVENTS.length) % EVENTS.length;
-          if (!disabledEvent(EVENTS[i].value)) {
-            return EVENTS[i].value;
-          }
+  const cycleEvent = (dir: number) => {
+    setEvent((cur) => {
+      let i = EVENTS.findIndex((ev) => ev.value === cur);
+      for (const _ev of EVENTS) {
+        i = (i + dir + EVENTS.length) % EVENTS.length;
+        if (!disabledEvent(EVENTS[i].value)) {
+          return EVENTS[i].value;
         }
-        return cur;
-      });
-    },
-    [disabledEvent]
-  );
+      }
+      return cur;
+    });
+  };
 
   const needsBody = event === "COMMENT" && pendingCount === 0;
   const canSubmit = !busy && (!needsBody || body.trim().length > 0);
 
-  const submit = useCallback(() => {
+  const submit = () => {
     if (!canSubmit) {
       return;
     }
     onSubmit(event, body.trim());
-  }, [canSubmit, event, body, onSubmit]);
+  };
 
-  const handleOverlayMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (e.target === e.currentTarget) {
-        onClose();
-      }
-    },
-    [onClose]
-  );
+  const handleBodyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setBody(e.target.value);
+  };
 
-  const handleOverlayKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    },
-    [onClose]
-  );
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      submit();
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      cycleEvent(e.shiftKey ? -1 : 1);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onClose();
+    }
+  };
 
-  const handleBodyChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setBody(e.target.value);
-    },
-    []
-  );
-
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        e.preventDefault();
-        submit();
-      } else if (e.key === "Tab") {
-        e.preventDefault();
-        cycleEvent(e.shiftKey ? -1 : 1);
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    },
-    [cycleEvent, onClose, submit]
-  );
-
-  const handleSelectEvent = useCallback(
-    (value: ReviewEvent) => () => {
-      if (!disabledEvent(value)) {
-        setEvent(value);
-      }
-    },
-    [disabledEvent]
-  );
-
-  if (!open) {
-    return null;
-  }
+  const handleSelectEvent = (value: ReviewEvent) => () => {
+    if (!disabledEvent(value)) {
+      setEvent(value);
+    }
+  };
 
   const placeholder = PLACEHOLDERS[event];
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: backdrop dismisses on outside click
-    <div
-      className="q-overlay"
-      onKeyDown={handleOverlayKeyDown}
-      onMouseDown={handleOverlayMouseDown}
-      role="presentation"
-      tabIndex={-1}
+    <dialog
+      aria-label="Submit review"
+      className="q-dialog q-dialog-top"
+      onCancel={onDialogCancel}
+      onClose={onDialogClose}
+      ref={dialogRef}
     >
-      <div aria-modal="true" className="q-dialog q-dialog-top" role="dialog">
-        <div className="border-line border-b px-5 py-3.5">
-          <h2 className="font-semibold text-fg text-sm">Submit review</h2>
-          <p className="mt-0.5 text-muted text-xs">
-            {pendingCount > 0
-              ? `${pendingCount} pending comment${pendingCount === 1 ? "" : "s"} will be included.`
-              : "No pending comments — submits the verdict and summary only."}
+      <div className="border-line border-b px-5 py-3.5">
+        <h2 className="font-semibold text-fg text-sm">Submit review</h2>
+        <p className="mt-0.5 text-muted text-xs">
+          {pendingCount > 0
+            ? `${pendingCount} pending comment${pendingCount === 1 ? "" : "s"} will be included.`
+            : "No pending comments — submits the verdict and summary only."}
+        </p>
+      </div>
+
+      <div className="px-5 py-4">
+        {!!ownPr && (
+          <p className="mb-2.5 text-faint text-xs">
+            This is your own PR — only a comment review can be submitted.
           </p>
+        )}
+        <div className="flex gap-2">
+          {EVENTS.map((opt) => {
+            const disabled = disabledEvent(opt.value);
+            return (
+              <button
+                className={cn(
+                  "flex-1 rounded-lg border px-2 py-2 font-semibold text-xs transition-colors",
+                  event === opt.value
+                    ? "border-accent bg-accent/15 text-fg"
+                    : "border-line text-muted hover:bg-surface-2 hover:text-fg",
+                  disabled &&
+                    "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted"
+                )}
+                disabled={disabled}
+                key={opt.value}
+                onClick={handleSelectEvent(opt.value)}
+                title={
+                  disabled
+                    ? "You can't approve or request changes on your own PR"
+                    : opt.hint
+                }
+                type="button"
+              >
+                {opt.label}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="px-5 py-4">
-          {!!ownPr && (
-            <p className="mb-2.5 text-faint text-xs">
-              This is your own PR — only a comment review can be submitted.
-            </p>
-          )}
-          <div className="flex gap-2">
-            {EVENTS.map((opt) => {
-              const disabled = disabledEvent(opt.value);
-              return (
-                <button
-                  className={cn(
-                    "flex-1 rounded-lg border px-2 py-2 font-semibold text-xs transition-colors",
-                    event === opt.value
-                      ? "border-accent bg-accent/15 text-fg"
-                      : "border-line text-muted hover:bg-surface-2 hover:text-fg",
-                    disabled &&
-                      "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted"
-                  )}
-                  disabled={disabled}
-                  key={opt.value}
-                  onClick={handleSelectEvent(opt.value)}
-                  title={
-                    disabled
-                      ? "You can't approve or request changes on your own PR"
-                      : opt.hint
-                  }
-                  type="button"
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
+        <textarea
+          aria-label="Review summary"
+          className="q-input mt-3"
+          onChange={handleBodyChange}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          rows={4}
+          value={body}
+        />
 
-          <textarea
-            autoFocus
-            className="q-input mt-3"
-            onChange={handleBodyChange}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            rows={4}
-            value={body}
-          />
+        {error ? (
+          <p className="mt-2 break-words text-danger text-xs">{error}</p>
+        ) : null}
+      </div>
 
-          {error ? (
-            <p className="mt-2 break-words text-danger text-xs">{error}</p>
-          ) : null}
-        </div>
-
-        <div className="flex items-center justify-between border-line border-t px-5 py-3.5">
-          <span className="text-faint text-xs">
-            Tab switches verdict · ⌘↵ to submit · Esc to cancel
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              className="q-btn q-btn-ghost"
-              onClick={onClose}
-              type="button"
-            >
-              Cancel
-            </button>
-            <button
-              className="q-btn q-btn-primary"
-              disabled={!canSubmit}
-              onClick={submit}
-              type="button"
-            >
-              {busy ? "Submitting…" : "Submit review"}
-            </button>
-          </div>
+      <div className="flex items-center justify-between border-line border-t px-5 py-3.5">
+        <span className="text-faint text-xs">
+          Tab switches verdict · ⌘↵ to submit · Esc to cancel
+        </span>
+        <div className="flex items-center gap-2">
+          <button className="q-btn q-btn-ghost" onClick={onClose} type="button">
+            Cancel
+          </button>
+          <button
+            className="q-btn q-btn-primary"
+            disabled={!canSubmit}
+            onClick={submit}
+            type="button"
+          >
+            {busy ? "Submitting…" : "Submit review"}
+          </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

@@ -1,6 +1,6 @@
 // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "../../lib/api.ts";
 import type { ChangedFile } from "../../types.ts";
 import { Spinner } from "../ui/spinner.tsx";
@@ -26,10 +26,6 @@ const IMAGE_MIME: Record<string, string> = {
 function mimeFor(path: string): string | null {
   const ext = path.toLowerCase().split(".").pop() ?? "";
   return IMAGE_MIME[ext] ?? null;
-}
-
-export function isImageFile(file: ChangedFile): boolean {
-  return !file.patch && mimeFor(file.filename) !== null;
 }
 
 function formatBytes(n: number): string {
@@ -70,7 +66,7 @@ function ImagePane({
   const mime = mimeFor(path) ?? "application/octet-stream";
   const blobKey = data?.base64 ?? "";
 
-  const bindImgRef = useCallback((img: HTMLImageElement | null) => {
+  const bindImgRef = (img: HTMLImageElement | null) => {
     imgRef.current = img;
     if (!img) {
       return;
@@ -86,7 +82,7 @@ function ImagePane({
     } else {
       img.addEventListener("load", syncDims, { once: true });
     }
-  }, []);
+  };
 
   const dimText = dims === null ? null : `${dims.w}×${dims.h}`;
   const sizeText = data === undefined ? null : formatBytes(data.size);

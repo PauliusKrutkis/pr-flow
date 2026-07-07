@@ -1,11 +1,6 @@
 // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { CaseSensitive, ChevronDown, ChevronUp, X } from "lucide-react";
-import {
-  type ChangeEvent,
-  type KeyboardEvent,
-  useCallback,
-  useRef,
-} from "react";
+import { type ChangeEvent, type KeyboardEvent, useRef } from "react";
 import { cn } from "../../lib/cn.ts";
 
 /**
@@ -52,51 +47,45 @@ export function FindBar({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const bindInputRef = useCallback((el: HTMLInputElement | null) => {
+  const bindInputRef = (el: HTMLInputElement | null) => {
     inputRef.current = el;
     if (el) {
       el.focus();
       el.select();
     }
-  }, []);
+  };
 
-  const handleChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      onQueryChange(e.target.value);
-    },
-    [onQueryChange]
-  );
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    onQueryChange(e.target.value);
+  };
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      const mod = e.metaKey || e.ctrlKey;
-      if (
-        e.key === "Enter" ||
-        e.key === "F3" ||
-        (mod && e.key.toLowerCase() === "g")
-      ) {
-        e.preventDefault();
-        if (e.shiftKey) {
-          onPrev();
-        } else {
-          onNext();
-        }
-      } else if (e.key === "ArrowDown") {
-        e.preventDefault();
-        onNext();
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    const mod = e.metaKey || e.ctrlKey;
+    if (
+      e.key === "Enter" ||
+      e.key === "F3" ||
+      (mod && e.key.toLowerCase() === "g")
+    ) {
+      e.preventDefault();
+      if (e.shiftKey) {
         onPrev();
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      } else if (mod && e.key.toLowerCase() === "f") {
-        e.preventDefault();
-        e.currentTarget.select();
+      } else {
+        onNext();
       }
-    },
-    [onClose, onNext, onPrev]
-  );
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      onNext();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      onPrev();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onClose();
+    } else if (mod && e.key.toLowerCase() === "f") {
+      e.preventDefault();
+      e.currentTarget.select();
+    }
+  };
 
   if (!open) {
     return null;

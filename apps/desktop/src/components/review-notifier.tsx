@@ -1,6 +1,6 @@
 // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useInbox } from "../hooks/use-inbox.ts";
 import { useHotkeys } from "../keyboard/use-hotkeys.ts";
 import { useAppStore } from "../store/app-store.ts";
@@ -49,7 +49,7 @@ export function ReviewNotifier() {
   const [toast, setToast] = useState<{ pr: PullRequest; extra: number } | null>(
     null
   );
-  const cardRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDialogElement>(null);
   const prevFocusRef = useRef<HTMLElement | null>(null);
 
   const stored = useRef<Set<string> | null | undefined>(undefined);
@@ -71,6 +71,9 @@ export function ReviewNotifier() {
     }
 
     const known = stored.current;
+    if (known === undefined) {
+      return;
+    }
     const fresh = prs.filter((item) => !known.has(keyOf(item)));
     stored.current = new Set(current);
     saveKnown(current);
@@ -133,9 +136,22 @@ export function ReviewNotifier() {
     };
   }, [toast]);
 
-  const dismiss = useCallback(() => setToast(null), []);
+  useEffect(() => {
+    if (!toast) {
+      return;
+    }
+    const card = cardRef.current;
+    card?.show();
+    return () => {
+      card?.close();
+    };
+  }, [toast]);
 
-  const open = useCallback(() => {
+  const dismiss = () => {
+    setToast(null);
+  };
+
+  const open = () => {
     setToast((current) => {
       if (!current) {
         return null;
@@ -146,7 +162,7 @@ export function ReviewNotifier() {
       store.markSeen(keyOf(reviewPr), reviewPr.updatedAt);
       return null;
     });
-  }, []);
+  };
 
   useHotkeys(
     "review-notifier",
@@ -174,11 +190,11 @@ export function ReviewNotifier() {
   const { pr, extra } = toast;
 
   return (
-    <div
+    <dialog
       aria-labelledby="review-notifier-title"
       className="qb-toast"
+      onClose={dismiss}
       ref={cardRef}
-      role="alertdialog"
       tabIndex={-1}
     >
       <span aria-hidden className="qb-toast-rail" />
@@ -226,6 +242,6 @@ export function ReviewNotifier() {
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

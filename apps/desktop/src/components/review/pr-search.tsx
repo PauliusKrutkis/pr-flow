@@ -3,12 +3,12 @@ import { CornerDownLeft, FileCode, Search } from "lucide-react";
 import {
   type KeyboardEvent,
   type MouseEvent,
-  useCallback,
   useEffect,
-  useMemo,
+  useId,
   useRef,
   useState,
 } from "react";
+import { useModalDialog } from "../../hooks/use-modal-dialog.ts";
 import { cn } from "../../lib/cn.ts";
 import { type DiffRow, parsePatch } from "../../lib/diff.ts";
 import { fuzzyMatch } from "../../lib/fuzzy.ts";
@@ -164,266 +164,257 @@ export function PrSearch({
   onSelectFile: (index: number) => void;
   onSelectLine: (index: number, anchor: string) => void;
 }) {
+  if (!open) {
+    return null;
+  }
+  return (
+    <PrSearchContent
+      files={files}
+      key={mode}
+      mode={mode}
+      onClose={onClose}
+      onSelectFile={onSelectFile}
+      onSelectLine={onSelectLine}
+    />
+  );
+}
+
+function PrSearchContent({
+  mode,
+  onClose,
+  files,
+  onSelectFile,
+  onSelectLine,
+}: {
+  mode: Mode;
+  onClose: () => void;
+  files: ChangedFile[];
+  onSelectFile: (index: number) => void;
+  onSelectLine: (index: number, anchor: string) => void;
+}) {
+  const listId = useId();
+  const { dialogRef, onDialogCancel, onDialogClose } = useModalDialog(onClose);
   const [query, setQuery] = useState("");
   const [sel, setSel] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const items = useMemo<Item[]>(() => {
-    const q = query.trim().toLowerCase();
-    if (mode === "files") {
-      return buildFileItems(q, files);
-    }
-    return buildTextItems(q, files);
-  }, [query, files, mode]);
+  const q = query.trim().toLowerCase();
+  const items: Item[] =
+    mode === "files" ? buildFileItems(q, files) : buildTextItems(q, files);
 
-  useEffect(() => setSel(0), []);
   useEffect(() => {
-    if (open) {
-      setQuery("");
-      setSel(0);
-      requestAnimationFrame(() => inputRef.current?.focus());
-    }
-  }, [open]);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
+
   useEffect(() => {
     listRef.current
       ?.querySelector('[data-active="true"]')
       ?.scrollIntoView({ block: "nearest" });
   }, []);
 
-  const choose = useCallback(
-    (it: Item) => {
-      if (it.kind === "line" && it.anchor !== null) {
-        onSelectLine(it.fileIndex, it.anchor);
-      } else {
-        onSelectFile(it.fileIndex);
-      }
-      onClose();
-    },
-    [onClose, onSelectFile, onSelectLine]
-  );
+  const choose = (it: Item) => {
+    if (it.kind === "line" && it.anchor !== null) {
+      onSelectLine(it.fileIndex, it.anchor);
+    } else {
+      onSelectFile(it.fileIndex);
+    }
+    onClose();
+  };
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setSel((s) => Math.min(s + 1, items.length - 1));
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setSel((s) => Math.max(s - 1, 0));
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        const it = items[sel];
-        if (it) {
-          choose(it);
-        }
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    },
-    [choose, items, onClose, sel]
-  );
-
-  const handleQueryChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      setQuery(e.target.value);
-    },
-    []
-  );
-
-  const handleOverlayMouseDown = useCallback(
-    (e: MouseEvent<HTMLDivElement>) => {
-      if (e.target === e.currentTarget) {
-        onClose();
-      }
-    },
-    [onClose]
-  );
-
-  const handleRowClick = useCallback(
-    (e: MouseEvent<HTMLButtonElement>) => {
-      const index = Number(e.currentTarget.dataset.index);
-      const it = items[index];
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSel((s) => Math.min(s + 1, items.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSel((s) => Math.max(s - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const it = items[sel];
       if (it) {
         choose(it);
       }
-    },
-    [choose, items]
-  );
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onClose();
+    }
+  };
 
-  const handleRowMouseMove = useCallback((e: MouseEvent<HTMLButtonElement>) => {
+  const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setQuery(e.target.value);
+    setSel(0);
+  };
+
+  const handleRowClick = (e: MouseEvent<HTMLButtonElement>) => {
+    const index = Number(e.currentTarget.dataset.index);
+    const it = items[index];
+    if (it) {
+      choose(it);
+    }
+  };
+
+  const handleRowMouseMove = (e: MouseEvent<HTMLButtonElement>) => {
     const index = Number(e.currentTarget.dataset.index);
     setSel(index);
-  }, []);
+  };
 
-  const handleRowKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLButtonElement>) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        handleRowClick(e as unknown as MouseEvent<HTMLButtonElement>);
-      }
-    },
-    [handleRowClick]
-  );
+  const handleRowKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleRowClick(e as unknown as MouseEvent<HTMLButtonElement>);
+    }
+  };
 
-  if (!open) {
-    return null;
-  }
-
-  const q = query.trim();
-  const empty = q.length > 0 && items.length === 0;
+  const displayQ = query.trim();
+  const empty = displayQ.length > 0 && items.length === 0;
   const placeholder =
     mode === "files" ? "Find a file in this PR…" : "Search code in this PR…";
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: backdrop dismisses on outside click
-    <div
-      className="q-overlay"
-      onMouseDown={handleOverlayMouseDown}
-      role="presentation"
+    <dialog
+      aria-label={mode === "files" ? "Find a file" : "Search code"}
+      className="q-dialog q-dialog-top qsp-panel"
+      onCancel={onDialogCancel}
+      onClose={onDialogClose}
+      ref={dialogRef}
     >
-      <div
-        aria-label={mode === "files" ? "Find a file" : "Search code"}
-        aria-modal="true"
-        className="q-dialog q-dialog-top qsp-panel"
-        role="dialog"
-      >
-        <div className="qsp-search">
-          <Search aria-hidden className="qsp-search-icon" size={17} />
-          <input
-            aria-expanded
-            autoComplete="off"
-            className="qsp-input"
-            onChange={handleQueryChange}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            ref={inputRef}
-            role="combobox"
-            spellCheck={false}
-            value={query}
-          />
-          <Kbd combo="esc" />
-        </div>
+      <div className="qsp-search">
+        <Search aria-hidden className="qsp-search-icon" size={17} />
+        <input
+          aria-controls={listId}
+          aria-expanded
+          aria-label={placeholder}
+          autoComplete="off"
+          className="qsp-input"
+          onChange={handleQueryChange}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          ref={inputRef}
+          role="combobox"
+          spellCheck={false}
+          value={query}
+        />
+        <Kbd combo="esc" />
+      </div>
 
-        <div className="qsp-list" ref={listRef} role="listbox">
-          {mode === "text" && !q && (
-            <div className="qsp-empty">
-              <Search aria-hidden size={20} />
-              <p>Search the diff text</p>
-              <span>Type to match lines across every changed file.</span>
-            </div>
-          )}
-          {items.map((it, i) => (
-            <button
-              aria-selected={i === sel}
-              className={cn("qsp-row", i === sel && "qsp-row-on")}
-              data-active={i === sel}
-              data-index={i}
-              key={itemKey(it, i)}
-              onClick={handleRowClick}
-              onKeyDown={handleRowKeyDown}
-              onMouseMove={handleRowMouseMove}
-              role="option"
-              type="button"
-            >
-              <span aria-hidden className="qsp-rail" />
-              {it.kind === "file" ? (
-                <>
-                  <FileCode aria-hidden className="qsp-search-icon" size={14} />
-                  <span className="qsp-main">
-                    <span className="qsp-title">
-                      <span>
-                        <HighlightIndices
-                          indices={it.matched}
-                          text={it.filename}
-                        />
-                      </span>
+      <div className="qsp-list" id={listId} ref={listRef} role="listbox">
+        {mode === "text" && !displayQ && (
+          <div className="qsp-empty">
+            <Search aria-hidden size={20} />
+            <p>Search the diff text</p>
+            <span>Type to match lines across every changed file.</span>
+          </div>
+        )}
+        {items.map((it, i) => (
+          <button
+            aria-selected={i === sel}
+            className={cn("qsp-row", i === sel && "qsp-row-on")}
+            data-active={i === sel}
+            data-index={i}
+            key={itemKey(it, i)}
+            onClick={handleRowClick}
+            onKeyDown={handleRowKeyDown}
+            onMouseMove={handleRowMouseMove}
+            role="option"
+            type="button"
+          >
+            <span aria-hidden className="qsp-rail" />
+            {it.kind === "file" ? (
+              <>
+                <FileCode aria-hidden className="qsp-search-icon" size={14} />
+                <span className="qsp-main">
+                  <span className="qsp-title">
+                    <span>
+                      <HighlightIndices
+                        indices={it.matched}
+                        text={it.filename}
+                      />
                     </span>
                   </span>
-                </>
-              ) : (
-                <>
-                  <span className="qsp-num">L{it.line ?? "?"}</span>
-                  <span className="qsp-main">
-                    <span className="qsp-title q-mono">
-                      {it.content ? (
-                        <span
-                          className="hljs"
-                          // biome-ignore lint/security/noDangerouslySetInnerHtml: syntax-highlighted diff snippet
-                          dangerouslySetInnerHTML={{
-                            __html: highlightLineWithMatch(
-                              it.content,
-                              it.filename,
-                              q
-                            ),
-                          }}
-                        />
-                      ) : (
-                        <span> </span>
-                      )}
-                    </span>
-                    <span className="qsp-meta">{base(it.filename)}</span>
-                    {i === sel && it.context.length > 1 && (
-                      <span aria-hidden className="qsp-snippet">
-                        {it.context.map((l) => (
-                          <span
-                            className={cn(
-                              "qsp-snip-line",
-                              l.hit && "qsp-snip-line-hit"
-                            )}
-                            key={`${l.num ?? "x"}-${l.text}`}
-                          >
-                            <span className="qsp-snip-num">{l.num ?? ""}</span>
-                            <span
-                              className="qsp-snip-code hljs"
-                              // biome-ignore lint/security/noDangerouslySetInnerHtml: syntax-highlighted diff snippet
-                              dangerouslySetInnerHTML={{
-                                __html: l.text
-                                  ? highlightLineWithMatch(
-                                      l.text,
-                                      it.filename,
-                                      l.hit ? q : ""
-                                    )
-                                  : " ",
-                              }}
-                            />
-                          </span>
-                        ))}
-                      </span>
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="qsp-num">L{it.line ?? "?"}</span>
+                <span className="qsp-main">
+                  <span className="qsp-title q-mono">
+                    {it.content ? (
+                      <span
+                        className="hljs"
+                        // biome-ignore lint/security/noDangerouslySetInnerHtml: syntax-highlighted diff snippet
+                        dangerouslySetInnerHTML={{
+                          __html: highlightLineWithMatch(
+                            it.content,
+                            it.filename,
+                            displayQ
+                          ),
+                        }}
+                      />
+                    ) : (
+                      <span> </span>
                     )}
                   </span>
-                </>
-              )}
-            </button>
-          ))}
-          {!!empty && (
-            <div className="qsp-empty">
-              <Search aria-hidden size={20} />
-              <p>Nothing matches “{q}”.</p>
-              <span>
-                {mode === "files"
-                  ? "Try part of a file name."
-                  : "Try other code text."}
-              </span>
-            </div>
-          )}
-        </div>
-
-        <div className="qsp-foot">
-          <span>
-            <Kbd combo="up" />
-            <Kbd combo="down" /> navigate
-          </span>
-          <span>
-            <CornerDownLeft aria-hidden size={11} />{" "}
-            {mode === "files" ? "open file" : "go to line"}
-          </span>
-          <span className="qsp-foot-scope">
-            {mode === "files" ? "files in this PR" : "code in this PR"}
-          </span>
-        </div>
+                  <span className="qsp-meta">{base(it.filename)}</span>
+                  {i === sel && it.context.length > 1 && (
+                    <span aria-hidden className="qsp-snippet">
+                      {it.context.map((l) => (
+                        <span
+                          className={cn(
+                            "qsp-snip-line",
+                            l.hit && "qsp-snip-line-hit"
+                          )}
+                          key={`${l.num ?? "x"}-${l.text}`}
+                        >
+                          <span className="qsp-snip-num">{l.num ?? ""}</span>
+                          <span
+                            className="qsp-snip-code hljs"
+                            // biome-ignore lint/security/noDangerouslySetInnerHtml: syntax-highlighted diff snippet
+                            dangerouslySetInnerHTML={{
+                              __html: l.text
+                                ? highlightLineWithMatch(
+                                    l.text,
+                                    it.filename,
+                                    l.hit ? displayQ : ""
+                                  )
+                                : " ",
+                            }}
+                          />
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </span>
+              </>
+            )}
+          </button>
+        ))}
+        {!!empty && (
+          <div className="qsp-empty">
+            <Search aria-hidden size={20} />
+            <p>Nothing matches “{displayQ}”.</p>
+            <span>
+              {mode === "files"
+                ? "Try part of a file name."
+                : "Try other code text."}
+            </span>
+          </div>
+        )}
       </div>
-    </div>
+
+      <div className="qsp-foot">
+        <span>
+          <Kbd combo="up" />
+          <Kbd combo="down" /> navigate
+        </span>
+        <span>
+          <CornerDownLeft aria-hidden size={11} />{" "}
+          {mode === "files" ? "open file" : "go to line"}
+        </span>
+        <span className="qsp-foot-scope">
+          {mode === "files" ? "files in this PR" : "code in this PR"}
+        </span>
+      </div>
+    </dialog>
   );
 }

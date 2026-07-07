@@ -10,14 +10,16 @@ import {
   ZoomOut,
   // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { CommandPalette } from "./components/command-palette.tsx";
 import { GlobalSearch } from "./components/global-search.tsx";
 import { HelpOverlay } from "./components/help-overlay.tsx";
 import { Inbox } from "./components/inbox/inbox.tsx";
 import { IssueTrackerDialog } from "./components/issue-tracker-dialog.tsx";
+import { PerfOverlay } from "./components/perf-overlay.tsx";
 import { ReviewScreen } from "./components/review/review-screen.tsx";
 import { ReviewNotifier } from "./components/review-notifier.tsx";
+import { StatusBar } from "./components/status-bar.tsx";
 import { TokenGate } from "./components/token-gate.tsx";
 import { Kbd } from "./components/ui/kbd.tsx";
 import { Spinner } from "./components/ui/spinner.tsx";
@@ -44,12 +46,16 @@ export default function App() {
   const inboxPaneVisible = useAppStore((s) => s.inboxPaneVisible);
   const [trackerOpen, setTrackerOpen] = useState(false);
 
-  const dismissToast = useCallback(() => setToast(null), [setToast]);
-  const closeTracker = useCallback(() => setTrackerOpen(false), []);
-  const runToastAction = useCallback(() => {
+  const dismissToast = () => {
+    setToast(null);
+  };
+  const closeTracker = () => {
+    setTrackerOpen(false);
+  };
+  const runToastAction = () => {
     toast?.action?.();
     setToast(null);
-  }, [toast, setToast]);
+  };
 
   useEffect(() => {
     if (!toast) {
@@ -199,6 +205,7 @@ export default function App() {
   );
 
   const baseScope = route.name === "review" ? "review" : "inbox";
+  const showRouteChrome = route.name === "inbox" || route.name === "review";
 
   const isMac = navigator.userAgent.includes("Macintosh");
 
@@ -225,13 +232,12 @@ export default function App() {
         )}
       </div>
 
+      {showRouteChrome ? <StatusBar baseScope={baseScope} /> : null}
+      <PerfOverlay />
+
       <div aria-live="polite" className="qb-stack qb-stack-host">
-        {(route.name === "inbox" || route.name === "review") && (
-          <UpdatePrompt />
-        )}
-        {(route.name === "inbox" || route.name === "review") && (
-          <ReviewNotifier />
-        )}
+        {showRouteChrome ? <UpdatePrompt /> : null}
+        {showRouteChrome ? <ReviewNotifier /> : null}
         {!!toast && (
           <div className="qb-toast" role="alert">
             <span aria-hidden className="qb-toast-rail" />
@@ -272,7 +278,7 @@ export default function App() {
       <IssueTrackerDialog onClose={closeTracker} open={trackerOpen} />
       <CommandPalette baseScope={baseScope} />
       <HelpOverlay baseScope={baseScope} />
-      {(route.name === "inbox" || route.name === "review") && <GlobalSearch />}
+      {showRouteChrome ? <GlobalSearch /> : null}
     </div>
   );
 }

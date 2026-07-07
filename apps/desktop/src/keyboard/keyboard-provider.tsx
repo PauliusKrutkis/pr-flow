@@ -1,10 +1,9 @@
 import {
   createContext,
   type ReactNode,
-  useCallback,
-  useContext,
+  use,
   useEffect,
-  useMemo,
+  useEffectEvent,
   useRef,
   useState,
 } from "react";
@@ -210,40 +209,32 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
   const seqRef = useRef("");
   const seqTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const nextId = useCallback(() => {
+  const nextId = () => {
     idRef.current += 1;
     return `kb-${idRef.current}`;
-  }, []);
+  };
 
-  const registerSource = useCallback(
-    (scope: string, get: () => Binding[]) => {
-      const id = nextId();
-      sourcesRef.current = [...sourcesRef.current, { get, id, scope }];
+  const registerSource = (scope: string, get: () => Binding[]) => {
+    const id = nextId();
+    sourcesRef.current = [...sourcesRef.current, { get, id, scope }];
+    setVersion((v) => v + 1);
+    return () => {
+      sourcesRef.current = sourcesRef.current.filter((s) => s.id !== id);
       setVersion((v) => v + 1);
-      return () => {
-        sourcesRef.current = sourcesRef.current.filter((s) => s.id !== id);
-        setVersion((v) => v + 1);
-      };
-    },
-    [nextId]
-  );
+    };
+  };
 
-  const pushScope = useCallback(
-    (scope: string) => {
-      const id = nextId();
-      scopeStackRef.current = [...scopeStackRef.current, { id, scope }];
-      return () => {
-        scopeStackRef.current = scopeStackRef.current.filter(
-          (s) => s.id !== id
-        );
-      };
-    },
-    [nextId]
-  );
+  const pushScope = (scope: string) => {
+    const id = nextId();
+    scopeStackRef.current = [...scopeStackRef.current, { id, scope }];
+    return () => {
+      scopeStackRef.current = scopeStackRef.current.filter((s) => s.id !== id);
+    };
+  };
 
-  const eligibleBindings = useCallback((): RegisteredBinding[] => {
+  const eligibleBindings = () => {
     const stack = scopeStackRef.current;
-    const active = stack.length ? stack.at(-1).scope : "global";
+    const active = stack.length ? stack.at(-1)?.scope : "global";
     const out: RegisteredBinding[] = [];
     let i = 0;
     for (const src of sourcesRef.current) {
@@ -255,60 +246,57 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
       }
     }
     return out;
-  }, []);
+  };
 
-  const clearSeq = useCallback(() => {
+  const clearSeq = () => {
     seqRef.current = "";
     if (seqTimerRef.current) {
       clearTimeout(seqTimerRef.current);
       seqTimerRef.current = null;
     }
-  }, []);
+  };
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      const editable = isEditableTarget(e.target);
-      const bindings = eligibleBindings();
-      const hasMod = e.metaKey || e.ctrlKey;
-      const key = normalizeKey(e);
+  const onKeyDown = useEffectEvent((e: KeyboardEvent) => {
+    const editable = isEditableTarget(e.target);
+    const bindings = eligibleBindings();
+    const hasMod = e.metaKey || e.ctrlKey;
+    const key = normalizeKey(e);
 
-      if (editable && !hasMod) {
-        return;
-      }
-
-      if (hasMod || e.altKey) {
-        handleModKeyDown(e, bindings, editable, clearSeq);
-        return;
-      }
-
-      handlePlainKeyDown(e, bindings, key, seqRef, seqTimerRef, clearSeq);
+    if (editable && !hasMod) {
+      return;
     }
 
+    if (hasMod || e.altKey) {
+      handleModKeyDown(e, bindings, editable, clearSeq);
+      return;
+    }
+
+    handlePlainKeyDown(e, bindings, key, seqRef, seqTimerRef, clearSeq);
+  });
+
+  useEffect(() => {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [eligibleBindings, clearSeq]);
+  }, []);
 
-  const value = useMemo<KeyboardContextValue>(
-    () => ({
-      getBindings: (scope: string): RegisteredBinding[] => {
-        const out: RegisteredBinding[] = [];
-        let i = 0;
-        for (const src of sourcesRef.current) {
-          if (src.scope === scope || src.scope === "global") {
-            for (const b of src.get()) {
-              out.push({ ...b, id: `${src.id}-${i}`, scope: src.scope });
-              i += 1;
-            }
+  const value = {
+    getBindings: (scope: string): RegisteredBinding[] => {
+      const out: RegisteredBinding[] = [];
+      let i = 0;
+      for (const src of sourcesRef.current) {
+        if (src.scope === scope || src.scope === "global") {
+          for (const b of src.get()) {
+            out.push({ ...b, id: `${src.id}-${i}`, scope: src.scope });
+            i += 1;
           }
         }
-        return out;
-      },
-      pushScope,
-      registerSource,
-      version,
-    }),
-    [registerSource, pushScope, version]
-  );
+      }
+      return out;
+    },
+    pushScope,
+    registerSource,
+    version,
+  };
 
   return (
     <KeyboardContext.Provider value={value}>
@@ -318,7 +306,7 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
 }
 
 export function useKeyboard(): KeyboardContextValue {
-  const ctx = useContext(KeyboardContext);
+  const ctx = use(KeyboardContext);
   if (!ctx) {
     throw new Error("useKeyboard must be used within a KeyboardProvider");
   }

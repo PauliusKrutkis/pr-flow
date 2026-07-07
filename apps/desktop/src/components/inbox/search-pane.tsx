@@ -1,6 +1,7 @@
 // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { Clock, CornerDownLeft, Search } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { useModalDialog } from "../../hooks/use-modal-dialog.ts";
 import { cn } from "../../lib/cn.ts";
 import { fuzzyMatchFields } from "../../lib/fuzzy.ts";
 import { formatRelativeTime } from "../../lib/time.ts";
@@ -32,163 +33,161 @@ export function SearchPane({
   prs: PullRequest[];
   onOpen: (pr: PullRequest) => void;
 }) {
+  if (!open) {
+    return null;
+  }
+  return (
+    <SearchPaneContent onOpen={onOpen} onOpenChange={onOpenChange} prs={prs} />
+  );
+}
+
+function SearchPaneContent({
+  onOpenChange,
+  prs,
+  onOpen,
+}: {
+  onOpenChange: (v: boolean) => void;
+  prs: PullRequest[];
+  onOpen: (pr: PullRequest) => void;
+}) {
+  const listId = useId();
+  const { dialogRef, onDialogCancel, onDialogClose } = useModalDialog(() => {
+    onOpenChange(false);
+  });
   const [query, setQuery] = useState("");
   const [sel, setSel] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const results = useMemo(() => {
-    const q = query.trim();
-    if (!q) {
-      return prs
-        .slice(0, 8)
-        .map((pr) => ({ hl: {} as Record<string, number[]>, pr }));
-    }
-
-    const out: (SearchResult & { score: number })[] = [];
-    for (const pr of prs) {
-      const m = fuzzyMatchFields(q, {
-        author: pr.author,
-        number: `#${pr.number}`,
-        repo: pr.repo,
-        title: pr.title,
-      });
-      if (m) {
-        out.push({ hl: m.indices, pr, score: m.score });
-      }
-    }
-    out.sort((a, b) => b.score - a.score);
-    return out;
-  }, [query, prs]);
-
-  const close = useCallback(() => {
-    onOpenChange(false);
-  }, [onOpenChange]);
-
-  const openResult = useCallback(
-    (pr: PullRequest) => {
-      onOpen(pr);
-      onOpenChange(false);
-    },
-    [onOpen, onOpenChange]
-  );
-
-  const onQueryChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value),
-    []
-  );
-
-  const onKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setSel((s) => Math.min(s + 1, results.length - 1));
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setSel((s) => Math.max(s - 1, 0));
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        const r = results[sel];
-        if (r) {
-          openResult(r.pr);
+  const q = query.trim();
+  const results: SearchResult[] = q
+    ? (() => {
+        const out: (SearchResult & { score: number })[] = [];
+        for (const pr of prs) {
+          const m = fuzzyMatchFields(q, {
+            author: pr.author,
+            number: `#${pr.number}`,
+            repo: pr.repo,
+            title: pr.title,
+          });
+          if (m) {
+            out.push({ hl: m.indices, pr, score: m.score });
+          }
         }
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        close();
-      }
-    },
-    [close, openResult, results, sel]
-  );
+        out.sort((a, b) => b.score - a.score);
+        return out;
+      })()
+    : prs.slice(0, 8).map((pr) => ({ hl: {} as Record<string, number[]>, pr }));
 
-  useEffect(() => setSel(0), []);
-  useEffect(() => {
-    if (open) {
-      setQuery("");
-      setSel(0);
-      requestAnimationFrame(() => inputRef.current?.focus());
+  const close = () => {
+    onOpenChange(false);
+  };
+
+  const openResult = (pr: PullRequest) => {
+    onOpen(pr);
+    onOpenChange(false);
+  };
+
+  const onQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setQuery(e.target.value);
+    setSel(0);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSel((s) => Math.min(s + 1, results.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSel((s) => Math.max(s - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const r = results[sel];
+      if (r) {
+        openResult(r.pr);
+      }
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      close();
     }
-  }, [open]);
+  };
+
+  useEffect(() => {
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
+
   useEffect(() => {
     listRef.current
       ?.querySelector('[data-active="true"]')
       ?.scrollIntoView({ block: "nearest" });
   }, []);
 
-  if (!open) {
-    return null;
-  }
-
-  const empty = query.trim().length > 0 && results.length === 0;
+  const empty = q.length > 0 && results.length === 0;
 
   return (
-    <>
-      <button
-        aria-label="Close search"
-        className="q-overlay"
-        onClick={close}
-        type="button"
-      />
-      <div
-        aria-label="Search pull requests"
-        aria-modal="true"
-        className="q-dialog q-dialog-top qsp-panel"
-        role="dialog"
-      >
-        <div className="qsp-search">
-          <Search aria-hidden className="qsp-search-icon" size={17} />
-          <input
-            aria-expanded
-            autoComplete="off"
-            className="qsp-input"
-            onChange={onQueryChange}
-            onKeyDown={onKeyDown}
-            placeholder="Search all pull requests…"
-            ref={inputRef}
-            role="combobox"
-            spellCheck={false}
-            value={query}
-          />
-          <Kbd combo="esc" />
-        </div>
-
-        <div className="qsp-list" ref={listRef} role="listbox">
-          {!query.trim() && results.length > 0 ? (
-            <div className="qsp-section">
-              <Clock aria-hidden size={12} /> Pull requests
-            </div>
-          ) : null}
-          {results.map(({ pr, hl }, i) => (
-            <SearchResultRow
-              hl={hl}
-              index={i}
-              key={prKey(pr)}
-              onOpen={openResult}
-              onSelect={setSel}
-              pr={pr}
-              selected={i === sel}
-            />
-          ))}
-          {empty ? (
-            <div className="qsp-empty">
-              <Search aria-hidden size={20} />
-              <p>No pull requests match “{query.trim()}”.</p>
-              <span>Try a number, author, or repo.</span>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="qsp-foot">
-          <span>
-            <Kbd combo="up" />
-            <Kbd combo="down" /> navigate
-          </span>
-          <span>
-            <CornerDownLeft aria-hidden size={11} /> open
-          </span>
-          <span className="qsp-foot-scope">searching all tabs</span>
-        </div>
+    <dialog
+      aria-label="Search pull requests"
+      className="q-dialog q-dialog-top qsp-panel"
+      onCancel={onDialogCancel}
+      onClose={onDialogClose}
+      ref={dialogRef}
+    >
+      <div className="qsp-search">
+        <Search aria-hidden className="qsp-search-icon" size={17} />
+        <input
+          aria-controls={listId}
+          aria-expanded
+          aria-label="Search pull requests"
+          autoComplete="off"
+          className="qsp-input"
+          onChange={onQueryChange}
+          onKeyDown={onKeyDown}
+          placeholder="Search all pull requests…"
+          ref={inputRef}
+          role="combobox"
+          spellCheck={false}
+          value={query}
+        />
+        <Kbd combo="esc" />
       </div>
-    </>
+
+      <div className="qsp-list" id={listId} ref={listRef} role="listbox">
+        {!q && results.length > 0 ? (
+          <div className="qsp-section">
+            <Clock aria-hidden size={12} /> Pull requests
+          </div>
+        ) : null}
+        {results.map(({ pr, hl }, i) => (
+          <SearchResultRow
+            hl={hl}
+            index={i}
+            key={prKey(pr)}
+            onOpen={openResult}
+            onSelect={setSel}
+            pr={pr}
+            selected={i === sel}
+          />
+        ))}
+        {empty ? (
+          <div className="qsp-empty">
+            <Search aria-hidden size={20} />
+            <p>No pull requests match “{q}”.</p>
+            <span>Try a number, author, or repo.</span>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="qsp-foot">
+        <span>
+          <Kbd combo="up" />
+          <Kbd combo="down" /> navigate
+        </span>
+        <span>
+          <CornerDownLeft aria-hidden size={11} /> open
+        </span>
+        <span className="qsp-foot-scope">searching all tabs</span>
+      </div>
+    </dialog>
   );
 }
 
@@ -207,23 +206,20 @@ function SearchResultRow({
   onOpen: (pr: PullRequest) => void;
   onSelect: (index: number) => void;
 }) {
-  const handleClick = useCallback(() => {
+  const handleClick = () => {
     onOpen(pr);
-  }, [onOpen, pr]);
+  };
 
-  const handleMouseMove = useCallback(() => {
+  const handleMouseMove = () => {
     onSelect(index);
-  }, [index, onSelect]);
+  };
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        onOpen(pr);
-      }
-    },
-    [onOpen, pr]
-  );
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onOpen(pr);
+    }
+  };
 
   return (
     <div

@@ -6,7 +6,6 @@ import {
   type MouseEvent,
   type PointerEvent,
   type Ref,
-  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -23,6 +22,7 @@ import { useLatest } from "../../hooks/use-latest.ts";
 import { cn } from "../../lib/cn.ts";
 import { findMatchRangesInLine } from "../../lib/find-in-diff.ts";
 import {
+  highlightHtmlToNodes,
   highlightLineWithFind,
   highlightLineWithIntra,
   highlightLineWithOccurrences,
@@ -322,51 +322,39 @@ function DiffLine({
     findOrdinal
   );
 
-  const handleMouseEnter = useCallback(
-    (e: MouseEvent<HTMLDivElement>) => {
-      if (anchor !== null) {
-        onEnter(fileIndex, anchor, e.clientX, e.clientY);
-      }
-    },
-    [anchor, fileIndex, onEnter]
-  );
+  const handleMouseEnter = (e: MouseEvent<HTMLDivElement>) => {
+    if (anchor !== null) {
+      onEnter(fileIndex, anchor, e.clientX, e.clientY);
+    }
+  };
 
-  const handleAddClick = useCallback(
-    (e: MouseEvent<HTMLButtonElement>) => {
-      if (e.detail === 0 && anchor !== null) {
-        onOpenBox(fileIndex, anchor);
-      }
-    },
-    [anchor, fileIndex, onOpenBox]
-  );
+  const handleAddClick = (e: MouseEvent<HTMLButtonElement>) => {
+    if (e.detail === 0 && anchor !== null) {
+      onOpenBox(fileIndex, anchor);
+    }
+  };
 
-  const handleAddPointerDown = useCallback(
-    (e: PointerEvent<HTMLButtonElement>) => {
-      if (anchor === null) {
-        return;
-      }
-      e.preventDefault();
-      e.currentTarget.setPointerCapture(e.pointerId);
-      onPlusDragStart(fileIndex, anchor);
-    },
-    [anchor, fileIndex, onPlusDragStart]
-  );
+  const handleAddPointerDown = (e: PointerEvent<HTMLButtonElement>) => {
+    if (anchor === null) {
+      return;
+    }
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    onPlusDragStart(fileIndex, anchor);
+  };
 
-  const handleAddPointerMove = useCallback(
-    (e: PointerEvent<HTMLButtonElement>) => {
-      if (e.buttons === 0) {
-        return;
-      }
-      const el = document.elementFromPoint(e.clientX, e.clientY);
-      const rowEl = el?.closest?.("[data-anchor]");
-      const a = rowEl?.getAttribute("data-anchor");
-      const f = rowEl?.getAttribute("data-file-index");
-      if (a && f !== null) {
-        onPlusDragOver(Number(f), a);
-      }
-    },
-    [onPlusDragOver]
-  );
+  const handleAddPointerMove = (e: PointerEvent<HTMLButtonElement>) => {
+    if (e.buttons === 0) {
+      return;
+    }
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const rowEl = el?.closest?.("[data-anchor]");
+    const a = rowEl?.getAttribute("data-anchor");
+    const f = rowEl?.getAttribute("data-file-index");
+    if (a && f !== null) {
+      onPlusDragOver(Number(f), a);
+    }
+  };
 
   const rowHoverProps =
     anchor === null ? {} : { onMouseEnter: handleMouseEnter };
@@ -411,11 +399,7 @@ function DiffLine({
             : ({ "--qf-lvl": guideLvl } as CSSProperties)
         }
       >
-        <span
-          className="hljs"
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: syntax-highlighted diff line HTML
-          dangerouslySetInnerHTML={{ __html: lineHtml }}
-        />
+        <span className="hljs">{highlightHtmlToNodes(lineHtml)}</span>
       </code>
     </div>
   );
@@ -457,12 +441,9 @@ function MappedCommentThread({
   callbacks: ReviewListCallbacks;
 }) {
   const rootId = thread[0].id;
-  const handleHoverChange = useCallback(
-    (hovering: boolean) => {
-      callbacks.onThreadHover(hovering ? { path: filename, rootId } : null);
-    },
-    [callbacks, filename, rootId]
-  );
+  const handleHoverChange = (hovering: boolean) => {
+    callbacks.onThreadHover(hovering ? { path: filename, rootId } : null);
+  };
 
   return (
     <CommentThread
@@ -485,9 +466,9 @@ function PendingCommentCard({
   activeAccount: AccountInfo | undefined;
   onRemovePending: (id: string) => void;
 }) {
-  const handleRemove = useCallback(() => {
+  const handleRemove = () => {
     onRemovePending(comment.id);
-  }, [comment.id, onRemovePending]);
+  };
 
   return (
     <div className="qf-thread qf-pending">
@@ -536,51 +517,31 @@ function CommentAddBox({
   addPending: boolean;
   callbacks: ReviewListCallbacks;
 }) {
-  const handleCancel = useCallback(() => {
+  const handleCancel = () => {
     callbacks.onCloseBox(item.fileIndex, item.anchor);
-  }, [callbacks, item.anchor, item.fileIndex]);
+  };
 
-  const handleSecondary = useCallback(
-    (body: string) => {
-      callbacks.onAddComment({
-        body,
-        line: target.line,
-        path: filename,
-        side: target.side,
-        startLine: item.boxStartLine ?? undefined,
-      });
-      callbacks.onCloseBox(item.fileIndex, item.anchor);
-    },
-    [
-      callbacks,
-      filename,
-      item.anchor,
-      item.boxStartLine,
-      item.fileIndex,
-      target,
-    ]
-  );
+  const handleSecondary = (body: string) => {
+    callbacks.onAddComment({
+      body,
+      line: target.line,
+      path: filename,
+      side: target.side,
+      startLine: item.boxStartLine ?? undefined,
+    });
+    callbacks.onCloseBox(item.fileIndex, item.anchor);
+  };
 
-  const handleSubmit = useCallback(
-    (body: string) => {
-      callbacks.onAddPending({
-        body,
-        line: target.line,
-        path: filename,
-        side: target.side,
-        startLine: item.boxStartLine ?? undefined,
-      });
-      callbacks.onCloseBox(item.fileIndex, item.anchor);
-    },
-    [
-      callbacks,
-      filename,
-      item.anchor,
-      item.boxStartLine,
-      item.fileIndex,
-      target,
-    ]
-  );
+  const handleSubmit = (body: string) => {
+    callbacks.onAddPending({
+      body,
+      line: target.line,
+      path: filename,
+      side: target.side,
+      startLine: item.boxStartLine ?? undefined,
+    });
+    callbacks.onCloseBox(item.fileIndex, item.anchor);
+  };
 
   return (
     <AddCommentBox
@@ -680,12 +641,12 @@ function GroupHeader({
     callbacks,
   } = ctx.props;
   const file = files[groupIndex];
-  const handleCopyPath = useCallback(() => {
+  const handleCopyPath = () => {
     callbacks.onCopyPath(groupIndex);
-  }, [callbacks, groupIndex]);
-  const handleToggleViewed = useCallback(() => {
+  };
+  const handleToggleViewed = () => {
     callbacks.onToggleViewed(groupIndex);
-  }, [callbacks, groupIndex]);
+  };
 
   if (!file) {
     return <div className="qf-fsec-head" />;
@@ -756,9 +717,9 @@ function HunkRow({
   item: ReviewHunkItem;
   onToggleHunk: ReviewListCallbacks["onToggleHunk"];
 }) {
-  const handleClick = useCallback(() => {
+  const handleClick = () => {
     onToggleHunk(item.fileIndex, item.hunkIndex);
-  }, [item.fileIndex, item.hunkIndex, onToggleHunk]);
+  };
 
   return (
     <button
@@ -1108,16 +1069,13 @@ export function ReviewList({
     })
   );
 
-  const handleMouseMove = useCallback(
-    (e: MouseEvent<HTMLDivElement>) => {
-      props.callbacks.onMouseMove(e.clientX, e.clientY);
-    },
-    [props.callbacks]
-  );
+  const handleMouseMove = (e: MouseEvent<HTMLDivElement>) => {
+    props.callbacks.onMouseMove(e.clientX, e.clientY);
+  };
 
-  const handleScrollerRef = useCallback((el: HTMLElement | Window | null) => {
+  const handleScrollerRef = (el: HTMLElement | Window | null) => {
     scrollerRef.current = (el as HTMLElement) ?? null;
-  }, []);
+  };
 
   const virtuosoInitialIndex =
     restoreState === null &&

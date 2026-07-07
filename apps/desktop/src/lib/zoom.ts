@@ -8,8 +8,8 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
  */
 
 const KEY = "pr-flow:zoom";
-export const ZOOM_MIN = 0.5;
-export const ZOOM_MAX = 2.0;
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 2.0;
 export const ZOOM_STEP = 0.1;
 
 export function loadZoom(): number {

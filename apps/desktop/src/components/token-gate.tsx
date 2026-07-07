@@ -1,65 +1,14 @@
 // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
-import { openUrl } from "@tauri-apps/plugin-opener";
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { ArrowLeft, KeyRound, Server } from "lucide-react";
+import { type ChangeEvent, type KeyboardEvent, useEffect, useRef } from "react";
 import {
-  type ChangeEvent,
-  type KeyboardEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-import { useHotkeys } from "../keyboard/use-hotkeys.ts";
-import { api } from "../lib/api.ts";
-import { useAppStore } from "../store/app-store.ts";
+  type Busy,
+  type GitlabInstance,
+  shortHost,
+  type TokenProvider,
+  useTokenGate,
+} from "../hooks/use-token-gate.ts";
 import { Spinner } from "./ui/spinner.tsx";
-
-type View = "identity" | "selfhosted" | "token";
-type Busy = "idle" | "oauth" | "probe" | "pat";
-type TokenProvider = "github" | "gitlab";
-
-/** Remembered self-hosted instances (host + optional OAuth application id). */
-interface GitlabInstance {
-  clientId?: string;
-  host: string;
-}
-
-const INSTANCES_KEY = "pr-flow:gitlabInstances";
-const HTTPS_PREFIX = /^https?:\/\//;
-const GH_TOKEN_URL =
-  "https://github.com/settings/tokens/new?scopes=repo&description=Nod";
-
-function loadInstances(): GitlabInstance[] {
-  try {
-    const v = JSON.parse(localStorage.getItem(INSTANCES_KEY) ?? "[]");
-    return Array.isArray(v) ? v.filter((x) => typeof x?.host === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveInstance(inst: GitlabInstance) {
-  const list = loadInstances().filter((i) => i.host !== inst.host);
-  list.push(inst);
-  try {
-    localStorage.setItem(INSTANCES_KEY, JSON.stringify(list));
-  } catch {
-    /* ignore */
-  }
-}
-
-function shortHost(host: string): string {
-  return host.replace(HTTPS_PREFIX, "");
-}
-
-function glTokenUrl(host: string): string {
-  return `${host}/-/user_settings/personal_access_tokens?name=Nod&scopes=api`;
-}
-
-function runPromise(promise: Promise<unknown>): void {
-  promise.catch(() => undefined);
-}
 
 function GitHubMark() {
   return (
@@ -98,7 +47,9 @@ interface InstanceRowProps {
 }
 
 function InstanceRow({ inst, disabled, onOpen }: InstanceRowProps) {
-  const onClick = useCallback(() => onOpen(inst), [inst, onOpen]);
+  const onClick = () => {
+    onOpen(inst);
+  };
 
   return (
     <button
@@ -229,6 +180,12 @@ function SelfHostedPanel({
   probedHost,
   token,
 }: SelfHostedPanelProps) {
+  const hostInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    requestAnimationFrame(() => hostInputRef.current?.focus());
+  }, []);
+
   return (
     <>
       <label className="qg-label" htmlFor="qg-host">
@@ -237,13 +194,13 @@ function SelfHostedPanel({
       <div className="flex gap-2">
         <input
           autoComplete="off"
-          autoFocus
           className="q-input font-mono"
           disabled={disabled}
           id="qg-host"
           onChange={onHostInputChange}
           onKeyDown={onHostKeyDown}
           placeholder="gitlab.yourcompany.com"
+          ref={hostInputRef}
           spellCheck={false}
           type="text"
           value={hostInput}
@@ -297,6 +254,7 @@ function SelfHostedPanel({
           <div className="qg-divider">or connect with a token</div>
 
           <input
+            aria-label="Personal access token"
             autoComplete="off"
             className="q-input font-mono"
             disabled={disabled}
@@ -357,16 +315,19 @@ function TokenPanel({
   tokenHost,
   tokenProvider,
 }: TokenPanelProps) {
-  const onSelectGithub = useCallback(
-    () => onProviderChange("github"),
-    [onProviderChange]
-  );
-  const onSelectGitlab = useCallback(
-    () => onProviderChange("gitlab"),
-    [onProviderChange]
-  );
+  const onSelectGithub = () => {
+    onProviderChange("github");
+  };
+  const onSelectGitlab = () => {
+    onProviderChange("gitlab");
+  };
   const scopeLabel = tokenProvider === "github" ? "repo" : "api";
   const tokenPlaceholder = tokenProvider === "github" ? "ghp_…" : "glpat-…";
+  const tokenInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    requestAnimationFrame(() => tokenInputRef.current?.focus());
+  }, []);
 
   return (
     <>
@@ -425,13 +386,13 @@ function TokenPanel({
       </label>
       <input
         autoComplete="off"
-        autoFocus
         className="q-input font-mono"
         disabled={disabled}
         id="qg-token"
         onChange={onTokenChange}
         onKeyDown={onTokenKeyDown}
         placeholder={tokenPlaceholder}
+        ref={tokenInputRef}
         spellCheck={false}
         type="password"
         value={token}
@@ -457,307 +418,8 @@ function TokenPanel({
   );
 }
 
-export function TokenGate() {
-  const goInbox = useAppStore((s) => s.goInbox);
-  const hasAccounts = useAppStore((s) => s.accounts.length > 0);
-  const accounts = useAppStore((s) => s.accounts);
-
-  const [view, setView] = useState<View>("identity");
-  const [busy, setBusy] = useState<Busy>("idle");
-  const [busyLabel, setBusyLabel] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  const [hostInput, setHostInput] = useState("");
-  const [probedHost, setProbedHost] = useState<string | null>(null);
-  const [appId, setAppId] = useState("");
-  const [tokenProvider, setTokenProvider] = useState<TokenProvider>("github");
-  const [tokenHost, setTokenHost] = useState("");
-  const [token, setToken] = useState("");
-
-  const [ghOauthReady, setGhOauthReady] = useState(true);
-  const [glOauthReady, setGlOauthReady] = useState(true);
-
-  useEffect(() => {
-    api
-      .isOAuthConfigured()
-      .then(setGhOauthReady)
-      .catch(() => setGhOauthReady(false));
-    api
-      .isGitlabOAuthConfigured()
-      .then(setGlOauthReady)
-      .catch(() => setGlOauthReady(false));
-  }, []);
-
-  const instances = useMemo<GitlabInstance[]>(() => {
-    const list = loadInstances();
-    for (const a of accounts) {
-      if (
-        a.provider === "gitlab" &&
-        a.host !== "https://gitlab.com" &&
-        !list.some((i) => i.host === a.host)
-      ) {
-        list.push({ host: a.host });
-      }
-    }
-    return list;
-  }, [accounts]);
-
-  const reset = useCallback((next: View) => {
-    setError(null);
-    setBusy("idle");
-    setView(next);
-  }, []);
-
-  useHotkeys("token", [
-    {
-      description: "Back",
-      group: "Navigation",
-      hidden: !hasAccounts && view === "identity",
-      keys: "esc",
-      run: () => {
-        if (view !== "identity") {
-          reset("identity");
-        } else if (hasAccounts) {
-          goInbox();
-        }
-      },
-    },
-  ]);
-
-  const finish = useCallback(() => {
-    goInbox();
-    window.location.reload();
-  }, [goInbox]);
-
-  const run = useCallback(
-    async (label: string, kind: Busy, action: () => Promise<void>) => {
-      if (busy !== "idle") {
-        return;
-      }
-      setBusy(kind);
-      setBusyLabel(label);
-      setError(null);
-      try {
-        await action();
-      } catch (e) {
-        setError(String(e));
-        setBusy("idle");
-      }
-    },
-    [busy]
-  );
-
-  const signInGithub = useCallback(
-    () =>
-      run("Waiting for GitHub in your browser…", "oauth", async () => {
-        await api.loginWithGithub();
-        finish();
-      }),
-    [finish, run]
-  );
-
-  const signInGitlab = useCallback(
-    (host?: string, clientId?: string) =>
-      run(
-        `Waiting for ${shortHost(host ?? "gitlab.com")} in your browser…`,
-        "oauth",
-        async () => {
-          await api.loginWithGitlab({
-            clientId: clientId ?? null,
-            host: host ?? null,
-          });
-          if (host) {
-            saveInstance({ clientId, host });
-          }
-          finish();
-        }
-      ),
-    [finish, run]
-  );
-
-  const openInstance = useCallback(
-    (inst: GitlabInstance) => {
-      if (inst.clientId) {
-        runPromise(signInGitlab(inst.host, inst.clientId));
-      } else {
-        setHostInput(shortHost(inst.host));
-        setProbedHost(inst.host);
-        setAppId("");
-        setToken("");
-        reset("selfhosted");
-      }
-    },
-    [reset, signInGitlab]
-  );
-
-  const probe = useCallback(
-    () =>
-      run("Checking the instance…", "probe", async () => {
-        const normalized = await api.probeGitlab(hostInput);
-        setProbedHost(normalized);
-        setBusy("idle");
-      }),
-    [hostInput, run]
-  );
-
-  const connectToken = useCallback(
-    (provider: TokenProvider, host: string | null) =>
-      run("Checking the token…", "pat", async () => {
-        await api.addAccount({ host, provider, token: token.trim() });
-        if (provider === "gitlab" && host) {
-          saveInstance({ host });
-        }
-        finish();
-      }),
-    [finish, run, token]
-  );
-
-  const disabled = busy !== "idle";
-  const knownId = probedHost
-    ? instances.find((i) => i.host === probedHost)?.clientId
-    : undefined;
-  const oauthId = appId.trim() || knownId;
-  const tokenConnectHost =
-    tokenProvider === "gitlab" ? tokenHost.trim() || null : null;
-
-  const onSignInGithub = useCallback(() => {
-    runPromise(signInGithub());
-  }, [signInGithub]);
-
-  const onSignInGitlabDefault = useCallback(() => {
-    runPromise(signInGitlab());
-  }, [signInGitlab]);
-
-  const onSelfHosted = useCallback(() => {
-    setHostInput("");
-    setProbedHost(null);
-    setAppId("");
-    setToken("");
-    reset("selfhosted");
-  }, [reset]);
-
-  const onUseToken = useCallback(() => {
-    setToken("");
-    reset("token");
-  }, [reset]);
-
-  const onHostInputChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      setHostInput(event.target.value);
-      setProbedHost(null);
-    },
-    []
-  );
-
-  const onHostKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === "Enter" && !probedHost) {
-        event.preventDefault();
-        runPromise(probe());
-      } else if (event.key === "Escape") {
-        event.preventDefault();
-        reset("identity");
-      }
-    },
-    [probe, probedHost, reset]
-  );
-
-  const onProbe = useCallback(() => {
-    runPromise(probe());
-  }, [probe]);
-
-  const onSelfHostedSignInGitlab = useCallback(() => {
-    if (probedHost && oauthId) {
-      runPromise(signInGitlab(probedHost, oauthId));
-    }
-  }, [oauthId, probedHost, signInGitlab]);
-
-  const onAppIdChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    setAppId(event.target.value);
-  }, []);
-
-  const onSelfHostedTokenChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      setToken(event.target.value);
-    },
-    []
-  );
-
-  const onSelfHostedTokenKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === "Enter" && probedHost) {
-        event.preventDefault();
-        runPromise(connectToken("gitlab", probedHost));
-      } else if (event.key === "Escape") {
-        event.preventDefault();
-        reset("identity");
-      }
-    },
-    [connectToken, probedHost, reset]
-  );
-
-  const onConnectGitlabToken = useCallback(() => {
-    if (probedHost) {
-      runPromise(connectToken("gitlab", probedHost));
-    }
-  }, [connectToken, probedHost]);
-
-  const onSelfHostedCreateToken = useCallback(() => {
-    if (probedHost) {
-      runPromise(openUrl(glTokenUrl(probedHost)));
-    }
-  }, [probedHost]);
-
-  const onProviderChange = useCallback((provider: TokenProvider) => {
-    setTokenProvider(provider);
-  }, []);
-
-  const onTokenHostChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      setTokenHost(event.target.value);
-    },
-    []
-  );
-
-  const onTokenInputChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      setToken(event.target.value);
-    },
-    []
-  );
-
-  const onTokenKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        runPromise(connectToken(tokenProvider, tokenConnectHost));
-      } else if (event.key === "Escape") {
-        event.preventDefault();
-        reset("identity");
-      }
-    },
-    [connectToken, reset, tokenConnectHost, tokenProvider]
-  );
-
-  const onTokenConnect = useCallback(() => {
-    runPromise(connectToken(tokenProvider, tokenConnectHost));
-  }, [connectToken, tokenConnectHost, tokenProvider]);
-
-  const onTokenCreateToken = useCallback(() => {
-    const url =
-      tokenProvider === "github"
-        ? GH_TOKEN_URL
-        : glTokenUrl(
-            tokenHost.trim()
-              ? `https://${shortHost(tokenHost.trim())}`
-              : "https://gitlab.com"
-          );
-    runPromise(openUrl(url));
-  }, [tokenHost, tokenProvider]);
-
-  const onBackToIdentity = useCallback(() => {
-    reset("identity");
-  }, [reset]);
+function TokenGateScreen() {
+  const gate = useTokenGate();
 
   return (
     <div className="flex h-full items-center justify-center bg-bg px-6">
@@ -765,10 +427,10 @@ export function TokenGate() {
         <div className="flex items-center gap-2.5">
           <span aria-hidden className="qg-logo" />
           <h1 className="font-semibold text-2xl text-fg">Nod</h1>
-          {hasAccounts && view === "identity" ? (
+          {gate.view === "identity" && gate.accounts.length > 0 ? (
             <button
               className="q-btn q-btn-ghost q-focus ml-auto px-2 py-1 text-xs"
-              onClick={goInbox}
+              onClick={gate.onGoInbox}
               type="button"
             >
               <ArrowLeft aria-hidden size={13} /> Back
@@ -776,71 +438,77 @@ export function TokenGate() {
           ) : null}
         </div>
         <p className="mt-1 mb-6 text-muted text-sm">
-          {hasAccounts ? "Add an account" : "Keyboard-first code review"}
+          {gate.accounts.length > 0
+            ? "Add an account"
+            : "Keyboard-first code review"}
         </p>
 
-        {view === "identity" ? (
+        {gate.view === "identity" ? (
           <IdentityPanel
-            disabled={disabled}
-            ghOauthReady={ghOauthReady}
-            glOauthReady={glOauthReady}
-            instances={instances}
-            onOpenInstance={openInstance}
-            onSelfHosted={onSelfHosted}
-            onSignInGithub={onSignInGithub}
-            onSignInGitlab={onSignInGitlabDefault}
-            onUseToken={onUseToken}
+            disabled={gate.disabled}
+            ghOauthReady={gate.ghOauthReady}
+            glOauthReady={gate.glOauthReady}
+            instances={gate.instances}
+            onOpenInstance={gate.onOpenInstance}
+            onSelfHosted={gate.onSelfHosted}
+            onSignInGithub={gate.onSignInGithub}
+            onSignInGitlab={gate.onSignInGitlab}
+            onUseToken={gate.onUseToken}
           />
         ) : null}
 
-        {view === "selfhosted" ? (
+        {gate.view === "selfhosted" ? (
           <SelfHostedPanel
-            appId={appId}
-            busy={busy}
-            disabled={disabled}
-            hostInput={hostInput}
-            oauthId={oauthId}
-            onAppIdChange={onAppIdChange}
-            onConnectGitlabToken={onConnectGitlabToken}
-            onCreateToken={onSelfHostedCreateToken}
-            onHostInputChange={onHostInputChange}
-            onHostKeyDown={onHostKeyDown}
-            onProbe={onProbe}
-            onSignInGitlab={onSelfHostedSignInGitlab}
-            onTokenChange={onSelfHostedTokenChange}
-            onTokenKeyDown={onSelfHostedTokenKeyDown}
-            probedHost={probedHost}
-            token={token}
+            appId={gate.appId}
+            busy={gate.busy}
+            disabled={gate.disabled}
+            hostInput={gate.hostInput}
+            oauthId={gate.oauthId}
+            onAppIdChange={gate.onAppIdChange}
+            onConnectGitlabToken={gate.onConnectGitlabToken}
+            onCreateToken={gate.onCreateSelfHostedToken}
+            onHostInputChange={gate.onHostInputChange}
+            onHostKeyDown={gate.onHostKeyDown}
+            onProbe={gate.onProbe}
+            onSignInGitlab={gate.onSelfHostedSignInGitlab}
+            onTokenChange={gate.onSelfHostedTokenChange}
+            onTokenKeyDown={gate.onSelfHostedTokenKeyDown}
+            probedHost={gate.probedHost}
+            token={gate.token}
           />
         ) : null}
 
-        {view === "token" ? (
+        {gate.view === "token" ? (
           <TokenPanel
-            busy={busy}
-            disabled={disabled}
-            onConnect={onTokenConnect}
-            onCreateToken={onTokenCreateToken}
-            onProviderChange={onProviderChange}
-            onTokenChange={onTokenInputChange}
-            onTokenHostChange={onTokenHostChange}
-            onTokenKeyDown={onTokenKeyDown}
-            token={token}
-            tokenHost={tokenHost}
-            tokenProvider={tokenProvider}
+            busy={gate.busy}
+            disabled={gate.disabled}
+            onConnect={gate.onConnectToken}
+            onCreateToken={gate.onCreateToken}
+            onProviderChange={gate.onProviderChange}
+            onTokenChange={gate.onTokenChange}
+            onTokenHostChange={gate.onTokenHostChange}
+            onTokenKeyDown={gate.onTokenKeyDown}
+            token={gate.token}
+            tokenHost={gate.tokenHost}
+            tokenProvider={gate.tokenProvider}
           />
         ) : null}
 
-        {busy === "oauth" ? (
-          <p className="mt-3 text-center text-muted text-xs">{busyLabel}</p>
+        {gate.busy === "oauth" ? (
+          <p className="mt-3 text-center text-muted text-xs">
+            {gate.busyLabel}
+          </p>
         ) : null}
-        {error === null ? null : (
-          <p className="mt-3 break-words text-danger text-sm">{error}</p>
+        {/* Biome's type-aware pass treats `error` as always set; runtime it is `string | null`. */}
+        {/* biome-ignore lint/suspicious/noUnnecessaryConditions: error is cleared to null on reset */}
+        {gate.error === null ? null : (
+          <p className="mt-3 break-words text-danger text-sm">{gate.error}</p>
         )}
 
-        {view === "identity" ? null : (
+        {gate.view === "identity" ? null : (
           <button
             className="qg-link q-focus mt-5"
-            onClick={onBackToIdentity}
+            onClick={gate.onBackToIdentity}
             type="button"
           >
             <ArrowLeft aria-hidden size={12} /> All sign-in options
@@ -852,4 +520,8 @@ export function TokenGate() {
       </div>
     </div>
   );
+}
+
+export function TokenGate() {
+  return <TokenGateScreen />;
 }
