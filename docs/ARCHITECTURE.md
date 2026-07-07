@@ -10,13 +10,18 @@ Nod (PR Flow) codebase. For product overview and the runtime diagram, see the
 
 ```
 Webview (React)  →  invoke() / typed wrappers (src/lib/api.ts)
-                 →  Tauri commands (src-tauri/src/commands.rs)
+                 →  Tauri commands (auth, accounts, commands, update)
+                 →  accounts::active_platform
                  →  Platform seam (platform.rs)
                  →  GitHub / GitLab implementations
+                 →  storage (JSON cache on disk)
 ```
 
 The webview never holds tokens or calls host APIs directly. All network I/O
 runs in Rust; the frontend consumes serde-shaped JSON via TanStack Query.
+
+**Rust backend detail:** module map, command list, cache files, and “where to
+look” guide → **[RUST.md](./RUST.md)**.
 
 Key directories:
 
@@ -26,7 +31,7 @@ Key directories:
 | `apps/desktop/src/lib/` | Pure logic (diff parsing, find, highlights) |
 | `apps/desktop/src/store/` | Zustand UI state (viewed files, pending comments, route) |
 | `apps/desktop/src/keyboard/` | Global hotkey layer |
-| `apps/desktop/src-tauri/src/` | Backend: auth, cache, platform APIs |
+| `apps/desktop/src-tauri/src/` | Backend — see [RUST.md](./RUST.md) |
 
 ---
 

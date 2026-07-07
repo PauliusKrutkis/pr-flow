@@ -71,7 +71,8 @@ comments: use the composer in the info panel (`i`).
 
 ## Architecture
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for layering, comment conventions,
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for layering and comment conventions,
+[docs/RUST.md](docs/RUST.md) for the Tauri backend module map,
 and state/caching notes. Overview:
 
 ```
