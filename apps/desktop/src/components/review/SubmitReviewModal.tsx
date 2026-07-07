@@ -11,7 +11,6 @@ const EVENTS: { value: ReviewEvent; label: string; hint: string }[] = [
 
 interface Props {
   open: boolean;
-  /** GitHub/GitLab reject approving or requesting changes on your own PR. */
   ownPr?: boolean;
   pendingCount: number;
   busy: boolean;
@@ -46,8 +45,6 @@ export function SubmitReviewModal({
   );
 
   if (!open) return null;
-
-  /** GitHub rejects an empty COMMENT review (needs a body or pending comments). */
 
   const needsBody = event === "COMMENT" && pendingCount === 0;
   const canSubmit = !busy && (!needsBody || body.trim().length > 0);

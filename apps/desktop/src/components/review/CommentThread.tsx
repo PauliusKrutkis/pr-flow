@@ -14,15 +14,11 @@ export interface ReplyRequest {
 }
 
 interface CommentThreadProps {
-  /** One thread, root first then replies. */
   comments: ReviewComment[];
   onReply: (a: { inReplyTo: number; body: string }) => Promise<void>;
   replyPending: boolean;
-  /** Flip the thread's resolved state (absent when the host can't resolve). */
   onResolve?: (a: { threadId: string; resolved: boolean }) => void;
-  /** Pointer entered/left this thread — feeds the `r`-to-reply target. */
   onHoverChange?: (hovering: boolean) => void;
-  /** When aimed at this thread's root, open the reply composer focused. */
   replyRequest?: ReplyRequest | null;
 }
 
@@ -50,7 +46,6 @@ export function CommentThread({
   }, [replyRequest, rootId]);
 
   if (comments.length === 0) return null;
-  /** Thread identity/state ride on every comment; read them off the root. */
 
   const threadId = root.threadId;
   const resolved = root.resolved;

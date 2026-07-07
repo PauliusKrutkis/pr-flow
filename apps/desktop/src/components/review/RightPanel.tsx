@@ -17,14 +17,11 @@ interface RightPanelProps {
   pr: PullRequest;
   fileCount: number;
   conversation: IssueComment[];
-  /** Submitted review verdicts/summaries (approvals, change requests). */
   reviews: ReviewSummary[];
-  /** All inline review comments — grouped into threads for "Code discussion". */
   inlineComments: ReviewComment[];
   open: boolean;
   onClose: () => void;
   onAddIssueComment: (body: string) => Promise<void>;
-  /** Jump the diff to an inline thread (the drawer closes). */
   onJumpToThread: (path: string, rootId: number) => void;
 }
 
@@ -77,13 +74,6 @@ export function RightPanel({
     }
   }, [open]);
 
-  /**
-   * PR-level comments and review verdicts interleave into one timeline.
-   * ISO-8601 timestamps compare lexicographically, and optimistic comments are
-   * stamped "now", so they land at the tail the instant they're typed.
-   * (Plain computations, not useMemo — the React Compiler caches them.)
-   */
-
   const timeline: TimelineEntry[] = [
     ...conversation.map((c) => ({
       kind: "comment" as const,
@@ -96,12 +86,6 @@ export function RightPanel({
       review: r,
     })),
   ].sort((a, b) => a.at.localeCompare(b.at));
-
-  /**
-   * Inline comments grouped into threads: roots carry no inReplyToId, replies
-   * point at their root. The drawer only indexes them — the full thread lives
-   * in the diff, which is where the row jumps.
-   */
 
   const replyCounts = new Map<number, number>();
   for (const c of inlineComments) {
@@ -283,7 +267,6 @@ function ConversationItem({
   avatarUrl: string;
   at: string;
   body: string;
-  /** Present for review entries — rendered as a state chip. */
   state?: string;
 }) {
   const chip = state ? (REVIEW_STATES[state] ?? REVIEW_STATES.COMMENTED) : null;

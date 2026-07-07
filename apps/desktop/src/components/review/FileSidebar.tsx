@@ -16,7 +16,6 @@ interface FileSidebarProps {
   prKeyValue: string;
   comments: ReviewComment[];
   pending: PendingComment[];
-  /** Files whose content changed since they were marked viewed. */
   changed: Set<string>;
 }
 
@@ -62,7 +61,6 @@ export function FileSidebar({
   pending,
   changed,
 }: FileSidebarProps) {
-  /** Subscribe to THIS PR's viewed map so the rail + rows re-render on toggle. */
 
   const viewedFiles = useAppStore((s) => s.viewed[prKeyValue]);
   const viewedSet = useMemo(

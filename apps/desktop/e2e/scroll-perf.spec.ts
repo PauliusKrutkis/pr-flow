@@ -20,12 +20,6 @@ test("scrolling a large PR stays smooth, with a bounded DOM", async ({ page }) =
   await expect(page.locator(".qf-diff").first()).toBeVisible();
   await page.waitForTimeout(300);
 
-  /**
-   * What counts as a stall scales with the engine baseline: headless WebKit
-   * software-renders at ~35ms/frame, so its ordinary frames brush past the
-   * 50ms that is already alarming on Chromium.
-   */
-
   const projectName = test.info().project.name;
   const stallMs = projectName.startsWith("webkit") ? 100 : 50;
   const result = await page.evaluate(async (stallMs) => {
@@ -85,11 +79,6 @@ test("resuming deep in a large PR holds position while the list restores", async
     }
     return (w.__stable ?? 0) >= 5;
   });
-  /**
-   * Pin the measurement to ONE specific row (the first VISIBLE one of file
-   * 9): "first rendered" differs across engines/reloads with the overscan
-   * window, which would compare different rows.
-   */
 
   const before = await page.evaluate(() => {
     const host = document.querySelector(".qf-scrollhost")!;

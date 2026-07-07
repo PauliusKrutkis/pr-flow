@@ -13,7 +13,6 @@ interface FileItem {
   kind: "file";
   fileIndex: number;
   filename: string;
-  /** Char indices of the fuzzy match, for highlighting. */
   matched: number[];
 }
 interface SnippetLine {
@@ -27,9 +26,7 @@ interface LineItem {
   filename: string;
   line: number | null;
   content: string;
-  /** Diff anchor ("SIDE:line") to land on, when the row has one. */
   anchor: string | null;
-  /** The matched line ±2 neighbours, for the expanded snippet. */
   context: SnippetLine[];
 }
 type Item = FileItem | LineItem;
@@ -96,7 +93,6 @@ export function PrSearch({
       const f = files[i];
       if (!f.patch) continue;
       for (const hunk of parsePatch(f.patch)) {
-        /** Rows minus the "@@" header, so snippet neighbours are real lines. */
 
         const rows = hunk.rows.filter((r) => r.type !== "hunk");
         for (let ri = 0; ri < rows.length; ri++) {

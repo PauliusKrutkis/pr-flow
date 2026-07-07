@@ -11,13 +11,7 @@ import { parsePatch, rowAnchor } from "./diff";
 import { findMatchRangesInLine } from "./findInDiff";
 
 export interface OccurrenceSpec {
-  /** The exact selected text. Matching is case-sensitive (editor convention). */
   query: string;
-  /**
-   * The selection looks like an identifier (\w+) → only whole-word matches
-   * count, so selecting `id` doesn't light up every `width`. Non-word
-   * selections (`q.trim`, `foo bar`) fall back to plain substring matching.
-   */
   wholeWord: boolean;
 }
 
@@ -75,9 +69,7 @@ export function occurrenceRangesInLine(
 }
 
 export interface OccurrenceMatch {
-  /** Diff row anchor ("LEFT:12" / "RIGHT:34") — the DiffViewer scroll target. */
   anchor: string;
-  /** Column range of the occurrence within the row's content. */
   start: number;
   end: number;
 }

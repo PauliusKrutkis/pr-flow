@@ -9,32 +9,14 @@ import type { BucketFixture, InboxFixture } from "./fixtures";
  */
 
 export interface AppOptions {
-  /** false boots into the sign-in gate. */
   hasToken?: boolean;
-  /** create_issue_comment never resolves — proves optimistic UI. */
   hangIssueComment?: boolean;
-  /**
-   * PR-detail payload per document load: index 0 serves the first load, 1 the
-   * first reload, … (the last entry repeats). Lets a test change a PR "server
-   * side" across a reload — e.g. the auto-unview-on-content-change flow.
-   */
   detailByLoad?: unknown[];
-  /**
-   * PR-detail payload per pr_detail CALL within one page load (the last entry
-   * repeats) — lets the "server" move mid-session without a reload, e.g. the
-   * inbox-heartbeat refresh flow. Takes precedence over detailByLoad.
-   */
   detailByCall?: unknown[];
-  /** Inbox payload per list_inbox call (the last entry repeats). */
   inboxByCall?: unknown[];
-  /** Override the four inbox buckets. */
   inbox?: InboxFixture;
-  /** Override the watched-repos ("Watching") bucket. */
   subscribed?: BucketFixture;
-  /** Repositories pre-listed in the watch dialog. */
   watchedRepos?: string[];
-  /** Results the watch dialog's provider search returns (after ~200ms, so
-   *  the in-flight state is observable). */
   repoHits?: { fullName: string; description: string }[];
 }
 
@@ -54,10 +36,6 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
   };
 
   await page.addInitScript((cfg) => {
-    /**
-     * Which document load is this? The init script runs once per navigation,
-     * so a localStorage counter (fresh per test context) tells reloads apart.
-     */
 
     const load = Number(localStorage.getItem("e2e:load") ?? "0");
     localStorage.setItem("e2e:load", String(load + 1));
@@ -65,7 +43,6 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
     const detail = byLoad
       ? byLoad[Math.min(load, byLoad.length - 1)]
       : cfg.detail;
-    /** Per-call sequences (clamped to their last entry). */
 
     let detailCalls = 0;
     let inboxCalls = 0;

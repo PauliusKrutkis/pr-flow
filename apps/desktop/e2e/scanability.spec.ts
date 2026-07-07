@@ -49,11 +49,6 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("a clean rename emphasizes exactly the changed word pieces", async ({ page }) => {
-  /**
-   * retry.ts pairs "const retryCount = 3;" with "const retryLimit = 3;" —
-   * the tokenizer splits the camelCase identifier, so only the differing
-   * pieces light up.
-   */
 
   const marks = page.locator('.qf-row[data-file-index="2"] mark.qf-intra-mark');
   await expect(marks).toHaveCount(2);
@@ -74,12 +69,6 @@ test("a rewrite pair fails the noise guard and renders without emphasis", async 
 });
 
 test("clicking inside an intraline-emphasized token still selects the whole word", async ({ page }) => {
-  /**
-   * "const retryLimit = 3;" renders fragmented: text · <mark>Limit</mark> ·
-   * text. A click on "retry" must expand across the WHOLE line's text to
-   * "retryLimit" — expanding within the clicked fragment would yield the
-   * sub-word and match nothing.
-   */
 
   const target = page.locator('.qf-row-add[data-file-index="2"]', {
     hasText: "retryLimit",
@@ -103,10 +92,6 @@ test("clicking inside an intraline-emphasized token still selects the whole word
   await page.mouse.move(pos!.x, pos!.y);
   await page.waitForTimeout(100);
   await page.mouse.click(pos!.x, pos!.y);
-  /**
-   * The single whole-word occurrence marks up (fragmented across the
-   * intraline mark boundary, so join the pieces).
-   */
 
   const marks = page.locator('.qf-row[data-file-index="2"] mark.qf-occ-mark');
   await expect(marks.first()).toBeVisible();
@@ -114,11 +99,6 @@ test("clicking inside an intraline-emphasized token still selects the whole word
 });
 
 test("indent guides paint on deep lines' code element, and nothing else", async ({ page }) => {
-  /**
-   * retry.ts is 2-space indented; "        attempt," sits four levels deep.
-   * Guides are a ::before layer on the code element (never in the text flow),
-   * sized by --qf-lvl.
-   */
 
   const deep = page
     .locator('.qf-row[data-file-index="2"]:not(.qf-row-hunk)', {
@@ -137,12 +117,6 @@ test("indent guides paint on deep lines' code element, and nothing else", async 
   expect(style.lvl).toBe("4");
   expect(style.image).toContain("repeating-linear-gradient");
   expect(parseFloat(style.width)).toBeGreaterThan(0);
-  /**
-   * Guides must land ON the text columns: the gradient is sized from the
-   * MEASURED space advance, not `ch` (the "0" glyph's advance, which drifts
-   * in some fonts). The ::before spans lvl × unit − 1px, so it must equal
-   * the width of (lvl × unit) leading spaces within a fraction of a pixel.
-   */
 
   const drift = await deep.evaluate((el) => {
     const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
@@ -159,11 +133,6 @@ test("indent guides paint on deep lines' code element, and nothing else", async 
   await expect(
     page.locator('.qf-row[data-file-index="2"] mark.qf-indent'),
   ).toHaveCount(0);
-
-  /**
-   * One level deep paints the single col-0 guide (levels >= 1 now paint, so
-   * block columns run straight through shallow rows like closing braces)…
-   */
 
   const shallow = page
     .locator('.qf-row[data-file-index="2"]:not(.qf-row-hunk)', {
@@ -222,8 +191,6 @@ test("overview ruler: find ticks map matches across the whole PR", async ({ page
   await expect(ticks).toHaveCount(9);
   await expect(page.locator(".qf-ruler-current")).toHaveCount(1);
 
-  /** Document order top to bottom: later files' ticks sit strictly lower. */
-
   const ys = await ticks.evaluateAll((els) =>
     els.map((el) => el.getBoundingClientRect().y),
   );
@@ -239,8 +206,6 @@ test("overview ruler: occurrence ticks on click, cleared by a blank click", asyn
   await expect(page.locator("mark.qf-occ-mark")).toHaveCount(2);
   await expect(page.locator(".qf-ruler-tick.qf-ruler-occ")).toHaveCount(2);
   await expect(page.locator(".qf-ruler-current")).toHaveCount(0);
-
-  /** A click on blank code clears the marks — and their ticks. */
 
   const row = await page
     .locator('.qf-row[data-file-index="1"]:not(.qf-row-hunk) .qf-code')
@@ -267,11 +232,6 @@ test("occurrence navigation: n/p and mark clicks jump between occurrences", asyn
 
   await page.keyboard.press("p");
   await expect(flash).toContainText("return gamma");
-
-  /**
-   * Clicking a mark jumps to the occurrence after it: the LAST mark (on the
-   * "return gamma" row) wraps forward to the first ("const gamma") row.
-   */
 
   const markBox = (await marks.nth(1).boundingBox())!;
   await page.mouse.move(markBox.x + markBox.width / 2, markBox.y + markBox.height / 2);

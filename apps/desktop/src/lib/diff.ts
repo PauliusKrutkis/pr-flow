@@ -8,11 +8,8 @@ export type DiffRowType = "hunk" | "context" | "add" | "del";
 
 export interface DiffRow {
   type: DiffRowType;
-  /** Line text WITHOUT the leading +/-/space marker (full header text for "hunk"). */
   content: string;
-  /** 1-based line number on the old side (LEFT), or null for added rows/headers. */
   oldLine: number | null;
-  /** 1-based line number on the new side (RIGHT), or null for removed rows/headers. */
   newLine: number | null;
 }
 

@@ -35,10 +35,8 @@ export function FindBar({
   open: boolean;
   query: string;
   caseSensitive: boolean;
-  /** 1-based position of the current match (0 when there are none). */
   current: number;
   total: number;
-  /** Bumped when mod+f fires while already open — refocus & select the query. */
   focusSeq: number;
   onQueryChange: (q: string) => void;
   onToggleCase: () => void;

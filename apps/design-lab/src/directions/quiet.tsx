@@ -222,14 +222,10 @@ export default function Quiet({ review }: DirectionProps) {
   const file = files[selected];
   const hunks = useMemo(() => parsePatch(file.patch), [file.patch]);
 
-  /** Flat list of selectable rows (skip hunk-header rows) for j/k navigation. */
-
   const selectableRows = useMemo(
     () => hunks.flatMap((h) => h.rows.filter((r) => r.type !== "hunk")),
     [hunks],
   );
-
-  /** Threads for the current file: roots (inReplyToId === null) + sorted replies. */
 
   const threadsByLine = useMemo(() => {
     const roots = file.comments.filter((c) => c.inReplyToId === null);
@@ -348,11 +344,6 @@ export default function Quiet({ review }: DirectionProps) {
     selectFile,
     markViewedAndNext,
   ]);
-
-  /**
-   * The keyboard cursor maps onto the absolute row position so the
-   * highlight tracks the same row the diff renders.
-   */
 
   const cursorRowKey = useMemo(() => {
     let count = 0;

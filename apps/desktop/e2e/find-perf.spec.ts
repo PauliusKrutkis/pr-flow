@@ -76,10 +76,6 @@ test.beforeEach(async ({ page }) => {
 
 test("typing in the find bar repaints the viewport, not the PR", async ({ page }) => {
   test.setTimeout(60_000);
-  /**
-   * The virtualization dividend, asserted: a 6,400-row PR renders a bounded
-   * slice of rows.
-   */
 
   const rendered = await page.locator(".qf-row:not(.qf-row-hunk)").count();
   expect(rendered).toBeGreaterThan(10);
@@ -107,11 +103,6 @@ test("typing in the find bar repaints the viewport, not the PR", async ({ page }
     expect(repainted).toBeLessThanOrEqual(RENDERED_CAP);
   }
   await expect(page.locator(".qf-findbar-count")).toHaveText("1/1");
-
-  /**
-   * Wall-clock budget on the warm steady state, as the MEDIAN (dev pages
-   * throw one-off GC pauses; a real regression shifts every keystroke).
-   */
 
   const median = [...times].sort((a, b) => a - b)[Math.floor(times.length / 2)];
   console.log(

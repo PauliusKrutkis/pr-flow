@@ -37,14 +37,24 @@ one of three places:
 
 1. **File header** — a single `/** … */` block (TypeScript) or `//! …` module
    doc (Rust) at the top of the file, before imports. Use this for module-level
-   rationale: non-obvious invariants, performance constraints, or cross-cutting
-   behavior that applies to the whole file.
+   rationale: non-obvious invariants, performance constraints, field semantics
+   on shared types, or cross-cutting behavior that applies to the whole file.
 
-2. **Item docs** — `/** … */` on exported functions, types, and non-obvious
-   constants (TS), or `/// …` on public items (Rust). Only when the name alone
-   does not convey the behavior.
+2. **Function docs** — `/** … */` immediately above a function (or method) when
+   the name and signature are not enough. Not on variables, hooks, or React
+   state inside a component body.
 
 3. **Nowhere** — if the code is self-explanatory, delete the comment.
+
+### What not to document inline
+
+- **Type or interface members** — no `/** … */` on individual properties inside
+  `interface`, `type`, props, or store shapes. Fold non-obvious field meaning
+  into the file header (see `inbox-mock.ts`, `types.ts`).
+- **Exported types and constants** — no separate doc block on `export interface
+  Foo` or `export const BAR`; describe them in the file header if needed.
+- **Component state and refs** — no doc blocks between `useState` / `useRef`
+  declarations; put interaction-model notes in the file header once.
 
 ### Allowed exceptions
 
@@ -59,18 +69,16 @@ line:
 ### Rust
 
 - Module docs: `//!` at the top of the file.
-- Item docs: `///` on structs, fields, and functions where semantics matter
-  (especially serde fields the frontend depends on).
+- Item docs: `///` on functions and on struct fields only when the serde/API
+  contract is non-obvious (especially fields the frontend depends on).
 - No `// ---` section dividers — use blank lines or extract a function.
 
 ### TypeScript / React
 
-- Prefer one file-header block over scattered state comments in large
-  components. Complex interaction models (cursor vs selection vs find bar)
-  belong in the module doc or on the owning hook/function.
-- Do not restate what a variable name already says (`// Per-file comment
-  buckets` above `commentsByFile` adds nothing).
+- One file-header block beats scattered docs anywhere else in the file.
 - Block comments (`/** … */`) only — no `//` prose.
+- JSDoc on `@param` / `@returns` is fine on functions when the behavior is not
+  obvious from the signature alone.
 
 ### Tests (e2e)
 

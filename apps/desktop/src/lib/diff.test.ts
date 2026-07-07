@@ -92,7 +92,6 @@ describe("anchorFractions", () => {
     expect(f.get("RIGHT:1")).toBeCloseTo(1.5 / 10);
     expect(f.get("LEFT:2")).toBeCloseTo(2.5 / 10);
     expect(f.get("RIGHT:12")).toBeCloseTo(9.5 / 10);
-    /** Fractions are monotonically render-ordered and inside (0, 1). */
 
     const values = [...f.values()];
     expect(values).toEqual([...values].sort((a, b) => a - b));

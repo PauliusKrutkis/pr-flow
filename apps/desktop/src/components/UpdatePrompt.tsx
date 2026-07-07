@@ -33,7 +33,6 @@ export function UpdatePrompt() {
     }
     check();
     const timer = window.setInterval(() => check(), RECHECK_MS);
-    /** Refocusing after a while is the natural "came back to the app" moment. */
 
     const onFocus = () => check(30 * 60 * 1000);
     window.addEventListener("focus", onFocus);

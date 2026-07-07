@@ -83,8 +83,6 @@ export default function App() {
     api.listAccounts().then(setAccounts).catch(() => {});
   }, [setRoute, setAccounts]);
 
-  /** Accounts in the palette: ⌘1…⌘9 switch, plus an "Add account" entry. */
-
   const accountBindings: Binding[] = [
     ...accounts.slice(0, 9).map(
       (a, i): Binding => ({
@@ -174,11 +172,6 @@ export default function App() {
   );
 
   const baseScope = route.name === "review" ? "review" : "inbox";
-
-  /**
-   * macOS runs with titleBarStyle: Overlay — the traffic lights float over our
-   * canvas, and this slim strip gives them room and acts as the drag handle.
-   */
 
   const isMac = navigator.userAgent.includes("Macintosh");
 

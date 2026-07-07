@@ -12,17 +12,9 @@ interface AddCommentBoxProps {
   pending: boolean;
   placeholder?: string;
   autoFocus?: boolean;
-  /** Primary button label (⌘↵). Defaults to "Comment". */
   submitLabel?: string;
-  /** Optional secondary action (e.g. post immediately vs. add to a review). */
   onSecondary?: (body: string) => Promise<void> | void;
   secondaryLabel?: string;
-  /**
-   * The commented line's current (head-side) text. When set, the editor's
-   * hint bar gains a "Suggestion" button that inserts a suggestion block
-   * prefilled with it — only line composers pass this; replies don't know
-   * their line's current content, so they don't offer it.
-   */
   suggestionText?: string;
 }
 

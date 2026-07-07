@@ -10,7 +10,6 @@ interface PRListItemProps {
   selected: boolean;
   unread: boolean;
   onOpen: () => void;
-  /** Called on hover — used to prefetch the PR so opening is instant. */
   onHover?: () => void;
 }
 

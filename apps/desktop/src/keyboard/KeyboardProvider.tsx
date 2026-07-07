@@ -76,8 +76,6 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
   const idRef = useRef(0);
   const [version, setVersion] = useState(0);
 
-  /** Sequence buffer for vim-style two-key bindings ("]c", "gg"). */
-
   const seqRef = useRef("");
   const seqTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -126,13 +124,6 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
-
-  /**
-   * Collect bindings eligible to fire right now: those in the active scope, or
-   * marked global. Reads the scope from the STACK REF, not state — the keydown
-   * listener is bound once, and closured state can lag a screen switch (the
-   * e2e suite caught Escape being dropped right after inbox → review).
-   */
 
   const eligibleBindings = useCallback((): RegisteredBinding[] => {
     const stack = scopeStackRef.current;
@@ -191,7 +182,6 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
         if (e.shiftKey) parts.push("shift");
         parts.push(key);
         const combo = parts.join("+");
-        /** Also accept the combo without an explicit "shift+" (e.g. "mod+k"). */
 
         const altCombo = combo.replace("shift+", "");
         let match = findByKey(bindings, combo) ?? findByKey(bindings, altCombo);

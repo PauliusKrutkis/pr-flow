@@ -8,10 +8,6 @@
 import { Fragment, type ReactNode } from "react";
 
 function inline(text: string, keyBase: string): ReactNode[] {
-  /**
-   * Order matters: code first (so we don't format inside it), then links,
-   * bold, italic.
-   */
 
   const out: ReactNode[] = [];
   const re =

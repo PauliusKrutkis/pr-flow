@@ -59,8 +59,6 @@ export default function CommandPalette() {
     ).slice(0, 6);
   }, [q]);
 
-  /** One flat index across both groups for arrow-key selection. */
-
   const flat = useMemo(
     () => [
       ...cmds.map((c) => ({ group: "cmd" as const, id: c.id })),

@@ -57,12 +57,6 @@ test("opening a PR from cache stays fast", async ({ page }) => {
   await setupApp(page, { detailByLoad: [BIG_DETAIL] });
   await expect(page.getByRole("option").first()).toBeVisible();
 
-  /**
-   * First open pays one-time costs (highlighting the mounted rows, JIT); the
-   * budget guards the WARM path — reopening a PR whose detail is already in
-   * the query cache, which is the "even from cache it feels slow" complaint.
-   */
-
   const cold = await openMs(page);
   const warm: number[] = [];
   for (let i = 0; i < 3; i++) warm.push(await openMs(page));

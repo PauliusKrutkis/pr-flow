@@ -81,8 +81,6 @@ export function TokenGate() {
       .catch(() => setGlOauthReady(false));
   }, []);
 
-  /** Remembered instances: localStorage entries + hosts of existing accounts. */
-
   const instances: GitlabInstance[] = (() => {
     const list = loadInstances();
     for (const a of accounts) {

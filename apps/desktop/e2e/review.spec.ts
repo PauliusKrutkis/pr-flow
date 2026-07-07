@@ -124,7 +124,6 @@ test("resume: reopening paints the spot you left — no visible jump after", asy
   await page.evaluate(() => {
     document.querySelector(".qf-scrollhost")!.scrollTop += 120;
   });
-  /** Reference: where the first retry.ts row sits after the nudge. */
 
   const before = await page.evaluate(() => {
     const host = document.querySelector(".qf-scrollhost")!;
@@ -138,11 +137,6 @@ test("resume: reopening paints the spot you left — no visible jump after", asy
   await expect(
     page.locator('[data-anchor][data-file-index="2"]').first(),
   ).toBeVisible();
-
-  /**
-   * The resumed viewport shows the same spot (virtuoso state restore) — and
-   * holds it, with no post-paint jumping.
-   */
 
   const measure = () =>
     page.evaluate(() => {
@@ -249,7 +243,6 @@ test("info timeline: review verdicts interleave with comments, oldest first", as
   const drawer = page.locator(".qf-drawer");
   await expect(drawer.getByText("LGTM, ship it.")).toBeVisible();
   await expect(drawer.locator(".q-pill-approved")).toHaveText("Approved");
-  /** Chronology: carol commented (08:00) before dave's approval (09:00). */
 
   const items = drawer.locator(".qf-convo-item");
   await expect(items.nth(0)).toContainText("carol");

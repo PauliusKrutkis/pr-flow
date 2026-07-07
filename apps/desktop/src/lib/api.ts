@@ -29,7 +29,6 @@ export const api = {
       host: args?.host ?? null,
       clientId: args?.clientId ?? null,
     }),
-  /** Confirms a GitLab API answers at the host; returns the normalized host. */
   probeGitlab: (host: string) => invoke<string>("probe_gitlab", { host }),
   setToken: (token: string) => invoke<GitHubUser>("set_token", { token }),
   clearToken: () => invoke<void>("clear_token"),
@@ -68,7 +67,6 @@ export const api = {
     path: string;
     line: number;
     side: string;
-    /** Range start for a multi-line comment (line = the range's end). */
     startLine?: number;
   }) => invoke<ReviewComment>("create_review_comment", args),
   replyToReviewComment: (args: {
@@ -110,8 +108,6 @@ export const api = {
   getFileBlob: (owner: string, repo: string, path: string, ref: string) =>
     invoke<FileBlob>("get_file_blob", { owner, repo, path, ref }),
 
-  /** Raw persisted JSON — may still be the legacy `prKey -> string[]` shape
-   *  on older installs; callers run it through normalizeViewedMap. */
   getViewedMap: () => invoke<unknown>("get_viewed_map"),
   setViewedMap: (map: ViewedMap) => invoke<void>("set_viewed_map", { map }),
 

@@ -90,13 +90,9 @@ test("single-clicking a token marks its occurrences within that file", async ({ 
     page.locator('.qf-row[data-file-index="1"] mark.qf-occ-mark'),
   ).toHaveCount(0);
 
-  /** Clicking another token retargets the marks to it. */
-
   const alpha = await tokenCenter(page, 0, "alpha");
   await page.mouse.click(alpha.x, alpha.y);
   await expect(occMarks(page).first()).toHaveText("alpha");
-
-  /** Clicking blank code (not a word) clears them. */
 
   const row = await page
     .locator('.qf-row[data-file-index="0"]:not(.qf-row-hunk) .qf-code')
@@ -114,13 +110,6 @@ test("double-clicking a token marks its occurrences", async ({ page }) => {
 test("clicking blank space right of a line ending in a word clears, not highlights", async ({ page }) => {
   await dblclickToken(page, 1, "gamma");
   await expect(occMarks(page)).toHaveCount(2);
-
-  /**
-   * "export default search" ends in a WORD character. Caret-from-point snaps
-   * a click in the blank area to the nearest text position — the end of
-   * "search" — and without the glyph-box guard that would highlight "search"
-   * instead of reading as blank.
-   */
 
   const lineEnd = await page.evaluate(() => {
     const codes = document.querySelectorAll(
@@ -153,7 +142,6 @@ test("marks are paint-only — the line's geometry does not move", async ({ page
 
   const after = await codeLine.boundingBox();
   expect(after).toEqual(before);
-  /** The mark itself must not introduce box spacing. */
 
   const style = await occMarks(page).first().evaluate((el) => {
     const s = getComputedStyle(el);

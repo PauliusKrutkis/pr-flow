@@ -15,21 +15,13 @@ import { parsePatch, rowAnchor, type DiffRow } from "./diff";
 
 export interface FindMatch {
   fileIndex: number;
-  /** Diff row anchor ("LEFT:12" / "RIGHT:34") — the DiffViewer scroll target. */
   anchor: string;
-  /** Column range of the match within the row's content (marker stripped). */
   start: number;
   end: number;
 }
 
 export interface FindOptions {
-  /** Case-insensitive by default, like a browser's find. */
   caseSensitive?: boolean;
-  /**
-   * Cap on returned matches (default MAX_MATCHES). The render side passes
-   * Infinity: the navigable list may cap for sanity, but the marks on screen
-   * must not go dark past the cap.
-   */
   maxMatches?: number;
 }
 
@@ -177,19 +169,11 @@ export function findInDiff(
     const hay = caseSensitive ? patch : lowered(patch);
     const starts = lineStarts(hay);
     const anchors = lineAnchors(patch);
-    /**
-     * Hits arrive in increasing offset, so the current line index only ever
-     * moves forward — no binary search.
-     */
 
     let li = 0;
     for (let o = hay.indexOf(needle); o !== -1; ) {
       while (li + 1 < starts.length && starts[li + 1] <= o) li++;
       const anchor = anchors[li];
-      /**
-       * Content starts one past the +/-/space marker; the needle has no
-       * newline, so a hit that matched at all fits inside its line.
-       */
 
       const col = o - starts[li] - 1;
       if (anchor == null || col < 0) {

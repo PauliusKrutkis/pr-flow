@@ -21,9 +21,7 @@ export type ReviewerStatus =
 export interface MockUser {
   login: string;
   name: string;
-  /** 2-letter avatar fallback (no network in the lab). */
   initials: string;
-  /** Avatar background colour. */
   color: string;
 }
 
@@ -32,10 +30,8 @@ export interface MockComment {
   author: MockUser;
   body: string;
   createdAt: string;
-  /** 1-based line on the diff side this thread anchors to. */
   line: number;
   side: "LEFT" | "RIGHT";
-  /** null for a thread root, else the id of the comment it replies to. */
   inReplyToId: number | null;
 }
 
@@ -55,7 +51,6 @@ export interface MockFile {
   additions: number;
   deletions: number;
   viewed: boolean;
-  /** Unified diff. Empty for binary / no-textual-diff files. */
   patch: string;
   comments: MockComment[];
   pending: PendingComment[];
@@ -86,9 +81,7 @@ export interface MockPR {
 export interface ReviewModel {
   pr: MockPR;
   files: MockFile[];
-  /** Seed the selected file to the one carrying the live thread. */
   initialFileIndex: number;
-  /** Total pending (batched) comments across all files. */
   pendingCount: number;
 }
 
@@ -271,7 +264,6 @@ export function tokenize(line: string, language: string): Token[] {
       i = j;
       continue;
     }
-    /** punctuation / operators (stop before a line comment) */
 
     let j = i + 1;
     while (

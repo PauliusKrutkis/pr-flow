@@ -103,10 +103,6 @@ test("reading pane shows description, diff stats and the latest comment", async 
 test("reading pane hides diff stats the provider didn't send", async ({
   page,
 }) => {
-  /**
-   * GitLab list payloads have no +/- totals — zeros mean "unknown", and the
-   * pane must not present them as facts.
-   */
 
   const sparse = {
     ...makePr(9, "MR from a list payload", "erin", "2026-07-02T08:00:00Z"),
@@ -190,7 +186,6 @@ test("watch dialog input clears its leading icon", async ({ page }) => {
 test("scrollbar thumb is invisible at rest and themed while scrolling", async ({
   page,
 }) => {
-  /** Enough rows to overflow the list viewport. */
 
   const tall: InboxFixture = {
     reviewRequested: {

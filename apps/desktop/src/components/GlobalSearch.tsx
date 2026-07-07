@@ -21,10 +21,6 @@ export function GlobalSearch() {
   const setSelectedKey = useAppStore((s) => s.setInboxSelectedKey);
 
   const allPrs = useMemo(() => {
-    /**
-     * Dedup on owner/name#number — the same PR can sit in an inbox bucket AND
-     * the watched bucket, and numeric ids aren't comparable across sources.
-     */
 
     const seen = new Set<string>();
     const out: PullRequest[] = [];

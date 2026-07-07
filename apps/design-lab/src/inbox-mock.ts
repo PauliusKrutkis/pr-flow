@@ -3,6 +3,11 @@
  * unread dots, and the zero-state can all be designed against realistic data.
  * Reuses the same people as the Review mock; times are relative to the same
  * fixed NOW (see mock.ts).
+ *
+ * InboxPR: `unread` drives the iris dot (not opened since last change);
+ * `myReview` is your verdict when relevant to the tab; `checks` is CI signal,
+ * surfaced only when failing. PRDetail is side-pane content for the selected PR.
+ * RECENT_PRS seeds the empty `/` search pane.
  */
 
 import { PEOPLE, type MockUser, type ReviewerStatus } from "./mock";
@@ -23,16 +28,12 @@ export interface InboxPR {
   changedFiles: number;
   comments: number;
   updatedAt: string;
-  /** Not yet opened since it last changed — renders the iris unread dot. */
   unread: boolean;
-  /** Your review verdict on this PR, when relevant to the tab. */
   myReview?: ReviewerStatus;
-  /** CI signal, kept deliberately quiet: only surfaced when failing. */
   checks?: "passing" | "failing" | "pending";
   tabs: InboxTab[];
 }
 
-/** Extra detail shown in the inbox side pane for the selected PR. */
 export interface PRDetail {
   branch: string;
   summary: string;
@@ -262,7 +263,6 @@ export function byNumber(n: number): InboxPR | undefined {
   return INBOX.find((pr) => pr.number === n);
 }
 
-/** Recently opened PRs — the empty state of the `/` search pane. */
 export const RECENT_PRS: InboxPR[] = [124, 119, 130, 122]
   .map(byNumber)
   .filter((pr): pr is InboxPR => Boolean(pr));

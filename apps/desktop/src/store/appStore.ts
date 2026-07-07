@@ -162,18 +162,11 @@ interface AppState {
   route: Route;
   paletteOpen: boolean;
   helpOpen: boolean;
-  /** Global "/" PR search (jump to any PR), available on every screen. */
   searchOpen: boolean;
   viewed: ViewedMap;
   lastSeen: Record<string, string>;
   inboxTab: InboxTabKey;
-  /** prKey of the highlighted PR, so the cursor follows the PR (not an index). */
   inboxSelectedKey: string | null;
-  /**
-   * Whether the inbox reading pane is actually on screen. Keys the toast-host
-   * offset (`data-pane` on the app root): alerts dodge the pane only when it
-   * exists — an empty inbox keeps them in the corner.
-   */
   inboxPaneVisible: boolean;
   setInboxPaneVisible: (visible: boolean) => void;
 
@@ -193,17 +186,7 @@ interface AppState {
 
   setViewed: (map: ViewedMap) => void;
   isViewed: (prKey: string, file: string) => boolean;
-  /**
-   * `fingerprint` is the file's current content fingerprint, stamped onto the
-   * mark so a later content change can be detected. Callers without one (none
-   * today) fall back to UNKNOWN, which reconciliation upgrades in place.
-   */
   toggleViewed: (prKey: string, file: string, fingerprint?: string) => void;
-  /**
-   * Checks every viewed mark of a PR against its current files: content
-   * mismatches are unviewed (returned), migrated legacy marks silently adopt
-   * the current fingerprint. Persists only when something actually changed.
-   */
   reconcileViewed: (
     prKey: string,
     files: readonly ChangedFile[],
@@ -215,7 +198,6 @@ interface AppState {
   isUnread: (prKey: string, updatedAt: string) => boolean;
 
   dismissed: Record<string, string>;
-  /** The most recent archive, so `z` can undo it. */
   lastDismissedKey: string | null;
   dismiss: (prKey: string, updatedAt: string) => void;
   undoDismiss: () => void;
@@ -224,7 +206,6 @@ interface AppState {
   accounts: AccountInfo[];
   activeAccountId: string | null;
   setAccounts: (info: AccountsInfo) => void;
-  /** Switch the backend's active account, then reload so every cache swaps. */
   switchAccount: (id: string) => void;
 
   pendingComments: Record<string, PendingComment[]>;
@@ -241,21 +222,11 @@ interface AppState {
   removePendingComment: (prKey: string, id: string) => void;
   clearPendingComments: (prKey: string) => void;
 
-  /**
-   * The single transient alert. Everything transient (archive undo, failed
-   * optimistic actions, …) goes through here so alerts always appear in the
-   * one shared host (bottom-right of the content column).
-   */
   toast: AppToast | null;
   setToast: (toast: AppToast | null) => void;
 
-  /**
-   * Issue-tracker linking (e.g. Jira): ticket IDs like SCR-2891 in titles
-   * become links to the configured base URL. Keyed per account.
-   */
   issueTrackers: Record<string, string>;
   setIssueTracker: (accountId: string, url: string | null) => void;
-  /** Convenience for failure messages. */
   setFlash: (message: string | null) => void;
 }
 
@@ -264,7 +235,6 @@ export interface AppToast {
   message: string;
   actionLabel?: string;
   action?: () => void;
-  /** Extra line under the action row. */
   note?: string;
 }
 

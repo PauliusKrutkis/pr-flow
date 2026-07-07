@@ -23,15 +23,10 @@ interface ComposerEditorProps {
   ref?: Ref<ComposerEditorHandle>;
   placeholder: string;
   autoFocus?: boolean;
-  /** The commented line's head-side text — enables the Suggestion block. */
   suggestionText?: string;
-  /** ⌘↵ — the parent decides what "submit" means (mode, pending, clearing). */
   onSubmitRequest: () => void;
-  /** Esc. */
   onCancel: () => void;
-  /** Tab, outside lists — flips the parent's batch/now mode when provided. */
   onModeFlip?: () => void;
-  /** Editor emptiness, for the parent's submit affordance. */
   onEmptyChange: (empty: boolean) => void;
 }
 
@@ -181,8 +176,6 @@ export function ComposerEditor({
     [editor],
   );
 
-  /** Lit states for the hint-bar toggles, updated per transaction. */
-
   const active = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -219,10 +212,6 @@ export function ComposerEditor({
   function applyLink() {
     setLinkOpen(false);
     const href = linkHref.trim();
-    /**
-     * focus() restores the selection the input borrowed; extendMarkRange
-     * covers editing an existing link from a caret inside it.
-     */
 
     const chain = editor.chain().focus().extendMarkRange("link");
     if (href) {

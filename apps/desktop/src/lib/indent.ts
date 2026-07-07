@@ -12,9 +12,7 @@
 import type { DiffHunk } from "./diff";
 
 export interface IndentUnit {
-  /** Gradient period — one guide per level — in ch (mono columns). */
   ch: number;
-  /** Leading-whitespace CHARS that make one level (1 for a tab). */
   chars: number;
 }
 

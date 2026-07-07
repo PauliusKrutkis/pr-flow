@@ -128,7 +128,6 @@ export function WatchReposDialog({
   }
 
   function cycleArmed(dir: 1 | -1) {
-    /** null → each watched row → Done → null (reversed for shift+tab). */
 
     const order: (number | "done" | null)[] = [
       null,

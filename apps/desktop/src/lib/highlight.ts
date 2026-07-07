@@ -182,7 +182,6 @@ export function warmHighlightCache(
 
   function pump(deadline?: IdleDeadline) {
     if (cancelled) return;
-    /** Without requestIdleCallback (WebKit), take small fixed bites instead. */
 
     const budgetEnd = performance.now() + 6;
     while (i < queue.length) {
@@ -256,7 +255,6 @@ function wrapMarkRanges(html: string, ranges: MarkRange[]): string {
     const len = node.data.length;
     const start = offset;
     offset += len;
-    /** Overlaps of the match ranges with this text node, in local coordinates. */
 
     const local: MarkRange[] = [];
     for (const r of ranges) {

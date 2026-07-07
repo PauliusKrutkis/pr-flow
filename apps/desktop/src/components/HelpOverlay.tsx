@@ -44,11 +44,6 @@ export function HelpOverlay({ baseScope }: { baseScope: string }) {
     { enabled: helpOpen },
   );
 
-  /**
-   * Split the live bindings into a "global" section and the current scope's
-   * section (the two the user can act on right now).
-   */
-
   const sections = useMemo<ScopeSection[]>(() => {
     if (!helpOpen) return [];
     void version;
@@ -79,11 +74,6 @@ export function HelpOverlay({ baseScope }: { baseScope: string }) {
   }, [helpOpen, baseScope, getBindings, version]);
 
   if (!helpOpen) return null;
-
-  /**
-   * Global (short) stacks on the left; the active scope (tall) stands on the
-   * right so neither column trails off.
-   */
 
   const left = sections.filter((s) => !s.active);
   const right = sections.filter((s) => s.active);

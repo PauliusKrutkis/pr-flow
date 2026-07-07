@@ -55,7 +55,6 @@ export type MarkSpec =
 export interface FindCurrent {
   fileIndex: number;
   anchor: string;
-  /** 0-based occurrence index within the row (multiple hits per line). */
   ordinal: number;
 }
 
@@ -124,18 +123,13 @@ export interface ReviewListCallbacks {
 interface ReviewListProps {
   model: ReviewListModel;
   files: ReadonlyArray<ChangedFile>;
-  /** fileAnchorKey of the cursor/flash row (null = none). */
   cursorKey: string | null;
-  /** The multi-line range, normalized to item order (rows in between paint
-   *  selected); endItem is the MOVING end, where the traveling "+" paints
-   *  during a drag. Null = no range. */
   selection: {
     fileIndex: number;
     fromItem: number;
     toItem: number;
     endItem: number;
   } | null;
-  /** A gutter drag is extending the range right now. */
   dragging: boolean;
   flashKey: string | null;
   inputMode: "keyboard" | "mouse";
@@ -150,19 +144,14 @@ interface ReviewListProps {
   baseSha: string;
   headSha: string;
   addPending: boolean;
-  /** Resume snapshot, applied on mount. */
   restoreState?: StateSnapshot;
-  /** Fallback resume target when no snapshot exists (group start). */
   initialFileIndex?: number;
-  /** Open the reply composer on the matching thread (from the `r` key);
-   *  each rendered thread checks the rootId itself. */
   replyRequest: (ReplyRequest & { path: string }) | null;
   callbacks: ReviewListCallbacks;
 }
 
 interface ListContext {
   props: ReviewListProps;
-  /** Measured mono-column width (px), or null before first measurement. */
   colW: number | null;
 }
 
@@ -210,13 +199,9 @@ function DiffLine({
 }: {
   item: ReviewRowItem;
   filename: string;
-  /** The row's cursor/selection/flash classes, pre-joined — ONE string prop
-   *  (value-compared) so the compiler's row memoization survives; an object
-   *  would be identity-fresh every render and repaint every row. */
   stateCls: string;
   intra: IntralineRanges | null;
   guideLvl: number | null;
-  /** The file's indent-guide period (px or ch string) — see --qf-indent. */
   indentVar: string;
   markKind: "find" | "occurrence" | null;
   markQuery: string | null;
@@ -571,13 +556,6 @@ function renderItem(ctx: ListContext, index: number, item: ReviewItem) {
       const key =
         item.anchor != null ? fileAnchorKey(item.fileIndex, item.anchor) : null;
       const marks = p.marks;
-      /**
-       * Mark props flow only to rows that actually match — one indexOf over
-       * each RENDERED row's text (a viewport-sized set) keeps the memoized
-       * non-matching rows from rebuilding their innerHTML on every keystroke.
-       * Occurrence marks additionally stay scoped to their own file (editor
-       * convention — the click asks "where else HERE?").
-       */
 
       const marked =
         marks != null &&
@@ -671,10 +649,6 @@ export function ReviewList({
   const vRef = useRef<GroupedVirtuosoHandle>(null);
   const scrollerRef = useRef<HTMLElement | null>(null);
   const { model } = props;
-  /**
-   * Event-time model access for the imperative handle (written in an
-   * insertion effect — never during render; render paths read ctx.props).
-   */
 
   const modelRef = useLatest(model);
 
@@ -705,8 +679,6 @@ export function ReviewList({
       const el = scrollerRef.current?.querySelector<HTMLElement>(".qf-fsec-head");
       return el?.offsetHeight ?? HEADER_FALLBACK_PX;
     }
-
-    /** Keep the cursor clear of the sticky header band when moving upward. */
 
     const cursorViewLocation: CalculateViewLocation = ({
       itemTop,

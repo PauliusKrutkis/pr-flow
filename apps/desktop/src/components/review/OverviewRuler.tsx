@@ -9,13 +9,7 @@ const MAX_TICKS = 200;
 
 interface OverviewRulerProps {
   kind: "find" | "occurrence";
-  /**
-   * One entry per match: its fraction (0..1) of the list, or a negative
-   * value for matches that currently have no position (collapsed hunks).
-   * Indexes align with `currentIndex`.
-   */
   fractions: ReadonlyArray<number>;
-  /** Index of the current match within `fractions` (find mode), or null. */
   currentIndex: number | null;
 }
 

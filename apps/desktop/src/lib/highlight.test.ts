@@ -55,7 +55,6 @@ describe("highlightLineWithMatch", () => {
   });
 
   it("marks matches that span token boundaries", () => {
-    /** "st x" crosses from the `const` keyword token into plain text. */
 
     const html = highlightLineWithMatch("const x = 1;", "a.ts", "st x");
     const text = html.replace(/<[^>]+>/g, "");
@@ -74,7 +73,6 @@ describe("highlightLineWithFind", () => {
     const html = highlightLineWithFind("foo(foo, foo)", "a.ts", "foo", false, 1);
     expect((html.match(/qf-find-mark/g) ?? []).length).toBe(3);
     expect((html.match(/qf-find-current/g) ?? []).length).toBe(1);
-    /** The current class lands on the SECOND occurrence. */
 
     const idx = html.split("qf-find-current")[0];
     expect((idx.match(/<mark/g) ?? []).length).toBe(2);
@@ -125,11 +123,6 @@ describe("highlightLineWithIntra", () => {
   });
 
   it("find marks nest inside intraline marks (intra is layered first)", () => {
-    /**
-     * The find hit ("Lim") lies inside the intraline span ("Limit") — the
-     * second pass walks text nodes inside the first pass's mark, so both
-     * marks coexist and the text stays byte-identical.
-     */
 
     const html = highlightLineWithFind(code, "a.ts", "Lim", false, 0, [
       [11, 16],

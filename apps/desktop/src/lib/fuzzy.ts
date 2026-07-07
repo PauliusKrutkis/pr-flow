@@ -7,7 +7,6 @@
 
 export interface FuzzyResult {
   score: number;
-  /** Character indices of the match in the original text (for highlighting). */
   indices: number[];
 }
 
@@ -29,8 +28,6 @@ function matchTerm(term: string, text: string): FuzzyResult | null {
   const lowerText = text.toLowerCase();
   const lowerTerm = term.toLowerCase();
 
-  /** Exact substring is the strongest possible match — check it first. */
-
   const sub = lowerText.indexOf(lowerTerm);
   if (sub !== -1) {
     const indices = Array.from({ length: term.length }, (_, k) => sub + k);
@@ -40,8 +37,6 @@ function matchTerm(term: string, text: string): FuzzyResult | null {
     score -= Math.min(sub, 20); // earlier is better
     return { score, indices };
   }
-
-  /** Subsequence match, preferring word-boundary characters. */
 
   const indices: number[] = [];
   let ti = 0;

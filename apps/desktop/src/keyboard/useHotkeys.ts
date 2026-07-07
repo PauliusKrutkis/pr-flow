@@ -3,13 +3,7 @@ import { useKeyboard } from "./KeyboardProvider";
 import type { Binding } from "./types";
 
 interface Options {
-  /** When false, the bindings are not registered (e.g. screen not focused). */
   enabled?: boolean;
-  /**
-   * When true (default), mounting this hook makes `scope` the active scope, so
-   * its bindings (and globals) fire and lower scopes are suppressed. Pass false
-   * to register bindings without changing the active scope (used for globals).
-   */
   activate?: boolean;
 }
 

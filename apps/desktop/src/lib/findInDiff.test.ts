@@ -97,12 +97,6 @@ describe("findInDiff", () => {
   });
 
   it("agrees with the per-line matcher when a periodic needle overlaps the marker column", () => {
-    /**
-     * The raw-text sweep sees "-a-a" spanning the del marker at offset 0 and
-     * must reject it WITHOUT skipping the real hit one column later — the hit
-     * the per-line matcher (and thus the rendered marks) finds at content
-     * column 1.
-     */
 
     const files = [{ patch: "@@ -1,1 +1,1 @@\n-a-a-a" }];
     expect(findInDiff(files, "-a-a")).toEqual([

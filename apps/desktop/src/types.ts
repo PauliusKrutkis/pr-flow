@@ -1,6 +1,13 @@
 /**
  * Shared data model. These mirror exactly the camelCase structs returned by
  * the Rust backend (see src-tauri/src/github.rs).
+ *
+ * PullRequest list items omit heavy fields (headSha, files); detail fetches
+ * fill baseSha/headRef/baseRef and lastComment (inbox pane teaser only).
+ * ReviewComment.threadId/resolved come from the provider's resolvable-thread
+ * handle — null hides the resolve affordance. PendingComment.line is the
+ * range end for multi-line drafts; startLine is the start when present.
+ * ViewedFileMap maps filename → content fingerprint ("?" = legacy mark).
  */
 
 export interface GitHubUser {
@@ -13,13 +20,11 @@ export interface PullRequest {
   id: number;
   number: number;
   title: string;
-  /** "owner/name" */
   repo: string;
   owner: string;
   name: string;
   author: string;
   authorAvatarUrl: string;
-  /** html_url on github.com */
   url: string;
   state: string;
   draft: boolean;
@@ -27,26 +32,20 @@ export interface PullRequest {
   updatedAt: string;
   createdAt: string;
   commentsCount: number;
-  /** head commit sha — needed to post inline review comments (empty in list view) */
   headSha: string;
-  /** base branch tip sha (populated on detail fetch; used for image diffs) */
   baseSha: string;
-  /** Branch names (populated on detail fetch; empty in the list view). */
   headRef: string;
   baseRef: string;
   additions: number;
   deletions: number;
   changedFiles: number;
   body: string;
-  /** Newest comment, for the inbox reading pane (list fetch only; absent on
-   *  detail fetches and providers that can't supply it cheaply). */
   lastComment?: LastComment;
 }
 
 export interface LastComment {
   author: string;
   authorAvatarUrl: string;
-  /** Plain text — a teaser, not Markdown. */
   body: string;
   createdAt: string;
 }
@@ -67,7 +66,6 @@ export interface ChangedFile {
   additions: number;
   deletions: number;
   changes: number;
-  /** Unified diff for this file. Absent for binary / very large files. */
   patch?: string | null;
   sha: string;
 }
@@ -77,7 +75,6 @@ export interface ReviewComment {
   path: string;
   line: number | null;
   originalLine: number | null;
-  /** "LEFT" | "RIGHT" */
   side: string;
   diffHunk: string;
   body: string;
@@ -85,17 +82,10 @@ export interface ReviewComment {
   userAvatarUrl: string;
   createdAt: string;
   inReplyToId: number | null;
-  /**
-   * Resolvable-thread handle (GitHub GraphQL node id / GitLab discussion id),
-   * stamped on every comment of the thread. null = resolving unavailable
-   * (e.g. the token can't reach GraphQL) and the UI hides the action.
-   */
   threadId: string | null;
-  /** The whole thread's resolved state, mirrored onto each of its comments. */
   resolved: boolean;
 }
 
-/** A PR-level conversation comment (not anchored to a diff line). */
 export interface IssueComment {
   id: number;
   body: string;
@@ -104,12 +94,10 @@ export interface IssueComment {
   createdAt: string;
 }
 
-/** A submitted review: an approval / change request / review summary body. */
 export interface ReviewSummary {
   id: number;
   user: string;
   userAvatarUrl: string;
-  /** "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED" | "DISMISSED" */
   state: string;
   body: string;
   submittedAt: string;
@@ -119,11 +107,8 @@ export interface PullRequestDetail {
   pr: PullRequest;
   files: ChangedFile[];
   comments: ReviewComment[];
-  /** PR-level conversation, oldest first. */
   issueComments: IssueComment[];
-  /** Submitted review verdicts/summaries, oldest first. */
   reviews: ReviewSummary[];
-  /** unix epoch millis */
   fetchedAt: number;
 }
 
@@ -132,7 +117,6 @@ export interface InboxBucket {
   prs: PullRequest[];
 }
 
-/** All inbox tabs, fetched in a single GraphQL request. */
 export interface InboxData {
   reviewRequested: InboxBucket;
   assigned: InboxBucket;
@@ -140,49 +124,35 @@ export interface InboxData {
   involved: InboxBucket;
 }
 
-/** Inbox tabs: the four involvement buckets plus the watched-repos tab. */
 export type InboxTabKey = keyof InboxData | "subscribed";
 
 export type ReviewEvent = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
 
-/** A draft inline comment, batched locally until the review is submitted. */
 export interface PendingComment {
   id: string;
   path: string;
-  /** The anchor line — for a multi-line comment, the range's END line. */
   line: number;
   side: string;
   body: string;
-  /** Multi-line range start (same side as `line`); absent = single line. */
   startLine?: number;
 }
 
-/**
- * filename -> content fingerprint captured when the file was marked viewed
- * (see lib/viewedFingerprint.ts; "?" = migrated legacy mark, fingerprint
- * unknown until the PR's detail is next loaded).
- */
 export type ViewedFileMap = Record<string, string>;
 
-/** prKey -> the files marked viewed, with their content fingerprints. */
 export type ViewedMap = Record<string, ViewedFileMap>;
 
-/** A repository search hit (the watch-repos picker). */
 export interface RepoHit {
   fullName: string;
   description: string;
 }
 
-/** Raw file bytes at a ref, base64-encoded (image diffs). */
 export interface FileBlob {
   base64: string;
   size: number;
 }
 
-/** A connected code-host account (token stays in the backend). */
 export interface AccountInfo {
   id: string;
-  /** "github" | "gitlab" */
   provider: string;
   host: string;
   login: string;
@@ -194,7 +164,6 @@ export interface AccountsInfo {
   activeId: string | null;
 }
 
-/** A newer release reported by the updater (null when up to date). */
 export interface UpdateInfo {
   version: string;
   currentVersion: string;

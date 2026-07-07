@@ -20,7 +20,6 @@ function optimisticComment(c: {
   side: string;
   body: string;
   inReplyToId: number | null;
-  /** Replies inherit their thread's handle/state so grouping stays intact. */
   threadId?: string | null;
   resolved?: boolean;
 }): ReviewComment {
@@ -95,7 +94,6 @@ export function useCommentMutations(
     mutationFn: (args: { body: string; inReplyTo: number }) =>
       api.replyToReviewComment({ owner, repo, number, ...args }),
     onMutate: (args) => {
-      /** Anchor the optimistic reply under its thread root. */
 
       const detail = queryClient.getQueryData<PullRequestDetail>(detailKey);
       const root = detail?.comments.find((c) => c.id === args.inReplyTo);
@@ -145,12 +143,6 @@ export function useCommentMutations(
     onError: (e, _args, before) => rollback(before, "Comment", e),
     onSettled: invalidate,
   });
-
-  /**
-   * Optimistic thread resolution: every comment carrying the thread's handle
-   * flips at once (the state is mirrored across the thread), so the collapsed
-   * card appears instantly; failure rolls the flip back with a flash.
-   */
 
   const resolveThread = useMutation({
     mutationFn: (args: { threadId: string; resolved: boolean }) =>

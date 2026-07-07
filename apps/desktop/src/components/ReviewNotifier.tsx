@@ -46,12 +46,6 @@ export function ReviewNotifier() {
   const cardRef = useRef<HTMLDivElement>(null);
   const prevFocusRef = useRef<HTMLElement | null>(null);
 
-  /**
-   * Known review-requested keys. A null stored value means "never seeded", so
-   * the first poll quietly records the existing backlog instead of announcing
-   * every open request at once.
-   */
-
   const stored = useRef<Set<string> | null | undefined>(undefined);
   if (stored.current === undefined) stored.current = loadKnown();
 
@@ -71,8 +65,6 @@ export function ReviewNotifier() {
     stored.current = new Set(current);
     saveKnown(current);
     if (fresh.length === 0) return;
-
-    /** Don't announce a PR you're already looking at. */
 
     const route = useAppStore.getState().route;
     const candidates = fresh.filter(

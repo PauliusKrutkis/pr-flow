@@ -36,8 +36,6 @@ interface Token {
   start: number;
   end: number;
   text: string;
-  /** Whitespace tokens are diffed but excluded from the commonality ratio —
-   *  matching indentation would otherwise inflate every pair's score. */
   ws: boolean;
 }
 
@@ -83,7 +81,6 @@ export function tokenize(line: string): Token[] {
 function lcsCommon(a: Token[], b: Token[]): { a: boolean[]; b: boolean[] } {
   const n = a.length;
   const m = b.length;
-  /** dp[i][j] = LCS length of a[i..] vs b[j..], flattened. */
 
   const dp = new Uint16Array((n + 1) * (m + 1));
   const at = (i: number, j: number) => i * (m + 1) + j;

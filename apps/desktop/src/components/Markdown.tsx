@@ -79,7 +79,6 @@ function SuggestionCard({ text }: { text: string }) {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
-  /** An empty suggestion body is a valid "delete these lines" proposal. */
 
   const body = text.replace(/\n$/, "");
   const lines = body.split("\n");

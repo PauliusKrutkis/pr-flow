@@ -118,10 +118,8 @@ export interface ReviewRowItem {
   fileIndex: number;
   hunkIndex: number;
   row: DiffRow;
-  /** "SIDE:line", or null for rows that can't anchor comments/jumps. */
   anchor: string | null;
   target: { line: number; side: string } | null;
-  /** This row has a thread/pending comment attached (visual treatment). */
   hasAnchored: boolean;
 }
 
@@ -138,14 +136,11 @@ export interface ReviewCommentsItem {
   fileIndex: number;
   anchor: string;
   target: { line: number; side: string } | null;
-  /** The anchored row's code — the composer's ```suggestion prefill. */
   rowContent: string | null;
   threads: ReviewComment[][];
   pending: PendingComment[];
   boxOpen: boolean;
-  /** Open composer's range start line (multi-line comment); null = single. */
   boxStartLine: number | null;
-  /** The range's rows, start→end, for the multi-line suggestion prefill. */
   rangeContent: string | null;
 }
 
@@ -169,29 +164,19 @@ export type ReviewItem =
 
 export interface ReviewListModel {
   items: ReviewItem[];
-  /** Items per file, in file order — GroupedVirtuoso's groupCounts. */
   groupCounts: number[];
-  /** First item index of each file's group. */
   groupFirstItem: number[];
-  /** fileAnchorKey(fileIndex, anchor) → item index of that row. */
   anchorItem: Map<string, number>;
-  /** Ordered navigable rows (the j/k cursor's world). */
   nav: Array<{ fileIndex: number; anchor: string; itemIndex: number }>;
-  /** Position of each nav entry, for O(1) cursor stepping. */
   navIndexOf: Map<string, number>;
-  /** Item indexes of comment blocks, for ]c/[c. */
   commentItems: number[];
 }
 
 export interface BuildReviewItemsInput {
   files: ReadonlyArray<ChangedFile>;
   isImage: (file: ChangedFile) => boolean;
-  /** fileIndex → collapsed hunk indexes. */
   collapsed: ReadonlyMap<number, ReadonlySet<number>>;
-  /** fileAnchorKey(...) entries with an open composer → the composer's range
-   *  start line (multi-line comment), or null for a single-line comment. */
   openBoxes: ReadonlyMap<string, number | null>;
-  /** filename → review comments / pending drafts. */
   commentsByFile: ReadonlyMap<string, ReviewComment[]>;
   pendingByFile: ReadonlyMap<string, PendingComment[]>;
 }
@@ -250,11 +235,6 @@ export function buildReviewItems(input: BuildReviewItemsInput): ReviewListModel 
         collapsed: isCollapsed,
       });
       if (isCollapsed) return;
-      /**
-       * Row content by anchor, within this hunk — a range composer anchored
-       * at its END row looks its earlier lines up here (ranges are one-side,
-       * one-hunk, so every start..end line has been seen by then).
-       */
 
       const contentByAnchor = new Map<string, string>();
       for (const row of hunk.rows) {

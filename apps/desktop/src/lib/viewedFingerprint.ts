@@ -77,11 +77,8 @@ export function normalizeViewedMap(raw: unknown): ViewedMap {
 }
 
 export interface ReconcileResult {
-  /** The reconciled entry (same reference semantics as input only via `changed`). */
   entry: ViewedFileMap;
-  /** Files whose content changed under a viewed mark — now unviewed. */
   unviewed: string[];
-  /** True when `entry` differs from the input (unviews OR silent upgrades). */
   changed: boolean;
 }
 
