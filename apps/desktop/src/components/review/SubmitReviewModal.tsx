@@ -1,5 +1,5 @@
 import { type KeyboardEvent, useEffect, useState } from "react";
-import { useHotkeys } from "../../keyboard/index.ts";
+import { useHotkeys } from "../../keyboard/useHotkeys.ts";
 import { cn } from "../../lib/cn.ts";
 import type { ReviewEvent } from "../../types.ts";
 

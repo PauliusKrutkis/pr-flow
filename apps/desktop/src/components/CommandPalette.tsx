@@ -1,6 +1,7 @@
 import { Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useHotkeys, useKeyboard } from "../keyboard/index.ts";
+import { useKeyboard } from "../keyboard/KeyboardProvider.tsx";
+import { useHotkeys } from "../keyboard/useHotkeys.ts";
 import { cn } from "../lib/cn.ts";
 import { fuzzyMatch } from "../lib/fuzzy.ts";
 import { useAppStore } from "../store/appStore.ts";
@@ -73,17 +74,14 @@ export function CommandPalette({ baseScope }: { baseScope: string }) {
       .sort((a, b) => b.score - a.score);
   }, [commandEntries, query]);
 
-  useEffect(() => {
-    setIndex((i) =>
-      entries.length === 0 ? 0 : Math.min(i, entries.length - 1)
-    );
-  }, [entries.length]);
+  const activeIndex =
+    entries.length === 0 ? 0 : Math.min(index, entries.length - 1);
 
   useEffect(() => {
     listRef.current
       ?.querySelector('[data-active="true"]')
       ?.scrollIntoView({ block: "nearest" });
-  }, [index]);
+  }, [activeIndex]);
 
   useHotkeys(
     "palette",
@@ -117,7 +115,7 @@ export function CommandPalette({ baseScope }: { baseScope: string }) {
       );
     } else if (e.key === "Enter") {
       e.preventDefault();
-      runAt(index);
+      runAt(activeIndex);
     } else if (e.key === "Escape") {
       e.preventDefault();
       closePalette();
@@ -167,8 +165,11 @@ export function CommandPalette({ baseScope }: { baseScope: string }) {
               <div className="qc-group-label">Commands</div>
               {entries.map((entry, i) => (
                 <button
-                  className={cn("qc-opt q-focus", i === index && "qc-opt-on")}
-                  data-active={i === index}
+                  className={cn(
+                    "qc-opt q-focus",
+                    i === activeIndex && "qc-opt-on"
+                  )}
+                  data-active={i === activeIndex}
                   key={`${i}-${entry.label}`}
                   onClick={() => runAt(i)}
                   onMouseMove={() => setIndex(i)}

@@ -1,5 +1,6 @@
 import { CheckCircle2 } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { cn } from "../../lib/cn.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
 import { useAppStore } from "../../store/appStore.ts";
 import type {
@@ -102,13 +103,13 @@ export function RightPanel({
   return (
     <>
       <div
-        className={"qf-drawer-scrim" + (open ? "qf-drawer-open" : "")}
+        className={cn("qf-drawer-scrim", open && "qf-drawer-open")}
         onClick={onClose}
         role="presentation"
       />
       <aside
         aria-hidden={!open}
-        className={"qf-drawer" + (open ? "qf-drawer-open" : "")}
+        className={cn("qf-drawer", open && "qf-drawer-open")}
         inert={!open}
         ref={panelRef}
         tabIndex={-1}
@@ -279,7 +280,7 @@ function ConversationItem({
       <div className="qf-convo-main">
         <div className="qf-convo-head">
           <span className="qf-comment-author">{user}</span>
-          {chip && <span className={"q-pill" + chip.cls}>{chip.label}</span>}
+          {chip && <span className={cn("q-pill", chip.cls)}>{chip.label}</span>}
           <span className="qf-comment-time" title={formatAbsolute(at)}>
             {formatRelativeTime(at)}
           </span>

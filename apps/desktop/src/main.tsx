@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
-import { KeyboardProvider } from "./keyboard/index.ts";
+import { KeyboardProvider } from "./keyboard/KeyboardProvider.tsx";
 import { queryClient } from "./lib/queryClient.ts";
 
 import "@fontsource/inter/latin-400.css";

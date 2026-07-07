@@ -180,3 +180,14 @@ export interface PRRef {
 export function prKey(pr: PRRef): string {
   return `${pr.owner}/${pr.name}#${pr.number}`;
 }
+
+/** Inverse of `prKey` — parses `owner/name#number`. */
+export function parsePrKey(key: string): PRRef {
+  const hash = key.lastIndexOf("#");
+  const slash = key.indexOf("/");
+  return {
+    name: key.slice(slash + 1, hash),
+    number: Number(key.slice(hash + 1)),
+    owner: key.slice(0, slash),
+  };
+}

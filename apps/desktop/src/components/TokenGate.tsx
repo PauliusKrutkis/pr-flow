@@ -1,7 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ArrowLeft, KeyRound, Server } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useHotkeys } from "../keyboard/index.ts";
+import { useHotkeys } from "../keyboard/useHotkeys.ts";
 import { api } from "../lib/api.ts";
 import { useAppStore } from "../store/appStore.ts";
 import { Spinner } from "./ui/Spinner.tsx";

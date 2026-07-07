@@ -1,5 +1,6 @@
 import { CornerDownLeft, FileCode, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { cn } from "../../lib/cn.ts";
 import { parsePatch } from "../../lib/diff.ts";
 import { fuzzyMatch } from "../../lib/fuzzy.ts";
 import { highlightLineWithMatch } from "../../lib/highlight.ts";
@@ -239,7 +240,7 @@ export function PrSearch({
           {items.map((it, i) => (
             <div
               aria-selected={i === sel}
-              className={"qsp-row" + (i === sel ? "qsp-row-on" : "")}
+              className={cn("qsp-row", i === sel && "qsp-row-on")}
               data-active={i === sel}
               key={`${it.kind}-${it.fileIndex}-${i}`}
               onClick={() => choose(it)}
@@ -286,10 +287,10 @@ export function PrSearch({
                       <span aria-hidden className="qsp-snippet">
                         {it.context.map((l, j) => (
                           <span
-                            className={
-                              "qsp-snip-line" +
-                              (l.hit ? "qsp-snip-line-hit" : "")
-                            }
+                            className={cn(
+                              "qsp-snip-line",
+                              l.hit && "qsp-snip-line-hit"
+                            )}
                             key={j}
                           >
                             <span className="qsp-snip-num">{l.num ?? ""}</span>

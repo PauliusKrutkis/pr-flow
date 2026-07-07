@@ -1,8 +1,9 @@
 import { Check, Eye, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useWatchedRepos } from "../../hooks/useSubscribed.ts";
-import { useHotkeys } from "../../keyboard/index.ts";
+import { useHotkeys } from "../../keyboard/useHotkeys.ts";
 import { api } from "../../lib/api.ts";
+import { cn } from "../../lib/cn.ts";
 import { queryClient, queryKeys } from "../../lib/queryClient.ts";
 import type { RepoHit } from "../../types.ts";
 import { Kbd } from "../ui/Kbd.tsx";
@@ -31,21 +32,24 @@ export function WatchReposDialog({
   const listRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<number | null>(null);
   const requestSeq = useRef(0);
+  const [seenOpen, setSeenOpen] = useState(false);
 
-  useEffect(() => {
+  if (open !== seenOpen) {
+    setSeenOpen(open);
     if (open) {
       setInput("");
       setHits([]);
       setSel(0);
       setArmed(null);
+      setRepos(data ?? []);
+    }
+  }
+
+  useEffect(() => {
+    if (open) {
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
-  useEffect(() => {
-    if (open) {
-      setRepos(data ?? []);
-    }
-  }, [open, data]);
 
   useEffect(() => {
     listRef.current
@@ -242,7 +246,7 @@ export function WatchReposDialog({
                 return (
                   <button
                     aria-selected={i === sel}
-                    className={"qw-hit" + (i === sel ? "qw-hit-on" : "")}
+                    className={cn("qw-hit", i === sel && "qw-hit-on")}
                     disabled={watched}
                     key={hit.fullName}
                     onClick={() => !watched && watch(hit.fullName)}
@@ -287,7 +291,7 @@ export function WatchReposDialog({
             ) : (
               repos.map((r, i) => (
                 <div
-                  className={"qw-row" + (armed === i ? "qw-row-armed" : "")}
+                  className={cn("qw-row", armed === i && "qw-row-armed")}
                   data-armed={armed === i}
                   key={r}
                 >
@@ -321,9 +325,10 @@ export function WatchReposDialog({
             · <Kbd combo="tab" /> actions · <Kbd combo="esc" /> done
           </span>
           <button
-            className={
-              "q-btn q-btn-quiet" + (armed === "done" ? "qw-done-armed" : "")
-            }
+            className={cn(
+              "q-btn q-btn-quiet",
+              armed === "done" && "qw-done-armed"
+            )}
             data-armed={armed === "done"}
             onClick={onClose}
             tabIndex={-1}

@@ -25,9 +25,11 @@ import {
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useCommentMutations } from "../../hooks/useComments.ts";
-import { useInbox } from "../../hooks/useInbox.ts";
+import { useInboxDetailNudge } from "../../hooks/useInboxDetailNudge.ts";
 import { useLatest } from "../../hooks/useLatest.ts";
 import { usePullRequestDetail } from "../../hooks/usePullRequestDetail.ts";
+import { useReviewHeadShaSync } from "../../hooks/useReviewHeadShaSync.ts";
+import { useViewedFileReconcile } from "../../hooks/useViewedFileReconcile.ts";
 import type { Binding } from "../../keyboard/types.ts";
 import { useHotkeys } from "../../keyboard/useHotkeys.ts";
 import { cn } from "../../lib/cn.ts";
@@ -60,7 +62,7 @@ import type {
   ReviewComment,
   ReviewEvent,
 } from "../../types.ts";
-import { prKey } from "../../types.ts";
+import { parsePrKey, prKey } from "../../types.ts";
 import { Avatar } from "../ui/Avatar.tsx";
 import { Kbd } from "../ui/Kbd.tsx";
 import { TicketTitle } from "../ui/TicketTitle.tsx";
@@ -92,9 +94,7 @@ import { SubmitReviewModal } from "./SubmitReviewModal.tsx";
  * - Find-in-diff (mod+f) seeds from the viewport, not the top of the PR.
  */
 interface ReviewScreenProps {
-  number: number;
-  owner: string;
-  repo: string;
+  routeKey: string;
 }
 
 type OccState = OccurrenceSpec & { fileIndex: number };
@@ -121,8 +121,9 @@ const EMPTY_OCC: OccurrenceMatch[] = [];
 const EMPTY_FRACTIONS: number[] = [];
 const EMPTY_COLLAPSED: ReadonlyMap<number, ReadonlySet<number>> = new Map();
 
-export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
-  const keyValue = prKey({ name: repo, number, owner });
+export function ReviewScreen({ routeKey }: ReviewScreenProps) {
+  const { name: repo, number, owner } = parsePrKey(routeKey);
+  const keyValue = routeKey;
 
   const { data, isError, error } = usePullRequestDetail(owner, repo, number);
   const {
@@ -143,13 +144,13 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const rightOpenRef = useLatest(rightOpen);
   const [commentIndex, setCommentIndex] = useState(0);
   const [submitOpen, setSubmitOpen] = useState(false);
-  const [prSearch, setPrSearch] = useState<null | "files" | "text">(null);
-  const [changedSinceViewed, setChangedSinceViewed] = useState<Set<string>>(
-    () => new Set()
-  );
-  const [replyReq, setReplyReq] = useState<{
-    rootId: number;
-    path: string;
+    const [prSearch, setPrSearch] = useState<null | "files" | "text">(null);
+    const [changedSinceViewed, setChangedSinceViewed] = useState<Set<string>>(
+      () => new Set()
+    );
+    const [replyReq, setReplyReq] = useState<{
+      rootId: number;
+      path: string;
     nonce: number;
   } | null>(null);
 
@@ -183,7 +184,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const occOriginRef = useRef<{ anchor: string; column: number } | null>(null);
 
   const listRef = useRef<ReviewListHandle>(null);
-  const mountShaRef = useRef("");
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveStateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -299,84 +299,17 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     return warmHighlightCache(files);
   }, [files]);
 
-  useEffect(() => {
-    if (!pr) {
-      return;
-    }
-    const seen = mountShaRef.current;
-    if (!seen) {
-      usePerfStore.getState().completeOpen();
-      mountShaRef.current = pr.headSha;
-      updateReviewMemory(keyValue, { headSha: pr.headSha });
-      return;
-    }
-    if (pr.headSha && pr.headSha !== seen) {
-      mountShaRef.current = pr.headSha;
-      updateReviewMemory(keyValue, { headSha: pr.headSha });
-      setToast({
-        message: "Showing the latest changes.",
-        title: "Pull request updated",
-      });
-    }
-  }, [pr, keyValue, setToast]);
-
-  const { data: inboxHeartbeat } = useInbox();
-  const nudgedForRef = useRef("");
-  useEffect(() => {
-    if (!pr) {
-      return;
-    }
-    const buckets = inboxHeartbeat
-      ? [
-          inboxHeartbeat.reviewRequested,
-          inboxHeartbeat.assigned,
-          inboxHeartbeat.created,
-          inboxHeartbeat.involved,
-        ]
-      : [];
-    const subscribed = queryClient.getQueryData<InboxBucket>(
-      queryKeys.subscribed
-    );
-    if (subscribed) {
-      buckets.push(subscribed);
-    }
-    const hit = buckets
-      .flatMap((b) => b.prs)
-      .find((p) => p.owner === owner && p.name === repo && p.number === number);
-    if (
-      hit &&
-      hit.updatedAt > pr.updatedAt &&
-      nudgedForRef.current !== hit.updatedAt
-    ) {
-      nudgedForRef.current = hit.updatedAt;
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.prDetail(owner, repo, number),
-      });
-    }
-  }, [inboxHeartbeat, pr, owner, repo, number]);
-
-  useEffect(() => {
-    if (!pr || files.length === 0) {
-      return;
-    }
-    const unviewed = reconcileViewed(keyValue, files, pr.headSha);
-    if (unviewed.length > 0) {
-      setChangedSinceViewed((prev) => {
-        const next = new Set(prev);
-        for (const f of unviewed) {
-          next.add(f);
-        }
-        return next;
-      });
-      setToast({
-        message:
-          unviewed.length === 1
-            ? `${unviewed[0]} changed since you viewed it — marked unviewed.`
-            : `${unviewed.length} files changed since you viewed them — marked unviewed.`,
-        title: "Pull request updated",
-      });
-    }
-  }, [pr, files, viewedFiles, keyValue, reconcileViewed, setToast]);
+  useReviewHeadShaSync(keyValue, pr, setToast);
+  useInboxDetailNudge(keyValue, pr);
+  useViewedFileReconcile(
+    keyValue,
+    pr,
+    files,
+    viewedFiles,
+    reconcileViewed,
+    setChangedSinceViewed,
+    setToast
+  );
 
   useEffect(() => {
     if (!detail || fileCount === 0) {
@@ -1872,7 +1805,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         <header className="qf-header flex shrink-0 items-center gap-4 px-6 py-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className={"qf-state" + stateClass}>
+              <span className={cn("qf-state", stateClass)}>
                 <span className="qf-state-dot" />
                 {stateLabel}
               </span>

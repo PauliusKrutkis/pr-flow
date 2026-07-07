@@ -112,20 +112,6 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
     [nextId]
   );
 
-  const getBindings = useCallback((scope: string): RegisteredBinding[] => {
-    const out: RegisteredBinding[] = [];
-    let i = 0;
-    for (const src of sourcesRef.current) {
-      if (src.scope === scope || src.scope === "global") {
-        for (const b of src.get()) {
-          out.push({ ...b, id: `${src.id}-${i}`, scope: src.scope });
-          i += 1;
-        }
-      }
-    }
-    return out;
-  }, []);
-
   const eligibleBindings = useCallback((): RegisteredBinding[] => {
     const stack = scopeStackRef.current;
     const active = stack.length ? stack[stack.length - 1].scope : "global";
@@ -263,8 +249,25 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
   }, [eligibleBindings, clearSeq]);
 
   const value = useMemo<KeyboardContextValue>(
-    () => ({ getBindings, pushScope, registerSource, version }),
-    [registerSource, pushScope, getBindings, version]
+    () => ({
+      getBindings: (scope: string): RegisteredBinding[] => {
+        const out: RegisteredBinding[] = [];
+        let i = 0;
+        for (const src of sourcesRef.current) {
+          if (src.scope === scope || src.scope === "global") {
+            for (const b of src.get()) {
+              out.push({ ...b, id: `${src.id}-${i}`, scope: src.scope });
+              i += 1;
+            }
+          }
+        }
+        return out;
+      },
+      pushScope,
+      registerSource,
+      version,
+    }),
+    [registerSource, pushScope, version]
   );
 
   return (

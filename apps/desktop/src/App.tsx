@@ -22,8 +22,8 @@ import { UpdatePrompt } from "./components/UpdatePrompt.tsx";
 import { Kbd } from "./components/ui/Kbd.tsx";
 import { Spinner } from "./components/ui/Spinner.tsx";
 import { useLoadViewed } from "./hooks/useViewed.ts";
-import { useHotkeys } from "./keyboard/index.ts";
 import type { Binding } from "./keyboard/types.ts";
+import { useHotkeys } from "./keyboard/useHotkeys.ts";
 import { api } from "./lib/api.ts";
 import { applyZoom, clampZoom, loadZoom, ZOOM_STEP } from "./lib/zoom.ts";
 import { loadLastRoute, useAppStore } from "./store/appStore.ts";
@@ -206,9 +206,7 @@ export default function App() {
         {route.name === "review" && (
           <ReviewScreen
             key={`${route.owner}/${route.repo}#${route.number}`}
-            number={route.number}
-            owner={route.owner}
-            repo={route.repo}
+            routeKey={`${route.owner}/${route.repo}#${route.number}`}
           />
         )}
       </div>

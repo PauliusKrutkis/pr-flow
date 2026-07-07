@@ -12,7 +12,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useInbox } from "../../hooks/useInbox.ts";
 import { prefetchPullRequest } from "../../hooks/usePullRequestDetail.ts";
 import { useSubscribed } from "../../hooks/useSubscribed.ts";
-import { useHotkeys } from "../../keyboard/index.ts";
+import { useHotkeys } from "../../keyboard/useHotkeys.ts";
+import { cn } from "../../lib/cn.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
 import { useAppStore } from "../../store/appStore.ts";
 import type {
@@ -92,7 +93,7 @@ export function Inbox() {
     !!at && new Date(pr.updatedAt).getTime() <= new Date(at).getTime();
   const filtered = useMemo(
     () => buckets[tab].prs.filter((pr) => !isHidden(pr, dismissed[keyFor(pr)])),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps
     [inbox, subscribedData, tab, dismissed]
   );
 
@@ -482,7 +483,7 @@ function InboxDetail({ pr }: { pr: PullRequest }) {
     >
       <header className="qi-detail-head">
         <div className="qi-detail-meta">
-          <span className={"q-pill" + stateCls}>
+          <span className={cn("q-pill", stateCls)}>
             <span className="q-pill-dot" />
             {stateLabel}
           </span>

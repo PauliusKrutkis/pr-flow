@@ -17,6 +17,8 @@ import type {
 
 let tempId = -1;
 
+type DetailSnapshot = PullRequestDetail | undefined;
+
 /** A best-effort local comment standing in until the server echoes the real one. */
 function optimisticComment(c: {
   path: string;
@@ -80,7 +82,19 @@ export function useCommentMutations(
       );
   };
 
-  const addReviewComment = useMutation({
+  const addReviewComment = useMutation<
+    ReviewComment,
+    Error,
+    {
+      body: string;
+      commitId: string;
+      path: string;
+      line: number;
+      side: string;
+      startLine?: number;
+    },
+    DetailSnapshot
+  >({
     mutationFn: (args: {
       body: string;
       commitId: string;
@@ -103,7 +117,12 @@ export function useCommentMutations(
     onSettled: invalidate,
   });
 
-  const reply = useMutation({
+  const reply = useMutation<
+    ReviewComment,
+    Error,
+    { body: string; inReplyTo: number },
+    DetailSnapshot
+  >({
     mutationFn: (args: { body: string; inReplyTo: number }) =>
       api.replyToReviewComment({ number, owner, repo, ...args }),
     onError: (e, _args, before) => rollback(before, "Reply", e),
@@ -125,7 +144,12 @@ export function useCommentMutations(
     onSettled: invalidate,
   });
 
-  const addIssueComment = useMutation({
+  const addIssueComment = useMutation<
+    void,
+    Error,
+    { body: string },
+    DetailSnapshot
+  >({
     mutationFn: (args: { body: string }) =>
       api.createIssueComment({ number, owner, repo, ...args }),
     onError: (e, _args, before) => rollback(before, "Comment", e),
@@ -156,7 +180,12 @@ export function useCommentMutations(
     onSettled: invalidate,
   });
 
-  const resolveThread = useMutation({
+  const resolveThread = useMutation<
+    void,
+    Error,
+    { threadId: string; resolved: boolean },
+    DetailSnapshot
+  >({
     mutationFn: (args: { threadId: string; resolved: boolean }) =>
       api.resolveThread({ number, owner, repo, ...args }),
     onError: (e, args, before) =>

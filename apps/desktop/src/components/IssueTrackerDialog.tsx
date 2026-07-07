@@ -1,6 +1,6 @@
 import { Ticket } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useHotkeys } from "../keyboard/index.ts";
+import { useHotkeys } from "../keyboard/useHotkeys.ts";
 import { useAppStore } from "../store/appStore.ts";
 
 /**

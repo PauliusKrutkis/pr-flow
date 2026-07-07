@@ -1,6 +1,7 @@
 import { Command, X } from "lucide-react";
 import { useMemo } from "react";
-import { useHotkeys, useKeyboard } from "../keyboard/index.ts";
+import { useKeyboard } from "../keyboard/KeyboardProvider.tsx";
+import { useHotkeys } from "../keyboard/useHotkeys.ts";
 import { useAppStore } from "../store/appStore.ts";
 import { Kbd } from "./ui/Kbd.tsx";
 

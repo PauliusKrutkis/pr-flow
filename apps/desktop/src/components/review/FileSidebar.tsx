@@ -1,5 +1,5 @@
 import { Check } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo, useRef } from "react";
 import { cn } from "../../lib/cn.ts";
 import { useAppStore } from "../../store/appStore.ts";
 import type {
@@ -93,12 +93,12 @@ export function FileSidebar({
     [files]
   );
 
-  useEffect(() => {
+  function revealInList(el: HTMLElement | null) {
+    if (!el) {
+      return;
+    }
     const list = listRef.current;
-    const el = list?.querySelector<HTMLElement>(
-      `[data-file-index="${selectedIndex}"]`
-    );
-    if (!(list && el)) {
+    if (!list) {
       return;
     }
     const listRect = list.getBoundingClientRect();
@@ -110,7 +110,7 @@ export function FileSidebar({
     ) {
       el.scrollIntoView({ block: "nearest" });
     }
-  }, [selectedIndex]);
+  }
 
   return (
     <div className="qf-sidebar flex h-full flex-col">
@@ -144,6 +144,7 @@ export function FileSidebar({
                 data-file-index={index}
                 key={file.filename}
                 onClick={() => onSelect(index)}
+                ref={on ? revealInList : undefined}
                 title={file.filename}
                 type="button"
               >

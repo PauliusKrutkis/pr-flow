@@ -3,7 +3,7 @@
  * it at module load, so install a Map-backed stand-in before anything imports.
  */
 
-if (typeof globalThis.localStorage === "undefined") {
+if (typeof globalThis.localStorage?.clear !== "function") {
   const store = new Map<string, string>();
   const ls: Storage = {
     clear: () => store.clear(),

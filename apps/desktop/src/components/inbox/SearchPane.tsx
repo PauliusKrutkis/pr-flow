@@ -1,5 +1,6 @@
 import { Clock, CornerDownLeft, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { cn } from "../../lib/cn.ts";
 import { fuzzyMatchFields } from "../../lib/fuzzy.ts";
 import { formatRelativeTime } from "../../lib/time.ts";
 import { type PullRequest, prKey } from "../../types.ts";
@@ -139,7 +140,7 @@ export function SearchPane({
           {results.map(({ pr, hl }, i) => (
             <div
               aria-selected={i === sel}
-              className={"qsp-row" + (i === sel ? "qsp-row-on" : "")}
+              className={cn("qsp-row", i === sel && "qsp-row-on")}
               data-active={i === sel}
               key={prKey(pr)}
               onClick={() => {
