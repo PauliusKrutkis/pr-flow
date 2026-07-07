@@ -149,9 +149,6 @@ export function SearchPane({
                   {pr.draft && <Badge tone="warning">Draft</Badge>}
                   {pr.merged && <Badge tone="accent">Merged</Badge>}
                 </span>
-                {/* Each field is wrapped in its own span: the meta row is a flex
-                    container, and bare highlight fragments would become flex
-                    items — the gap would split the word around the mark. */}
                 <span className="qsp-meta">
                   <Avatar url={pr.authorAvatarUrl} name={pr.author} size={14} />
                   <span>

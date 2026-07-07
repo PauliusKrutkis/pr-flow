@@ -34,7 +34,6 @@ export function PRListItem({
           : "border-transparent hover:bg-surface-2",
       )}
     >
-      {/* Unread dot */}
       <span
         aria-hidden
         className={cn(
@@ -43,7 +42,6 @@ export function PRListItem({
         )}
       />
 
-      {/* Main */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span
@@ -76,7 +74,6 @@ export function PRListItem({
         </div>
       </div>
 
-      {/* Right: relative time */}
       <span
         className="shrink-0 whitespace-nowrap font-mono text-[11px] text-faint"
         title={formatAbsolute(pr.updatedAt)}

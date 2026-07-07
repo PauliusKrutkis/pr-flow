@@ -383,8 +383,6 @@ function CommentsBlock({
                 Discard
               </button>
             </div>
-            {/* The composer writes markdown — the pending card must render
-                it, or bold comes back as asterisks the moment you save. */}
             <div className="qf-comment-body">
               <Markdown>{p.body}</Markdown>
             </div>

@@ -200,9 +200,6 @@ export default function App() {
         )}
       </div>
 
-      {/* THE alert host: every transient surface (update prompt, new-review
-          toast, archive undo, failure flashes) stacks here — bottom-right of
-          the content column (offset from the inbox reading pane via CSS). */}
       <div className="qb-stack qb-stack-host" aria-live="polite">
         {(route.name === "inbox" || route.name === "review") && <UpdatePrompt />}
         {(route.name === "inbox" || route.name === "review") && <ReviewNotifier />}

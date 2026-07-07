@@ -1,10 +1,7 @@
-/**
- * Shared presentational primitives for the Quiet system — the small pieces that
- * recur across every view (avatars, keycaps, status glyphs, state pills). They
- * render the `q-` classes defined in theme.ts, so a view composes them instead
- * of re-deriving spacing/colour per surface.
- */
-
+// Shared presentational primitives for the Quiet system — the small pieces that
+// recur across every view (avatars, keycaps, status glyphs, state pills). They
+// render the `q-` classes defined in theme.ts, so a view composes them instead
+// of re-deriving spacing/colour per surface.
 import type { ReactNode } from "react";
 import { cn } from "./lib/cn";
 import type { MockUser, FileStatus, ReviewerStatus } from "./mock";

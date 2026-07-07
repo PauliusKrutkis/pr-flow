@@ -14,8 +14,6 @@ const GLOBS = [
   "apps/desktop/src/**/*.{ts,tsx}",
   "apps/desktop/e2e/**/*.{ts,tsx}",
   "apps/desktop/*.ts",
-  "apps/design-lab/src/**/*.{ts,tsx}",
-  "apps/design-lab/*.ts",
   "packages/*/src/**/*.{ts,tsx}",
   "apps/desktop/src-tauri/src/**/*.rs",
 ];
@@ -40,7 +38,6 @@ function collectFiles() {
   const dirs = [
     "apps/desktop/src",
     "apps/desktop/e2e",
-    "apps/design-lab/src",
     "packages/core/src",
     "packages/ui/src",
     "apps/desktop/src-tauri/src",
@@ -50,7 +47,6 @@ function collectFiles() {
     "apps/desktop/vitest.config.ts",
     "apps/desktop/vitest.setup.ts",
     "apps/desktop/playwright.config.ts",
-    "apps/design-lab/vite.config.ts",
   ];
   const files = new Set(dirs.flatMap((d) => walk(path.join(ROOT, d))));
   for (const f of extra) {

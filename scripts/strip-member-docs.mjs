@@ -25,7 +25,6 @@ function collectFiles() {
   const dirs = [
     "apps/desktop/src",
     "apps/desktop/e2e",
-    "apps/design-lab/src",
     "packages/core/src",
     "packages/ui/src",
   ];

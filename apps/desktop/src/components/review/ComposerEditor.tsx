@@ -230,8 +230,6 @@ export function ComposerEditor({
     <div className="qa-editor">
       <EditorContent editor={editor} />
 
-      {/* The hint bar IS the toolbar: each entry names its hotkey and is a
-          real button, lit when the selection carries that mark. */}
       <div className="qa-tools">
         {linkOpen ? (
           <input

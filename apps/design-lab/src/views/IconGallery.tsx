@@ -1,9 +1,6 @@
-/**
- * App icon exploration — five candidate marks in the Quiet palette, shown at
- * dock sizes on light and dark desktops. Each card exports a 1024×1024 PNG
- * (the input `pnpm tauri icon <png>` wants) straight from the browser.
- */
-
+// App icon exploration — five candidate marks in the Quiet palette, shown at
+// dock sizes on light and dark desktops. Each card exports a 1024×1024 PNG
+// (the input `pnpm tauri icon <png>` wants) straight from the browser.
 import { useRef } from "react";
 
 const IRIS = "#8b80ff";

@@ -113,7 +113,6 @@ export function FileSidebar({
       </div>
 
       <div className="flex min-h-0 flex-1">
-        {/* flat file list */}
         <nav
           ref={listRef}
           className="qf-filelist min-h-0 flex-1 overflow-y-auto py-1"

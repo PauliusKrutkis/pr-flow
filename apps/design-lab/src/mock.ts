@@ -1,14 +1,12 @@
-/**
- * Shared mock data + helpers for the design directions.
- *
- * Every direction renders the SAME review model so they're directly
- * comparable. The shapes mirror the desktop app's data model (see
- * apps/desktop/src/types.ts) but are trimmed to what a Review screen needs.
- *
- * No network, no external images: users carry initials + a colour so avatars
- * render offline. Relative times are computed against a fixed NOW so the mock
- * reads the same regardless of the wall clock.
- */
+// Shared mock data + helpers for the design directions.
+//
+// Every direction renders the SAME review model so they're directly
+// comparable. The shapes mirror the desktop app's data model (see
+// apps/desktop/src/types.ts) but are trimmed to what a Review screen needs.
+//
+// No network, no external images: users carry initials + a colour so avatars
+// render offline. Relative times are computed against a fixed NOW so the mock
+// reads the same regardless of the wall clock.
 
 export type FileStatus = "added" | "modified" | "removed" | "renamed";
 export type ReviewEvent = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
@@ -21,7 +19,9 @@ export type ReviewerStatus =
 export interface MockUser {
   login: string;
   name: string;
+  /** 2-letter avatar fallback (no network in the lab). */
   initials: string;
+  /** Avatar background colour. */
   color: string;
 }
 
@@ -30,8 +30,10 @@ export interface MockComment {
   author: MockUser;
   body: string;
   createdAt: string;
+  /** 1-based line on the diff side this thread anchors to. */
   line: number;
   side: "LEFT" | "RIGHT";
+  /** null for a thread root, else the id of the comment it replies to. */
   inReplyToId: number | null;
 }
 
@@ -51,6 +53,7 @@ export interface MockFile {
   additions: number;
   deletions: number;
   viewed: boolean;
+  /** Unified diff. Empty for binary / no-textual-diff files. */
   patch: string;
   comments: MockComment[];
   pending: PendingComment[];
@@ -81,14 +84,15 @@ export interface MockPR {
 export interface ReviewModel {
   pr: MockPR;
   files: MockFile[];
+  /** Seed the selected file to the one carrying the live thread. */
   initialFileIndex: number;
+  /** Total pending (batched) comments across all files. */
   pendingCount: number;
 }
 
-/**
- * Time — fixed NOW so relative labels are stable in a design mock.
- * ---------------------------------------------------------------------------
- */
+// ---------------------------------------------------------------------------
+// Time — fixed NOW so relative labels are stable in a design mock.
+// ---------------------------------------------------------------------------
 
 const NOW = Date.parse("2026-06-30T16:12:00Z");
 
@@ -114,10 +118,9 @@ export function formatAbsolute(iso: string): string {
   return d.toLocaleString();
 }
 
-/**
- * Diff parsing — mirrors apps/desktop/src/lib/diff.ts
- * ---------------------------------------------------------------------------
- */
+// ---------------------------------------------------------------------------
+// Diff parsing — mirrors apps/desktop/src/lib/diff.ts
+// ---------------------------------------------------------------------------
 
 export type DiffRowType = "hunk" | "context" | "add" | "del";
 
@@ -178,11 +181,10 @@ export function parsePatch(patch: string | null | undefined): DiffHunk[] {
   return hunks;
 }
 
-/**
- * Lightweight syntax tokenizer (dependency-free). Directions theme the token
- * types via CSS; see <Tokens> in highlight.tsx.
- * ---------------------------------------------------------------------------
- */
+// ---------------------------------------------------------------------------
+// Lightweight syntax tokenizer (dependency-free). Directions theme the token
+// types via CSS; see <Tokens> in highlight.tsx.
+// ---------------------------------------------------------------------------
 
 export type TokenType =
   | "kw"
@@ -224,10 +226,12 @@ export function tokenize(line: string, language: string): Token[] {
   while (i < n) {
     const ch = line[i];
 
+    // line comment
     if (ch === "/" && line[i + 1] === "/") {
       push(line.slice(i), "com");
       break;
     }
+    // string / template literal (single line)
     if (ch === '"' || ch === "'" || ch === "`") {
       let j = i + 1;
       while (j < n && line[j] !== ch) {
@@ -238,6 +242,7 @@ export function tokenize(line: string, language: string): Token[] {
       i = j + 1;
       continue;
     }
+    // number
     if (ch >= "0" && ch <= "9") {
       let j = i + 1;
       while (j < n && /[0-9._a-fxA-F]/.test(line[j])) j += 1;
@@ -245,6 +250,7 @@ export function tokenize(line: string, language: string): Token[] {
       i = j;
       continue;
     }
+    // identifier
     if (/[A-Za-z_$]/.test(ch)) {
       let j = i + 1;
       while (j < n && /[A-Za-z0-9_$]/.test(line[j])) j += 1;
@@ -257,6 +263,7 @@ export function tokenize(line: string, language: string): Token[] {
       i = j;
       continue;
     }
+    // whitespace
     if (/\s/.test(ch)) {
       let j = i + 1;
       while (j < n && /\s/.test(line[j])) j += 1;
@@ -264,7 +271,7 @@ export function tokenize(line: string, language: string): Token[] {
       i = j;
       continue;
     }
-
+    // punctuation / operators (stop before a line comment)
     let j = i + 1;
     while (
       j < n &&
@@ -279,10 +286,9 @@ export function tokenize(line: string, language: string): Token[] {
   return out;
 }
 
-/**
- * People
- * ---------------------------------------------------------------------------
- */
+// ---------------------------------------------------------------------------
+// People
+// ---------------------------------------------------------------------------
 
 const mira: MockUser = {
   login: "mira-okafor",
@@ -311,10 +317,9 @@ const you: MockUser = {
 
 export const PEOPLE = { mira, theo, dann, you };
 
-/**
- * Files
- * ---------------------------------------------------------------------------
- */
+// ---------------------------------------------------------------------------
+// Files
+// ---------------------------------------------------------------------------
 
 const files: MockFile[] = [
   {
@@ -562,10 +567,9 @@ const files: MockFile[] = [
   },
 ];
 
-/**
- * The pull request
- * ---------------------------------------------------------------------------
- */
+// ---------------------------------------------------------------------------
+// The pull request
+// ---------------------------------------------------------------------------
 
 const prBody = [
   "Replaces the ad-hoc `keydown` listeners with a **scope-aware keyboard layer**.",

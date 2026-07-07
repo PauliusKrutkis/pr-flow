@@ -18,7 +18,7 @@ export default function AddCommentBox() {
 
   const file = REVIEW.files[0];
   const rows = parsePatch(file.patch)[0].rows.slice(0, 9);
-
+  // anchor the composer under the first added line
   const anchor = rows.findIndex((r) => r.type === "add");
 
   return (

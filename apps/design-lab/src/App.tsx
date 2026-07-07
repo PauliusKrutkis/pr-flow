@@ -1,15 +1,12 @@
-/**
- * Design Lab — the gallery.
- *
- * One shared design system ("Quiet", born on the Review screen) rendered across
- * every view in the app so they can be judged as one system. The Review screen
- * is the reference direction (directions/quiet.tsx); every other view is built
- * on the extracted base (theme.ts) + shadcn-on-Radix primitives (ui/*), so the
- * palette, type, motion, and focus ring stay identical everywhere.
- *
- * The thin top strip is lab-only chrome: press 1–9 to jump between views.
- */
-
+// Design Lab — the gallery.
+//
+// One shared design system ("Quiet", born on the Review screen) rendered across
+// every view in the app so they can be judged as one system. The Review screen
+// is the reference direction (directions/quiet.tsx); every other view is built
+// on the extracted base (theme.ts) + shadcn-on-Radix primitives (ui/*), so the
+// palette, type, motion, and focus ring stay identical everywhere.
+//
+// The thin top strip is lab-only chrome: press 1–9 to jump between views.
 import { useEffect, useRef, useState } from "react";
 import { TooltipProvider } from "./ui/tooltip";
 import { BASE_CSS } from "./theme";
@@ -55,9 +52,14 @@ export function App() {
   const [active, setActive] = useState(REVIEW_INDEX); // open on the Review reference
   const frameRef = useRef<HTMLDivElement>(null);
 
+  // Lab chrome owns the digit keys; the views own everything else. Ignore when
+  // typing in a field or when a modal (Radix dialog) has the focus.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement)?.tagName;
+      // Views own every non-digit key; a focused field owns digits too (so
+      // typing "5" into the palette filters rather than jumping views). An open
+      // dialog with focus on a button is fine to switch away from.
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const n = Number(e.key);
@@ -70,6 +72,7 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Move focus into the freshly-mounted view so its keyboard layer is live.
   useEffect(() => {
     const el = frameRef.current?.querySelector<HTMLElement>(".dir-quiet");
     el?.focus();

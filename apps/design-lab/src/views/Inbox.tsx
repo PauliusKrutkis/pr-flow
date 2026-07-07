@@ -34,6 +34,7 @@ export default function Inbox({ onOpenPR }: { onOpenPR?: (pr: InboxPR) => void }
   const rows = useMemo(() => forTab(tab), [tab]);
   const selected = rows[Math.min(cursor, rows.length - 1)];
 
+  // Latest "open the selected PR" action, so the keyboard handler stays stable.
   const openRef = useRef<() => void>(() => {});
   openRef.current = () => selected && onOpenPR?.(selected);
 

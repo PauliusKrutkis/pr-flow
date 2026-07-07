@@ -190,7 +190,6 @@ export function TokenGate() {
   return (
     <div className="flex h-full items-center justify-center bg-bg px-6">
       <div className="qg-card">
-        {/* header */}
         <div className="flex items-center gap-2.5">
           <span className="qg-logo" aria-hidden />
           <h1 className="text-2xl font-semibold text-fg">Nod</h1>
@@ -501,7 +500,6 @@ export function TokenGate() {
           </>
         )}
 
-        {/* one status line — the waiting state or the error, never both */}
         {busy === "oauth" && (
           <p className="mt-3 text-center text-xs text-muted">{busyLabel}</p>
         )}

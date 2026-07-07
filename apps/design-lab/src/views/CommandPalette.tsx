@@ -59,6 +59,7 @@ export default function CommandPalette() {
     ).slice(0, 6);
   }, [q]);
 
+  // One flat index across both groups for arrow-key selection.
   const flat = useMemo(
     () => [
       ...cmds.map((c) => ({ group: "cmd" as const, id: c.id })),
@@ -85,6 +86,7 @@ export default function CommandPalette() {
       setSel((s) => Math.max(s - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
+      // demo: selecting closes the palette
       setOpen(false);
     }
   }
@@ -110,6 +112,7 @@ export default function CommandPalette() {
           variant="top"
           className="qc-panel"
           onOpenAutoFocus={(e) => {
+            // keep focus on the search field, not the first option
             e.preventDefault();
             (e.currentTarget as HTMLElement).querySelector("input")?.focus();
           }}

@@ -251,7 +251,6 @@ export function Inbox() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Tabs (also serve as the header) */}
       <div className="qi-tabs shrink-0 border-b border-line px-3">
         {TABS.map((t, i) => {
           const active = t.key === tab;
@@ -440,9 +439,6 @@ function InboxDetail({ pr }: { pr: PullRequest }) {
             updated {formatRelativeTime(pr.updatedAt)}
           </span>
         </div>
-        {/* Zero-valued stats mean "the provider's list API doesn't carry
-            this" (GitLab lists have no +/- totals) — hide them rather than
-            show a wrong 0. */}
         <div className="qi-detail-stats">
           {pr.changedFiles > 0 && (
             <span>

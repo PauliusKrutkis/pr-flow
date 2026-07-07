@@ -1,13 +1,10 @@
-/**
- * shadcn-style Dialog — Radix primitives for the accessibility floor (focus
- * trap, ESC-to-close, aria-modal, scroll lock, portal), themed by the Quiet
- * system rather than shadcn's default slate palette. The command palette, help
- * overlay, and submit modal all compose these.
- *
- * Tokens live on :root (see theme.ts) so portalled content — which renders on
- * document.body, outside the .dir-quiet root — still reads var(--accent) etc.
- */
-
+// shadcn-style Dialog — Radix primitives for the accessibility floor (focus
+// trap, ESC-to-close, aria-modal, scroll lock, portal), themed by the Quiet
+// system rather than shadcn's default slate palette. The command palette, help
+// overlay, and submit modal all compose these.
+//
+// Tokens live on :root (see theme.ts) so portalled content — which renders on
+// document.body, outside the .dir-quiet root — still reads var(--accent) etc.
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { forwardRef } from "react";
 import { cn } from "../lib/cn";

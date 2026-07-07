@@ -1768,8 +1768,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
           </div>
         </header>
 
-        {/* The find bar floats over the diff's top-right corner — anchored to
-            this wrapper (not the scroller) so it never scrolls away. */}
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <FindBar
             open={findOpen}
@@ -1826,7 +1824,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
               callbacks={listCallbacks}
             />
           )}
-          {/* Overview ruler: match ticks along the whole list's range. */}
           <OverviewRuler
             kind={findOpen ? "find" : "occurrence"}
             fractions={rulerFractions}

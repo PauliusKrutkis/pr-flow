@@ -32,8 +32,12 @@ Key directories:
 
 ## Comments
 
-Do **not** use inline `//` line comments in source files. Comments belong in
-one of three places:
+These rules apply to **production code** (`apps/desktop/`, `packages/`, Rust
+backend). **`apps/design-lab/` is excluded** — it is a throwaway design
+playground and may keep inline comments, JSX labels, and section dividers.
+
+Do **not** use inline `//` line comments in production source files. Comments
+belong in one of three places:
 
 1. **File header** — a single `/** … */` block (TypeScript) or `//! …` module
    doc (Rust) at the top of the file, before imports. Use this for module-level
@@ -50,11 +54,19 @@ one of three places:
 
 - **Type or interface members** — no `/** … */` on individual properties inside
   `interface`, `type`, props, or store shapes. Fold non-obvious field meaning
-  into the file header (see `inbox-mock.ts`, `types.ts`).
+  into the file header (see `apps/desktop/src/types.ts`).
 - **Exported types and constants** — no separate doc block on `export interface
-  Foo` or `export const BAR`; describe them in the file header if needed.
+  Foo`, `export const BAR`, or `export const Foo = forwardRef(…)`; describe them
+  in the file header if needed.
 - **Component state and refs** — no doc blocks between `useState` / `useRef`
   declarations; put interaction-model notes in the file header once.
+- **JSX markup** — no `{/* … */}` section labels in render trees (`{/* file list
+  */}`, `{/* ============ CENTER ============ */}`). Layout should be obvious
+  from structure and class names; non-obvious UI behaviour belongs in the file
+  header.
+- **CSS** — no mid-file `/* … */` comments in production stylesheets. One
+  file-header block at the top only. `apps/desktop/src/quiet.css` is legacy
+  and being migrated incrementally.
 
 ### Allowed exceptions
 
@@ -76,7 +88,7 @@ line:
 ### TypeScript / React
 
 - One file-header block beats scattered docs anywhere else in the file.
-- Block comments (`/** … */`) only — no `//` prose.
+- Block comments (`/** … */`) only — no `//` prose and no `{/* … */}` in JSX.
 - JSDoc on `@param` / `@returns` is fine on functions when the behavior is not
   obvious from the signature alone.
 
