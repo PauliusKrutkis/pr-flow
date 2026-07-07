@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <!-- Nod app icon — the keycap. One key, one action: hit return, give it a nod.
        Source of truth for src-tauri/icons/* (regenerate: export 1024px PNG,
-       then `pnpm tauri icon <png>`). Mirrors design-lab IconGallery "Keycap". -->
+       then `pnpm tauri icon <png>`). -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#20202f"/>

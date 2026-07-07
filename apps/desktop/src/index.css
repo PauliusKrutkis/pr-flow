@@ -1,8 +1,8 @@
 @import "tailwindcss";
 @import "./quiet.css";
 
-/* Nod theme — the "Quiet" palette (deep indigo canvas, one iris accent),
-   ported from apps/design-lab. Tailwind v4 reads these CSS variables and
+/* Nod theme — the "Quiet" palette (deep indigo canvas, one iris accent).
+   Tailwind v4 reads these CSS variables and
    generates utilities like `bg-surface`, `text-muted`, `border-line`, etc.
    This @theme block is the SINGLE source of truth for colors: the short-named
    Quiet vars on `:root` below alias these `--color-*` custom properties, so a

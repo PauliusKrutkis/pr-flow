@@ -32,9 +32,8 @@ Key directories:
 
 ## Comments
 
-These rules apply to **production code** (`apps/desktop/`, `packages/`, Rust
-backend). **`apps/design-lab/` is excluded** — it is a throwaway design
-playground and may keep inline comments, JSX labels, and section dividers.
+These rules apply to production code (`apps/desktop/`, `packages/`, Rust
+backend).
 
 Do **not** use inline `//` line comments in production source files. Comments
 belong in one of three places:

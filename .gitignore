@@ -12,10 +12,6 @@ dist
 dist-ssr
 *.local
 
-# ForkDesign local artifacts (design-lab) — screenshots & agent iterations
-apps/design-lab/designs/
-apps/design-lab/public/designs/
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

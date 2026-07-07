@@ -1,11 +1,10 @@
 /* ===========================================================================
-   The "Quiet" design system, ported from apps/design-lab.
+   The "Quiet" design system.
 
    Two layers:
      1. Shared primitives (`q-*`, `.md`, syntax) — unscoped, used everywhere.
-        From design-lab src/theme.ts (BASE_CSS).
      2. The Review screen (`qf-*`) — scoped under `.dir-quiet`, applied on the
-        ReviewScreen root. From design-lab src/directions/quiet.tsx.
+        ReviewScreen root.
      3. highlight.js output retheme (`.hljs-*`) — desktop highlights real code
         via highlight.js, so the Quiet syntax palette is applied to its classes.
 

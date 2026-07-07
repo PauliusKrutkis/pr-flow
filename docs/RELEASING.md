@@ -138,7 +138,7 @@ Gotchas learned the hard way:
   final before the first real release — it now is. Note: the *repo* is still
   `pr-flow`; renaming it on GitHub is optional (GitHub redirects old URLs,
   including release downloads, so the updater endpoint keeps working).
-- [x] **Icon: the keycap** (resting variant from the design-lab gallery,
+- [x] **Icon: the keycap** (resting variant from the original design exploration,
   view 9) — `apps/desktop/app-icon.svg` is the source; platform sizes in
   `src-tauri/icons/` were regenerated with `pnpm tauri icon`. To change it
   later: edit the SVG, export 1024×1024 PNG, re-run `pnpm tauri icon <png>`.
