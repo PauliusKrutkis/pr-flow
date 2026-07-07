@@ -66,7 +66,7 @@ export function WatchReposDialog({
       api
         .searchRepos(q)
         .then((res) => {
-          if (seq !== requestSeq.current) return; // a newer query is in flight
+          if (seq !== requestSeq.current) return;
           setHits(res ?? []);
           setSel(0);
           setSearching(false);
@@ -203,7 +203,7 @@ export function WatchReposDialog({
               value={input}
               onChange={(e) => {
                 setInput(e.target.value);
-                setArmed(null); // typing means "back to searching"
+                setArmed(null);
               }}
               onKeyDown={onKeyDown}
               placeholder="Search repositories…  (or paste owner/repo)"

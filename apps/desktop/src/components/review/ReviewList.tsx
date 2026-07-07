@@ -59,37 +59,20 @@ export interface FindCurrent {
 }
 
 export interface ReviewListHandle {
-  /** Scroll a file's group header to the top (file navigation). */
   scrollToFileStart(fileIndex: number): void;
-  /** Center an item (search/find jumps). */
   centerItem(itemIndex: number): void;
-  /** Bring an item into view, clearing the sticky header band (j/k cursor). */
   nudgeItemIntoView(itemIndex: number): void;
-  /** The scrolling element (page-scroll, occurrence DOM logic). */
   scroller(): HTMLElement | null;
-  /** Snapshot the scroll state for resume. */
   getState(cb: (state: StateSnapshot) => void): void;
-  /**
-   * Item index of the first row visible below the sticky header, from the
-   * rendered DOM (virtuoso's range callbacks include overscan, which would
-   * put "what you're looking at" hundreds of px above the viewport).
-   */
   firstVisibleRowItem(): number | null;
-  /** The topmost rendered row and its offset from the scroller top — the
-   *  anchor-exact half of the resume position (see scrollItemTo). */
   firstVisibleRow(): { fileIndex: number; anchor: string; top: number } | null;
-  /** Put an item's top exactly `topPx` below the scroller top. Snapshot
-   *  restore alone lands wherever the height ESTIMATES say (engines/fonts
-   *  drift); this corrects against real geometry. */
   scrollItemTo(itemIndex: number, topPx: number): void;
 }
 
 export interface ReviewListCallbacks {
   onRowEnter(fileIndex: number, anchor: string, x: number, y: number): void;
-  /** startLine present = a multi-line composer (anchor is the range's end). */
   onOpenBox(fileIndex: number, anchor: string, startLine?: number): void;
   onCloseBox(fileIndex: number, anchor: string): void;
-  /** Gutter "+" drag — the mouse path to a multi-line range. */
   onPlusDragStart(fileIndex: number, anchor: string): void;
   onPlusDragOver(fileIndex: number, anchor: string): void;
   onPlusDragEnd(): void;
@@ -111,9 +94,7 @@ export interface ReviewListCallbacks {
     startLine?: number;
   }): Promise<void>;
   onReply(a: { inReplyTo: number; body: string }): Promise<void>;
-  /** Flip a thread's resolved state (optimistic upstream). */
   onResolveThread(a: { threadId: string; resolved: boolean }): void;
-  /** The pointer entered (or left, null) a thread — the `r` reply target. */
   onThreadHover(t: { rootId: number; path: string } | null): void;
   onRemovePending(id: string): void;
   onScroll(): void;
@@ -159,7 +140,6 @@ interface ListContext {
  * The sticky group-header band the cursor must clear when moving upward.
  * Measured lazily from the rendered header; this is the pre-measure fallback.
  */
-
 const HEADER_FALLBACK_PX = 36;
 
 function glyphFor(status: string): { letter: string; cls: string } {
@@ -307,7 +287,6 @@ function DiffLine({
  * guides can't use `ch` — see quiet.css). One app-global measurement; only
  * cached once fonts have loaded so a fallback-font value can't stick.
  */
-
 let monoColWidthCache: number | null = null;
 
 function measureMonoColWidth(host: HTMLElement): number {
@@ -623,7 +602,6 @@ function renderItem(ctx: ListContext, index: number, item: ReviewItem) {
  * Custom scroller so the scroll element carries the app's classes (CSS hooks,
  * e2e selectors) — virtuoso owns the element, we own its identity.
  */
-
 function Scroller({
   className: _cn,
   ref,

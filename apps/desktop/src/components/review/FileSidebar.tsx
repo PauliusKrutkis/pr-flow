@@ -40,7 +40,6 @@ function glyphFor(status: FileStatus): Glyph {
   }
 }
 
-/** Split a path into a trailing-slashed dir and its basename. */
 function splitPath(filename: string): { dir: string; base: string } {
   const idx = filename.lastIndexOf("/");
   if (idx === -1) return { dir: "", base: filename };
@@ -73,7 +72,7 @@ export function FileSidebar({
   const threadCounts = useMemo(() => {
     const m = new Map<string, number>();
     for (const c of comments) {
-      if (c.inReplyToId != null) continue; // roots only
+      if (c.inReplyToId != null) continue; 
       m.set(c.path, (m.get(c.path) ?? 0) + 1);
     }
     return m;

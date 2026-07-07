@@ -7,7 +7,6 @@ import { Avatar } from "../ui/Avatar";
 import { Kbd } from "../ui/Kbd";
 import { AddCommentBox } from "./AddCommentBox";
 
-/** An `r`-key request to open this thread's reply composer (nonce re-fires). */
 export interface ReplyRequest {
   rootId: number;
   nonce: number;

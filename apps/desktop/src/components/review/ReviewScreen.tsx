@@ -97,17 +97,14 @@ import { OverviewRuler } from "./OverviewRuler";
  *   cursor once created; plain cursor moves collapse it.
  * - Find-in-diff (mod+f) seeds from the viewport, not the top of the PR.
  */
-
 interface ReviewScreenProps {
   owner: string;
   repo: string;
   number: number;
 }
 
-/** An occurrence query plus the file section it lights up. */
 type OccState = OccurrenceSpec & { fileIndex: number };
 
-/** The keyboard/hover line cursor: one row, anywhere in the PR. */
 interface CursorPos {
   fileIndex: number;
   anchor: string;
@@ -374,7 +371,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const resumeCorrectedRef = useRef(false);
   useEffect(() => {
     if (resumeCorrectedRef.current) return;
-    if (modelRef.current.items.length === 0) return; // detail not in yet
+    if (modelRef.current.items.length === 0) return; 
     resumeCorrectedRef.current = true;
     const t = initialMem?.topRow;
     if (!t || !initialMem?.listState) return;
@@ -402,7 +399,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
           settled = 0;
         } else {
           settled += 1;
-          if (settled >= 2) return; // held for two frames — done
+          if (settled >= 2) return;
         }
       }
       tries += 1;
@@ -433,7 +430,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
    * Scroll → debounce → snapshot the virtualizer state into review memory.
    * The snapshot IS the resume position (restoreStateFrom on next mount).
    */
-
   function handleListScroll() {
     if (saveStateTimerRef.current) clearTimeout(saveStateTimerRef.current);
     saveStateTimerRef.current = setTimeout(() => {
@@ -497,7 +493,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
    * follows the keyboard; the cursor rides along so the accent and any
    * follow-up `c` agree about where you are.
    */
-
   function extendSelection(delta: 1 | -1) {
     const m = modelRef.current;
     keyboardHoldRef.current = true;
@@ -809,7 +804,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const nextFile = () => moveFile(1);
   const prevFile = () => moveFile(-1);
 
-  /** Tab cycles with wrap-around: past the last file it returns to the first. */
 
   function cycleFile(dir: number) {
     const n = fileCountRef.current;
@@ -821,7 +815,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
    * From file search: open the file and seat the cursor on its first line,
    * so `c` (and j/k) work immediately without a hover.
    */
-
   function selectFileFromSearch(fileIndex: number) {
     scrollToFile(fileIndex);
     const entry = modelRef.current.nav.find((n) => n.fileIndex === fileIndex);
@@ -832,8 +825,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     }
   }
 
-  /** From text search / find / occurrence jumps: land on the matched line. */
-
   function selectLine(
     fileIndex: number,
     anchor: string,
@@ -843,7 +834,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     const key = fileAnchorKey(fileIndex, anchor);
     usePerfStore.getState().markFileStart();
     setActiveIndex(fileIndex);
-    activeIndexRef.current = fileIndex; // eager — see scrollToFile
+    activeIndexRef.current = fileIndex;
     setCommentIndex(0);
     if (!findOpenRef.current && !opts.keepOccurrences) setOccSpec(null);
     keyboardHoldRef.current = true;
@@ -882,7 +873,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
    * Every query edit re-anchors to the viewport: after a jump the viewport IS
    * the last match, so typing more keeps searching from where you are.
    */
-
   function changeFindQuery(q: string) {
     captureFindSeed();
     setFindQuery(q);
@@ -912,7 +902,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
    * Closing clears the find highlights (marks fall back to the selection's
    * occurrences, if any); focus falls back to the document — j/k works.
    */
-
   function closeFind() {
     setFindOpen(false);
   }
@@ -920,7 +909,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
    * Enter/next/prev: the first press jumps to the CURRENT match, later ones
    * step (with wrap-around).
    */
-
   function findStep(dir: 1 | -1) {
     const n = findMatches.length;
     if (n === 0) return;

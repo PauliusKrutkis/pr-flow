@@ -27,7 +27,6 @@ function mimeFor(path: string): string | null {
   return IMAGE_MIME[ext] ?? null;
 }
 
-/** Binary image files render as an image diff instead of the "no diff" note. */
 export function isImageFile(file: ChangedFile): boolean {
   return !file.patch && mimeFor(file.filename) !== null;
 }
