@@ -1,33 +1,33 @@
+import { type Editor, Extension } from "@tiptap/core";
+import { Placeholder } from "@tiptap/extensions";
+import { Markdown } from "@tiptap/markdown";
+import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import { Diff } from "lucide-react";
 import {
+  type Ref,
   useImperativeHandle,
   useInsertionEffect,
   useState,
-  type Ref,
 } from "react";
-import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
-import { Extension, type Editor } from "@tiptap/core";
-import StarterKit from "@tiptap/starter-kit";
-import { Placeholder } from "@tiptap/extensions";
-import { Markdown } from "@tiptap/markdown";
-import { Diff } from "lucide-react";
-import { Kbd } from "../ui/Kbd";
+import { Kbd } from "../ui/Kbd.tsx";
 
 export interface ComposerEditorHandle {
-  /** The composed comment, serialized to the hosts' wire format. */
-  getMarkdown(): string;
   clear(): void;
   focus(): void;
+  /** The composed comment, serialized to the hosts' wire format. */
+  getMarkdown(): string;
 }
 
 interface ComposerEditorProps {
-  ref?: Ref<ComposerEditorHandle>;
-  placeholder: string;
   autoFocus?: boolean;
-  suggestionText?: string;
-  onSubmitRequest: () => void;
   onCancel: () => void;
-  onModeFlip?: () => void;
   onEmptyChange: (empty: boolean) => void;
+  onModeFlip?: () => void;
+  onSubmitRequest: () => void;
+  placeholder: string;
+  ref?: Ref<ComposerEditorHandle>;
+  suggestionText?: string;
 }
 
 /** Toolbar buttons swallow mousedown so a click never steals the editor's
@@ -60,33 +60,36 @@ type ComposerKeyHandlers = {
 const HANDLERS = new WeakMap<Editor, ComposerKeyHandlers>();
 
 const ComposerKeys = Extension.create({
-  name: "composerKeys",
   addKeyboardShortcuts() {
     return {
-      "Mod-Enter": ({ editor }) => {
-        HANDLERS.get(editor)?.submit();
-        return true;
-      },
       Escape: ({ editor }) => {
         HANDLERS.get(editor)?.cancel();
         return true;
       },
-      "Mod-k": ({ editor }) =>
-        HANDLERS.get(editor)?.openLink(editor) ?? false,
-      Tab: ({ editor }) => {
+      "Mod-Enter": ({ editor }) => {
+        HANDLERS.get(editor)?.submit();
+        return true;
+      },
+      "Mod-k": ({ editor }) => HANDLERS.get(editor)?.openLink(editor) ?? false,
+      "Shift-Tab": ({ editor }) => {
         const flip = HANDLERS.get(editor)?.flip;
-        if (!flip || editor.isActive("listItem")) return false;
+        if (!flip || editor.isActive("listItem")) {
+          return false;
+        }
         flip();
         return true;
       },
-      "Shift-Tab": ({ editor }) => {
+      Tab: ({ editor }) => {
         const flip = HANDLERS.get(editor)?.flip;
-        if (!flip || editor.isActive("listItem")) return false;
+        if (!flip || editor.isActive("listItem")) {
+          return false;
+        }
         flip();
         return true;
       },
     };
   },
+  name: "composerKeys",
 });
 
 /**
@@ -117,31 +120,23 @@ export function ComposerEditor({
    */
 
   function openLink(ed: Editor): boolean {
-    if (ed.state.selection.empty && !ed.isActive("link")) return false;
+    if (ed.state.selection.empty && !ed.isActive("link")) {
+      return false;
+    }
     setLinkHref((ed.getAttributes("link").href as string | undefined) ?? "");
     setLinkOpen(true);
     return true;
   }
 
   const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        underline: false,
-        link: { openOnClick: false },
-      }),
-      Placeholder.configure({ placeholder }),
-      Markdown,
-      ComposerKeys,
-    ],
-    content: "",
     autofocus: autoFocus ? "end" : false,
-    onUpdate: ({ editor: e }) => HANDLERS.get(e)?.emptyChange(e.isEmpty),
+    content: "",
     editorProps: {
       attributes: {
+        "aria-label": placeholder,
+        "aria-multiline": "true",
         class: "qa-editor-content",
         role: "textbox",
-        "aria-multiline": "true",
-        "aria-label": placeholder,
       },
       handleKeyDown: (_view, event) => {
         if (
@@ -154,34 +149,44 @@ export function ComposerEditor({
         return false;
       },
     },
+    extensions: [
+      StarterKit.configure({
+        link: { openOnClick: false },
+        underline: false,
+      }),
+      Placeholder.configure({ placeholder }),
+      Markdown,
+      ComposerKeys,
+    ],
+    onUpdate: ({ editor: e }) => HANDLERS.get(e)?.emptyChange(e.isEmpty),
   });
 
   useInsertionEffect(() => {
     HANDLERS.set(editor, {
-      submit: onSubmitRequest,
       cancel: onCancel,
+      emptyChange: onEmptyChange,
       flip: onModeFlip,
       openLink,
-      emptyChange: onEmptyChange,
+      submit: onSubmitRequest,
     });
   });
 
   useImperativeHandle(
     ref,
     (): ComposerEditorHandle => ({
-      getMarkdown: () => editor.getMarkdown(),
       clear: () => editor.commands.clearContent(true),
       focus: () => editor.commands.focus(),
+      getMarkdown: () => editor.getMarkdown(),
     }),
-    [editor],
+    [editor]
   );
 
   const active = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
       bold: e.isActive("bold"),
-      italic: e.isActive("italic"),
       code: e.isActive("code"),
+      italic: e.isActive("italic"),
       link: e.isActive("link"),
     }),
   });
@@ -198,9 +203,9 @@ export function ComposerEditor({
       .chain()
       .focus()
       .insertContent({
-        type: "codeBlock",
         attrs: { language: "suggestion" },
-        content: line ? [{ type: "text", text: line }] : undefined,
+        content: line ? [{ text: line, type: "text" }] : undefined,
+        type: "codeBlock",
       })
       .run();
     if (line) {
@@ -233,8 +238,8 @@ export function ComposerEditor({
       <div className="qa-tools">
         {linkOpen ? (
           <input
-            ref={focusOnMount}
-            value={linkHref}
+            aria-label="Link URL"
+            className="q-input qa-link-input"
             onChange={(e) => setLinkHref(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -247,72 +252,74 @@ export function ComposerEditor({
               }
             }}
             placeholder="https://…  ↵ applies · Esc backs out"
-            aria-label="Link URL"
-            className="q-input qa-link-input"
+            ref={focusOnMount}
+            value={linkHref}
           />
         ) : (
           <>
             {suggestionText != null && (
               <button
-                type="button"
-                onMouseDown={keepEditorFocus}
-                onClick={insertSuggestion}
-                className="qa-tool qa-tool-suggest q-focus"
                 aria-label="Insert suggestion"
+                className="qa-tool qa-tool-suggest q-focus"
+                onClick={insertSuggestion}
+                onMouseDown={keepEditorFocus}
                 title="Insert a code suggestion prefilled with this line"
+                type="button"
               >
-                <Diff size={12} aria-hidden />
+                <Diff aria-hidden size={12} />
                 Suggestion
               </button>
             )}
             <button
-              type="button"
-              onMouseDown={keepEditorFocus}
-              onClick={() => editor.chain().focus().toggleBold().run()}
-              className={"qa-tool q-focus" + (active.bold ? " qa-tool-on" : "")}
-              aria-pressed={active.bold}
               aria-label="Bold"
+              aria-pressed={active.bold}
+              className={"qa-tool q-focus" + (active.bold ? "qa-tool-on" : "")}
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              onMouseDown={keepEditorFocus}
               title="Bold"
+              type="button"
             >
               <Kbd combo="mod+b" />
               bold
             </button>
             <button
-              type="button"
-              onMouseDown={keepEditorFocus}
-              onClick={() => editor.chain().focus().toggleItalic().run()}
-              className={
-                "qa-tool q-focus" + (active.italic ? " qa-tool-on" : "")
-              }
-              aria-pressed={active.italic}
               aria-label="Italic"
+              aria-pressed={active.italic}
+              className={
+                "qa-tool q-focus" + (active.italic ? "qa-tool-on" : "")
+              }
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              onMouseDown={keepEditorFocus}
               title="Italic"
+              type="button"
             >
               <Kbd combo="mod+i" />
               italic
             </button>
             <button
-              type="button"
-              onMouseDown={keepEditorFocus}
-              onClick={() => editor.chain().focus().toggleCode().run()}
-              className={"qa-tool q-focus" + (active.code ? " qa-tool-on" : "")}
-              aria-pressed={active.code}
               aria-label="Code"
+              aria-pressed={active.code}
+              className={"qa-tool q-focus" + (active.code ? "qa-tool-on" : "")}
+              onClick={() => editor.chain().focus().toggleCode().run()}
+              onMouseDown={keepEditorFocus}
               title="Inline code"
+              type="button"
             >
               <Kbd combo="mod+e" />
               code
             </button>
             <button
-              type="button"
-              onMouseDown={keepEditorFocus}
-              onClick={() => {
-                if (!openLink(editor)) editor.commands.focus();
-              }}
-              className={"qa-tool q-focus" + (active.link ? " qa-tool-on" : "")}
-              aria-pressed={active.link}
               aria-label="Link"
+              aria-pressed={active.link}
+              className={"qa-tool q-focus" + (active.link ? "qa-tool-on" : "")}
+              onClick={() => {
+                if (!openLink(editor)) {
+                  editor.commands.focus();
+                }
+              }}
+              onMouseDown={keepEditorFocus}
               title="Link the selection"
+              type="button"
             >
               <Kbd combo="mod+k" />
               link

@@ -1,12 +1,12 @@
+import { Clock, CornerDownLeft, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, Clock, CornerDownLeft } from "lucide-react";
-import { prKey, type PullRequest } from "../../types";
-import { formatRelativeTime } from "../../lib/time";
-import { Avatar } from "../ui/Avatar";
-import { Kbd } from "../ui/Kbd";
-import { Badge } from "../ui/Badge";
-import { HighlightIndices } from "../ui/Highlight";
-import { fuzzyMatchFields } from "../../lib/fuzzy";
+import { fuzzyMatchFields } from "../../lib/fuzzy.ts";
+import { formatRelativeTime } from "../../lib/time.ts";
+import { type PullRequest, prKey } from "../../types.ts";
+import { Avatar } from "../ui/Avatar.tsx";
+import { Badge } from "../ui/Badge.tsx";
+import { HighlightIndices } from "../ui/Highlight.tsx";
+import { Kbd } from "../ui/Kbd.tsx";
 
 /**
  * Search pane — the Superhuman move: `/` doesn't drop a filter field into the
@@ -33,18 +33,26 @@ export function SearchPane({
   const results = useMemo(() => {
     const q = query.trim();
     if (!q) {
-      return prs.slice(0, 8).map((pr) => ({ pr, hl: {} as Record<string, number[]> }));
+      return prs
+        .slice(0, 8)
+        .map((pr) => ({ hl: {} as Record<string, number[]>, pr }));
     }
 
-    const out: { pr: PullRequest; hl: Record<string, number[]>; score: number }[] = [];
+    const out: {
+      pr: PullRequest;
+      hl: Record<string, number[]>;
+      score: number;
+    }[] = [];
     for (const pr of prs) {
       const m = fuzzyMatchFields(q, {
-        title: pr.title,
-        number: `#${pr.number}`,
         author: pr.author,
+        number: `#${pr.number}`,
         repo: pr.repo,
+        title: pr.title,
       });
-      if (m) out.push({ pr, hl: m.indices, score: m.score });
+      if (m) {
+        out.push({ hl: m.indices, pr, score: m.score });
+      }
     }
     out.sort((a, b) => b.score - a.score);
     return out;
@@ -64,7 +72,9 @@ export function SearchPane({
       ?.scrollIntoView({ block: "nearest" });
   }, [sel]);
 
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   const empty = query.trim().length > 0 && results.length === 0;
 
@@ -92,71 +102,82 @@ export function SearchPane({
     <div
       className="q-overlay"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onOpenChange(false);
+        if (e.target === e.currentTarget) {
+          onOpenChange(false);
+        }
       }}
     >
       <div
+        aria-label="Search pull requests"
+        aria-modal="true"
         className="q-dialog q-dialog-top qsp-panel"
         role="dialog"
-        aria-modal="true"
-        aria-label="Search pull requests"
       >
         <div className="qsp-search">
-          <Search size={17} className="qsp-search-icon" aria-hidden />
+          <Search aria-hidden className="qsp-search-icon" size={17} />
           <input
-            ref={inputRef}
-            className="qsp-input"
-            placeholder="Search all pull requests…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={onKeyDown}
-            role="combobox"
             aria-expanded
             autoComplete="off"
+            className="qsp-input"
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder="Search all pull requests…"
+            ref={inputRef}
+            role="combobox"
             spellCheck={false}
+            value={query}
           />
           <Kbd combo="esc" />
         </div>
 
-        <div className="qsp-list" role="listbox" ref={listRef}>
+        <div className="qsp-list" ref={listRef} role="listbox">
           {!query.trim() && results.length > 0 && (
             <div className="qsp-section">
-              <Clock size={12} aria-hidden /> Pull requests
+              <Clock aria-hidden size={12} /> Pull requests
             </div>
           )}
           {results.map(({ pr, hl }, i) => (
             <div
-              key={prKey(pr)}
-              role="option"
               aria-selected={i === sel}
+              className={"qsp-row" + (i === sel ? "qsp-row-on" : "")}
               data-active={i === sel}
-              className={"qsp-row" + (i === sel ? " qsp-row-on" : "")}
-              onMouseMove={() => setSel(i)}
+              key={prKey(pr)}
               onClick={() => {
                 onOpen(pr);
                 onOpenChange(false);
               }}
+              onMouseMove={() => setSel(i)}
+              role="option"
             >
-              <span className="qsp-rail" aria-hidden />
+              <span aria-hidden className="qsp-rail" />
               <span className="qsp-num">
-                <HighlightIndices text={`#${pr.number}`} indices={hl.number ?? []} />
+                <HighlightIndices
+                  indices={hl.number ?? []}
+                  text={`#${pr.number}`}
+                />
               </span>
               <span className="qsp-main">
                 <span className="qsp-title">
                   <span>
-                    <HighlightIndices text={pr.title} indices={hl.title ?? []} />
+                    <HighlightIndices
+                      indices={hl.title ?? []}
+                      text={pr.title}
+                    />
                   </span>
                   {pr.draft && <Badge tone="warning">Draft</Badge>}
                   {pr.merged && <Badge tone="accent">Merged</Badge>}
                 </span>
                 <span className="qsp-meta">
-                  <Avatar url={pr.authorAvatarUrl} name={pr.author} size={14} />
+                  <Avatar name={pr.author} size={14} url={pr.authorAvatarUrl} />
                   <span>
-                    <HighlightIndices text={pr.author} indices={hl.author ?? []} />
+                    <HighlightIndices
+                      indices={hl.author ?? []}
+                      text={pr.author}
+                    />
                   </span>
                   <span className="q-dot">·</span>
                   <span>
-                    <HighlightIndices text={pr.repo} indices={hl.repo ?? []} />
+                    <HighlightIndices indices={hl.repo ?? []} text={pr.repo} />
                   </span>
                 </span>
               </span>
@@ -167,7 +188,7 @@ export function SearchPane({
           ))}
           {empty && (
             <div className="qsp-empty">
-              <Search size={20} aria-hidden />
+              <Search aria-hidden size={20} />
               <p>No pull requests match “{query.trim()}”.</p>
               <span>Try a number, author, or repo.</span>
             </div>
@@ -180,7 +201,7 @@ export function SearchPane({
             <Kbd combo="down" /> navigate
           </span>
           <span>
-            <CornerDownLeft size={11} aria-hidden /> open
+            <CornerDownLeft aria-hidden size={11} /> open
           </span>
           <span className="qsp-foot-scope">searching all tabs</span>
         </div>

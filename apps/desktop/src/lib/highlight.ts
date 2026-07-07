@@ -1,7 +1,7 @@
 import hljs from "highlight.js";
-import { parsePatch } from "./diff";
-import { findMatchRangesInLine } from "./findInDiff";
-import { occurrenceRangesInLine } from "./occurrences";
+import { parsePatch } from "./diff.ts";
+import { findMatchRangesInLine } from "./findInDiff.ts";
+import { occurrenceRangesInLine } from "./occurrences.ts";
 
 /**
  * Best-effort, per-line syntax highlighting for the diff viewer. Highlighting
@@ -10,73 +10,79 @@ import { occurrenceRangesInLine } from "./occurrences";
  */
 
 const LANG_BY_EXT: Record<string, string> = {
-  ts: "typescript",
-  tsx: "typescript",
-  mts: "typescript",
-  cts: "typescript",
-  js: "javascript",
-  jsx: "javascript",
-  mjs: "javascript",
-  cjs: "javascript",
-  json: "json",
-  py: "python",
-  rs: "rust",
-  go: "go",
-  java: "java",
-  kt: "kotlin",
-  kts: "kotlin",
-  rb: "ruby",
-  php: "php",
-  c: "c",
-  h: "c",
-  cpp: "cpp",
-  cxx: "cpp",
-  cc: "cpp",
-  hpp: "cpp",
-  cs: "csharp",
-  swift: "swift",
-  scala: "scala",
-  sh: "bash",
   bash: "bash",
-  zsh: "bash",
-  fish: "bash",
-  yml: "yaml",
-  yaml: "yaml",
-  toml: "ini",
-  ini: "ini",
+  c: "c",
+  cc: "cpp",
   cfg: "ini",
-  md: "markdown",
-  markdown: "markdown",
-  html: "xml",
-  htm: "xml",
-  xml: "xml",
-  svg: "xml",
-  vue: "xml",
-  svelte: "xml",
+  cjs: "javascript",
+  clj: "clojure",
+  cpp: "cpp",
+  cs: "csharp",
   css: "css",
-  scss: "scss",
-  less: "less",
-  sql: "sql",
-  lua: "lua",
+  cts: "typescript",
+  cxx: "cpp",
   dart: "dart",
-  r: "r",
-  pl: "perl",
+  dockerfile: "dockerfile",
   ex: "elixir",
   exs: "elixir",
-  clj: "clojure",
+  fish: "bash",
+  go: "go",
+  h: "c",
+  hpp: "cpp",
   hs: "haskell",
-  proto: "protobuf",
-  dockerfile: "dockerfile",
+  htm: "xml",
+  html: "xml",
+  ini: "ini",
+  java: "java",
+  js: "javascript",
+  json: "json",
+  jsx: "javascript",
+  kt: "kotlin",
+  kts: "kotlin",
+  less: "less",
+  lua: "lua",
   makefile: "makefile",
+  markdown: "markdown",
+  md: "markdown",
+  mjs: "javascript",
+  mts: "typescript",
+  php: "php",
+  pl: "perl",
+  proto: "protobuf",
+  py: "python",
+  r: "r",
+  rb: "ruby",
+  rs: "rust",
+  scala: "scala",
+  scss: "scss",
+  sh: "bash",
+  sql: "sql",
+  svelte: "xml",
+  svg: "xml",
+  swift: "swift",
+  toml: "ini",
+  ts: "typescript",
+  tsx: "typescript",
+  vue: "xml",
+  xml: "xml",
+  yaml: "yaml",
+  yml: "yaml",
+  zsh: "bash",
 };
 
 function langForFilename(filename: string): string | null {
   const base = (filename.split("/").pop() ?? filename).toLowerCase();
-  if (base === "dockerfile") return "dockerfile";
-  if (base === "makefile") return "makefile";
+  if (base === "dockerfile") {
+    return "dockerfile";
+  }
+  if (base === "makefile") {
+    return "makefile";
+  }
   const ext = base.includes(".") ? base.split(".").pop()! : "";
   const lang = LANG_BY_EXT[ext];
-  if (!lang) return null;
+  if (!lang) {
+    return null;
+  }
   return hljs.getLanguage(lang) ? lang : null;
 }
 
@@ -85,10 +91,7 @@ export function isHighlightable(filename: string): boolean {
 }
 
 function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 const cache = new Map<string, string>();
@@ -128,9 +131,13 @@ const COMMENT_CONTINUATION = /^\s*\*(?:$|[\s/])/;
  * Safe to dangerouslySetInnerHTML — input is highlighted or HTML-escaped.
  */
 export function highlightLine(code: string, filename: string): string {
-  if (code.length === 0) return "";
+  if (code.length === 0) {
+    return "";
+  }
   const lang = langForFilename(filename);
-  if (!lang) return escapeHtml(code);
+  if (!lang) {
+    return escapeHtml(code);
+  }
 
   if (C_BLOCK_COMMENT_LANGS.has(lang) && COMMENT_CONTINUATION.test(code)) {
     return `<span class="hljs-comment">${escapeHtml(code)}</span>`;
@@ -138,16 +145,20 @@ export function highlightLine(code: string, filename: string): string {
 
   const key = `${lang}\0${code}`;
   const hit = cache.get(key);
-  if (hit !== undefined) return hit;
+  if (hit !== undefined) {
+    return hit;
+  }
 
   let html: string;
   try {
-    html = hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+    html = hljs.highlight(code, { ignoreIllegals: true, language: lang }).value;
   } catch {
     html = escapeHtml(code);
   }
 
-  if (cache.size > 30_000) cache.clear();
+  if (cache.size > 30_000) {
+    cache.clear();
+  }
   cache.set(key, html);
   return html;
 }
@@ -162,14 +173,18 @@ export function highlightLine(code: string, filename: string): string {
  * Returns a cancel function; work runs in idle slices and never blocks input.
  */
 export function warmHighlightCache(
-  files: ReadonlyArray<{ filename: string; patch?: string | null }>,
+  files: ReadonlyArray<{ filename: string; patch?: string | null }>
 ): () => void {
   const queue: Array<[code: string, filename: string]> = [];
   for (const f of files) {
-    if (!f.patch || !isHighlightable(f.filename)) continue;
+    if (!(f.patch && isHighlightable(f.filename))) {
+      continue;
+    }
     for (const hunk of parsePatch(f.patch)) {
       for (const row of hunk.rows) {
-        if (row.type === "hunk") continue;
+        if (row.type === "hunk") {
+          continue;
+        }
         queue.push([row.content, f.filename]);
       }
     }
@@ -181,24 +196,33 @@ export function warmHighlightCache(
     typeof requestIdleCallback === "function" ? requestIdleCallback : undefined;
 
   function pump(deadline?: IdleDeadline) {
-    if (cancelled) return;
+    if (cancelled) {
+      return;
+    }
 
     const budgetEnd = performance.now() + 6;
     while (i < queue.length) {
       const out =
-        deadline != null
-          ? deadline.timeRemaining() < 2
-          : performance.now() > budgetEnd;
-      if (out) break;
+        deadline == null
+          ? performance.now() > budgetEnd
+          : deadline.timeRemaining() < 2;
+      if (out) {
+        break;
+      }
       highlightLine(queue[i][0], queue[i][1]);
       i += 1;
     }
-    if (i < queue.length) schedule();
+    if (i < queue.length) {
+      schedule();
+    }
   }
 
   function schedule() {
-    if (idle) idle(pump, { timeout: 1000 });
-    else setTimeout(pump, 32);
+    if (idle) {
+      idle(pump, { timeout: 1000 });
+    } else {
+      setTimeout(pump, 32);
+    }
   }
 
   schedule();
@@ -208,9 +232,9 @@ export function warmHighlightCache(
 }
 
 interface MarkRange {
-  start: number;
-  end: number;
   className: string;
+  end: number;
+  start: number;
 }
 
 /** Intraline word-diff ranges (lib/intraline), as [start, end) code columns. */
@@ -224,14 +248,16 @@ export type IntraRanges = ReadonlyArray<[number, number]> | null;
  * swallow a find mark's boundary.
  */
 function withIntra(html: string, intra: IntraRanges): string {
-  if (!intra || intra.length === 0) return html;
+  if (!intra || intra.length === 0) {
+    return html;
+  }
   return wrapMarkRanges(
     html,
     intra.map(([start, end]) => ({
-      start,
-      end,
       className: "qf-intra-mark",
-    })),
+      end,
+      start,
+    }))
   );
 }
 
@@ -243,12 +269,16 @@ function withIntra(html: string, intra: IntraRanges): string {
  * non-overlapping — both producers below guarantee that.
  */
 function wrapMarkRanges(html: string, ranges: MarkRange[]): string {
-  if (ranges.length === 0) return html;
+  if (ranges.length === 0) {
+    return html;
+  }
   const root = document.createElement("span");
   root.innerHTML = html;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const texts: Text[] = [];
-  while (walker.nextNode()) texts.push(walker.currentNode as Text);
+  while (walker.nextNode()) {
+    texts.push(walker.currentNode as Text);
+  }
 
   let offset = 0;
   for (const node of texts) {
@@ -260,20 +290,28 @@ function wrapMarkRanges(html: string, ranges: MarkRange[]): string {
     for (const r of ranges) {
       const s = Math.max(r.start - start, 0);
       const e = Math.min(r.end - start, len);
-      if (s < e) local.push({ start: s, end: e, className: r.className });
+      if (s < e) {
+        local.push({ className: r.className, end: e, start: s });
+      }
     }
-    if (local.length === 0) continue;
+    if (local.length === 0) {
+      continue;
+    }
     const frag = document.createDocumentFragment();
     let pos = 0;
     for (const { start: s, end: e, className } of local) {
-      if (s > pos) frag.appendChild(document.createTextNode(node.data.slice(pos, s)));
+      if (s > pos) {
+        frag.appendChild(document.createTextNode(node.data.slice(pos, s)));
+      }
       const mark = document.createElement("mark");
       mark.className = className;
       mark.textContent = node.data.slice(s, e);
       frag.appendChild(mark);
       pos = e;
     }
-    if (pos < len) frag.appendChild(document.createTextNode(node.data.slice(pos)));
+    if (pos < len) {
+      frag.appendChild(document.createTextNode(node.data.slice(pos)));
+    }
     node.parentNode?.replaceChild(frag, node);
   }
   return root.innerHTML;
@@ -287,7 +325,7 @@ function wrapMarkRanges(html: string, ranges: MarkRange[]): string {
 export function highlightLineWithIntra(
   code: string,
   filename: string,
-  intra: IntraRanges,
+  intra: IntraRanges
 ): string {
   return withIntra(highlightLine(code, filename), intra);
 }
@@ -300,18 +338,20 @@ export function highlightLineWithIntra(
 export function highlightLineWithMatch(
   code: string,
   filename: string,
-  query: string,
+  query: string
 ): string {
   const html = highlightLine(code, filename);
   const q = query.trim();
-  if (!q || code.length === 0) return html;
+  if (!q || code.length === 0) {
+    return html;
+  }
   return wrapMarkRanges(
     html,
     findMatchRangesInLine(code, q).map(([start, end]) => ({
-      start,
-      end,
       className: "q-hl",
-    })),
+      end,
+      start,
+    }))
   );
 }
 
@@ -329,18 +369,24 @@ export function highlightLineWithFind(
   query: string,
   caseSensitive: boolean,
   currentOrdinal: number | null,
-  intra: IntraRanges = null,
+  intra: IntraRanges = null
 ): string {
   const html = withIntra(highlightLine(code, filename), intra);
-  if (!query || code.length === 0) return html;
+  if (!query || code.length === 0) {
+    return html;
+  }
   return wrapMarkRanges(
     html,
-    findMatchRangesInLine(code, query, caseSensitive).map(([start, end], i) => ({
-      start,
-      end,
-      className:
-        i === currentOrdinal ? "qf-find-mark qf-find-current" : "qf-find-mark",
-    })),
+    findMatchRangesInLine(code, query, caseSensitive).map(
+      ([start, end], i) => ({
+        className:
+          i === currentOrdinal
+            ? "qf-find-mark qf-find-current"
+            : "qf-find-mark",
+        end,
+        start,
+      })
+    )
   );
 }
 
@@ -356,16 +402,18 @@ export function highlightLineWithOccurrences(
   filename: string,
   query: string,
   wholeWord: boolean,
-  intra: IntraRanges = null,
+  intra: IntraRanges = null
 ): string {
   const html = withIntra(highlightLine(code, filename), intra);
-  if (!query || code.length === 0) return html;
+  if (!query || code.length === 0) {
+    return html;
+  }
   return wrapMarkRanges(
     html,
     occurrenceRangesInLine(code, { query, wholeWord }).map(([start, end]) => ({
-      start,
-      end,
       className: "qf-occ-mark",
-    })),
+      end,
+      start,
+    }))
   );
 }

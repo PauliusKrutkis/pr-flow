@@ -1,28 +1,28 @@
-import { useEffect, useRef } from "react";
 import { CheckCircle2 } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
+import { useAppStore } from "../../store/appStore.ts";
 import type {
   IssueComment,
   PullRequest,
   ReviewComment,
   ReviewSummary,
-} from "../../types";
-import { formatRelativeTime, formatAbsolute } from "../../lib/time";
-import { Markdown } from "../Markdown";
-import { Avatar } from "../ui/Avatar";
-import { TicketTitle } from "../ui/TicketTitle";
-import { useAppStore } from "../../store/appStore";
-import { AddCommentBox } from "./AddCommentBox";
+} from "../../types.ts";
+import { Markdown } from "../Markdown.tsx";
+import { Avatar } from "../ui/Avatar.tsx";
+import { TicketTitle } from "../ui/TicketTitle.tsx";
+import { AddCommentBox } from "./AddCommentBox.tsx";
 
 interface RightPanelProps {
-  pr: PullRequest;
-  fileCount: number;
   conversation: IssueComment[];
-  reviews: ReviewSummary[];
+  fileCount: number;
   inlineComments: ReviewComment[];
-  open: boolean;
-  onClose: () => void;
   onAddIssueComment: (body: string) => Promise<void>;
+  onClose: () => void;
   onJumpToThread: (path: string, rootId: number) => void;
+  open: boolean;
+  pr: PullRequest;
+  reviews: ReviewSummary[];
 }
 
 /** One row of the merged conversation: a comment or a review verdict. */
@@ -31,10 +31,10 @@ type TimelineEntry =
   | { kind: "review"; at: string; review: ReviewSummary };
 
 const REVIEW_STATES: Record<string, { label: string; cls: string }> = {
-  APPROVED: { label: "Approved", cls: "q-pill-approved" },
-  CHANGES_REQUESTED: { label: "Changes requested", cls: "q-pill-changes" },
-  COMMENTED: { label: "Commented", cls: "q-pill-commented" },
-  DISMISSED: { label: "Dismissed", cls: "q-pill-muted" },
+  APPROVED: { cls: "q-pill-approved", label: "Approved" },
+  CHANGES_REQUESTED: { cls: "q-pill-changes", label: "Changes requested" },
+  COMMENTED: { cls: "q-pill-commented", label: "Commented" },
+  DISMISSED: { cls: "q-pill-muted", label: "Dismissed" },
 };
 
 /**
@@ -56,14 +56,16 @@ export function RightPanel({
 }: RightPanelProps) {
   const body = pr.body?.trim() ?? "";
   const trackerBase = useAppStore((s) =>
-    s.activeAccountId ? s.issueTrackers[s.activeAccountId] : undefined,
+    s.activeAccountId ? s.issueTrackers[s.activeAccountId] : undefined
   );
 
   const panelRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const el = panelRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     if (open) {
       el.focus({ preventScroll: true });
     } else if (el.contains(document.activeElement)) {
@@ -76,13 +78,13 @@ export function RightPanel({
 
   const timeline: TimelineEntry[] = [
     ...conversation.map((c) => ({
-      kind: "comment" as const,
       at: c.createdAt,
       comment: c,
+      kind: "comment" as const,
     })),
     ...reviews.map((r) => ({
-      kind: "review" as const,
       at: r.submittedAt,
+      kind: "review" as const,
       review: r,
     })),
   ].sort((a, b) => a.at.localeCompare(b.at));
@@ -95,30 +97,30 @@ export function RightPanel({
   }
   const threads = inlineComments
     .filter((c) => c.inReplyToId == null)
-    .map((root) => ({ root, replyCount: replyCounts.get(root.id) ?? 0 }));
+    .map((root) => ({ replyCount: replyCounts.get(root.id) ?? 0, root }));
 
   return (
     <>
       <div
-        className={"qf-drawer-scrim" + (open ? " qf-drawer-open" : "")}
+        className={"qf-drawer-scrim" + (open ? "qf-drawer-open" : "")}
         onClick={onClose}
         role="presentation"
       />
       <aside
+        aria-hidden={!open}
+        className={"qf-drawer" + (open ? "qf-drawer-open" : "")}
+        inert={!open}
         ref={panelRef}
         tabIndex={-1}
-        className={"qf-drawer" + (open ? " qf-drawer-open" : "")}
-        aria-hidden={!open}
-        inert={!open}
       >
         <div className="qf-drawer-head">
           <span className="qf-drawer-title">Pull request</span>
           <button
-            type="button"
+            aria-label="Close"
             className="qf-drawer-close qf-focusable"
             onClick={onClose}
             title="Close (Esc)"
-            aria-label="Close"
+            type="button"
           >
             Esc
           </button>
@@ -133,7 +135,7 @@ export function RightPanel({
               </span>
             </div>
             <div className="qf-drawer-meta">
-              <Avatar url={pr.authorAvatarUrl} name={pr.author} size={15} />
+              <Avatar name={pr.author} size={15} url={pr.authorAvatarUrl} />
               <span>{pr.author}</span>
               <span className="qf-dot">·</span>
               <span>
@@ -154,7 +156,7 @@ export function RightPanel({
             {body ? (
               <Markdown>{body}</Markdown>
             ) : (
-              <p className="text-sm text-faint">No description.</p>
+              <p className="text-faint text-sm">No description.</p>
             )}
           </section>
 
@@ -166,7 +168,7 @@ export function RightPanel({
               )}
             </h3>
             {timeline.length === 0 ? (
-              <p className="text-sm text-faint">
+              <p className="text-faint text-sm">
                 No discussion yet — start one below.
               </p>
             ) : (
@@ -174,22 +176,22 @@ export function RightPanel({
                 {timeline.map((entry) =>
                   entry.kind === "comment" ? (
                     <ConversationItem
+                      at={entry.comment.createdAt}
+                      avatarUrl={entry.comment.userAvatarUrl}
+                      body={entry.comment.body}
                       key={`c-${entry.comment.id}`}
                       user={entry.comment.user}
-                      avatarUrl={entry.comment.userAvatarUrl}
-                      at={entry.comment.createdAt}
-                      body={entry.comment.body}
                     />
                   ) : (
                     <ConversationItem
-                      key={`r-${entry.review.id}`}
-                      user={entry.review.user}
-                      avatarUrl={entry.review.userAvatarUrl}
                       at={entry.review.submittedAt}
+                      avatarUrl={entry.review.userAvatarUrl}
                       body={entry.review.body}
+                      key={`r-${entry.review.id}`}
                       state={entry.review.state}
+                      user={entry.review.user}
                     />
-                  ),
+                  )
                 )}
               </div>
             )}
@@ -204,23 +206,23 @@ export function RightPanel({
               <div className="qf-drawer-threads">
                 {threads.map(({ root, replyCount }) => (
                   <button
-                    key={root.id}
-                    type="button"
                     className="qf-thread-row qf-focusable"
+                    key={root.id}
                     onClick={() => onJumpToThread(root.path, root.id)}
                     title="Jump to this thread in the diff"
+                    type="button"
                   >
                     <span className="qf-thread-loc">
                       {root.resolved && (
                         <CheckCircle2
-                          size={12}
-                          className="qf-thread-check"
                           aria-label="Resolved"
+                          className="qf-thread-check"
+                          size={12}
                         />
                       )}
                       <span className="qf-thread-path">{root.path}</span>
                       <span className="qf-thread-line">
-                        {root.line != null ? `:${root.line}` : " · outdated"}
+                        {root.line == null ? " · outdated" : `:${root.line}`}
                       </span>
                       {replyCount > 0 && (
                         <span className="qf-thread-replies">
@@ -239,14 +241,14 @@ export function RightPanel({
 
           <section className="qf-drawer-section">
             <AddCommentBox
+              autoFocus={false}
+              onCancel={onClose}
               onSubmit={(text) => {
                 void onAddIssueComment(text);
               }}
-              onCancel={onClose}
               pending={false}
               placeholder="Comment on this pull request…"
               submitLabel="Comment"
-              autoFocus={false}
             />
           </section>
         </div>
@@ -273,11 +275,11 @@ function ConversationItem({
   const trimmed = body.trim();
   return (
     <div className="qf-convo-item">
-      <Avatar url={avatarUrl} name={user} size={20} />
+      <Avatar name={user} size={20} url={avatarUrl} />
       <div className="qf-convo-main">
         <div className="qf-convo-head">
           <span className="qf-comment-author">{user}</span>
-          {chip && <span className={"q-pill " + chip.cls}>{chip.label}</span>}
+          {chip && <span className={"q-pill" + chip.cls}>{chip.label}</span>}
           <span className="qf-comment-time" title={formatAbsolute(at)}>
             {formatRelativeTime(at)}
           </span>

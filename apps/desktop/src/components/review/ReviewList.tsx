@@ -1,20 +1,29 @@
+import { Check } from "lucide-react";
 import {
+  type CSSProperties,
+  type HTMLAttributes,
+  type Ref,
   useEffect,
   useImperativeHandle,
   useRef,
   useState,
-  type CSSProperties,
-  type HTMLAttributes,
-  type Ref,
 } from "react";
 import {
-  GroupedVirtuoso,
   type CalculateViewLocation,
+  GroupedVirtuoso,
   type GroupedVirtuosoHandle,
   type StateSnapshot,
 } from "react-virtuoso";
-import { Check } from "lucide-react";
-import type { ChangedFile, PendingComment } from "../../types";
+import { useLatest } from "../../hooks/useLatest.ts";
+import { cn } from "../../lib/cn.ts";
+import { findMatchRangesInLine } from "../../lib/findInDiff.ts";
+import {
+  highlightLineWithFind,
+  highlightLineWithIntra,
+  highlightLineWithOccurrences,
+} from "../../lib/highlight.ts";
+import type { IntralineRanges } from "../../lib/intraline.ts";
+import { occurrenceRangesInLine } from "../../lib/occurrences.ts";
 import {
   fileAnchorKey,
   fileRenderMeta,
@@ -22,23 +31,14 @@ import {
   type ReviewItem,
   type ReviewListModel,
   type ReviewRowItem,
-} from "../../lib/reviewItems";
-import {
-  highlightLineWithFind,
-  highlightLineWithIntra,
-  highlightLineWithOccurrences,
-} from "../../lib/highlight";
-import { findMatchRangesInLine } from "../../lib/findInDiff";
-import { useLatest } from "../../hooks/useLatest";
-import { occurrenceRangesInLine } from "../../lib/occurrences";
-import type { IntralineRanges } from "../../lib/intraline";
-import { cn } from "../../lib/cn";
-import { useAppStore } from "../../store/appStore";
-import { Avatar } from "../ui/Avatar";
-import { Markdown } from "../Markdown";
-import { CommentThread, type ReplyRequest } from "./CommentThread";
-import { AddCommentBox } from "./AddCommentBox";
-import { ImageDiff } from "./ImageDiff";
+} from "../../lib/reviewItems.ts";
+import { useAppStore } from "../../store/appStore.ts";
+import type { ChangedFile, PendingComment } from "../../types.ts";
+import { Markdown } from "../Markdown.tsx";
+import { Avatar } from "../ui/Avatar.tsx";
+import { AddCommentBox } from "./AddCommentBox.tsx";
+import { CommentThread, type ReplyRequest } from "./CommentThread.tsx";
+import { ImageDiff } from "./ImageDiff.tsx";
 
 /**
  * What to mark on every rendered row — the find bar's (mod+f) or the
@@ -49,43 +49,32 @@ import { ImageDiff } from "./ImageDiff";
  */
 export type MarkSpec =
   | { kind: "find"; query: string; caseSensitive: boolean }
-  | { kind: "occurrence"; query: string; wholeWord: boolean; fileIndex: number };
+  | {
+      kind: "occurrence";
+      query: string;
+      wholeWord: boolean;
+      fileIndex: number;
+    };
 
 /** The current find match: which file/row, which occurrence within the row. */
 export interface FindCurrent {
-  fileIndex: number;
   anchor: string;
+  fileIndex: number;
   ordinal: number;
 }
 
 export interface ReviewListHandle {
-  scrollToFileStart(fileIndex: number): void;
   centerItem(itemIndex: number): void;
+  firstVisibleRow(): { fileIndex: number; anchor: string; top: number } | null;
+  firstVisibleRowItem(): number | null;
+  getState(cb: (state: StateSnapshot) => void): void;
   nudgeItemIntoView(itemIndex: number): void;
   scroller(): HTMLElement | null;
-  getState(cb: (state: StateSnapshot) => void): void;
-  firstVisibleRowItem(): number | null;
-  firstVisibleRow(): { fileIndex: number; anchor: string; top: number } | null;
   scrollItemTo(itemIndex: number, topPx: number): void;
+  scrollToFileStart(fileIndex: number): void;
 }
 
 export interface ReviewListCallbacks {
-  onRowEnter(fileIndex: number, anchor: string, x: number, y: number): void;
-  onOpenBox(fileIndex: number, anchor: string, startLine?: number): void;
-  onCloseBox(fileIndex: number, anchor: string): void;
-  onPlusDragStart(fileIndex: number, anchor: string): void;
-  onPlusDragOver(fileIndex: number, anchor: string): void;
-  onPlusDragEnd(): void;
-  onToggleHunk(fileIndex: number, hunkIndex: number): void;
-  onToggleViewed(fileIndex: number): void;
-  onCopyPath(fileIndex: number): void;
-  onAddPending(c: {
-    path: string;
-    line: number;
-    side: string;
-    body: string;
-    startLine?: number;
-  }): void;
   onAddComment(a: {
     path: string;
     line: number;
@@ -93,47 +82,63 @@ export interface ReviewListCallbacks {
     body: string;
     startLine?: number;
   }): Promise<void>;
+  onAddPending(c: {
+    path: string;
+    line: number;
+    side: string;
+    body: string;
+    startLine?: number;
+  }): void;
+  onCloseBox(fileIndex: number, anchor: string): void;
+  onCopyPath(fileIndex: number): void;
+  onMouseMove(x: number, y: number): void;
+  onOpenBox(fileIndex: number, anchor: string, startLine?: number): void;
+  onPlusDragEnd(): void;
+  onPlusDragOver(fileIndex: number, anchor: string): void;
+  onPlusDragStart(fileIndex: number, anchor: string): void;
+  onRemovePending(id: string): void;
   onReply(a: { inReplyTo: number; body: string }): Promise<void>;
   onResolveThread(a: { threadId: string; resolved: boolean }): void;
-  onThreadHover(t: { rootId: number; path: string } | null): void;
-  onRemovePending(id: string): void;
+  onRowEnter(fileIndex: number, anchor: string, x: number, y: number): void;
   onScroll(): void;
-  onMouseMove(x: number, y: number): void;
+  onThreadHover(t: { rootId: number; path: string } | null): void;
+  onToggleHunk(fileIndex: number, hunkIndex: number): void;
+  onToggleViewed(fileIndex: number): void;
 }
 
 interface ReviewListProps {
-  model: ReviewListModel;
-  files: ReadonlyArray<ChangedFile>;
+  activeIndex: number;
+  addPending: boolean;
+  baseSha: string;
+  callbacks: ReviewListCallbacks;
+  changedSinceViewed: ReadonlySet<string>;
+  copiedPathIndex: number | null;
   cursorKey: string | null;
+  dragging: boolean;
+  files: ReadonlyArray<ChangedFile>;
+  findCurrent: FindCurrent | null;
+  flashKey: string | null;
+  headSha: string;
+  initialFileIndex?: number;
+  inputMode: "keyboard" | "mouse";
+  marks: MarkSpec | null;
+  model: ReviewListModel;
+  owner: string;
+  replyRequest: (ReplyRequest & { path: string }) | null;
+  repo: string;
+  restoreState?: StateSnapshot;
   selection: {
     fileIndex: number;
     fromItem: number;
     toItem: number;
     endItem: number;
   } | null;
-  dragging: boolean;
-  flashKey: string | null;
-  inputMode: "keyboard" | "mouse";
-  marks: MarkSpec | null;
-  findCurrent: FindCurrent | null;
-  activeIndex: number;
   viewedSet: ReadonlySet<string>;
-  changedSinceViewed: ReadonlySet<string>;
-  copiedPathIndex: number | null;
-  owner: string;
-  repo: string;
-  baseSha: string;
-  headSha: string;
-  addPending: boolean;
-  restoreState?: StateSnapshot;
-  initialFileIndex?: number;
-  replyRequest: (ReplyRequest & { path: string }) | null;
-  callbacks: ReviewListCallbacks;
 }
 
 interface ListContext {
-  props: ReviewListProps;
   colW: number | null;
+  props: ReviewListProps;
 }
 
 /**
@@ -145,15 +150,15 @@ const HEADER_FALLBACK_PX = 36;
 function glyphFor(status: string): { letter: string; cls: string } {
   switch (status) {
     case "added":
-      return { letter: "A", cls: "qf-st-add" };
+      return { cls: "qf-st-add", letter: "A" };
     case "removed":
-      return { letter: "D", cls: "qf-st-del" };
+      return { cls: "qf-st-del", letter: "D" };
     case "renamed":
-      return { letter: "R", cls: "qf-st-ren" };
+      return { cls: "qf-st-ren", letter: "R" };
     case "copied":
-      return { letter: "C", cls: "qf-st-ren" };
+      return { cls: "qf-st-ren", letter: "C" };
     default:
-      return { letter: "M", cls: "qf-st-mod" };
+      return { cls: "qf-st-mod", letter: "M" };
   }
 }
 
@@ -198,46 +203,52 @@ function DiffLine({
   const marker = row.type === "add" ? "+" : row.type === "del" ? "-" : " ";
   return (
     <div
-      data-anchor={anchor ?? undefined}
-      data-file-index={fileIndex}
-      onMouseEnter={
-        anchor != null
-          ? (e) => onEnter(fileIndex, anchor, e.clientX, e.clientY)
-          : undefined
-      }
       className={cn(
         "qf-row",
         row.type === "add" && "qf-row-add",
         row.type === "del" && "qf-row-del",
         stateCls,
-        hasAnchored && "qf-row-threaded",
+        hasAnchored && "qf-row-threaded"
       )}
+      data-anchor={anchor ?? undefined}
+      data-file-index={fileIndex}
+      onMouseEnter={
+        anchor == null
+          ? undefined
+          : (e) => onEnter(fileIndex, anchor, e.clientX, e.clientY)
+      }
       style={{ "--qf-indent": indentVar } as CSSProperties}
     >
       <span className="qf-gutter qf-gutter-old">
         {row.oldLine ?? ""}
         {canComment && anchor != null && (
           <button
-            type="button"
             aria-label="Add comment"
+            className="qf-add-btn"
+            onClick={(e) => {
+              if (e.detail === 0) {
+                onOpenBox(fileIndex, anchor);
+              }
+            }}
             onPointerDown={(e) => {
               e.preventDefault();
               e.currentTarget.setPointerCapture(e.pointerId);
               onPlusDragStart(fileIndex, anchor);
             }}
             onPointerMove={(e) => {
-              if (e.buttons === 0) return;
+              if (e.buttons === 0) {
+                return;
+              }
               const el = document.elementFromPoint(e.clientX, e.clientY);
               const rowEl = el?.closest?.("[data-anchor]");
               const a = rowEl?.getAttribute("data-anchor");
               const f = rowEl?.getAttribute("data-file-index");
-              if (a && f != null) onPlusDragOver(Number(f), a);
+              if (a && f != null) {
+                onPlusDragOver(Number(f), a);
+              }
             }}
             onPointerUp={onPlusDragEnd}
-            onClick={(e) => {
-              if (e.detail === 0) onOpenBox(fileIndex, anchor);
-            }}
-            className="qf-add-btn"
+            type="button"
           >
             +
           </button>
@@ -248,9 +259,9 @@ function DiffLine({
       <code
         className="qf-code"
         style={
-          guideLvl != null
-            ? ({ "--qf-lvl": guideLvl } as CSSProperties)
-            : undefined
+          guideLvl == null
+            ? undefined
+            : ({ "--qf-lvl": guideLvl } as CSSProperties)
         }
       >
         <span
@@ -266,14 +277,14 @@ function DiffLine({
                       markQuery,
                       markFlag,
                       findOrdinal,
-                      intra,
+                      intra
                     )
                   : highlightLineWithOccurrences(
                       row.content,
                       filename,
                       markQuery,
                       markFlag,
-                      intra,
+                      intra
                     ),
           }}
         />
@@ -298,7 +309,9 @@ function measureMonoColWidth(host: HTMLElement): number {
   host.appendChild(probe);
   const w = probe.getBoundingClientRect().width / 100;
   probe.remove();
-  if (w > 0 && document.fonts?.status === "loaded") monoColWidthCache = w;
+  if (w > 0 && document.fonts?.status === "loaded") {
+    monoColWidthCache = w;
+  }
   return w;
 }
 
@@ -316,34 +329,37 @@ function CommentsBlock({
   callbacks: ReviewListCallbacks;
 }) {
   const activeAccount = useAppStore((s) =>
-    s.accounts.find((a) => a.id === s.activeAccountId),
+    s.accounts.find((a) => a.id === s.activeAccountId)
   );
   const target = item.target;
   return (
-    <div className="js-comment qf-comment-wrap" data-file-index={item.fileIndex}>
+    <div
+      className="js-comment qf-comment-wrap"
+      data-file-index={item.fileIndex}
+    >
       {item.threads.map((thread) => (
         <CommentThread
-          key={thread[0].id}
           comments={thread}
-          onReply={callbacks.onReply}
-          replyPending={addPending}
-          onResolve={callbacks.onResolveThread}
+          key={thread[0].id}
           onHoverChange={(hovering) =>
             callbacks.onThreadHover(
-              hovering ? { rootId: thread[0].id, path: filename } : null,
+              hovering ? { path: filename, rootId: thread[0].id } : null
             )
           }
+          onReply={callbacks.onReply}
+          onResolve={callbacks.onResolveThread}
+          replyPending={addPending}
           replyRequest={replyRequest}
         />
       ))}
       {item.pending.map((p: PendingComment) => (
-        <div key={p.id} className="qf-thread qf-pending">
+        <div className="qf-thread qf-pending" key={p.id}>
           <div className="qf-comment">
             <div className="qf-comment-head">
               <Avatar
-                url={activeAccount?.avatarUrl ?? ""}
                 name={activeAccount?.login ?? "you"}
                 size={20}
+                url={activeAccount?.avatarUrl ?? ""}
               />
               <span className="qf-comment-author">
                 {activeAccount?.login ?? "You"}
@@ -355,9 +371,9 @@ function CommentsBlock({
                 </span>
               )}
               <button
-                type="button"
-                onClick={() => callbacks.onRemovePending(p.id)}
                 className="qf-pending-remove qf-focusable"
+                onClick={() => callbacks.onRemovePending(p.id)}
+                type="button"
               >
                 Discard
               </button>
@@ -377,37 +393,37 @@ function CommentsBlock({
               </div>
             )}
             <AddCommentBox
-              pending={addPending}
               autoFocus
+              onCancel={() => callbacks.onCloseBox(item.fileIndex, item.anchor)}
+              onSecondary={(body) => {
+                void callbacks.onAddComment({
+                  body,
+                  line: target.line,
+                  path: filename,
+                  side: target.side,
+                  startLine: item.boxStartLine ?? undefined,
+                });
+                callbacks.onCloseBox(item.fileIndex, item.anchor);
+              }}
+              onSubmit={(body) => {
+                callbacks.onAddPending({
+                  body,
+                  line: target.line,
+                  path: filename,
+                  side: target.side,
+                  startLine: item.boxStartLine ?? undefined,
+                });
+                callbacks.onCloseBox(item.fileIndex, item.anchor);
+              }}
+              pending={addPending}
               placeholder="Add a review comment…"
-              submitLabel="Add to review"
               secondaryLabel="Comment now"
+              submitLabel="Add to review"
               suggestionText={
                 target.side === "RIGHT"
                   ? (item.rangeContent ?? item.rowContent ?? undefined)
                   : undefined
               }
-              onCancel={() => callbacks.onCloseBox(item.fileIndex, item.anchor)}
-              onSubmit={(body) => {
-                callbacks.onAddPending({
-                  path: filename,
-                  line: target.line,
-                  side: target.side,
-                  body,
-                  startLine: item.boxStartLine ?? undefined,
-                });
-                callbacks.onCloseBox(item.fileIndex, item.anchor);
-              }}
-              onSecondary={(body) => {
-                void callbacks.onAddComment({
-                  path: filename,
-                  line: target.line,
-                  side: target.side,
-                  body,
-                  startLine: item.boxStartLine ?? undefined,
-                });
-                callbacks.onCloseBox(item.fileIndex, item.anchor);
-              }}
             />
           </div>
         </div>
@@ -416,31 +432,46 @@ function CommentsBlock({
   );
 }
 
-function GroupHeader({ ctx, groupIndex }: { ctx: ListContext; groupIndex: number }) {
-  const { files, activeIndex, viewedSet, changedSinceViewed, copiedPathIndex, callbacks } =
-    ctx.props;
+function GroupHeader({
+  ctx,
+  groupIndex,
+}: {
+  ctx: ListContext;
+  groupIndex: number;
+}) {
+  const {
+    files,
+    activeIndex,
+    viewedSet,
+    changedSinceViewed,
+    copiedPathIndex,
+    callbacks,
+  } = ctx.props;
   const file = files[groupIndex];
-  if (!file) return <div className="qf-fsec-head" />;
+  if (!file) {
+    return <div className="qf-fsec-head" />;
+  }
   const glyph = glyphFor(file.status);
   const slash = file.filename.lastIndexOf("/");
   const dir = slash === -1 ? "" : file.filename.slice(0, slash + 1);
-  const basename = slash === -1 ? file.filename : file.filename.slice(slash + 1);
+  const basename =
+    slash === -1 ? file.filename : file.filename.slice(slash + 1);
   const viewed = viewedSet.has(file.filename);
   const copied = copiedPathIndex === groupIndex;
   return (
     <header
       className={cn(
         "qf-fsec-head",
-        groupIndex === activeIndex && "qf-fsec-active",
+        groupIndex === activeIndex && "qf-fsec-active"
       )}
       data-file-index={groupIndex}
     >
       <span className={cn("qf-file-glyph", glyph.cls)}>{glyph.letter}</span>
       <button
-        type="button"
         className="qf-fsec-name qf-fsec-copy"
-        title={copied ? "Copied" : `${file.filename} — click to copy path`}
         onClick={() => callbacks.onCopyPath(groupIndex)}
+        title={copied ? "Copied" : `${file.filename} — click to copy path`}
+        type="button"
       >
         {file.previousFilename && file.status === "renamed" && (
           <span className="qf-filebar-prev">{file.previousFilename} → </span>
@@ -448,13 +479,16 @@ function GroupHeader({ ctx, groupIndex }: { ctx: ListContext; groupIndex: number
         <span className="qf-file-dir">{dir}</span>
         <span className="qf-fsec-base">{basename}</span>
         {copied && (
-          <span className="qf-fsec-copied" aria-live="polite">
-            <Check size={11} aria-hidden /> copied
+          <span aria-live="polite" className="qf-fsec-copied">
+            <Check aria-hidden size={11} /> copied
           </span>
         )}
       </button>
       {changedSinceViewed.has(file.filename) && (
-        <span className="qf-updated-chip" title="Changed since you marked it viewed">
+        <span
+          className="qf-updated-chip"
+          title="Changed since you marked it viewed"
+        >
           updated
         </span>
       )}
@@ -463,13 +497,13 @@ function GroupHeader({ ctx, groupIndex }: { ctx: ListContext; groupIndex: number
         <span className="qf-del">−{file.deletions}</span>
       </span>
       <button
-        type="button"
+        aria-pressed={viewed}
         className={cn("qf-viewed-btn", viewed && "qf-viewed-on")}
         onClick={() => callbacks.onToggleViewed(groupIndex)}
         title={viewed ? "Viewed — click to unmark (v)" : "Mark as viewed (v)"}
-        aria-pressed={viewed}
+        type="button"
       >
-        <Check size={12} aria-hidden />
+        <Check aria-hidden size={12} />
         Viewed
       </button>
     </header>
@@ -479,18 +513,20 @@ function GroupHeader({ ctx, groupIndex }: { ctx: ListContext; groupIndex: number
 function renderItem(ctx: ListContext, index: number, item: ReviewItem) {
   const p = ctx.props;
   const file = p.files[item.fileIndex];
-  if (!file) return <div style={{ height: 1 }} />;
+  if (!file) {
+    return <div style={{ height: 1 }} />;
+  }
 
   switch (item.kind) {
     case "image":
       return (
         <div data-file-index={item.fileIndex}>
           <ImageDiff
+            baseSha={p.baseSha}
             file={file}
+            headSha={p.headSha}
             owner={p.owner}
             repo={p.repo}
-            baseSha={p.baseSha}
-            headSha={p.headSha}
           />
         </div>
       );
@@ -503,10 +539,12 @@ function renderItem(ctx: ListContext, index: number, item: ReviewItem) {
     case "hunk":
       return (
         <button
-          type="button"
-          onClick={() => p.callbacks.onToggleHunk(item.fileIndex, item.hunkIndex)}
           className="qf-row qf-row-hunk"
           data-file-index={item.fileIndex}
+          onClick={() =>
+            p.callbacks.onToggleHunk(item.fileIndex, item.hunkIndex)
+          }
+          type="button"
         >
           <span className="qf-gutter qf-gutter-old" />
           <span className="qf-gutter qf-gutter-new" />
@@ -517,21 +555,21 @@ function renderItem(ctx: ListContext, index: number, item: ReviewItem) {
     case "comments":
       return (
         <CommentsBlock
-          item={item}
-          filename={file.filename}
           addPending={p.addPending}
+          callbacks={p.callbacks}
+          filename={file.filename}
+          item={item}
           replyRequest={
             p.replyRequest && p.replyRequest.path === file.filename
               ? p.replyRequest
               : null
           }
-          callbacks={p.callbacks}
         />
       );
     case "row": {
       const meta = fileRenderMeta(file.patch!);
       const key =
-        item.anchor != null ? fileAnchorKey(item.fileIndex, item.anchor) : null;
+        item.anchor == null ? null : fileAnchorKey(item.fileIndex, item.anchor);
       const marks = p.marks;
 
       const marked =
@@ -540,7 +578,7 @@ function renderItem(ctx: ListContext, index: number, item: ReviewItem) {
           ? findMatchRangesInLine(
               item.row.content,
               marks.query,
-              marks.caseSensitive,
+              marks.caseSensitive
             ).length > 0
           : marks.fileIndex === item.fileIndex &&
             occurrenceRangesInLine(item.row.content, {
@@ -555,9 +593,9 @@ function renderItem(ctx: ListContext, index: number, item: ReviewItem) {
           ? p.findCurrent.ordinal
           : null;
       const indentVar =
-        ctx.colW != null
-          ? `${(meta.indentUnit.ch * ctx.colW).toFixed(3)}px`
-          : `${meta.indentUnit.ch}ch`;
+        ctx.colW == null
+          ? `${meta.indentUnit.ch}ch`
+          : `${(meta.indentUnit.ch * ctx.colW).toFixed(3)}px`;
       const sel = p.selection;
       const inSel =
         sel != null &&
@@ -566,19 +604,12 @@ function renderItem(ctx: ListContext, index: number, item: ReviewItem) {
         index <= sel.toItem;
       return (
         <DiffLine
-          item={item}
           filename={file.filename}
-          stateCls={cn(
-            key != null && key === p.cursorKey && "qf-row-active",
-            inSel && "qf-row-selected",
-            inSel && index === sel.endItem && "qf-row-sel-end",
-            key != null && key === p.flashKey && "qf-row-flash",
-          )}
-          intra={meta.intraByRow.get(item.row) ?? null}
+          findOrdinal={findOrdinal}
           guideLvl={meta.guideByRow.get(item.row) ?? null}
           indentVar={indentVar}
-          markKind={marked ? marks.kind : null}
-          markQuery={marked ? marks.query : null}
+          intra={meta.intraByRow.get(item.row) ?? null}
+          item={item}
           markFlag={
             marked
               ? marks.kind === "find"
@@ -586,12 +617,19 @@ function renderItem(ctx: ListContext, index: number, item: ReviewItem) {
                 : marks.wholeWord
               : false
           }
-          findOrdinal={findOrdinal}
+          markKind={marked ? marks.kind : null}
+          markQuery={marked ? marks.query : null}
           onEnter={p.callbacks.onRowEnter}
           onOpenBox={p.callbacks.onOpenBox}
-          onPlusDragStart={p.callbacks.onPlusDragStart}
-          onPlusDragOver={p.callbacks.onPlusDragOver}
           onPlusDragEnd={p.callbacks.onPlusDragEnd}
+          onPlusDragOver={p.callbacks.onPlusDragOver}
+          onPlusDragStart={p.callbacks.onPlusDragStart}
+          stateCls={cn(
+            key != null && key === p.cursorKey && "qf-row-active",
+            inSel && "qf-row-selected",
+            inSel && index === sel.endItem && "qf-row-sel-end",
+            key != null && key === p.flashKey && "qf-row-flash"
+          )}
         />
       );
     }
@@ -611,9 +649,9 @@ function Scroller({
     <div
       ref={ref}
       {...props}
-      tabIndex={-1}
       className="qf-scrollhost min-w-0 flex-1"
       data-testid="review-scroller"
+      tabIndex={-1}
     />
   );
 }
@@ -628,163 +666,192 @@ export function ReviewList({
 
   const modelRef = useLatest(model);
 
-    const [colW, setColW] = useState<number | null>(monoColWidthCache);
-    useEffect(() => {
-      if (monoColWidthCache != null) return;
-      const host = scrollerRef.current;
-      if (!host) return;
-      let cancelled = false;
-      const raf = requestAnimationFrame(() => {
-        const w = measureMonoColWidth(host);
-        if (!cancelled && w > 0) setColW(w);
-      });
-      if (document.fonts?.status !== "loaded") {
-        void document.fonts?.ready.then(() => {
-          if (cancelled || !scrollerRef.current) return;
-          const w = measureMonoColWidth(scrollerRef.current);
-          if (w > 0) setColW(w);
-        });
-      }
-      return () => {
-        cancelled = true;
-        cancelAnimationFrame(raf);
-      };
-    }, []);
-
-    function stickyHeaderPx(): number {
-      const el = scrollerRef.current?.querySelector<HTMLElement>(".qf-fsec-head");
-      return el?.offsetHeight ?? HEADER_FALLBACK_PX;
+  const [colW, setColW] = useState<number | null>(monoColWidthCache);
+  useEffect(() => {
+    if (monoColWidthCache != null) {
+      return;
     }
-
-    const cursorViewLocation: CalculateViewLocation = ({
-      itemTop,
-      itemBottom,
-      viewportTop,
-      viewportBottom,
-      locationParams: { behavior, align: _align, ...rest },
-    }) => {
-      const headerPx = stickyHeaderPx() + 4;
-      if (itemTop < viewportTop + headerPx) {
-        return { ...rest, behavior, align: "start", offset: -headerPx };
+    const host = scrollerRef.current;
+    if (!host) {
+      return;
+    }
+    let cancelled = false;
+    const raf = requestAnimationFrame(() => {
+      const w = measureMonoColWidth(host);
+      if (!cancelled && w > 0) {
+        setColW(w);
       }
-      if (itemBottom > viewportBottom - 4) {
-        return { ...rest, behavior, align: "end", offset: 4 };
-      }
-      return null;
-    };
-
-    useImperativeHandle(ref, (): ReviewListHandle => {
-      return {
-        scrollToFileStart(fileIndex) {
-          const first = modelRef.current.groupFirstItem[fileIndex];
-          if (first == null) return;
-          vRef.current?.scrollToIndex({ index: first, align: "start" });
-        },
-        centerItem(itemIndex) {
-          vRef.current?.scrollToIndex({ index: itemIndex, align: "center" });
-        },
-        nudgeItemIntoView(itemIndex) {
-          vRef.current?.scrollIntoView({
-            index: itemIndex,
-            calculateViewLocation: cursorViewLocation,
-          });
-        },
-        scroller() {
-          return scrollerRef.current;
-        },
-        getState(cb) {
-          vRef.current?.getState(cb);
-        },
-        firstVisibleRow() {
-          const scroller = scrollerRef.current;
-          if (!scroller) return null;
-          const top = scroller.getBoundingClientRect().top;
-          const rows = scroller.querySelectorAll<HTMLElement>("[data-anchor]");
-          for (const el of rows) {
-            const rect = el.getBoundingClientRect();
-            if (rect.bottom <= top + 1) continue;
-            const anchor = el.dataset.anchor;
-            const fi = Number(el.dataset.fileIndex);
-            if (anchor == null || !Number.isFinite(fi)) continue;
-            return { fileIndex: fi, anchor, top: rect.top - top };
-          }
-          return null;
-        },
-        scrollItemTo(itemIndex, topPx) {
-          vRef.current?.scrollToIndex({
-            index: itemIndex,
-            align: "start",
-            offset: -topPx,
-          });
-        },
-        firstVisibleRowItem() {
-          const scroller = scrollerRef.current;
-          if (!scroller) return null;
-          const top = scroller.getBoundingClientRect().top + stickyHeaderPx();
-          const rows = scroller.querySelectorAll<HTMLElement>("[data-anchor]");
-          for (const el of rows) {
-            if (el.getBoundingClientRect().bottom <= top + 4) continue;
-            const anchor = el.dataset.anchor;
-            const fi = Number(el.dataset.fileIndex);
-            if (anchor == null || !Number.isFinite(fi)) continue;
-            const idx = modelRef.current.anchorItem.get(
-              fileAnchorKey(fi, anchor),
-            );
-            if (idx != null) return idx;
-          }
-          return null;
-        },
-      };
     });
+    if (document.fonts?.status !== "loaded") {
+      void document.fonts?.ready.then(() => {
+        if (cancelled || !scrollerRef.current) {
+          return;
+        }
+        const w = measureMonoColWidth(scrollerRef.current);
+        if (w > 0) {
+          setColW(w);
+        }
+      });
+    }
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
+  }, []);
 
-    return (
-      <div
-        className="qf-diff qf-review-list min-h-0 min-w-0 flex-1"
-        data-mode={props.inputMode}
-        data-dragging={props.dragging && props.selection ? "" : undefined}
-        onMouseMove={(e) => props.callbacks.onMouseMove(e.clientX, e.clientY)}
-      >
-        <GroupedVirtuoso<unknown, ListContext>
-          ref={vRef}
-          context={{ props, colW }}
-          groupCounts={model.groupCounts}
-          groupContent={(groupIndex, ctx) => (
-            <GroupHeader ctx={ctx} groupIndex={groupIndex} />
-          )}
-          itemContent={(index, _group, _data, ctx) =>
-            renderItem(ctx, index, ctx.props.model.items[index])
+  function stickyHeaderPx(): number {
+    const el = scrollerRef.current?.querySelector<HTMLElement>(".qf-fsec-head");
+    return el?.offsetHeight ?? HEADER_FALLBACK_PX;
+  }
+
+  const cursorViewLocation: CalculateViewLocation = ({
+    itemTop,
+    itemBottom,
+    viewportTop,
+    viewportBottom,
+    locationParams: { behavior, align: _align, ...rest },
+  }) => {
+    const headerPx = stickyHeaderPx() + 4;
+    if (itemTop < viewportTop + headerPx) {
+      return { ...rest, align: "start", behavior, offset: -headerPx };
+    }
+    if (itemBottom > viewportBottom - 4) {
+      return { ...rest, align: "end", behavior, offset: 4 };
+    }
+    return null;
+  };
+
+  useImperativeHandle(
+    ref,
+    (): ReviewListHandle => ({
+      centerItem(itemIndex) {
+        vRef.current?.scrollToIndex({ align: "center", index: itemIndex });
+      },
+      firstVisibleRow() {
+        const scroller = scrollerRef.current;
+        if (!scroller) {
+          return null;
+        }
+        const top = scroller.getBoundingClientRect().top;
+        const rows = scroller.querySelectorAll<HTMLElement>("[data-anchor]");
+        for (const el of rows) {
+          const rect = el.getBoundingClientRect();
+          if (rect.bottom <= top + 1) {
+            continue;
           }
-          computeItemKey={(index, _group, ctx) => {
-            const it = ctx.props.model.items[index];
-            if (!it) return `i${index}`;
-            switch (it.kind) {
-              case "row":
-                return it.anchor != null
-                  ? `r:${it.fileIndex}:${it.anchor}`
-                  : `r:${it.fileIndex}:${it.hunkIndex}:${index}`;
-              case "hunk":
-                return `h:${it.fileIndex}:${it.hunkIndex}`;
-              case "comments":
-                return `c:${it.fileIndex}:${it.anchor}`;
-              default:
-                return `f:${it.fileIndex}:${it.kind}`;
+          const anchor = el.dataset.anchor;
+          const fi = Number(el.dataset.fileIndex);
+          if (anchor == null || !Number.isFinite(fi)) {
+            continue;
+          }
+          return { anchor, fileIndex: fi, top: rect.top - top };
+        }
+        return null;
+      },
+      firstVisibleRowItem() {
+        const scroller = scrollerRef.current;
+        if (!scroller) {
+          return null;
+        }
+        const top = scroller.getBoundingClientRect().top + stickyHeaderPx();
+        const rows = scroller.querySelectorAll<HTMLElement>("[data-anchor]");
+        for (const el of rows) {
+          if (el.getBoundingClientRect().bottom <= top + 4) {
+            continue;
+          }
+          const anchor = el.dataset.anchor;
+          const fi = Number(el.dataset.fileIndex);
+          if (anchor == null || !Number.isFinite(fi)) {
+            continue;
+          }
+          const idx = modelRef.current.anchorItem.get(
+            fileAnchorKey(fi, anchor)
+          );
+          if (idx != null) {
+            return idx;
+          }
+        }
+        return null;
+      },
+      getState(cb) {
+        vRef.current?.getState(cb);
+      },
+      nudgeItemIntoView(itemIndex) {
+        vRef.current?.scrollIntoView({
+          calculateViewLocation: cursorViewLocation,
+          index: itemIndex,
+        });
+      },
+      scroller() {
+        return scrollerRef.current;
+      },
+      scrollItemTo(itemIndex, topPx) {
+        vRef.current?.scrollToIndex({
+          align: "start",
+          index: itemIndex,
+          offset: -topPx,
+        });
+      },
+      scrollToFileStart(fileIndex) {
+        const first = modelRef.current.groupFirstItem[fileIndex];
+        if (first == null) {
+          return;
+        }
+        vRef.current?.scrollToIndex({ align: "start", index: first });
+      },
+    })
+  );
+
+  return (
+    <div
+      className="qf-diff qf-review-list min-h-0 min-w-0 flex-1"
+      data-dragging={props.dragging && props.selection ? "" : undefined}
+      data-mode={props.inputMode}
+      onMouseMove={(e) => props.callbacks.onMouseMove(e.clientX, e.clientY)}
+    >
+      <GroupedVirtuoso<unknown, ListContext>
+        computeItemKey={(index, _group, ctx) => {
+          const it = ctx.props.model.items[index];
+          if (!it) {
+            return `i${index}`;
+          }
+          switch (it.kind) {
+            case "row":
+              return it.anchor == null
+                ? `r:${it.fileIndex}:${it.hunkIndex}:${index}`
+                : `r:${it.fileIndex}:${it.anchor}`;
+            case "hunk":
+              return `h:${it.fileIndex}:${it.hunkIndex}`;
+            case "comments":
+              return `c:${it.fileIndex}:${it.anchor}`;
+            default:
+              return `f:${it.fileIndex}:${it.kind}`;
+          }
+        }}
+        context={{ colW, props }}
+        defaultItemHeight={26}
+        groupContent={(groupIndex, ctx) => (
+          <GroupHeader ctx={ctx} groupIndex={groupIndex} />
+        )}
+        groupCounts={model.groupCounts}
+        increaseViewportBy={{ bottom: 600, top: 400 }}
+        itemContent={(index, _group, _data, ctx) =>
+          renderItem(ctx, index, ctx.props.model.items[index])
+        }
+        onScroll={props.callbacks.onScroll}
+        ref={vRef}
+        restoreStateFrom={props.restoreState}
+        scrollerRef={(el) => {
+          scrollerRef.current = (el as HTMLElement) ?? null;
+        }}
+        {...(props.restoreState == null && (props.initialFileIndex ?? 0) > 0
+          ? {
+              initialTopMostItemIndex:
+                model.groupFirstItem[props.initialFileIndex!] ?? 0,
             }
-          }}
-          increaseViewportBy={{ top: 400, bottom: 600 }}
-          defaultItemHeight={26}
-          scrollerRef={(el) => {
-            scrollerRef.current = (el as HTMLElement) ?? null;
-          }}
-          onScroll={props.callbacks.onScroll}
-          restoreStateFrom={props.restoreState}
-          {...(props.restoreState == null && (props.initialFileIndex ?? 0) > 0
-            ? {
-                initialTopMostItemIndex:
-                  model.groupFirstItem[props.initialFileIndex!] ?? 0,
-              }
-            : {})}
-          components={{ Scroller }}
-        />
-      </div>
-    );
+          : {})}
+        components={{ Scroller }}
+      />
+    </div>
+  );
 }

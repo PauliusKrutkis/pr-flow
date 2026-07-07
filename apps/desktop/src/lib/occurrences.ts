@@ -7,8 +7,8 @@
  * selection inside a single diff code line" gating).
  */
 
-import { parsePatch, rowAnchor } from "./diff";
-import { findMatchRangesInLine } from "./findInDiff";
+import { parsePatch, rowAnchor } from "./diff.ts";
+import { findMatchRangesInLine } from "./findInDiff.ts";
 
 export interface OccurrenceSpec {
   query: string;
@@ -38,12 +38,18 @@ const HAS_SUBSTANCE = /[\p{L}\p{N}]/u;
  * form so ` foo ` doesn't pass on padding alone.
  */
 export function occurrenceSpecFromSelection(
-  text: string,
+  text: string
 ): OccurrenceSpec | null {
-  if (text.includes("\n")) return null;
+  if (text.includes("\n")) {
+    return null;
+  }
   const trimmed = text.trim();
-  if (trimmed.length < MIN_LEN || trimmed.length > MAX_LEN) return null;
-  if (!HAS_SUBSTANCE.test(trimmed)) return null;
+  if (trimmed.length < MIN_LEN || trimmed.length > MAX_LEN) {
+    return null;
+  }
+  if (!HAS_SUBSTANCE.test(trimmed)) {
+    return null;
+  }
   return { query: text, wholeWord: WORD.test(text) };
 }
 
@@ -57,21 +63,23 @@ const WORD_CHAR = /\w/;
  */
 export function occurrenceRangesInLine(
   text: string,
-  spec: OccurrenceSpec,
+  spec: OccurrenceSpec
 ): Array<[number, number]> {
   const ranges = findMatchRangesInLine(text, spec.query, true);
-  if (!spec.wholeWord) return ranges;
+  if (!spec.wholeWord) {
+    return ranges;
+  }
   return ranges.filter(
     ([start, end]) =>
       (start === 0 || !WORD_CHAR.test(text[start - 1])) &&
-      (end === text.length || !WORD_CHAR.test(text[end])),
+      (end === text.length || !WORD_CHAR.test(text[end]))
   );
 }
 
 export interface OccurrenceMatch {
   anchor: string;
-  start: number;
   end: number;
+  start: number;
 }
 
 /**
@@ -83,15 +91,17 @@ export interface OccurrenceMatch {
  */
 export function occurrenceMatches(
   file: { patch?: string | null },
-  spec: OccurrenceSpec,
+  spec: OccurrenceSpec
 ): OccurrenceMatch[] {
   const out: OccurrenceMatch[] = [];
   for (const hunk of parsePatch(file.patch)) {
     for (const row of hunk.rows) {
       const anchor = rowAnchor(row);
-      if (anchor == null) continue;
+      if (anchor == null) {
+        continue;
+      }
       for (const [start, end] of occurrenceRangesInLine(row.content, spec)) {
-        out.push({ anchor, start, end });
+        out.push({ anchor, end, start });
       }
     }
   }

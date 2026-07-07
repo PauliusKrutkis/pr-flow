@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { fuzzyMatch, fuzzyMatchFields } from "./fuzzy";
+import { fuzzyMatch, fuzzyMatchFields } from "./fuzzy.ts";
 
 describe("fuzzyMatch", () => {
   it("empty query matches everything with no highlights", () => {
-    expect(fuzzyMatch("", "anything")).toEqual({ score: 0, indices: [] });
-    expect(fuzzyMatch("   ", "anything")).toEqual({ score: 0, indices: [] });
+    expect(fuzzyMatch("", "anything")).toEqual({ indices: [], score: 0 });
+    expect(fuzzyMatch("   ", "anything")).toEqual({ indices: [], score: 0 });
   });
 
   it("misses when a character never appears", () => {
@@ -51,8 +51,8 @@ describe("fuzzyMatchFields", () => {
 
   it("takes the best field's score and reports per-field indices", () => {
     const m = fuzzyMatchFields("titleword", {
-      title: "titleword here",
       author: "someone",
+      title: "titleword here",
     })!;
     expect(m.indices.title).toBeDefined();
     expect(m.indices.author).toBeUndefined();

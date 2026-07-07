@@ -1,39 +1,43 @@
 import { create } from "zustand";
 
 interface PerfState {
-  lastPROpenMs: number | null;
-  lastFileSwitchMs: number | null;
-  visible: boolean;
-
-  _openStart: number | null;
   _fileStart: number | null;
 
-  markOpenStart: () => void;
-  completeOpen: () => void;
-  markFileStart: () => void;
+  _openStart: number | null;
   completeFile: () => void;
+  completeOpen: () => void;
+  lastFileSwitchMs: number | null;
+  lastPROpenMs: number | null;
+  markFileStart: () => void;
+
+  markOpenStart: () => void;
   toggle: () => void;
+  visible: boolean;
 }
 
 export const usePerfStore = create<PerfState>((set, get) => ({
-  lastPROpenMs: null,
-  lastFileSwitchMs: null,
-  visible: true,
-
-  _openStart: null,
   _fileStart: null,
 
-  markOpenStart: () => set({ _openStart: performance.now() }),
-  completeOpen: () => {
-    const start = get()._openStart;
-    if (start == null) return;
-    set({ lastPROpenMs: performance.now() - start, _openStart: null });
-  },
-  markFileStart: () => set({ _fileStart: performance.now() }),
+  _openStart: null,
   completeFile: () => {
     const start = get()._fileStart;
-    if (start == null) return;
-    set({ lastFileSwitchMs: performance.now() - start, _fileStart: null });
+    if (start == null) {
+      return;
+    }
+    set({ _fileStart: null, lastFileSwitchMs: performance.now() - start });
   },
+  completeOpen: () => {
+    const start = get()._openStart;
+    if (start == null) {
+      return;
+    }
+    set({ _openStart: null, lastPROpenMs: performance.now() - start });
+  },
+  lastFileSwitchMs: null,
+  lastPROpenMs: null,
+  markFileStart: () => set({ _fileStart: performance.now() }),
+
+  markOpenStart: () => set({ _openStart: performance.now() }),
   toggle: () => set((s) => ({ visible: !s.visible })),
+  visible: true,
 }));

@@ -1,9 +1,9 @@
 import { useMemo } from "react";
-import { useInbox } from "../hooks/useInbox";
-import { useSubscribed } from "../hooks/useSubscribed";
-import { useAppStore } from "../store/appStore";
-import { prKey, type PullRequest } from "../types";
-import { SearchPane } from "./inbox/SearchPane";
+import { useInbox } from "../hooks/useInbox.ts";
+import { useSubscribed } from "../hooks/useSubscribed.ts";
+import { useAppStore } from "../store/appStore.ts";
+import { type PullRequest, prKey } from "../types.ts";
+import { SearchPane } from "./inbox/SearchPane.tsx";
 
 /**
  * The global "/" PR search — jump to any pull request from any screen. Reads the
@@ -21,7 +21,6 @@ export function GlobalSearch() {
   const setSelectedKey = useAppStore((s) => s.setInboxSelectedKey);
 
   const allPrs = useMemo(() => {
-
     const seen = new Set<string>();
     const out: PullRequest[] = [];
     const add = (pr: PullRequest) => {
@@ -38,15 +37,19 @@ export function GlobalSearch() {
         "created",
         "involved",
       ] as const) {
-        for (const pr of data[key].prs) add(pr);
+        for (const pr of data[key].prs) {
+          add(pr);
+        }
       }
     }
-    for (const pr of subscribed?.prs ?? []) add(pr);
+    for (const pr of subscribed?.prs ?? []) {
+      add(pr);
+    }
     return out;
   }, [data, subscribed]);
 
   const openPR = (pr: PullRequest) => {
-    const key = prKey({ owner: pr.owner, name: pr.name, number: pr.number });
+    const key = prKey({ name: pr.name, number: pr.number, owner: pr.owner });
     setSelectedKey(key);
     markSeen(key, pr.updatedAt);
     openReview(pr.owner, pr.name, pr.number);
@@ -54,10 +57,10 @@ export function GlobalSearch() {
 
   return (
     <SearchPane
-      open={searchOpen}
-      onOpenChange={setSearchOpen}
-      prs={allPrs}
       onOpen={openPR}
+      onOpenChange={setSearchOpen}
+      open={searchOpen}
+      prs={allPrs}
     />
   );
 }

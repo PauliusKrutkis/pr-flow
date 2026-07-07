@@ -1,23 +1,23 @@
-import { useEffect, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
-import type { ReviewComment } from "../../types";
-import { formatRelativeTime, formatAbsolute } from "../../lib/time";
-import { Markdown } from "../Markdown";
-import { Avatar } from "../ui/Avatar";
-import { Kbd } from "../ui/Kbd";
-import { AddCommentBox } from "./AddCommentBox";
+import { useEffect, useState } from "react";
+import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
+import type { ReviewComment } from "../../types.ts";
+import { Markdown } from "../Markdown.tsx";
+import { Avatar } from "../ui/Avatar.tsx";
+import { Kbd } from "../ui/Kbd.tsx";
+import { AddCommentBox } from "./AddCommentBox.tsx";
 
 export interface ReplyRequest {
-  rootId: number;
   nonce: number;
+  rootId: number;
 }
 
 interface CommentThreadProps {
   comments: ReviewComment[];
-  onReply: (a: { inReplyTo: number; body: string }) => Promise<void>;
-  replyPending: boolean;
-  onResolve?: (a: { threadId: string; resolved: boolean }) => void;
   onHoverChange?: (hovering: boolean) => void;
+  onReply: (a: { inReplyTo: number; body: string }) => Promise<void>;
+  onResolve?: (a: { threadId: string; resolved: boolean }) => void;
+  replyPending: boolean;
   replyRequest?: ReplyRequest | null;
 }
 
@@ -36,7 +36,9 @@ export function CommentThread({
   const rootId = root?.id;
 
   useEffect(() => {
-    if (!replyRequest || replyRequest.rootId !== rootId) return;
+    if (!replyRequest || replyRequest.rootId !== rootId) {
+      return;
+    }
     const raf = requestAnimationFrame(() => {
       setExpanded(true);
       setReplying(true);
@@ -44,7 +46,9 @@ export function CommentThread({
     return () => cancelAnimationFrame(raf);
   }, [replyRequest, rootId]);
 
-  if (comments.length === 0) return null;
+  if (comments.length === 0) {
+    return null;
+  }
 
   const threadId = root.threadId;
   const resolved = root.resolved;
@@ -55,21 +59,21 @@ export function CommentThread({
   };
 
   function submitReply(body: string) {
-    void onReply({ inReplyTo: rootId, body });
+    void onReply({ body, inReplyTo: rootId });
     setReplying(false);
   }
 
   if (resolved && !expanded) {
     return (
       <button
-        type="button"
         className="qf-thread qf-thread-collapsed qf-focusable"
         data-comment-root={rootId}
         onClick={() => setExpanded(true)}
         title="Resolved — click to expand"
+        type="button"
         {...hoverProps}
       >
-        <CheckCircle2 size={13} aria-hidden />
+        <CheckCircle2 aria-hidden size={13} />
         <span className="qf-resolved-tag">Resolved</span>
         <span className="qf-resolved-snip">
           {root.user} · {firstLine(root.body)}
@@ -82,23 +86,29 @@ export function CommentThread({
     <div className="qf-thread" data-comment-root={rootId} {...hoverProps}>
       {resolved && (
         <div className="qf-thread-resolved-bar">
-          <CheckCircle2 size={13} aria-hidden />
+          <CheckCircle2 aria-hidden size={13} />
           <span className="qf-resolved-tag">Resolved</span>
           <button
-            type="button"
             className="qf-resolved-collapse qf-focusable"
             onClick={() => setExpanded(false)}
+            type="button"
           >
             Collapse
           </button>
         </div>
       )}
       {comments.map((c, i) => (
-        <div key={c.id} className={i > 0 ? "qf-comment qf-comment-reply" : "qf-comment"}>
+        <div
+          className={i > 0 ? "qf-comment qf-comment-reply" : "qf-comment"}
+          key={c.id}
+        >
           <div className="qf-comment-head">
-            <Avatar url={c.userAvatarUrl} name={c.user} size={20} />
+            <Avatar name={c.user} size={20} url={c.userAvatarUrl} />
             <span className="qf-comment-author">{c.user}</span>
-            <span className="qf-comment-time" title={formatAbsolute(c.createdAt)}>
+            <span
+              className="qf-comment-time"
+              title={formatAbsolute(c.createdAt)}
+            >
               {formatRelativeTime(c.createdAt)}
             </span>
           </div>
@@ -110,20 +120,20 @@ export function CommentThread({
       {replying ? (
         <div className="qf-comment qf-comment-reply">
           <AddCommentBox
-            onSubmit={submitReply}
+            autoFocus
             onCancel={() => setReplying(false)}
+            onSubmit={submitReply}
             pending={replyPending}
             placeholder="Reply…"
             submitLabel="Reply"
-            autoFocus
           />
         </div>
       ) : (
         <div className="qf-thread-actions">
           <button
-            type="button"
-            onClick={() => setReplying(true)}
             className="qf-reply-btn qf-focusable"
+            onClick={() => setReplying(true)}
+            type="button"
           >
             Reply
             <span aria-hidden className="qf-key-hint">
@@ -132,12 +142,12 @@ export function CommentThread({
           </button>
           {threadId != null && onResolve && (
             <button
-              type="button"
               className="qf-reply-btn qf-resolve-btn qf-focusable"
               onClick={() => {
-                onResolve({ threadId, resolved: !resolved });
+                onResolve({ resolved: !resolved, threadId });
                 setExpanded(resolved);
               }}
+              type="button"
             >
               {resolved ? "Unresolve" : "Resolve"}
               <span aria-hidden className="qf-key-hint">

@@ -12,11 +12,11 @@ import type { StateSnapshot } from "react-virtuoso";
 
 export interface ReviewMemory {
   fileIndex: number;
+  headSha: string;
+  listState?: StateSnapshot;
   scrollTop: number;
   sectionOffset?: number;
-  listState?: StateSnapshot;
   topRow?: { fileIndex: number; anchor: string; top: number };
-  headSha: string;
 }
 
 const KEY = "pr-flow:reviewMemory";
@@ -31,7 +31,7 @@ function loadAll(): Record<string, ReviewMemory> {
   }
 }
 
-let cache: Record<string, ReviewMemory> = loadAll();
+const cache: Record<string, ReviewMemory> = loadAll();
 let timer: ReturnType<typeof setTimeout> | null = null;
 
 function flush() {
@@ -47,7 +47,9 @@ function flush() {
 }
 
 function schedule() {
-  if (timer) clearTimeout(timer);
+  if (timer) {
+    clearTimeout(timer);
+  }
   timer = setTimeout(flush, WRITE_DELAY);
 }
 
@@ -55,8 +57,11 @@ export function getReviewMemory(prKey: string): ReviewMemory | undefined {
   return cache[prKey];
 }
 
-export function updateReviewMemory(prKey: string, patch: Partial<ReviewMemory>) {
-  const prev = cache[prKey] ?? { fileIndex: 0, scrollTop: 0, headSha: "" };
+export function updateReviewMemory(
+  prKey: string,
+  patch: Partial<ReviewMemory>
+) {
+  const prev = cache[prKey] ?? { fileIndex: 0, headSha: "", scrollTop: 0 };
   cache[prKey] = { ...prev, ...patch };
   schedule();
 }

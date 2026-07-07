@@ -11,12 +11,19 @@ import { fileURLToPath } from "url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function walk(dir, acc = []) {
-  if (!fs.existsSync(dir)) return acc;
+  if (!fs.existsSync(dir)) {
+    return acc;
+  }
   for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, ent.name);
-    if (ent.name === "node_modules" || ent.name === "dist") continue;
-    if (ent.isDirectory()) walk(p, acc);
-    else if (/\.(ts|tsx)$/.test(ent.name)) acc.push(p);
+    if (ent.name === "node_modules" || ent.name === "dist") {
+      continue;
+    }
+    if (ent.isDirectory()) {
+      walk(p, acc);
+    } else if (/\.(ts|tsx)$/.test(ent.name)) {
+      acc.push(p);
+    }
   }
   return acc;
 }
@@ -33,14 +40,18 @@ function collectFiles() {
 
 function blockEnd(lines, start) {
   for (let e = start; e < lines.length; e++) {
-    if (/\*\//.test(lines[e])) return e;
+    if (/\*\//.test(lines[e])) {
+      return e;
+    }
   }
   return start;
 }
 
 function isPropertyLine(line) {
   const trimmed = line.trim();
-  if (/^[A-Za-z_]\w*\s*\(/.test(trimmed)) return false;
+  if (/^[A-Za-z_]\w*\s*\(/.test(trimmed)) {
+    return false;
+  }
   return /^[ \t]{2,}[A-Za-z_]\w*(?:\?)?: /.test(line);
 }
 
@@ -65,7 +76,9 @@ function stripMemberDocs(content) {
     const end = blockEnd(lines, start);
 
     let j = end + 1;
-    while (j < lines.length && lines[j].trim() === "") j++;
+    while (j < lines.length && lines[j].trim() === "") {
+      j++;
+    }
     const next = lines[j] ?? "";
 
     if (isPropertyLine(next) || isStateLine(next)) {
@@ -73,7 +86,9 @@ function stripMemberDocs(content) {
       continue;
     }
 
-    for (let k = start; k <= end; k++) out.push(lines[k]);
+    for (let k = start; k <= end; k++) {
+      out.push(lines[k]);
+    }
     i = end + 1;
   }
 

@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
 import { Check, Eye, Search, X } from "lucide-react";
-import { api } from "../../lib/api";
-import { queryClient, queryKeys } from "../../lib/queryClient";
-import { useWatchedRepos } from "../../hooks/useSubscribed";
-import { useHotkeys } from "../../keyboard";
-import type { RepoHit } from "../../types";
-import { Kbd } from "../ui/Kbd";
+import { useEffect, useRef, useState } from "react";
+import { useWatchedRepos } from "../../hooks/useSubscribed.ts";
+import { useHotkeys } from "../../keyboard/index.ts";
+import { api } from "../../lib/api.ts";
+import { queryClient, queryKeys } from "../../lib/queryClient.ts";
+import type { RepoHit } from "../../types.ts";
+import { Kbd } from "../ui/Kbd.tsx";
 
 /**
  * Manage the watched repositories behind the "Watching" tab. Typing searches
@@ -42,7 +42,9 @@ export function WatchReposDialog({
     }
   }, [open]);
   useEffect(() => {
-    if (open) setRepos(data ?? []);
+    if (open) {
+      setRepos(data ?? []);
+    }
   }, [open, data]);
 
   useEffect(() => {
@@ -52,9 +54,13 @@ export function WatchReposDialog({
   }, [armed]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     const q = input.trim();
-    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    if (debounceRef.current) {
+      window.clearTimeout(debounceRef.current);
+    }
     if (q.length < 2) {
       setHits([]);
       setSearching(false);
@@ -66,7 +72,9 @@ export function WatchReposDialog({
       api
         .searchRepos(q)
         .then((res) => {
-          if (seq !== requestSeq.current) return;
+          if (seq !== requestSeq.current) {
+            return;
+          }
           setHits(res ?? []);
           setSel(0);
           setSearching(false);
@@ -79,17 +87,21 @@ export function WatchReposDialog({
         });
     }, 250);
     return () => {
-      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+      if (debounceRef.current) {
+        window.clearTimeout(debounceRef.current);
+      }
     };
   }, [input, open]);
 
   useHotkeys(
     "watch-repos",
-    [{ keys: "esc", description: "Close", hidden: true, run: () => onClose() }],
-    { enabled: open },
+    [{ description: "Close", hidden: true, keys: "esc", run: () => onClose() }],
+    { enabled: open }
   );
 
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   function stopWatching(repo: string) {
     const next = repos.filter((x) => x !== repo);
@@ -99,7 +111,7 @@ export function WatchReposDialog({
         ? next.length === 0
           ? null
           : Math.min(a, next.length - 1)
-        : a,
+        : a
     );
     inputRef.current?.focus();
   }
@@ -120,15 +132,18 @@ export function WatchReposDialog({
       .trim()
       .replace(/^https?:\/\/[^/]+\//, "")
       .replace(/\/+$/, "");
-    if (!cleaned || !cleaned.includes("/")) return;
-    if (!repos.includes(cleaned)) persist([...repos, cleaned]);
+    if (!(cleaned && cleaned.includes("/"))) {
+      return;
+    }
+    if (!repos.includes(cleaned)) {
+      persist([...repos, cleaned]);
+    }
     setInput("");
     setHits([]);
     inputRef.current?.focus();
   }
 
   function cycleArmed(dir: 1 | -1) {
-
     const order: (number | "done" | null)[] = [
       null,
       ...repos.map((_, i) => i),
@@ -156,7 +171,9 @@ export function WatchReposDialog({
         onClose();
       } else if (typeof armed === "number") {
         const repo = repos[armed];
-        if (repo) stopWatching(repo);
+        if (repo) {
+          stopWatching(repo);
+        }
       } else {
         const hit = hits[sel];
         watch(hit ? hit.fullName : input);
@@ -171,21 +188,23 @@ export function WatchReposDialog({
     <div
       className="q-overlay"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
       }}
     >
       <div
+        aria-label="Watched repositories"
+        aria-modal="true"
         className="q-dialog q-dialog-top qw-panel"
         role="dialog"
-        aria-modal="true"
-        aria-label="Watched repositories"
       >
-        <div className="border-b border-line px-5 py-3.5">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
-            <Eye size={14} aria-hidden className="text-accent" />
+        <div className="border-line border-b px-5 py-3.5">
+          <h2 className="flex items-center gap-2 font-semibold text-fg text-sm">
+            <Eye aria-hidden className="text-accent" size={14} />
             Watched repositories
           </h2>
-          <p className="mt-0.5 text-xs text-muted">
+          <p className="mt-0.5 text-muted text-xs">
             Every open PR in these repos shows up under Watching — whether or
             not you're involved.
           </p>
@@ -194,26 +213,26 @@ export function WatchReposDialog({
         <div className="px-5 py-4">
           <div className="relative">
             <Search
-              size={14}
               aria-hidden
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-faint"
+              className="absolute top-1/2 left-3 -translate-y-1/2 text-faint"
+              size={14}
             />
             <input
-              ref={inputRef}
-              value={input}
+              aria-expanded={hits.length > 0}
+              autoComplete="off"
+              className="q-input q-input-icon font-mono"
               onChange={(e) => {
                 setInput(e.target.value);
                 setArmed(null);
               }}
               onKeyDown={onKeyDown}
               placeholder="Search repositories…  (or paste owner/repo)"
-              spellCheck={false}
-              autoComplete="off"
-              className="q-input q-input-icon font-mono"
+              ref={inputRef}
               role="combobox"
-              aria-expanded={hits.length > 0}
+              spellCheck={false}
+              value={input}
             />
-            {searching && <span className="qw-scan" aria-hidden />}
+            {searching && <span aria-hidden className="qw-scan" />}
           </div>
 
           {input.trim().length >= 2 && (hits.length > 0 || !searching) && (
@@ -222,14 +241,14 @@ export function WatchReposDialog({
                 const watched = repos.includes(hit.fullName);
                 return (
                   <button
-                    key={hit.fullName}
-                    type="button"
-                    role="option"
                     aria-selected={i === sel}
-                    onMouseMove={() => setSel(i)}
-                    onClick={() => !watched && watch(hit.fullName)}
-                    className={"qw-hit" + (i === sel ? " qw-hit-on" : "")}
+                    className={"qw-hit" + (i === sel ? "qw-hit-on" : "")}
                     disabled={watched}
+                    key={hit.fullName}
+                    onClick={() => !watched && watch(hit.fullName)}
+                    onMouseMove={() => setSel(i)}
+                    role="option"
+                    type="button"
                   >
                     <span className="q-mono min-w-0 truncate text-[13px]">
                       {hit.fullName}
@@ -239,16 +258,16 @@ export function WatchReposDialog({
                     )}
                     {watched && (
                       <Check
-                        size={13}
                         aria-label="Already watching"
                         className="ml-auto shrink-0 text-success"
+                        size={13}
                       />
                     )}
                   </button>
                 );
               })}
               {!searching && hits.length === 0 && (
-                <p className="px-2 py-2 text-xs text-faint">
+                <p className="px-2 py-2 text-faint text-xs">
                   {input.includes("/")
                     ? `No matches — Enter watches “${input.trim()}” as typed.`
                     : "No matches."}
@@ -258,29 +277,31 @@ export function WatchReposDialog({
           )}
 
           <div
-            ref={listRef}
             className="mt-3 flex max-h-56 flex-col gap-1 overflow-y-auto"
+            ref={listRef}
           >
             {repos.length === 0 ? (
-              <p className="py-4 text-center text-xs text-faint">
+              <p className="py-4 text-center text-faint text-xs">
                 Nothing watched yet. Search above to add a repository.
               </p>
             ) : (
               repos.map((r, i) => (
                 <div
-                  key={r}
+                  className={"qw-row" + (armed === i ? "qw-row-armed" : "")}
                   data-armed={armed === i}
-                  className={"qw-row" + (armed === i ? " qw-row-armed" : "")}
+                  key={r}
                 >
-                  <span className="q-mono min-w-0 truncate text-[13px]">{r}</span>
+                  <span className="q-mono min-w-0 truncate text-[13px]">
+                    {r}
+                  </span>
                   <button
-                    type="button"
-                    tabIndex={-1}
+                    aria-label={`Stop watching ${r}`}
                     className="qb-x"
                     onClick={() => stopWatching(r)}
-                    aria-label={`Stop watching ${r}`}
+                    tabIndex={-1}
+                    type="button"
                   >
-                    <X size={13} aria-hidden />
+                    <X aria-hidden size={13} />
                   </button>
                 </div>
               ))
@@ -288,8 +309,8 @@ export function WatchReposDialog({
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t border-line px-5 py-3">
-          <span className="text-xs text-faint">
+        <div className="flex items-center justify-between border-line border-t px-5 py-3">
+          <span className="text-faint text-xs">
             <Kbd combo="up" />
             <Kbd combo="down" /> pick · <Kbd combo="enter" />{" "}
             {armed === "done"
@@ -300,13 +321,13 @@ export function WatchReposDialog({
             · <Kbd combo="tab" /> actions · <Kbd combo="esc" /> done
           </span>
           <button
-            type="button"
-            tabIndex={-1}
+            className={
+              "q-btn q-btn-quiet" + (armed === "done" ? "qw-done-armed" : "")
+            }
             data-armed={armed === "done"}
             onClick={onClose}
-            className={
-              "q-btn q-btn-quiet" + (armed === "done" ? " qw-done-armed" : "")
-            }
+            tabIndex={-1}
+            type="button"
           >
             Done
           </button>

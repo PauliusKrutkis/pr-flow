@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parsePatch } from "./diff";
-import { intralineDiff, intralinePairs, tokenize } from "./intraline";
+import { parsePatch } from "./diff.ts";
+import { intralineDiff, intralinePairs, tokenize } from "./intraline.ts";
 
 /** The emphasized substrings, for readable assertions. */
 function slices(text: string, ranges: Array<[number, number]>): string[] {
@@ -50,7 +50,7 @@ describe("intralineDiff", () => {
   it("emphasizes only the changed identifier piece in a rename", () => {
     const d = intralineDiff(
       "  const retryCount = 3;",
-      "  const retryLimit = 3;",
+      "  const retryLimit = 3;"
     )!;
     expect(slices("  const retryCount = 3;", d.del)).toEqual(["Count"]);
     expect(slices("  const retryLimit = 3;", d.add)).toEqual(["Limit"]);
@@ -76,7 +76,7 @@ describe("intralineDiff", () => {
   it("bails when the lines share too little (common-token ratio < 0.4)", () => {
     expect(intralineDiff("  return 1;", "  // tuned")).toBeNull();
     expect(
-      intralineDiff("const a = compute();", "let done = false;"),
+      intralineDiff("const a = compute();", "let done = false;")
     ).toBeNull();
   });
 
@@ -90,7 +90,6 @@ describe("intralineDiff", () => {
   });
 
   it("bails past the span cap even when the ratio passes", () => {
-
     const del = "f(a1, b1, c1, d1, e1, f1, g1, h1, i1)";
     const add = "f(a2, b2, c2, d2, e2, f2, g2, h2, i2)";
     expect(intralineDiff(del, add)).toBeNull();
@@ -130,11 +129,10 @@ describe("intralinePairs", () => {
   });
 
   it("leaves leftover rows of an unbalanced run unpaired", () => {
-
     const hunks = parsePatch(
       ["@@ -1,2 +1,3 @@", "-  return 1;", "+  // tuned", "+  return 2;"].join(
-        "\n",
-      ),
+        "\n"
+      )
     );
     expect(intralinePairs(hunks).size).toBe(0);
   });
@@ -148,7 +146,7 @@ describe("intralinePairs", () => {
         "+  const retryLimit = 3;",
         "@@ -10,1 +10,1 @@",
         "-  const retryCount = 3;",
-      ].join("\n"),
+      ].join("\n")
     );
     expect(intralinePairs(hunks).size).toBe(0);
   });

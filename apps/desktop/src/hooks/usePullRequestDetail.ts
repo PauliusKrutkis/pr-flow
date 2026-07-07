@@ -1,8 +1,8 @@
-import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "../lib/api";
-import { queryClient, queryKeys } from "../lib/queryClient";
-import type { PullRequestDetail } from "../types";
+import { useEffect } from "react";
+import { api } from "../lib/api.ts";
+import { queryClient, queryKeys } from "../lib/queryClient.ts";
+import type { PullRequestDetail } from "../types.ts";
 
 /**
  * Detail freshness window. The consuming query and the prefetch must share this
@@ -18,7 +18,7 @@ const PR_DETAIL_STALE_MS = 60_000;
 export function usePullRequestDetail(
   owner: string,
   repo: string,
-  number: number,
+  number: number
 ) {
   useEffect(() => {
     let cancelled = false;
@@ -28,7 +28,7 @@ export function usePullRequestDetail(
         if (!cancelled && detail) {
           queryClient.setQueryData<PullRequestDetail>(
             queryKeys.prDetail(owner, repo, number),
-            (cur) => cur ?? detail,
+            (cur) => cur ?? detail
           );
         }
       })
@@ -39,11 +39,11 @@ export function usePullRequestDetail(
   }, [owner, repo, number]);
 
   return useQuery({
-    queryKey: queryKeys.prDetail(owner, repo, number),
     queryFn: () => api.getPullRequestDetail(owner, repo, number),
-    staleTime: PR_DETAIL_STALE_MS,
+    queryKey: queryKeys.prDetail(owner, repo, number),
     refetchInterval: PR_DETAIL_STALE_MS,
     refetchOnWindowFocus: true,
+    staleTime: PR_DETAIL_STALE_MS,
   });
 }
 
@@ -56,7 +56,7 @@ export function usePullRequestDetail(
 export function prefetchPullRequest(
   owner: string,
   repo: string,
-  number: number,
+  number: number
 ): void {
   const key = queryKeys.prDetail(owner, repo, number);
   if (!queryClient.getQueryData(key)) {
@@ -66,15 +66,15 @@ export function prefetchPullRequest(
         if (detail) {
           queryClient.setQueryData<PullRequestDetail>(
             key,
-            (cur) => cur ?? detail,
+            (cur) => cur ?? detail
           );
         }
       })
       .catch(() => {});
   }
   void queryClient.prefetchQuery({
-    queryKey: key,
     queryFn: () => api.getPullRequestDetail(owner, repo, number),
+    queryKey: key,
     staleTime: PR_DETAIL_STALE_MS,
   });
 }

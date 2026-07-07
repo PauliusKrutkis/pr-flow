@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parsePatch } from "./diff";
-import { detectIndentUnit, guideLevelsForHunk } from "./indent";
+import { parsePatch } from "./diff.ts";
+import { detectIndentUnit, guideLevelsForHunk } from "./indent.ts";
 
 function unitOf(lines: string[]) {
   const patch = ["@@ -1,9 +1,9 @@", ...lines.map((l) => ` ${l}`)].join("\n");
@@ -13,9 +13,9 @@ describe("detectIndentUnit", () => {
       ch: 2,
       chars: 2,
     });
-    expect(unitOf(["function f() {", "    four;", "        eight;", "}"])).toEqual(
-      { ch: 4, chars: 4 },
-    );
+    expect(
+      unitOf(["function f() {", "    four;", "        eight;", "}"])
+    ).toEqual({ ch: 4, chars: 4 });
   });
 
   it("clamps to 2/4/8", () => {
@@ -44,7 +44,7 @@ describe("detectIndentUnit", () => {
 
 describe("guideLevelsForHunk", () => {
   const two = { ch: 2, chars: 2 };
-  const row = (content: string, type = "context") => ({ type, content });
+  const row = (content: string, type = "context") => ({ content, type });
 
   it("counts levels per row; zero-indent rows get null", () => {
     const rows = [row("top();"), row("  one();"), row("    two();")];
@@ -68,12 +68,7 @@ describe("guideLevelsForHunk", () => {
   });
 
   it("hunk header rows are null and stop bridging", () => {
-    const rows = [
-      row("    a();"),
-      row("@@", "hunk"),
-      row(""),
-      row("    b();"),
-    ];
+    const rows = [row("    a();"), row("@@", "hunk"), row(""), row("    b();")];
     expect(guideLevelsForHunk(rows, two)).toEqual([2, null, null, 2]);
   });
 

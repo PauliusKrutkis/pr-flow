@@ -1,33 +1,33 @@
+import { CornerDownLeft, FileCode, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, FileCode, CornerDownLeft } from "lucide-react";
-import type { ChangedFile } from "../../types";
-import { parsePatch } from "../../lib/diff";
-import { highlightLineWithMatch } from "../../lib/highlight";
-import { fuzzyMatch } from "../../lib/fuzzy";
-import { Kbd } from "../ui/Kbd";
-import { HighlightIndices } from "../ui/Highlight";
+import { parsePatch } from "../../lib/diff.ts";
+import { fuzzyMatch } from "../../lib/fuzzy.ts";
+import { highlightLineWithMatch } from "../../lib/highlight.ts";
+import type { ChangedFile } from "../../types.ts";
+import { HighlightIndices } from "../ui/Highlight.tsx";
+import { Kbd } from "../ui/Kbd.tsx";
 
 type Mode = "files" | "text";
 
 interface FileItem {
-  kind: "file";
   fileIndex: number;
   filename: string;
+  kind: "file";
   matched: number[];
 }
 interface SnippetLine {
+  hit: boolean;
   num: number | null;
   text: string;
-  hit: boolean;
 }
 interface LineItem {
-  kind: "line";
+  anchor: string | null;
+  content: string;
+  context: SnippetLine[];
   fileIndex: number;
   filename: string;
+  kind: "line";
   line: number | null;
-  content: string;
-  anchor: string | null;
-  context: SnippetLine[];
 }
 type Item = FileItem | LineItem;
 
@@ -75,9 +75,9 @@ export function PrSearch({
         const m = fuzzyMatch(q, f.filename);
         if (m !== null) {
           out.push({
-            kind: "file",
             fileIndex: i,
             filename: f.filename,
+            kind: "file",
             matched: m.indices,
             score: m.score,
           });
@@ -87,17 +87,22 @@ export function PrSearch({
       return out;
     }
 
-    if (!q) return [];
+    if (!q) {
+      return [];
+    }
     const out: Item[] = [];
     for (let i = 0; i < files.length && out.length < MAX_LINES; i++) {
       const f = files[i];
-      if (!f.patch) continue;
+      if (!f.patch) {
+        continue;
+      }
       for (const hunk of parsePatch(f.patch)) {
-
         const rows = hunk.rows.filter((r) => r.type !== "hunk");
         for (let ri = 0; ri < rows.length; ri++) {
           const row = rows[ri];
-          if (!row.content.toLowerCase().includes(q)) continue;
+          if (!row.content.toLowerCase().includes(q)) {
+            continue;
+          }
           const context: SnippetLine[] = [];
           for (
             let ci = Math.max(0, ri - SNIPPET_RADIUS);
@@ -106,31 +111,35 @@ export function PrSearch({
           ) {
             const r = rows[ci];
             context.push({
+              hit: ci === ri,
               num: r.newLine ?? r.oldLine,
               text: r.content,
-              hit: ci === ri,
             });
           }
           const anchor =
             row.type === "del"
-              ? row.oldLine != null
-                ? `LEFT:${row.oldLine}`
-                : null
-              : row.newLine != null
-                ? `RIGHT:${row.newLine}`
-                : null;
+              ? row.oldLine == null
+                ? null
+                : `LEFT:${row.oldLine}`
+              : row.newLine == null
+                ? null
+                : `RIGHT:${row.newLine}`;
           out.push({
-            kind: "line",
+            anchor,
+            content: row.content.trim(),
+            context,
             fileIndex: i,
             filename: f.filename,
+            kind: "line",
             line: row.newLine ?? row.oldLine,
-            content: row.content.trim(),
-            anchor,
-            context,
           });
-          if (out.length >= MAX_LINES) break;
+          if (out.length >= MAX_LINES) {
+            break;
+          }
         }
-        if (out.length >= MAX_LINES) break;
+        if (out.length >= MAX_LINES) {
+          break;
+        }
       }
     }
     return out;
@@ -150,7 +159,9 @@ export function PrSearch({
       ?.scrollIntoView({ block: "nearest" });
   }, [sel]);
 
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   const q = query.trim();
   const empty = q.length > 0 && items.length === 0;
@@ -176,7 +187,9 @@ export function PrSearch({
     } else if (e.key === "Enter") {
       e.preventDefault();
       const it = items[sel];
-      if (it) choose(it);
+      if (it) {
+        choose(it);
+      }
     } else if (e.key === "Escape") {
       e.preventDefault();
       onClose();
@@ -187,60 +200,62 @@ export function PrSearch({
     <div
       className="q-overlay"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
       }}
     >
       <div
+        aria-label={mode === "files" ? "Find a file" : "Search code"}
+        aria-modal="true"
         className="q-dialog q-dialog-top qsp-panel"
         role="dialog"
-        aria-modal="true"
-        aria-label={mode === "files" ? "Find a file" : "Search code"}
       >
         <div className="qsp-search">
-          <Search size={17} className="qsp-search-icon" aria-hidden />
+          <Search aria-hidden className="qsp-search-icon" size={17} />
           <input
-            ref={inputRef}
-            className="qsp-input"
-            placeholder={placeholder}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={onKeyDown}
-            role="combobox"
             aria-expanded
             autoComplete="off"
+            className="qsp-input"
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder={placeholder}
+            ref={inputRef}
+            role="combobox"
             spellCheck={false}
+            value={query}
           />
           <Kbd combo="esc" />
         </div>
 
-        <div className="qsp-list" role="listbox" ref={listRef}>
+        <div className="qsp-list" ref={listRef} role="listbox">
           {mode === "text" && !q && (
             <div className="qsp-empty">
-              <Search size={20} aria-hidden />
+              <Search aria-hidden size={20} />
               <p>Search the diff text</p>
               <span>Type to match lines across every changed file.</span>
             </div>
           )}
           {items.map((it, i) => (
             <div
-              key={`${it.kind}-${it.fileIndex}-${i}`}
-              role="option"
               aria-selected={i === sel}
+              className={"qsp-row" + (i === sel ? "qsp-row-on" : "")}
               data-active={i === sel}
-              className={"qsp-row" + (i === sel ? " qsp-row-on" : "")}
-              onMouseMove={() => setSel(i)}
+              key={`${it.kind}-${it.fileIndex}-${i}`}
               onClick={() => choose(it)}
+              onMouseMove={() => setSel(i)}
+              role="option"
             >
-              <span className="qsp-rail" aria-hidden />
+              <span aria-hidden className="qsp-rail" />
               {it.kind === "file" ? (
                 <>
-                  <FileCode size={14} className="qsp-search-icon" aria-hidden />
+                  <FileCode aria-hidden className="qsp-search-icon" size={14} />
                   <span className="qsp-main">
                     <span className="qsp-title">
                       <span>
                         <HighlightIndices
-                          text={it.filename}
                           indices={it.matched}
+                          text={it.filename}
                         />
                       </span>
                     </span>
@@ -258,7 +273,7 @@ export function PrSearch({
                             __html: highlightLineWithMatch(
                               it.content,
                               it.filename,
-                              q,
+                              q
                             ),
                           }}
                         />
@@ -268,14 +283,14 @@ export function PrSearch({
                     </span>
                     <span className="qsp-meta">{base(it.filename)}</span>
                     {i === sel && it.context.length > 1 && (
-                      <span className="qsp-snippet" aria-hidden>
+                      <span aria-hidden className="qsp-snippet">
                         {it.context.map((l, j) => (
                           <span
-                            key={j}
                             className={
                               "qsp-snip-line" +
-                              (l.hit ? " qsp-snip-line-hit" : "")
+                              (l.hit ? "qsp-snip-line-hit" : "")
                             }
+                            key={j}
                           >
                             <span className="qsp-snip-num">{l.num ?? ""}</span>
                             <span
@@ -285,7 +300,7 @@ export function PrSearch({
                                   ? highlightLineWithMatch(
                                       l.text,
                                       it.filename,
-                                      l.hit ? q : "",
+                                      l.hit ? q : ""
                                     )
                                   : " ",
                               }}
@@ -301,10 +316,12 @@ export function PrSearch({
           ))}
           {empty && (
             <div className="qsp-empty">
-              <Search size={20} aria-hidden />
+              <Search aria-hidden size={20} />
               <p>Nothing matches “{q}”.</p>
               <span>
-                {mode === "files" ? "Try part of a file name." : "Try other code text."}
+                {mode === "files"
+                  ? "Try part of a file name."
+                  : "Try other code text."}
               </span>
             </div>
           )}
@@ -316,7 +333,7 @@ export function PrSearch({
             <Kbd combo="down" /> navigate
           </span>
           <span>
-            <CornerDownLeft size={11} aria-hidden />{" "}
+            <CornerDownLeft aria-hidden size={11} />{" "}
             {mode === "files" ? "open file" : "go to line"}
           </span>
           <span className="qsp-foot-scope">

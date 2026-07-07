@@ -1,35 +1,48 @@
 import { describe, expect, it } from "vitest";
 import {
-  UNKNOWN_FINGERPRINT,
   fingerprintFile,
   normalizeViewedMap,
   reconcileViewedEntry,
-} from "./viewedFingerprint";
+  UNKNOWN_FINGERPRINT,
+} from "./viewedFingerprint.ts";
 
 const HEAD = "headsha";
 
 describe("fingerprintFile", () => {
   it("is stable for identical patches and differs when the patch changes", () => {
-    const a = fingerprintFile({ patch: "@@ -1 +1 @@\n-x\n+y", sha: "s1" }, HEAD);
-    const b = fingerprintFile({ patch: "@@ -1 +1 @@\n-x\n+y", sha: "s2" }, "other");
-    const c = fingerprintFile({ patch: "@@ -1 +1 @@\n-x\n+z", sha: "s1" }, HEAD);
+    const a = fingerprintFile(
+      { patch: "@@ -1 +1 @@\n-x\n+y", sha: "s1" },
+      HEAD
+    );
+    const b = fingerprintFile(
+      { patch: "@@ -1 +1 @@\n-x\n+y", sha: "s2" },
+      "other"
+    );
+    const c = fingerprintFile(
+      { patch: "@@ -1 +1 @@\n-x\n+z", sha: "s1" },
+      HEAD
+    );
     expect(a).toBe(b); // patch wins — sha/head don't leak into it
     expect(a).not.toBe(c);
     expect(a.startsWith("p:")).toBe(true);
   });
 
   it("falls back to the blob sha when there is no patch (binary files)", () => {
-    expect(fingerprintFile({ patch: null, sha: "abc123" }, HEAD)).toBe("s:abc123");
+    expect(fingerprintFile({ patch: null, sha: "abc123" }, HEAD)).toBe(
+      "s:abc123"
+    );
     expect(fingerprintFile({ sha: "abc123" }, HEAD)).toBe("s:abc123");
   });
 
   it("falls back to the head sha when there is neither patch nor sha", () => {
-    expect(fingerprintFile({ patch: undefined, sha: "" }, HEAD)).toBe(`h:${HEAD}`);
+    expect(fingerprintFile({ patch: undefined, sha: "" }, HEAD)).toBe(
+      `h:${HEAD}`
+    );
   });
 
   it("never produces the UNKNOWN sentinel", () => {
     expect(fingerprintFile({ patch: "?", sha: "?" }, "?")).not.toBe(
-      UNKNOWN_FINGERPRINT,
+      UNKNOWN_FINGERPRINT
     );
   });
 });
@@ -51,7 +64,7 @@ describe("normalizeViewedMap (migration)", () => {
       normalizeViewedMap({
         "o/r#1": ["a.ts"],
         "o/r#2": { "b.ts": "s:abc" },
-      }),
+      })
     ).toEqual({
       "o/r#1": { "a.ts": UNKNOWN_FINGERPRINT },
       "o/r#2": { "b.ts": "s:abc" },
@@ -65,11 +78,11 @@ describe("normalizeViewedMap (migration)", () => {
     expect(normalizeViewedMap([1, 2])).toEqual({});
     expect(
       normalizeViewedMap({
-        good: ["a.ts", 7, null],
-        bad: 42,
         alsoBad: { "a.ts": 9 },
-      }),
-    ).toEqual({ good: { "a.ts": UNKNOWN_FINGERPRINT }, alsoBad: {} });
+        bad: 42,
+        good: ["a.ts", 7, null],
+      })
+    ).toEqual({ alsoBad: {}, good: { "a.ts": UNKNOWN_FINGERPRINT } });
   });
 });
 
@@ -80,7 +93,11 @@ describe("reconcileViewedEntry", () => {
   const fpB = fingerprintFile(fileB, HEAD);
 
   it("is a no-op when every mark matches", () => {
-    const res = reconcileViewedEntry({ "a.ts": fpA, "b.ts": fpB }, [fileA, fileB], HEAD);
+    const res = reconcileViewedEntry(
+      { "a.ts": fpA, "b.ts": fpB },
+      [fileA, fileB],
+      HEAD
+    );
     expect(res.changed).toBe(false);
     expect(res.unviewed).toEqual([]);
     expect(res.entry).toEqual({ "a.ts": fpA, "b.ts": fpB });
@@ -91,7 +108,7 @@ describe("reconcileViewedEntry", () => {
     const res = reconcileViewedEntry(
       { "a.ts": fpA, "b.ts": fpB },
       [changedA, fileB],
-      "headsha2",
+      "headsha2"
     );
     expect(res.changed).toBe(true);
     expect(res.unviewed).toEqual(["a.ts"]);
@@ -102,7 +119,7 @@ describe("reconcileViewedEntry", () => {
     const res = reconcileViewedEntry(
       { "a.ts": UNKNOWN_FINGERPRINT },
       [fileA],
-      HEAD,
+      HEAD
     );
     expect(res.changed).toBe(true); // the upgrade must persist
     expect(res.unviewed).toEqual([]);
@@ -118,9 +135,9 @@ describe("reconcileViewedEntry", () => {
 
   it("handles empty / missing entries", () => {
     expect(reconcileViewedEntry(undefined, [fileA], HEAD)).toEqual({
+      changed: false,
       entry: {},
       unviewed: [],
-      changed: false,
     });
     expect(reconcileViewedEntry({}, [fileA], HEAD).changed).toBe(false);
   });
@@ -131,7 +148,7 @@ describe("reconcileViewedEntry", () => {
     const res = reconcileViewedEntry(
       { "img.png": fp },
       [{ ...bin, sha: "v2" }],
-      HEAD,
+      HEAD
     );
     expect(res.unviewed).toEqual(["img.png"]);
   });

@@ -1,28 +1,32 @@
 import { Fragment } from "react";
-import { cn } from "../../lib/cn";
+import { cn } from "../../lib/cn.ts";
 
 const capClass = "q-kbd";
 
 const NAMED: Record<string, string> = {
-  mod: "⌘",
+  alt: "⌥",
+  backspace: "⌫",
+  down: "↓",
   enter: "↵",
   esc: "Esc",
-  up: "↑",
-  down: "↓",
   left: "←",
+  mod: "⌘",
   right: "→",
-  space: "Space",
-  backspace: "⌫",
-  tab: "Tab",
   shift: "⇧",
-  alt: "⌥",
+  space: "Space",
+  tab: "Tab",
+  up: "↑",
 };
 
 /** Turn one descriptor part into a display label. */
 function renderPart(part: string): string {
   const lower = part.toLowerCase();
-  if (NAMED[lower]) return NAMED[lower];
-  if (part.length === 1) return part.toUpperCase();
+  if (NAMED[lower]) {
+    return NAMED[lower];
+  }
+  if (part.length === 1) {
+    return part.toUpperCase();
+  }
   return part.charAt(0).toUpperCase() + part.slice(1);
 }
 
@@ -49,7 +53,9 @@ export function Kbd({
   combo?: string;
   className?: string;
 }) {
-  if (!combo) return null;
+  if (!combo) {
+    return null;
+  }
   const caps = toCaps(combo);
   return (
     <span className={cn("inline-flex items-center gap-0.5", className)}>

@@ -1,8 +1,8 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { ChangedFile } from "../../types";
-import { api } from "../../lib/api";
-import { Spinner } from "../ui/Spinner";
+import { useState } from "react";
+import { api } from "../../lib/api.ts";
+import type { ChangedFile } from "../../types.ts";
+import { Spinner } from "../ui/Spinner.tsx";
 
 /**
  * Before/after panes for binary image files, which have no textual patch.
@@ -11,15 +11,15 @@ import { Spinner } from "../ui/Spinner";
  */
 
 const IMAGE_MIME: Record<string, string> = {
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  gif: "image/gif",
-  webp: "image/webp",
-  bmp: "image/bmp",
   avif: "image/avif",
+  bmp: "image/bmp",
+  gif: "image/gif",
   ico: "image/x-icon",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
   svg: "image/svg+xml",
+  webp: "image/webp",
 };
 
 function mimeFor(path: string): string | null {
@@ -32,8 +32,12 @@ export function isImageFile(file: ChangedFile): boolean {
 }
 
 function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024) {
+    return `${n} B`;
+  }
+  if (n < 1024 * 1024) {
+    return `${(n / 1024).toFixed(1)} KB`;
+  }
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
@@ -53,11 +57,11 @@ function ImagePane({
   gitRef: string;
 }) {
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["fileBlob", owner, repo, path, gitRef],
-    queryFn: () => api.getFileBlob(owner, repo, path, gitRef),
-    staleTime: Infinity,
-    retry: 1,
     enabled: !!gitRef,
+    queryFn: () => api.getFileBlob(owner, repo, path, gitRef),
+    queryKey: ["fileBlob", owner, repo, path, gitRef],
+    retry: 1,
+    staleTime: Number.POSITIVE_INFINITY,
   });
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
 
@@ -85,14 +89,14 @@ function ImagePane({
         )}
         {data && (
           <img
-            src={`data:${mime};base64,${data.base64}`}
             alt={`${label}: ${path}`}
             onLoad={(e) =>
               setDims({
-                w: e.currentTarget.naturalWidth,
                 h: e.currentTarget.naturalHeight,
+                w: e.currentTarget.naturalWidth,
               })
             }
+            src={`data:${mime};base64,${data.base64}`}
           />
         )}
       </div>
@@ -121,22 +125,22 @@ export function ImageDiff({
     <div className="qf-imgdiff">
       {showOld && (
         <ImagePane
-          label={file.status === "removed" ? "Removed" : "Before"}
-          tone="old"
-          owner={owner}
-          repo={repo}
-          path={oldPath}
           gitRef={baseSha}
+          label={file.status === "removed" ? "Removed" : "Before"}
+          owner={owner}
+          path={oldPath}
+          repo={repo}
+          tone="old"
         />
       )}
       {showNew && (
         <ImagePane
-          label={file.status === "added" ? "Added" : "After"}
-          tone="new"
-          owner={owner}
-          repo={repo}
-          path={file.filename}
           gitRef={headSha}
+          label={file.status === "added" ? "Added" : "After"}
+          owner={owner}
+          path={file.filename}
+          repo={repo}
+          tone="new"
         />
       )}
     </div>

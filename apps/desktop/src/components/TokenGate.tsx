@@ -1,18 +1,18 @@
-import { useEffect, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ArrowLeft, KeyRound, Server } from "lucide-react";
-import { api } from "../lib/api";
-import { useAppStore } from "../store/appStore";
-import { useHotkeys } from "../keyboard";
-import { Spinner } from "./ui/Spinner";
+import { useEffect, useState } from "react";
+import { useHotkeys } from "../keyboard/index.ts";
+import { api } from "../lib/api.ts";
+import { useAppStore } from "../store/appStore.ts";
+import { Spinner } from "./ui/Spinner.tsx";
 
 type View = "identity" | "selfhosted" | "token";
 type Busy = "idle" | "oauth" | "probe" | "pat";
 
 /** Remembered self-hosted instances (host + optional OAuth application id). */
 interface GitlabInstance {
-  host: string;
   clientId?: string;
+  host: string;
 }
 const INSTANCES_KEY = "pr-flow:gitlabInstances";
 function loadInstances(): GitlabInstance[] {
@@ -39,7 +39,13 @@ function shortHost(host: string): string {
 
 function GitHubMark() {
   return (
-    <svg viewBox="0 0 16 16" width="17" height="17" fill="currentColor" aria-hidden>
+    <svg
+      aria-hidden
+      fill="currentColor"
+      height="17"
+      viewBox="0 0 16 16"
+      width="17"
+    >
       <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
     </svg>
   );
@@ -47,7 +53,13 @@ function GitHubMark() {
 
 function GitLabMark() {
   return (
-    <svg viewBox="0 0 16 16" width="17" height="17" fill="currentColor" aria-hidden>
+    <svg
+      aria-hidden
+      fill="currentColor"
+      height="17"
+      viewBox="0 0 16 16"
+      width="17"
+    >
       <path d="M15.73 6.44l-.02-.06-2.13-5.55a.55.55 0 00-.22-.26.57.57 0 00-.65.03.57.57 0 00-.19.29l-1.44 4.4H4.92L3.48.89a.56.56 0 00-.19-.29.57.57 0 00-.65-.03.55.55 0 00-.22.26L.29 6.38l-.02.06a3.95 3.95 0 001.31 4.56l.01.01.02.02 3.24 2.43 1.61 1.21 .98.74a.66.66 0 00.79 0l.98-.74 1.61-1.21 3.26-2.44.01-.01a3.95 3.95 0 001.31-4.57z" />
     </svg>
   );
@@ -66,7 +78,9 @@ export function TokenGate() {
   const [hostInput, setHostInput] = useState("");
   const [probedHost, setProbedHost] = useState<string | null>(null);
   const [appId, setAppId] = useState("");
-  const [tokenProvider, setTokenProvider] = useState<"github" | "gitlab">("github");
+  const [tokenProvider, setTokenProvider] = useState<"github" | "gitlab">(
+    "github"
+  );
   const [tokenHost, setTokenHost] = useState("");
   const [token, setToken] = useState("");
 
@@ -74,7 +88,10 @@ export function TokenGate() {
   const [glOauthReady, setGlOauthReady] = useState(true);
 
   useEffect(() => {
-    api.isOAuthConfigured().then(setGhOauthReady).catch(() => setGhOauthReady(false));
+    api
+      .isOAuthConfigured()
+      .then(setGhOauthReady)
+      .catch(() => setGhOauthReady(false));
     api
       .isGitlabOAuthConfigured()
       .then(setGlOauthReady)
@@ -103,13 +120,16 @@ export function TokenGate() {
 
   useHotkeys("token", [
     {
-      keys: "esc",
       description: "Back",
       group: "Navigation",
       hidden: !hasAccounts && view === "identity",
+      keys: "esc",
       run: () => {
-        if (view !== "identity") reset("identity");
-        else if (hasAccounts) goInbox();
+        if (view !== "identity") {
+          reset("identity");
+        } else if (hasAccounts) {
+          goInbox();
+        }
       },
     },
   ]);
@@ -122,7 +142,9 @@ export function TokenGate() {
   }
 
   async function run(label: string, kind: Busy, action: () => Promise<void>) {
-    if (busy !== "idle") return;
+    if (busy !== "idle") {
+      return;
+    }
     setBusy(kind);
     setBusyLabel(label);
     setError(null);
@@ -145,10 +167,15 @@ export function TokenGate() {
       `Waiting for ${shortHost(host ?? "gitlab.com")} in your browser…`,
       "oauth",
       async () => {
-        await api.loginWithGitlab({ host: host ?? null, clientId: clientId ?? null });
-        if (host) saveInstance({ host, clientId });
+        await api.loginWithGitlab({
+          clientId: clientId ?? null,
+          host: host ?? null,
+        });
+        if (host) {
+          saveInstance({ clientId, host });
+        }
         finish();
-      },
+      }
     );
 
   const openInstance = (inst: GitlabInstance) => {
@@ -172,8 +199,10 @@ export function TokenGate() {
 
   const connectToken = (provider: "github" | "gitlab", host: string | null) =>
     run("Checking the token…", "pat", async () => {
-      await api.addAccount({ provider, host, token: token.trim() });
-      if (provider === "gitlab" && host) saveInstance({ host });
+      await api.addAccount({ host, provider, token: token.trim() });
+      if (provider === "gitlab" && host) {
+        saveInstance({ host });
+      }
       finish();
     });
 
@@ -191,54 +220,58 @@ export function TokenGate() {
     <div className="flex h-full items-center justify-center bg-bg px-6">
       <div className="qg-card">
         <div className="flex items-center gap-2.5">
-          <span className="qg-logo" aria-hidden />
-          <h1 className="text-2xl font-semibold text-fg">Nod</h1>
+          <span aria-hidden className="qg-logo" />
+          <h1 className="font-semibold text-2xl text-fg">Nod</h1>
           {hasAccounts && view === "identity" && (
             <button
-              type="button"
-              onClick={goInbox}
               className="q-btn q-btn-ghost q-focus ml-auto px-2 py-1 text-xs"
+              onClick={goInbox}
+              type="button"
             >
-              <ArrowLeft size={13} aria-hidden /> Back
+              <ArrowLeft aria-hidden size={13} /> Back
             </button>
           )}
         </div>
-        <p className="mb-6 mt-1 text-sm text-muted">
+        <p className="mt-1 mb-6 text-muted text-sm">
           {hasAccounts ? "Add an account" : "Keyboard-first code review"}
         </p>
 
         {view === "identity" && (
           <>
-            <div className="qg-stack" role="group" aria-label="Sign in">
+            <div aria-label="Sign in" className="qg-stack" role="group">
               <button
-                type="button"
                 className="qg-row q-focus"
                 disabled={disabled}
                 onClick={() => void signInGithub()}
+                type="button"
               >
                 <GitHubMark />
                 Continue with GitHub
-                {!ghOauthReady && <span className="qg-row-hint">needs setup</span>}
+                {!ghOauthReady && (
+                  <span className="qg-row-hint">needs setup</span>
+                )}
               </button>
               <button
-                type="button"
                 className="qg-row q-focus"
                 disabled={disabled}
                 onClick={() => void signInGitlab()}
+                type="button"
               >
                 <GitLabMark />
                 Continue with GitLab
-                {!glOauthReady && <span className="qg-row-hint">needs setup</span>}
+                {!glOauthReady && (
+                  <span className="qg-row-hint">needs setup</span>
+                )}
               </button>
               {instances.map((inst) => (
                 <button
-                  key={inst.host}
-                  type="button"
                   className="qg-row q-focus"
                   disabled={disabled}
+                  key={inst.host}
                   onClick={() => openInstance(inst)}
+                  type="button"
                 >
-                  <Server size={16} aria-hidden />
+                  <Server aria-hidden size={16} />
                   <span className="q-mono">{shortHost(inst.host)}</span>
                   {!inst.clientId && <span className="qg-row-hint">token</span>}
                 </button>
@@ -247,7 +280,6 @@ export function TokenGate() {
 
             <div className="qg-links">
               <button
-                type="button"
                 className="qg-link q-focus"
                 onClick={() => {
                   setHostInput("");
@@ -256,19 +288,20 @@ export function TokenGate() {
                   setToken("");
                   reset("selfhosted");
                 }}
+                type="button"
               >
-                <Server size={12} aria-hidden /> Self-hosted GitLab
+                <Server aria-hidden size={12} /> Self-hosted GitLab
               </button>
               <span className="q-dot">·</span>
               <button
-                type="button"
                 className="qg-link q-focus"
                 onClick={() => {
                   setToken("");
                   reset("token");
                 }}
+                type="button"
               >
-                <KeyRound size={12} aria-hidden /> Use a token
+                <KeyRound aria-hidden size={12} /> Use a token
               </button>
             </div>
           </>
@@ -281,9 +314,11 @@ export function TokenGate() {
             </label>
             <div className="flex gap-2">
               <input
+                autoComplete="off"
+                autoFocus
+                className="q-input font-mono"
+                disabled={disabled}
                 id="qg-host"
-                type="text"
-                value={hostInput}
                 onChange={(e) => {
                   setHostInput(e.target.value);
                   setProbedHost(null);
@@ -299,17 +334,15 @@ export function TokenGate() {
                 }}
                 placeholder="gitlab.yourcompany.com"
                 spellCheck={false}
-                autoComplete="off"
-                autoFocus
-                disabled={disabled}
-                className="q-input font-mono"
+                type="text"
+                value={hostInput}
               />
               {!probedHost && (
                 <button
-                  type="button"
-                  onClick={() => void probe()}
-                  disabled={disabled || !hostInput.trim()}
                   className="q-btn q-btn-quiet shrink-0"
+                  disabled={disabled || !hostInput.trim()}
+                  onClick={() => void probe()}
+                  type="button"
                 >
                   {busy === "probe" ? <Spinner /> : "Continue"}
                 </button>
@@ -322,10 +355,10 @@ export function TokenGate() {
 
                 {oauthId && (
                   <button
-                    type="button"
                     className="q-btn q-btn-primary q-focus mb-4 w-full py-2.5"
                     disabled={disabled}
                     onClick={() => void signInGitlab(probedHost, oauthId)}
+                    type="button"
                   >
                     <GitLabMark /> Sign in to {shortHost(probedHost)}
                   </button>
@@ -339,22 +372,23 @@ export function TokenGate() {
                   </span>
                 </label>
                 <input
+                  autoComplete="off"
+                  className="q-input font-mono"
+                  disabled={disabled}
                   id="qg-appid"
-                  type="text"
-                  value={appId}
                   onChange={(e) => setAppId(e.target.value)}
                   placeholder="from Group → Settings → Applications"
                   spellCheck={false}
-                  autoComplete="off"
-                  disabled={disabled}
-                  className="q-input font-mono"
+                  type="text"
+                  value={appId}
                 />
 
                 <div className="qg-divider">or connect with a token</div>
 
                 <input
-                  type="password"
-                  value={token}
+                  autoComplete="off"
+                  className="q-input font-mono"
+                  disabled={disabled}
                   onChange={(e) => setToken(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -367,23 +401,22 @@ export function TokenGate() {
                   }}
                   placeholder="glpat-…  (api scope)"
                   spellCheck={false}
-                  autoComplete="off"
-                  disabled={disabled}
-                  className="q-input font-mono"
+                  type="password"
+                  value={token}
                 />
                 <div className="mt-2.5 flex items-center justify-between gap-3">
                   <button
-                    type="button"
-                    onClick={() => void connectToken("gitlab", probedHost)}
-                    disabled={disabled || !token.trim()}
                     className="q-btn q-btn-quiet flex-1"
+                    disabled={disabled || !token.trim()}
+                    onClick={() => void connectToken("gitlab", probedHost)}
+                    type="button"
                   >
                     {busy === "pat" ? <Spinner /> : "Connect"}
                   </button>
                   <button
-                    type="button"
+                    className="shrink-0 text-accent text-sm hover:underline"
                     onClick={() => void openUrl(glTokenUrl(probedHost))}
-                    className="shrink-0 text-sm text-accent hover:underline"
+                    type="button"
                   >
                     Create a token →
                   </button>
@@ -395,22 +428,30 @@ export function TokenGate() {
 
         {view === "token" && (
           <>
-            <div className="qa-seg mb-4" role="radiogroup" aria-label="Provider">
+            <div
+              aria-label="Provider"
+              className="qa-seg mb-4"
+              role="radiogroup"
+            >
               <button
-                type="button"
-                role="radio"
                 aria-checked={tokenProvider === "github"}
-                className={"qa-seg-btn" + (tokenProvider === "github" ? " qa-seg-on" : "")}
+                className={
+                  "qa-seg-btn" + (tokenProvider === "github" ? "qa-seg-on" : "")
+                }
                 onClick={() => setTokenProvider("github")}
+                role="radio"
+                type="button"
               >
                 <GitHubMark /> GitHub
               </button>
               <button
-                type="button"
-                role="radio"
                 aria-checked={tokenProvider === "gitlab"}
-                className={"qa-seg-btn" + (tokenProvider === "gitlab" ? " qa-seg-on" : "")}
+                className={
+                  "qa-seg-btn" + (tokenProvider === "gitlab" ? "qa-seg-on" : "")
+                }
                 onClick={() => setTokenProvider("gitlab")}
+                role="radio"
+                type="button"
               >
                 <GitLabMark /> GitLab
               </button>
@@ -419,18 +460,19 @@ export function TokenGate() {
             {tokenProvider === "gitlab" && (
               <>
                 <label className="qg-label" htmlFor="qg-token-host">
-                  Host <span className="qg-label-soft">— empty for gitlab.com</span>
+                  Host{" "}
+                  <span className="qg-label-soft">— empty for gitlab.com</span>
                 </label>
                 <input
+                  autoComplete="off"
+                  className="q-input mb-3 font-mono"
+                  disabled={disabled}
                   id="qg-token-host"
-                  type="text"
-                  value={tokenHost}
                   onChange={(e) => setTokenHost(e.target.value)}
                   placeholder="gitlab.com"
                   spellCheck={false}
-                  autoComplete="off"
-                  disabled={disabled}
-                  className="q-input mb-3 font-mono"
+                  type="text"
+                  value={tokenHost}
                 />
               </>
             )}
@@ -442,16 +484,18 @@ export function TokenGate() {
               </span>
             </label>
             <input
+              autoComplete="off"
+              autoFocus
+              className="q-input font-mono"
+              disabled={disabled}
               id="qg-token"
-              type="password"
-              value={token}
               onChange={(e) => setToken(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
                   void connectToken(
                     tokenProvider,
-                    tokenProvider === "gitlab" ? tokenHost.trim() || null : null,
+                    tokenProvider === "gitlab" ? tokenHost.trim() || null : null
                   );
                 } else if (e.key === "Escape") {
                   e.preventDefault();
@@ -460,27 +504,25 @@ export function TokenGate() {
               }}
               placeholder={tokenProvider === "github" ? "ghp_…" : "glpat-…"}
               spellCheck={false}
-              autoComplete="off"
-              autoFocus
-              disabled={disabled}
-              className="q-input font-mono"
+              type="password"
+              value={token}
             />
             <div className="mt-3 flex items-center justify-between gap-3">
               <button
-                type="button"
+                className="q-btn q-btn-quiet flex-1 py-2"
+                disabled={disabled || !token.trim()}
                 onClick={() =>
                   void connectToken(
                     tokenProvider,
-                    tokenProvider === "gitlab" ? tokenHost.trim() || null : null,
+                    tokenProvider === "gitlab" ? tokenHost.trim() || null : null
                   )
                 }
-                disabled={disabled || !token.trim()}
-                className="q-btn q-btn-quiet flex-1 py-2"
+                type="button"
               >
                 {busy === "pat" ? <Spinner /> : "Connect"}
               </button>
               <button
-                type="button"
+                className="shrink-0 text-accent text-sm hover:underline"
                 onClick={() =>
                   void openUrl(
                     tokenProvider === "github"
@@ -488,11 +530,11 @@ export function TokenGate() {
                       : glTokenUrl(
                           tokenHost.trim()
                             ? `https://${shortHost(tokenHost.trim())}`
-                            : "https://gitlab.com",
-                        ),
+                            : "https://gitlab.com"
+                        )
                   )
                 }
-                className="shrink-0 text-sm text-accent hover:underline"
+                type="button"
               >
                 Create a token →
               </button>
@@ -501,20 +543,22 @@ export function TokenGate() {
         )}
 
         {busy === "oauth" && (
-          <p className="mt-3 text-center text-xs text-muted">{busyLabel}</p>
+          <p className="mt-3 text-center text-muted text-xs">{busyLabel}</p>
         )}
-        {error && <p className="mt-3 break-words text-sm text-danger">{error}</p>}
+        {error && (
+          <p className="mt-3 break-words text-danger text-sm">{error}</p>
+        )}
 
         {view !== "identity" && (
           <button
-            type="button"
             className="qg-link q-focus mt-5"
             onClick={() => reset("identity")}
+            type="button"
           >
-            <ArrowLeft size={12} aria-hidden /> All sign-in options
+            <ArrowLeft aria-hidden size={12} /> All sign-in options
           </button>
         )}
-        <p className="mt-4 text-center text-xs text-faint">
+        <p className="mt-4 text-center text-faint text-xs">
           Tokens stay on this device; sign-ins open your browser.
         </p>
       </div>

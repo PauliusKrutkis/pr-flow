@@ -9,10 +9,10 @@ import { QueryClient } from "@tanstack/react-query";
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30_000,
       gcTime: 5 * 60_000,
-      retry: 1,
       refetchOnWindowFocus: true,
+      retry: 1,
+      staleTime: 30_000,
     },
   },
 });
@@ -20,8 +20,8 @@ export const queryClient = new QueryClient({
 export const queryKeys = {
   currentUser: ["currentUser"] as const,
   inbox: ["inbox"] as const,
-  subscribed: ["subscribed"] as const,
-  watchedRepos: ["watchedRepos"] as const,
   prDetail: (owner: string, repo: string, number: number) =>
     ["pr", owner, repo, number] as const,
+  subscribed: ["subscribed"] as const,
+  watchedRepos: ["watchedRepos"] as const,
 };

@@ -1,5 +1,5 @@
-import { Fragment } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { Fragment } from "react";
 
 /**
  * Titles with issue-tracker links: ticket IDs (SCR-2891, ABC-42, …) become
@@ -24,29 +24,33 @@ export function TicketTitle({
   title: string;
   trackerBase?: string;
 }) {
-  if (!trackerBase) return <>{title}</>;
+  if (!trackerBase) {
+    return <>{title}</>;
+  }
   const parts = title.split(TICKET_RE);
-  if (parts.length === 1) return <>{title}</>;
+  if (parts.length === 1) {
+    return <>{title}</>;
+  }
   return (
     <>
       {parts.map((part, i) =>
         i % 2 === 1 ? (
           <a
-            key={i}
-            href="#"
             className="q-ticket"
-            title={ticketUrl(trackerBase, part)}
+            href="#"
+            key={i}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               void openUrl(ticketUrl(trackerBase, part));
             }}
+            title={ticketUrl(trackerBase, part)}
           >
             {part}
           </a>
         ) : (
           <Fragment key={i}>{part}</Fragment>
-        ),
+        )
       )}
     </>
   );

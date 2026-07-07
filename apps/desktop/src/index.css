@@ -24,8 +24,9 @@
   --color-danger: #ff7088;
   --color-warning: #e7c56a;
 
-  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, "SF Mono", Menlo,
-    Monaco, monospace;
+  --font-mono:
+    "Geist Mono", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Monaco,
+    monospace;
 
   --radius-card: 0.5rem;
 }
@@ -68,15 +69,15 @@ body,
 
 body {
   margin: 0;
-  background-color: var(--color-bg);
-  color: var(--color-fg);
+  overflow: hidden;
   font-family: var(--font-ui);
   font-size: 14px;
-  line-height: 1.45;
-  letter-spacing: -0.005em;
   -webkit-font-smoothing: antialiased;
+  line-height: 1.45;
+  color: var(--color-fg);
+  letter-spacing: -0.005em;
+  background-color: var(--color-bg);
   text-rendering: optimizeLegibility;
-  overflow: hidden;
 }
 
 #root {
@@ -102,9 +103,9 @@ body {
 }
 *::-webkit-scrollbar-thumb {
   background-color: transparent;
-  border-radius: 9999px;
-  border: 2px solid transparent; /* 9px lane − 2×2px inset = 5px thumb */
   background-clip: content-box;
+  border: 2px solid transparent; /* 9px lane − 2×2px inset = 5px thumb */
+  border-radius: 9999px;
 }
 *::-webkit-scrollbar-track,
 *::-webkit-scrollbar-corner {
@@ -119,8 +120,8 @@ body {
 }
 @supports not selector(::-webkit-scrollbar) {
   * {
-    scrollbar-width: thin;
     scrollbar-color: transparent transparent;
+    scrollbar-width: thin;
   }
   .is-scrolling,
   *:hover {

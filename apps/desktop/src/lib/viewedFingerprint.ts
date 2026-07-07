@@ -11,7 +11,7 @@
  * vitest suite exercises them without touching localStorage or Tauri.
  */
 
-import type { ChangedFile, ViewedFileMap, ViewedMap } from "../types";
+import type { ChangedFile, ViewedFileMap, ViewedMap } from "../types.ts";
 
 /**
  * Fingerprint of a legacy mark (persisted before fingerprints existed). It is
@@ -25,10 +25,17 @@ export const UNKNOWN_FINGERPRINT = "?";
 /** FNV-1a 32-bit over a string, as lowercase hex. Fast and plenty for change
  *  detection — a collision only means a changed file stays marked viewed. */
 function fnv1a(input: string): string {
-  let hash = 0x811c9dc5;
+  let hash = 0x81_1c_9d_c5;
   for (let i = 0; i < input.length; i++) {
     hash ^= input.charCodeAt(i);
-    hash = (hash + ((hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24))) >>> 0;
+    hash =
+      (hash +
+        ((hash << 1) +
+          (hash << 4) +
+          (hash << 7) +
+          (hash << 8) +
+          (hash << 24))) >>>
+      0;
   }
   return hash.toString(16).padStart(8, "0");
 }
@@ -41,10 +48,14 @@ function fnv1a(input: string): string {
  */
 export function fingerprintFile(
   file: Pick<ChangedFile, "patch" | "sha">,
-  headSha: string,
+  headSha: string
 ): string {
-  if (file.patch) return `p:${fnv1a(file.patch)}`;
-  if (file.sha) return `s:${file.sha}`;
+  if (file.patch) {
+    return `p:${fnv1a(file.patch)}`;
+  }
+  if (file.sha) {
+    return `s:${file.sha}`;
+  }
   return `h:${headSha}`;
 }
 
@@ -56,19 +67,27 @@ export function fingerprintFile(
  *  - anything else                   → dropped
  */
 export function normalizeViewedMap(raw: unknown): ViewedMap {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
   const out: ViewedMap = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     if (Array.isArray(value)) {
       const entry: ViewedFileMap = {};
       for (const name of value) {
-        if (typeof name === "string") entry[name] = UNKNOWN_FINGERPRINT;
+        if (typeof name === "string") {
+          entry[name] = UNKNOWN_FINGERPRINT;
+        }
       }
       out[key] = entry;
     } else if (value && typeof value === "object") {
       const entry: ViewedFileMap = {};
-      for (const [name, fp] of Object.entries(value as Record<string, unknown>)) {
-        if (typeof fp === "string") entry[name] = fp;
+      for (const [name, fp] of Object.entries(
+        value as Record<string, unknown>
+      )) {
+        if (typeof fp === "string") {
+          entry[name] = fp;
+        }
       }
       out[key] = entry;
     }
@@ -77,9 +96,9 @@ export function normalizeViewedMap(raw: unknown): ViewedMap {
 }
 
 export interface ReconcileResult {
+  changed: boolean;
   entry: ViewedFileMap;
   unviewed: string[];
-  changed: boolean;
 }
 
 /**
@@ -93,10 +112,10 @@ export interface ReconcileResult {
 export function reconcileViewedEntry(
   entry: ViewedFileMap | undefined,
   files: readonly Pick<ChangedFile, "filename" | "patch" | "sha">[],
-  headSha: string,
+  headSha: string
 ): ReconcileResult {
   if (!entry || Object.keys(entry).length === 0) {
-    return { entry: entry ?? {}, unviewed: [], changed: false };
+    return { changed: false, entry: entry ?? {}, unviewed: [] };
   }
   const byName = new Map(files.map((f) => [f.filename, f]));
   const next: ViewedFileMap = {};
@@ -119,5 +138,5 @@ export function reconcileViewedEntry(
       changed = true;
     }
   }
-  return { entry: next, unviewed, changed };
+  return { changed, entry: next, unviewed };
 }

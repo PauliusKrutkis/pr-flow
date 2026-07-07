@@ -18,18 +18,30 @@ const GLOBS = [
   "apps/desktop/src-tauri/src/**/*.rs",
 ];
 
-const KEEP_LINE = /^\s*\/\/\s*(eslint|@ts-|biome-ignore|allow\(|deny\(|warn\(|clippy::)/;
+const KEEP_LINE =
+  /^\s*\/\/\s*(eslint|@ts-|biome-ignore|allow\(|deny\(|warn\(|clippy::)/;
 const DIVIDER = /^\s*\/\/\s*[-=]{3,}/;
 const TRIVIAL =
   /^\s*\/\/\s*(Per-file|Live refs|Warm the|Step \d|Mark the|Open |Click |Press |Wait |Navigate |Scroll |Type |Select |Close |Toggle |Verify |Check |Ensure |Load |Reload |Mock |Setup |Teardown )/i;
 
 function walk(dir, acc = []) {
-  if (!fs.existsSync(dir)) return acc;
+  if (!fs.existsSync(dir)) {
+    return acc;
+  }
   for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, ent.name);
-    if (ent.name === "node_modules" || ent.name === "target" || ent.name === "dist") continue;
-    if (ent.isDirectory()) walk(p, acc);
-    else if (/\.(ts|tsx|rs)$/.test(ent.name)) acc.push(p);
+    if (
+      ent.name === "node_modules" ||
+      ent.name === "target" ||
+      ent.name === "dist"
+    ) {
+      continue;
+    }
+    if (ent.isDirectory()) {
+      walk(p, acc);
+    } else if (/\.(ts|tsx|rs)$/.test(ent.name)) {
+      acc.push(p);
+    }
   }
   return acc;
 }
@@ -51,7 +63,9 @@ function collectFiles() {
   const files = new Set(dirs.flatMap((d) => walk(path.join(ROOT, d))));
   for (const f of extra) {
     const p = path.join(ROOT, f);
-    if (fs.existsSync(p)) files.add(p);
+    if (fs.existsSync(p)) {
+      files.add(p);
+    }
   }
   return [...files];
 }
@@ -70,26 +84,36 @@ function isBlank(line) {
 
 function nextNonBlank(lines, i) {
   for (let j = i; j < lines.length; j++) {
-    if (!isBlank(lines[j])) return lines[j];
+    if (!isBlank(lines[j])) {
+      return lines[j];
+    }
   }
   return null;
 }
 
 function isDocTarget(line) {
-  if (!line) return false;
-  return /^(export\s+)?(async\s+)?function\b/.test(line.trim()) ||
+  if (!line) {
+    return false;
+  }
+  return (
+    /^(export\s+)?(async\s+)?function\b/.test(line.trim()) ||
     /^export\s+(const|let|var|type|interface|enum|class)\b/.test(line.trim()) ||
     /^(const|let|var)\s+\w+/.test(line.trim()) ||
     /^#\[(derive|allow|serde)/.test(line.trim()) ||
     /^pub\s+(struct|enum|fn|async fn|const|type)/.test(line.trim()) ||
     /^struct\s+\w+/.test(line.trim()) ||
-    /^fn\s+\w+/.test(line.trim());
+    /^fn\s+\w+/.test(line.trim())
+  );
 }
 
 function shouldKeepBlock(text) {
   const t = text.trim();
-  if (!t) return false;
-  if (t.length < 40 && !/[—–:;]/.test(t)) return false;
+  if (!t) {
+    return false;
+  }
+  if (t.length < 40 && !/[—–:;]/.test(t)) {
+    return false;
+  }
   return true;
 }
 
@@ -136,20 +160,35 @@ function processTs(content) {
     }
 
     if (!isCommentLine(line)) {
-      if (!isBlank(line)) seenCode = true;
+      if (!isBlank(line)) {
+        seenCode = true;
+      }
       out.push(line);
       i++;
       continue;
     }
 
     const block = [];
-    while (i < lines.length && (isCommentLine(lines[i]) || (block.length && isBlank(lines[i]) && isCommentLine(lines[i + 1] ?? "")))) {
-      if (isCommentLine(lines[i])) block.push(stripCommentPrefix(lines[i]));
-      else if (block.length) break;
+    while (
+      i < lines.length &&
+      (isCommentLine(lines[i]) ||
+        (block.length &&
+          isBlank(lines[i]) &&
+          isCommentLine(lines[i + 1] ?? "")))
+    ) {
+      if (isCommentLine(lines[i])) {
+        block.push(stripCommentPrefix(lines[i]));
+      } else if (block.length) {
+        break;
+      }
       i++;
     }
 
-    while (i < lines.length && isBlank(lines[i]) && !isCommentLine(lines[i + 1] ?? "")) {
+    while (
+      i < lines.length &&
+      isBlank(lines[i]) &&
+      !isCommentLine(lines[i + 1] ?? "")
+    ) {
       i++;
     }
 
@@ -158,12 +197,16 @@ function processTs(content) {
     const atFileHead = !seenCode;
     const attach = isDocTarget(next);
 
-    if (!keep) continue;
+    if (!keep) {
+      continue;
+    }
 
     if (atFileHead || attach) {
       const indent = next?.match(/^(\s*)/)?.[1] ?? "";
       out.push(toJsDoc(block, indent));
-      if (out.length && i < lines.length) out.push("");
+      if (out.length && i < lines.length) {
+        out.push("");
+      }
     }
   }
 
@@ -179,10 +222,12 @@ function processRs(content) {
   while (i < lines.length) {
     const line = lines[i];
 
-    if (/^\s*\/\/[!\/]/.test(line) || /^\s*\/\*/.test(line)) {
+    if (/^\s*\/\/[!/]/.test(line) || /^\s*\/\*/.test(line)) {
       out.push(line);
       i++;
-      if (!isBlank(line)) seenCode = true;
+      if (!isBlank(line)) {
+        seenCode = true;
+      }
       continue;
     }
 
@@ -192,7 +237,9 @@ function processRs(content) {
     }
 
     if (!isCommentLine(line)) {
-      if (!isBlank(line)) seenCode = true;
+      if (!isBlank(line)) {
+        seenCode = true;
+      }
       out.push(line);
       i++;
       continue;
@@ -204,14 +251,18 @@ function processRs(content) {
       i++;
     }
 
-    while (i < lines.length && isBlank(lines[i])) i++;
+    while (i < lines.length && isBlank(lines[i])) {
+      i++;
+    }
 
     const next = nextNonBlank(lines, i);
     const keep = shouldKeepBlock(block.join("\n"));
     const atFileHead = !seenCode;
     const attach = isDocTarget(next);
 
-    if (!keep) continue;
+    if (!keep) {
+      continue;
+    }
 
     const indent = next?.match(/^(\s*)/)?.[1] ?? "";
     if (atFileHead) {

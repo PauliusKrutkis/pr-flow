@@ -1,5 +1,5 @@
-import { expect, test } from "./test";
-import { setupApp } from "./bridge";
+import { setupApp } from "./bridge.ts";
+import { expect, test } from "./test.ts";
 
 test.beforeEach(async ({ page }) => {
   await setupApp(page);
@@ -14,16 +14,18 @@ test.beforeEach(async ({ page }) => {
 async function cursorToTuned(page: import("@playwright/test").Page) {
   await page.keyboard.press("j");
   await expect(
-    page.locator('.qf-row-active[data-anchor="RIGHT:1"]'),
+    page.locator('.qf-row-active[data-anchor="RIGHT:1"]')
   ).toBeVisible();
   await page.keyboard.press("j");
   await page.keyboard.press("j");
   await expect(
-    page.locator('.qf-row-active[data-anchor="RIGHT:2"]'),
+    page.locator('.qf-row-active[data-anchor="RIGHT:2"]')
   ).toBeVisible();
 }
 
-test("shift+j grows the range; c comments on it with a multi-line suggestion", async ({ page }) => {
+test("shift+j grows the range; c comments on it with a multi-line suggestion", async ({
+  page,
+}) => {
   await cursorToTuned(page);
   await page.keyboard.press("Shift+j");
   await page.keyboard.press("Shift+j");
@@ -42,12 +44,12 @@ test("shift+j grows the range; c comments on it with a multi-line suggestion", a
 
   await page.keyboard.press("Control+Enter");
   await expect(page.locator(".qf-range-tag")).toHaveText("Lines 2–4");
-  await expect(
-    page.locator(".qf-pending .md-suggestion-line"),
-  ).toHaveCount(3);
+  await expect(page.locator(".qf-pending .md-suggestion-line")).toHaveCount(3);
 });
 
-test("the submitted review payload carries the range start", async ({ page }) => {
+test("the submitted review payload carries the range start", async ({
+  page,
+}) => {
   await cursorToTuned(page);
   await page.keyboard.press("Shift+j");
   await page.keyboard.press("c");
@@ -62,24 +64,28 @@ test("the submitted review payload carries the range start", async ({ page }) =>
   await expect
     .poll(async () =>
       page.evaluate(() =>
-        JSON.parse(localStorage.getItem("e2e:lastReview") ?? "null"),
-      ),
+        JSON.parse(localStorage.getItem("e2e:lastReview") ?? "null")
+      )
     )
     .toMatchObject({
-      comments: [{ path: "src/lib/fuzzy.ts", line: 3, side: "RIGHT", startLine: 2 }],
+      comments: [
+        { line: 3, path: "src/lib/fuzzy.ts", side: "RIGHT", startLine: 2 },
+      ],
     });
 });
 
 test("extension never crosses a side boundary", async ({ page }) => {
   await page.keyboard.press("j");
   await expect(
-    page.locator('.qf-row-active[data-anchor="RIGHT:1"]'),
+    page.locator('.qf-row-active[data-anchor="RIGHT:1"]')
   ).toBeVisible();
   await page.keyboard.press("Shift+j");
   await expect(page.locator(".qf-row-selected")).toHaveCount(0);
 });
 
-test("shift+k shrinks back over the anchor and the range collapses", async ({ page }) => {
+test("shift+k shrinks back over the anchor and the range collapses", async ({
+  page,
+}) => {
   await cursorToTuned(page);
   await page.keyboard.press("Shift+j");
   await expect(page.locator(".qf-row-selected")).toHaveCount(2);
@@ -87,7 +93,9 @@ test("shift+k shrinks back over the anchor and the range collapses", async ({ pa
   await expect(page.locator(".qf-row-selected")).toHaveCount(0);
 });
 
-test("plain j collapses the range; esc clears it without leaving the review", async ({ page }) => {
+test("plain j collapses the range; esc clears it without leaving the review", async ({
+  page,
+}) => {
   await cursorToTuned(page);
   await page.keyboard.press("Shift+j");
   await expect(page.locator(".qf-row-selected")).toHaveCount(2);
@@ -99,20 +107,28 @@ test("plain j collapses the range; esc clears it without leaving the review", as
   await page.keyboard.press("Escape");
   await expect(page.locator(".qf-row-selected")).toHaveCount(0);
   await expect(
-    page.getByRole("heading", { name: "Add fuzzy matching to search" }),
+    page.getByRole("heading", { name: "Add fuzzy matching to search" })
   ).toBeVisible();
 });
 
-test("dragging the gutter + selects the range and opens the composer", async ({ page }) => {
-  const from = page.locator('.qf-row[data-file-index="0"][data-anchor="RIGHT:2"]');
-  const to = page.locator('.qf-row[data-file-index="0"][data-anchor="RIGHT:4"]');
+test("dragging the gutter + selects the range and opens the composer", async ({
+  page,
+}) => {
+  const from = page.locator(
+    '.qf-row[data-file-index="0"][data-anchor="RIGHT:2"]'
+  );
+  const to = page.locator(
+    '.qf-row[data-file-index="0"][data-anchor="RIGHT:4"]'
+  );
   await from.hover();
   const btn = from.locator(".qf-add-btn");
   await expect(btn).toBeVisible();
 
   const start = await btn.boundingBox();
   const end = await to.boundingBox();
-  if (!start || !end) throw new Error("rows not laid out");
+  if (!(start && end)) {
+    throw new Error("rows not laid out");
+  }
   await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
   await page.mouse.down();
   await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2, {
@@ -126,26 +142,32 @@ test("dragging the gutter + selects the range and opens the composer", async ({ 
 
   await expect(page.locator(".qf-range-head")).toHaveText("Lines 2–4");
   await expect(
-    page.getByRole("textbox", { name: "Add a review comment…" }),
+    page.getByRole("textbox", { name: "Add a review comment…" })
   ).toBeFocused();
 });
 
-test("a plain + click still opens the single-line composer", async ({ page }) => {
-  const row = page.locator('.qf-row[data-file-index="0"][data-anchor="RIGHT:2"]');
+test("a plain + click still opens the single-line composer", async ({
+  page,
+}) => {
+  const row = page.locator(
+    '.qf-row[data-file-index="0"][data-anchor="RIGHT:2"]'
+  );
   await row.hover();
   await row.locator(".qf-add-btn").click();
   await expect(
-    page.getByRole("textbox", { name: "Add a review comment…" }),
+    page.getByRole("textbox", { name: "Add a review comment…" })
   ).toBeVisible();
   await expect(page.locator(".qf-range-head")).toHaveCount(0);
 });
 
-test("a pending range survives leaving and reopening the PR", async ({ page }) => {
+test("a pending range survives leaving and reopening the PR", async ({
+  page,
+}) => {
   await cursorToTuned(page);
   await page.keyboard.press("Shift+j");
   await page.keyboard.press("c");
   await expect(
-    page.getByRole("textbox", { name: "Add a review comment…" }),
+    page.getByRole("textbox", { name: "Add a review comment…" })
   ).toBeFocused();
   await page.keyboard.type("keep this range");
   await page.keyboard.press("Control+Enter");

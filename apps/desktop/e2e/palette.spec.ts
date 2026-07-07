@@ -1,5 +1,5 @@
-import { expect, test } from "./test";
-import { setupApp } from "./bridge";
+import { setupApp } from "./bridge.ts";
+import { expect, test } from "./test.ts";
 
 test.beforeEach(async ({ page }) => {
   await setupApp(page);
@@ -12,7 +12,7 @@ test("mod+k opens; fuzzy filters; esc closes", async ({ page }) => {
   await expect(input).toBeFocused();
   await input.fill("arch");
   await expect(
-    page.getByRole("button", { name: /Archive until it updates/ }),
+    page.getByRole("button", { name: /Archive until it updates/ })
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(input).not.toBeVisible();
@@ -24,7 +24,7 @@ test("running a command acts on the app", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: /Watching/ })).toHaveAttribute(
     "data-state",
-    "active",
+    "active"
   );
 });
 

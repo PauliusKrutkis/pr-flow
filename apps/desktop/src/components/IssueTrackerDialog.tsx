@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
 import { Ticket } from "lucide-react";
-import { useAppStore } from "../store/appStore";
-import { useHotkeys } from "../keyboard";
+import { useEffect, useRef, useState } from "react";
+import { useHotkeys } from "../keyboard/index.ts";
+import { useAppStore } from "../store/appStore.ts";
 
 /**
  * Configure issue-tracker linking for the active account: paste the tracker's
@@ -17,7 +17,7 @@ export function IssueTrackerDialog({
 }) {
   const activeAccountId = useAppStore((s) => s.activeAccountId);
   const current = useAppStore((s) =>
-    s.activeAccountId ? (s.issueTrackers[s.activeAccountId] ?? "") : "",
+    s.activeAccountId ? (s.issueTrackers[s.activeAccountId] ?? "") : ""
   );
   const setIssueTracker = useAppStore((s) => s.setIssueTracker);
   const [url, setUrl] = useState("");
@@ -32,14 +32,18 @@ export function IssueTrackerDialog({
 
   useHotkeys(
     "issue-tracker",
-    [{ keys: "esc", description: "Close", hidden: true, run: () => onClose() }],
-    { enabled: open },
+    [{ description: "Close", hidden: true, keys: "esc", run: () => onClose() }],
+    { enabled: open }
   );
 
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   function save() {
-    if (activeAccountId) setIssueTracker(activeAccountId, url);
+    if (activeAccountId) {
+      setIssueTracker(activeAccountId, url);
+    }
     onClose();
   }
 
@@ -47,21 +51,23 @@ export function IssueTrackerDialog({
     <div
       className="q-overlay"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
       }}
     >
       <div
+        aria-label="Issue tracker"
+        aria-modal="true"
         className="q-dialog q-dialog-top qw-panel"
         role="dialog"
-        aria-modal="true"
-        aria-label="Issue tracker"
       >
-        <div className="border-b border-line px-5 py-3.5">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
-            <Ticket size={14} aria-hidden className="text-accent" />
+        <div className="border-line border-b px-5 py-3.5">
+          <h2 className="flex items-center gap-2 font-semibold text-fg text-sm">
+            <Ticket aria-hidden className="text-accent" size={14} />
             Issue tracker links
           </h2>
-          <p className="mt-0.5 text-xs text-muted">
+          <p className="mt-0.5 text-muted text-xs">
             Ticket IDs in PR titles (SCR-2891, ABC-42, …) become links to this
             URL. Set once per account.
           </p>
@@ -69,8 +75,8 @@ export function IssueTrackerDialog({
 
         <div className="px-5 py-4">
           <input
-            ref={inputRef}
-            value={url}
+            autoComplete="off"
+            className="q-input font-mono"
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -82,21 +88,21 @@ export function IssueTrackerDialog({
               }
             }}
             placeholder="https://yourco.atlassian.net/browse/"
+            ref={inputRef}
             spellCheck={false}
-            autoComplete="off"
-            className="q-input font-mono"
+            value={url}
           />
-          <p className="mt-2 text-xs text-faint">
+          <p className="mt-2 text-faint text-xs">
             The ticket ID is appended — or use {"{id}"} anywhere in the URL.
             Leave empty to turn linking off.
           </p>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
-          <button type="button" onClick={onClose} className="q-btn q-btn-ghost">
+        <div className="flex items-center justify-end gap-2 border-line border-t px-5 py-3">
+          <button className="q-btn q-btn-ghost" onClick={onClose} type="button">
             Cancel
           </button>
-          <button type="button" onClick={save} className="q-btn q-btn-primary">
+          <button className="q-btn q-btn-primary" onClick={save} type="button">
             Save
           </button>
         </div>

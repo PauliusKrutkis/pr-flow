@@ -4,31 +4,22 @@ export const makePr = (
   n: number,
   title: string,
   author: string,
-  updatedAt: string,
+  updatedAt: string
 ) => ({
-  id: n,
-  number: n,
-  title,
-  repo: `acme/rocket`,
-  owner: "acme",
-  name: "rocket",
+  additions: 12,
   author,
   authorAvatarUrl: "",
-  url: `https://github.com/acme/rocket/pull/${n}`,
-  state: "open",
-  draft: false,
-  merged: false,
-  updatedAt,
-  createdAt: "2026-06-30T09:00:00Z",
-  commentsCount: n === 1 ? 2 : 0,
-  headSha: "headsha",
-  baseSha: "basesha",
-  headRef: "feat/thing",
   baseRef: "main",
-  additions: 12,
-  deletions: 3,
-  changedFiles: 2,
+  baseSha: "basesha",
   body: "A **fixture** pull request.",
+  changedFiles: 2,
+  commentsCount: n === 1 ? 2 : 0,
+  createdAt: "2026-06-30T09:00:00Z",
+  deletions: 3,
+  draft: false,
+  headRef: "feat/thing",
+  headSha: "headsha",
+  id: n,
   lastComment:
     n === 1
       ? {
@@ -38,6 +29,15 @@ export const makePr = (
           createdAt: "2026-07-02T09:30:00Z",
         }
       : undefined,
+  merged: false,
+  name: "rocket",
+  number: n,
+  owner: "acme",
+  repo: "acme/rocket",
+  state: "open",
+  title,
+  updatedAt,
+  url: `https://github.com/acme/rocket/pull/${n}`,
 });
 
 export type PrFixture = ReturnType<typeof makePr>;
@@ -48,17 +48,30 @@ export type InboxFixture = Record<
 >;
 
 export const INBOX: InboxFixture = {
+  assigned: { count: 0, prs: [] },
+  created: {
+    count: 1,
+    prs: [makePr(4, "My own PR", "me", "2026-07-01T12:00:00Z")],
+  },
+  involved: { count: 0, prs: [] },
   reviewRequested: {
     count: 3,
     prs: [
-      makePr(1, "Add fuzzy matching to search", "alice", "2026-07-02T10:00:00Z"),
-      makePr(2, "Fix cursor drift in diff viewer", "bob", "2026-07-02T09:00:00Z"),
+      makePr(
+        1,
+        "Add fuzzy matching to search",
+        "alice",
+        "2026-07-02T10:00:00Z"
+      ),
+      makePr(
+        2,
+        "Fix cursor drift in diff viewer",
+        "bob",
+        "2026-07-02T09:00:00Z"
+      ),
       makePr(3, "Rework the token gate", "carol", "2026-07-01T18:00:00Z"),
     ],
   },
-  assigned: { count: 0, prs: [] },
-  created: { count: 1, prs: [makePr(4, "My own PR", "me", "2026-07-01T12:00:00Z")] },
-  involved: { count: 0, prs: [] },
 };
 
 /* The watched-repos ("Watching") bucket: one PR that ALSO lives in the inbox
@@ -68,11 +81,16 @@ export const SUBSCRIBED: BucketFixture = {
   prs: [
     makePr(1, "Add fuzzy matching to search", "alice", "2026-07-02T10:00:00Z"),
     {
-      ...makePr(77, "Watched-only satellite uplink", "dave", "2026-07-01T15:00:00Z"),
+      ...makePr(
+        77,
+        "Watched-only satellite uplink",
+        "dave",
+        "2026-07-01T15:00:00Z"
+      ),
       id: 9077,
-      repo: "acme/comet",
-      owner: "acme",
       name: "comet",
+      owner: "acme",
+      repo: "acme/comet",
       url: "https://github.com/acme/comet/pull/77",
     },
   ],
@@ -87,25 +105,54 @@ const PATCH = `@@ -1,5 +1,6 @@
  export const beta = true;`;
 
 export const DETAIL = {
-  pr: {
-    ...makePr(1, "Add fuzzy matching to search", "alice", "2026-07-02T10:00:00Z"),
-  },
-  files: [
+  comments: [
     {
-      filename: "src/lib/fuzzy.ts",
-      status: "modified",
-      additions: 2,
-      deletions: 1,
-      changes: 3,
-      patch: PATCH,
-      sha: "f1",
+      body: "Is this constant right?",
+      createdAt: "2026-07-02T09:30:00Z",
+      diffHunk: "",
+      id: 100,
+      inReplyToId: null,
+      line: 2,
+      originalLine: null,
+      path: "src/lib/fuzzy.ts",
+      resolved: false,
+      side: "RIGHT",
+      threadId: "T100",
+      user: "bob",
+      userAvatarUrl: "",
     },
     {
-      filename: "src/lib/search.ts",
-      status: "added",
+      body: "How about:\n```suggestion\n  return 3;\n```",
+      createdAt: "2026-07-02T09:45:00Z",
+      diffHunk: "",
+      id: 101,
+      inReplyToId: 100,
+      line: null,
+      originalLine: null,
+      path: "src/lib/fuzzy.ts",
+      resolved: false,
+      side: "RIGHT",
+      threadId: "T100",
+      user: "carol",
+      userAvatarUrl: "",
+    },
+  ],
+  fetchedAt: 1_750_000_000_000,
+  files: [
+    {
+      additions: 2,
+      changes: 3,
+      deletions: 1,
+      filename: "src/lib/fuzzy.ts",
+      patch: PATCH,
+      sha: "f1",
+      status: "modified",
+    },
+    {
       additions: 5,
-      deletions: 0,
       changes: 5,
+      deletions: 0,
+      filename: "src/lib/search.ts",
       patch: `@@ -0,0 +1,5 @@
 +export function search(q: string) {
 +  const gamma = q.trim();
@@ -113,13 +160,13 @@ export const DETAIL = {
 +}
 +export default search`,
       sha: "f2",
+      status: "added",
     },
     {
-      filename: "src/lib/retry.ts",
-      status: "modified",
       additions: 36,
-      deletions: 1,
       changes: 37,
+      deletions: 1,
+      filename: "src/lib/retry.ts",
       patch: `@@ -1,4 +1,4 @@
  export function withRetry(fn: () => Promise<void>) {
 -  const retryCount = 3;
@@ -167,60 +214,36 @@ export const DETAIL = {
    done(delay);
  }`,
       sha: "f3",
-    },
-  ],
-  comments: [
-    {
-      id: 100,
-      path: "src/lib/fuzzy.ts",
-      line: 2,
-      originalLine: null,
-      side: "RIGHT",
-      diffHunk: "",
-      body: "Is this constant right?",
-      user: "bob",
-      userAvatarUrl: "",
-      createdAt: "2026-07-02T09:30:00Z",
-      inReplyToId: null,
-      threadId: "T100",
-      resolved: false,
-    },
-    {
-      id: 101,
-      path: "src/lib/fuzzy.ts",
-      line: null,
-      originalLine: null,
-      side: "RIGHT",
-      diffHunk: "",
-      body: "How about:\n```suggestion\n  return 3;\n```",
-      user: "carol",
-      userAvatarUrl: "",
-      createdAt: "2026-07-02T09:45:00Z",
-      inReplyToId: 100,
-      threadId: "T100",
-      resolved: false,
+      status: "modified",
     },
   ],
   issueComments: [
     {
-      id: 200,
       body: "Nice direction overall.",
+      createdAt: "2026-07-02T08:00:00Z",
+      id: 200,
       user: "carol",
       userAvatarUrl: "",
-      createdAt: "2026-07-02T08:00:00Z",
     },
   ],
+  pr: {
+    ...makePr(
+      1,
+      "Add fuzzy matching to search",
+      "alice",
+      "2026-07-02T10:00:00Z"
+    ),
+  },
   reviews: [
     {
+      body: "LGTM, ship it.",
       id: 300,
+      state: "APPROVED",
+      submittedAt: "2026-07-02T09:00:00Z",
       user: "dave",
       userAvatarUrl: "",
-      state: "APPROVED",
-      body: "LGTM, ship it.",
-      submittedAt: "2026-07-02T09:00:00Z",
     },
   ],
-  fetchedAt: 1_750_000_000_000,
 };
 
 /**
@@ -230,7 +253,7 @@ export const DETAIL = {
  */
 export const DETAIL_CHANGED = {
   ...DETAIL,
-  pr: { ...DETAIL.pr, headSha: "headsha2", updatedAt: "2026-07-02T11:00:00Z" },
+  fetchedAt: 1_750_000_100_000,
   files: [
     {
       ...DETAIL.files[0],
@@ -249,7 +272,7 @@ export const DETAIL_CHANGED = {
     DETAIL.files[1],
     DETAIL.files[2],
   ],
-  fetchedAt: 1_750_000_100_000,
+  pr: { ...DETAIL.pr, headSha: "headsha2", updatedAt: "2026-07-02T11:00:00Z" },
 };
 
 /**
@@ -277,27 +300,27 @@ export const INBOX_UPDATED = {
 export function makeBigDetail(
   fileCount: number,
   lines: number,
-  lineAt: (f: number, i: number) => string,
+  lineAt: (f: number, i: number) => string
 ) {
   return {
     ...DETAIL,
-    pr: {
-      ...makePr(1, "Big refactor", "alice", "2026-07-02T10:00:00Z"),
-      changedFiles: fileCount,
-    },
+    comments: [],
     files: Array.from({ length: fileCount }, (_, f) => ({
-      filename: `src/mod${String(f).padStart(2, "0")}.ts`,
-      status: "modified",
       additions: 0,
-      deletions: 0,
       changes: lines,
+      deletions: 0,
+      filename: `src/mod${String(f).padStart(2, "0")}.ts`,
       patch: [
         `@@ -1,${lines} +1,${lines} @@`,
         ...Array.from({ length: lines }, (_, i) => " " + lineAt(f, i + 1)),
       ].join("\n"),
       sha: `bf${f}`,
+      status: "modified",
     })),
-    comments: [],
+    pr: {
+      ...makePr(1, "Big refactor", "alice", "2026-07-02T10:00:00Z"),
+      changedFiles: fileCount,
+    },
   };
 }
 
@@ -313,9 +336,9 @@ export function perfBudget(ms: number, projectName: string): number {
 }
 
 export const ACCOUNT = {
-  id: "github-com-me",
-  provider: "github",
-  host: "https://github.com",
-  login: "me",
   avatarUrl: "",
+  host: "https://github.com",
+  id: "github-com-me",
+  login: "me",
+  provider: "github",
 };

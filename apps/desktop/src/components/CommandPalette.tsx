@@ -1,17 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
-import { useKeyboard, useHotkeys } from "../keyboard";
-import { useAppStore } from "../store/appStore";
-import { cn } from "../lib/cn";
-import { fuzzyMatch } from "../lib/fuzzy";
-import { HighlightIndices } from "./ui/Highlight";
-import { Kbd } from "./ui/Kbd";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useHotkeys, useKeyboard } from "../keyboard/index.ts";
+import { cn } from "../lib/cn.ts";
+import { fuzzyMatch } from "../lib/fuzzy.ts";
+import { useAppStore } from "../store/appStore.ts";
+import { HighlightIndices } from "./ui/Highlight.tsx";
+import { Kbd } from "./ui/Kbd.tsx";
 
 interface Entry {
-  label: string;
   group?: string;
-  keyCombo?: string;
   icon?: React.ComponentType<{ size?: number | string; className?: string }>;
+  keyCombo?: string;
+  label: string;
   run: () => void;
 }
 
@@ -42,15 +42,17 @@ export function CommandPalette({ baseScope }: { baseScope: string }) {
   }, [paletteOpen]);
 
   const commandEntries = useMemo<Entry[]>(() => {
-    if (!paletteOpen) return [];
+    if (!paletteOpen) {
+      return [];
+    }
     void version;
     return getBindings(baseScope)
       .filter((b) => !b.hidden)
       .map((b) => ({
-        label: b.description,
         group: b.group,
-        keyCombo: firstKey(b.keys),
         icon: b.icon,
+        keyCombo: firstKey(b.keys),
+        label: b.description,
         run: () => {
           b.run(new KeyboardEvent("keydown"));
           closePalette();
@@ -60,7 +62,9 @@ export function CommandPalette({ baseScope }: { baseScope: string }) {
 
   const entries = useMemo(() => {
     const q = query.trim();
-    if (!q) return commandEntries.map((e) => ({ ...e, matched: [] as number[] }));
+    if (!q) {
+      return commandEntries.map((e) => ({ ...e, matched: [] as number[] }));
+    }
     return commandEntries
       .flatMap((e) => {
         const m = fuzzyMatch(q, e.label);
@@ -70,7 +74,9 @@ export function CommandPalette({ baseScope }: { baseScope: string }) {
   }, [commandEntries, query]);
 
   useEffect(() => {
-    setIndex((i) => (entries.length === 0 ? 0 : Math.min(i, entries.length - 1)));
+    setIndex((i) =>
+      entries.length === 0 ? 0 : Math.min(i, entries.length - 1)
+    );
   }, [entries.length]);
 
   useEffect(() => {
@@ -83,16 +89,18 @@ export function CommandPalette({ baseScope }: { baseScope: string }) {
     "palette",
     [
       {
-        keys: "esc",
         description: "Close palette",
         hidden: true,
+        keys: "esc",
         run: () => closePalette(),
       },
     ],
-    { enabled: paletteOpen },
+    { enabled: paletteOpen }
   );
 
-  if (!paletteOpen) return null;
+  if (!paletteOpen) {
+    return null;
+  }
 
   function runAt(i: number) {
     entries[i]?.run();
@@ -105,7 +113,7 @@ export function CommandPalette({ baseScope }: { baseScope: string }) {
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setIndex((i) =>
-        entries.length ? (i - 1 + entries.length) % entries.length : 0,
+        entries.length ? (i - 1 + entries.length) % entries.length : 0
       );
     } else if (e.key === "Enter") {
       e.preventDefault();
@@ -120,54 +128,65 @@ export function CommandPalette({ baseScope }: { baseScope: string }) {
     <div
       className="q-overlay"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) closePalette();
+        if (e.target === e.currentTarget) {
+          closePalette();
+        }
       }}
     >
-      <div className="q-dialog q-dialog-top qc-panel" role="dialog" aria-modal="true">
+      <div
+        aria-modal="true"
+        className="q-dialog q-dialog-top qc-panel"
+        role="dialog"
+      >
         <div className="qc-search">
-          <Search size={16} className="qc-search-icon" aria-hidden />
+          <Search aria-hidden className="qc-search-icon" size={16} />
           <input
-            ref={inputRef}
+            aria-expanded
+            autoComplete="off"
             autoFocus
-            value={query}
+            className="qc-input"
             onChange={(e) => {
               setQuery(e.target.value);
               setIndex(0);
             }}
             onKeyDown={onKeyDown}
             placeholder="Run a command…"
-            spellCheck={false}
-            autoComplete="off"
-            className="qc-input"
+            ref={inputRef}
             role="combobox"
-            aria-expanded
+            spellCheck={false}
+            value={query}
           />
           <Kbd combo="esc" />
         </div>
 
-        <div className="qc-list" role="listbox" ref={listRef}>
+        <div className="qc-list" ref={listRef} role="listbox">
           {entries.length === 0 ? (
             <div className="qc-empty">No commands match “{query.trim()}”.</div>
           ) : (
-            <div className="qc-group" role="group" aria-label="Commands">
+            <div aria-label="Commands" className="qc-group" role="group">
               <div className="qc-group-label">Commands</div>
               {entries.map((entry, i) => (
                 <button
-                  type="button"
-                  key={`${i}-${entry.label}`}
-                  data-active={i === index}
-                  onMouseMove={() => setIndex(i)}
-                  onClick={() => runAt(i)}
                   className={cn("qc-opt q-focus", i === index && "qc-opt-on")}
+                  data-active={i === index}
+                  key={`${i}-${entry.label}`}
+                  onClick={() => runAt(i)}
+                  onMouseMove={() => setIndex(i)}
+                  type="button"
                 >
-                  <span className="qc-rail" aria-hidden />
-                  <span className="qc-opt-icon" aria-hidden>
+                  <span aria-hidden className="qc-rail" />
+                  <span aria-hidden className="qc-opt-icon">
                     {entry.icon && <entry.icon size={14} />}
                   </span>
                   <span className="qc-opt-label">
-                    <HighlightIndices text={entry.label} indices={entry.matched} />
+                    <HighlightIndices
+                      indices={entry.matched}
+                      text={entry.label}
+                    />
                   </span>
-                  {entry.group && <span className="qc-opt-sub">{entry.group}</span>}
+                  {entry.group && (
+                    <span className="qc-opt-sub">{entry.group}</span>
+                  )}
                   {entry.keyCombo && <Kbd combo={entry.keyCombo} />}
                 </button>
               ))}

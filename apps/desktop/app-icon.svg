@@ -1,39 +1,68 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<svg
+  height="512"
+  viewBox="0 0 512 512"
+  width="512"
+  xmlns="http://www.w3.org/2000/svg"
+>
   <!-- Nod app icon — the keycap. One key, one action: hit return, give it a nod.
        Source of truth for src-tauri/icons/* (regenerate: export 1024px PNG,
        then `pnpm tauri icon <png>`). -->
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#20202f"/>
-      <stop offset="1" stop-color="#0d0d15"/>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#20202f" />
+      <stop offset="1" stop-color="#0d0d15" />
     </linearGradient>
-    <radialGradient id="bloom" cx="0.3" cy="0.12" r="0.9">
-      <stop offset="0" stop-color="#8b80ff" stop-opacity="0.28"/>
-      <stop offset="0.55" stop-color="#8b80ff" stop-opacity="0.05"/>
-      <stop offset="1" stop-color="#8b80ff" stop-opacity="0"/>
+    <radialGradient cx="0.3" cy="0.12" id="bloom" r="0.9">
+      <stop offset="0" stop-color="#8b80ff" stop-opacity="0.28" />
+      <stop offset="0.55" stop-color="#8b80ff" stop-opacity="0.05" />
+      <stop offset="1" stop-color="#8b80ff" stop-opacity="0" />
     </radialGradient>
-    <linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2b2b3e"/>
-      <stop offset="1" stop-color="#191926"/>
+    <linearGradient id="face" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#2b2b3e" />
+      <stop offset="1" stop-color="#191926" />
     </linearGradient>
-    <linearGradient id="iris" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#8b80ff"/>
-      <stop offset="1" stop-color="#6f63e6"/>
+    <linearGradient id="iris" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#8b80ff" />
+      <stop offset="1" stop-color="#6f63e6" />
     </linearGradient>
   </defs>
 
-  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#bg)"/>
-  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#bloom)"/>
-  <rect x="17.5" y="17.5" width="477" height="477" rx="106.5" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="3"/>
+  <rect fill="url(#bg)" height="480" rx="108" width="480" x="16" y="16" />
+  <rect fill="url(#bloom)" height="480" rx="108" width="480" x="16" y="16" />
+  <rect
+    fill="none"
+    height="477"
+    rx="106.5"
+    stroke="rgba(255,255,255,0.08)"
+    stroke-width="3"
+    width="477"
+    x="17.5"
+    y="17.5"
+  />
 
   <!-- key body (side) + face -->
-  <rect x="116" y="140" width="280" height="252" rx="52" fill="#0a0a12"/>
-  <rect x="116" y="124" width="280" height="240" rx="52" fill="url(#face)"/>
-  <rect x="118" y="126" width="276" height="236" rx="50" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3"/>
+  <rect fill="#0a0a12" height="252" rx="52" width="280" x="116" y="140" />
+  <rect fill="url(#face)" height="240" rx="52" width="280" x="116" y="124" />
+  <rect
+    fill="none"
+    height="236"
+    rx="50"
+    stroke="rgba(255,255,255,0.1)"
+    stroke-width="3"
+    width="276"
+    x="118"
+    y="126"
+  />
 
   <!-- return glyph in iris -->
-  <g fill="none" stroke="url(#iris)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M330 200 v46 a20 20 0 0 1 -20 20 H196"/>
-    <path d="M232 224 L190 266 L232 308"/>
+  <g
+    fill="none"
+    stroke="url(#iris)"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="30"
+  >
+    <path d="M330 200 v46 a20 20 0 0 1 -20 20 H196" />
+    <path d="M232 224 L190 266 L232 308" />
   </g>
 </svg>

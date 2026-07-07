@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
-import { expect, test } from "./test";
-import { setupApp } from "./bridge";
+import { setupApp } from "./bridge.ts";
+import { expect, test } from "./test.ts";
 
 /**
  * The rich composer: a WYSIWYG surface that submits markdown. ⌘B/⌘I/⌘E
@@ -23,7 +23,9 @@ test.beforeEach(async ({ page }) => {
   await expect(box(page)).toBeFocused();
 });
 
-test("mod+b bolds the selection for real — no symbols on the surface", async ({ page }) => {
+test("mod+b bolds the selection for real — no symbols on the surface", async ({
+  page,
+}) => {
   const ed = box(page);
   await page.keyboard.type("make this bold");
   await page.keyboard.press("Control+a");
@@ -32,11 +34,13 @@ test("mod+b bolds the selection for real — no symbols on the surface", async (
   await expect(ed).not.toContainText("**");
   await expect(page.getByRole("button", { name: "Bold" })).toHaveAttribute(
     "aria-pressed",
-    "true",
+    "true"
   );
 });
 
-test("markdown typing shortcuts still resolve — muscle memory keeps working", async ({ page }) => {
+test("markdown typing shortcuts still resolve — muscle memory keeps working", async ({
+  page,
+}) => {
   const ed = box(page);
   await page.keyboard.type("**bold** and *italic* prose");
   await expect(ed.locator("strong")).toHaveText("bold");
@@ -57,7 +61,9 @@ test("mod+k links the selection via the inline url input", async ({ page }) => {
   await expect(ed.locator('a[href="https://example.com"]')).toHaveText("docs");
 });
 
-test("rich text serializes to markdown on submit — bold survives the wire", async ({ page }) => {
+test("rich text serializes to markdown on submit — bold survives the wire", async ({
+  page,
+}) => {
   await page.keyboard.type("ship it");
   await page.keyboard.press("Control+a");
   await page.keyboard.press("Control+b");
@@ -66,7 +72,9 @@ test("rich text serializes to markdown on submit — bold survives the wire", as
   await expect(page.locator(".qf-pending strong")).toHaveText("ship it");
 });
 
-test("the suggestion block round-trips: insert, edit in place, pending card", async ({ page }) => {
+test("the suggestion block round-trips: insert, edit in place, pending card", async ({
+  page,
+}) => {
   const ed = box(page);
   await page.getByRole("button", { name: "Insert suggestion" }).click();
   const sugg = ed.locator("pre code.language-suggestion");
@@ -77,29 +85,31 @@ test("the suggestion block round-trips: insert, edit in place, pending card", as
   await page.keyboard.press("Control+Enter");
   await expect(page.getByText("Pending")).toBeVisible();
   await expect(page.locator(".qf-pending .md-suggestion-line")).toHaveText(
-    "export function alpha(): number {",
+    "export function alpha(): number {"
   );
 });
 
-test("esc backs out of the composer without leaving the review", async ({ page }) => {
+test("esc backs out of the composer without leaving the review", async ({
+  page,
+}) => {
   await page.keyboard.type("draft");
   await page.keyboard.press("Escape");
   await expect(box(page)).toHaveCount(0);
   await expect(
-    page.getByRole("heading", { name: "Add fuzzy matching to search" }),
+    page.getByRole("heading", { name: "Add fuzzy matching to search" })
   ).toBeVisible();
 });
 
-test("tab still flips the batch/now mode from inside the editor", async ({ page }) => {
+test("tab still flips the batch/now mode from inside the editor", async ({
+  page,
+}) => {
   await page.keyboard.type("x");
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("radio", { name: "Comment now" })).toHaveAttribute(
-    "aria-checked",
-    "true",
-  );
+  await expect(
+    page.getByRole("radio", { name: "Comment now" })
+  ).toHaveAttribute("aria-checked", "true");
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("radio", { name: "Add to review" })).toHaveAttribute(
-    "aria-checked",
-    "true",
-  );
+  await expect(
+    page.getByRole("radio", { name: "Add to review" })
+  ).toHaveAttribute("aria-checked", "true");
 });

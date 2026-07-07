@@ -8,14 +8,14 @@
  * turns item indexes into fractions.
  */
 
-import type { ChangedFile, PendingComment, ReviewComment } from "../types";
-import { parsePatch, type DiffHunk, type DiffRow } from "./diff";
-import { intralinePairs, type IntralineRanges } from "./intraline";
+import type { ChangedFile, PendingComment, ReviewComment } from "../types.ts";
+import { type DiffHunk, type DiffRow, parsePatch } from "./diff.ts";
 import {
   detectIndentUnit,
   guideLevelsForHunk,
   type IndentUnit,
-} from "./indent";
+} from "./indent.ts";
+import { type IntralineRanges, intralinePairs } from "./intraline.ts";
 
 /** A stable key for anchoring comments/boxes to a (side, line) location. */
 export function anchorKey(side: string, line: number): string {
@@ -30,10 +30,10 @@ export function fileAnchorKey(fileIndex: number, anchor: string): string {
 /** Resolve the comment target for a diff row. */
 export function rowTarget(row: DiffRow): { line: number; side: string } | null {
   if (row.type === "del") {
-    return row.oldLine != null ? { line: row.oldLine, side: "LEFT" } : null;
+    return row.oldLine == null ? null : { line: row.oldLine, side: "LEFT" };
   }
   if (row.type === "add" || row.type === "context") {
-    return row.newLine != null ? { line: row.newLine, side: "RIGHT" } : null;
+    return row.newLine == null ? null : { line: row.newLine, side: "RIGHT" };
   }
   return null;
 }
@@ -55,15 +55,23 @@ export function adjacentSelectableAnchor(
   side: string,
   hunkIndex: number,
   fromAnchor: string,
-  delta: 1 | -1,
+  delta: 1 | -1
 ): string | null {
   const idx = m.navIndexOf.get(fileAnchorKey(fileIndex, fromAnchor));
-  if (idx == null) return null;
+  if (idx == null) {
+    return null;
+  }
   const next = m.nav[idx + delta];
-  if (!next || next.fileIndex !== fileIndex) return null;
+  if (!next || next.fileIndex !== fileIndex) {
+    return null;
+  }
   const item = m.items[next.itemIndex];
-  if (item.kind !== "row" || item.hunkIndex !== hunkIndex) return null;
-  if (item.target == null || item.target.side !== side) return null;
+  if (item.kind !== "row" || item.hunkIndex !== hunkIndex) {
+    return null;
+  }
+  if (item.target == null || item.target.side !== side) {
+    return null;
+  }
   return next.anchor;
 }
 
@@ -72,16 +80,20 @@ export function adjacentSelectableAnchor(
  * index each thread by the anchor of its root comment.
  */
 export function buildThreads(
-  comments: ReviewComment[],
+  comments: ReviewComment[]
 ): Map<string, ReviewComment[][]> {
   const byId = new Map<number, ReviewComment>();
-  for (const c of comments) byId.set(c.id, c);
+  for (const c of comments) {
+    byId.set(c.id, c);
+  }
 
   function rootOf(c: ReviewComment): ReviewComment {
     let cur = c;
     const seen = new Set<number>();
     while (cur.inReplyToId != null && byId.has(cur.inReplyToId)) {
-      if (seen.has(cur.id)) break;
+      if (seen.has(cur.id)) {
+        break;
+      }
       seen.add(cur.id);
       cur = byId.get(cur.inReplyToId)!;
     }
@@ -100,11 +112,13 @@ export function buildThreads(
   for (const [rootId, list] of threadsByRoot) {
     const root = byId.get(rootId)!;
     const line = root.line ?? root.originalLine;
-    if (line == null) continue;
+    if (line == null) {
+      continue;
+    }
     const key = anchorKey(root.side || "RIGHT", line);
     const sorted = [...list].sort(
       (a, b) =>
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     );
     const bucket = out.get(key) ?? [];
     bucket.push(sorted);
@@ -114,44 +128,44 @@ export function buildThreads(
 }
 
 export interface ReviewRowItem {
-  kind: "row";
-  fileIndex: number;
-  hunkIndex: number;
-  row: DiffRow;
   anchor: string | null;
-  target: { line: number; side: string } | null;
+  fileIndex: number;
   hasAnchored: boolean;
+  hunkIndex: number;
+  kind: "row";
+  row: DiffRow;
+  target: { line: number; side: string } | null;
 }
 
 export interface ReviewHunkItem {
-  kind: "hunk";
-  fileIndex: number;
-  hunkIndex: number;
-  header: string;
   collapsed: boolean;
+  fileIndex: number;
+  header: string;
+  hunkIndex: number;
+  kind: "hunk";
 }
 
 export interface ReviewCommentsItem {
-  kind: "comments";
-  fileIndex: number;
   anchor: string;
-  target: { line: number; side: string } | null;
-  rowContent: string | null;
-  threads: ReviewComment[][];
-  pending: PendingComment[];
   boxOpen: boolean;
   boxStartLine: number | null;
+  fileIndex: number;
+  kind: "comments";
+  pending: PendingComment[];
   rangeContent: string | null;
+  rowContent: string | null;
+  target: { line: number; side: string } | null;
+  threads: ReviewComment[][];
 }
 
 /** Whole-file bodies without rows: image comparisons and binary notes. */
 export interface ReviewImageItem {
-  kind: "image";
   fileIndex: number;
+  kind: "image";
 }
 export interface ReviewNoteItem {
-  kind: "note";
   fileIndex: number;
+  kind: "note";
   text: string;
 }
 
@@ -163,27 +177,35 @@ export type ReviewItem =
   | ReviewNoteItem;
 
 export interface ReviewListModel {
-  items: ReviewItem[];
+  anchorItem: Map<string, number>;
+  commentItems: number[];
   groupCounts: number[];
   groupFirstItem: number[];
-  anchorItem: Map<string, number>;
+  items: ReviewItem[];
   nav: Array<{ fileIndex: number; anchor: string; itemIndex: number }>;
   navIndexOf: Map<string, number>;
-  commentItems: number[];
 }
 
 export interface BuildReviewItemsInput {
+  collapsed: ReadonlyMap<number, ReadonlySet<number>>;
+  commentsByFile: ReadonlyMap<string, ReviewComment[]>;
   files: ReadonlyArray<ChangedFile>;
   isImage: (file: ChangedFile) => boolean;
-  collapsed: ReadonlyMap<number, ReadonlySet<number>>;
   openBoxes: ReadonlyMap<string, number | null>;
-  commentsByFile: ReadonlyMap<string, ReviewComment[]>;
   pendingByFile: ReadonlyMap<string, PendingComment[]>;
 }
 
-export function buildReviewItems(input: BuildReviewItemsInput): ReviewListModel {
-  const { files, isImage, collapsed, openBoxes, commentsByFile, pendingByFile } =
-    input;
+export function buildReviewItems(
+  input: BuildReviewItemsInput
+): ReviewListModel {
+  const {
+    files,
+    isImage,
+    collapsed,
+    openBoxes,
+    commentsByFile,
+    pendingByFile,
+  } = input;
   const items: ReviewItem[] = [];
   const groupCounts: number[] = [];
   const groupFirstItem: number[] = [];
@@ -197,14 +219,14 @@ export function buildReviewItems(input: BuildReviewItemsInput): ReviewListModel 
     const startCount = items.length;
 
     if (isImage(file)) {
-      items.push({ kind: "image", fileIndex });
+      items.push({ fileIndex, kind: "image" });
       groupCounts.push(items.length - startCount);
       return;
     }
     if (!file.patch) {
       items.push({
-        kind: "note",
         fileIndex,
+        kind: "note",
         text:
           file.changes > 0
             ? "Diff not available."
@@ -228,26 +250,32 @@ export function buildReviewItems(input: BuildReviewItemsInput): ReviewListModel 
     hunks.forEach((hunk, hunkIndex) => {
       const isCollapsed = fileCollapsed?.has(hunkIndex) ?? false;
       items.push({
-        kind: "hunk",
-        fileIndex,
-        hunkIndex,
-        header: hunk.header,
         collapsed: isCollapsed,
+        fileIndex,
+        header: hunk.header,
+        hunkIndex,
+        kind: "hunk",
       });
-      if (isCollapsed) return;
+      if (isCollapsed) {
+        return;
+      }
 
       const contentByAnchor = new Map<string, string>();
       for (const row of hunk.rows) {
-        if (row.type === "hunk") continue;
+        if (row.type === "hunk") {
+          continue;
+        }
         const target = rowTarget(row);
         const anchor = target ? anchorKey(target.side, target.line) : null;
-        if (anchor != null) contentByAnchor.set(anchor, row.content);
+        if (anchor != null) {
+          contentByAnchor.set(anchor, row.content);
+        }
         const rowThreads = anchor ? threads.get(anchor) : undefined;
         const rowPending = anchor ? pendingByAnchor.get(anchor) : undefined;
         const boxStartLine =
-          anchor != null
-            ? (openBoxes.get(fileAnchorKey(fileIndex, anchor)) ?? null)
-            : null;
+          anchor == null
+            ? null
+            : (openBoxes.get(fileAnchorKey(fileIndex, anchor)) ?? null);
         const boxOpen =
           anchor != null && openBoxes.has(fileAnchorKey(fileIndex, anchor));
         const hasAnchored =
@@ -255,16 +283,16 @@ export function buildReviewItems(input: BuildReviewItemsInput): ReviewListModel 
         if (anchor != null) {
           anchorItem.set(fileAnchorKey(fileIndex, anchor), items.length);
           navIndexOf.set(fileAnchorKey(fileIndex, anchor), nav.length);
-          nav.push({ fileIndex, anchor, itemIndex: items.length });
+          nav.push({ anchor, fileIndex, itemIndex: items.length });
         }
         items.push({
-          kind: "row",
-          fileIndex,
-          hunkIndex,
-          row,
           anchor,
-          target,
+          fileIndex,
           hasAnchored,
+          hunkIndex,
+          kind: "row",
+          row,
+          target,
         });
         if (hasAnchored || boxOpen) {
           let rangeContent: string | null = null;
@@ -272,22 +300,24 @@ export function buildReviewItems(input: BuildReviewItemsInput): ReviewListModel 
             const lines: string[] = [];
             for (let l = boxStartLine; l <= target.line; l += 1) {
               const c = contentByAnchor.get(anchorKey(target.side, l));
-              if (c != null) lines.push(c);
+              if (c != null) {
+                lines.push(c);
+              }
             }
             rangeContent = lines.join("\n");
           }
           commentItems.push(items.length);
           items.push({
-            kind: "comments",
-            fileIndex,
             anchor: anchor!,
-            target,
-            rowContent: row.content,
-            threads: rowThreads ?? [],
-            pending: rowPending ?? [],
             boxOpen,
             boxStartLine: boxOpen ? boxStartLine : null,
+            fileIndex,
+            kind: "comments",
+            pending: rowPending ?? [],
             rangeContent,
+            rowContent: row.content,
+            target,
+            threads: rowThreads ?? [],
           });
         }
       }
@@ -297,13 +327,13 @@ export function buildReviewItems(input: BuildReviewItemsInput): ReviewListModel 
   });
 
   return {
-    items,
+    anchorItem,
+    commentItems,
     groupCounts,
     groupFirstItem,
-    anchorItem,
+    items,
     nav,
     navIndexOf,
-    commentItems,
   };
 }
 
@@ -315,9 +345,9 @@ export function buildReviewItems(input: BuildReviewItemsInput): ReviewListModel 
  */
 
 export interface FileRenderMeta {
-  intraByRow: ReadonlyMap<DiffRow, IntralineRanges>;
   guideByRow: ReadonlyMap<DiffRow, number>;
   indentUnit: IndentUnit;
+  intraByRow: ReadonlyMap<DiffRow, IntralineRanges>;
 }
 
 const metaCache = new WeakMap<object, FileRenderMeta>();
@@ -325,20 +355,24 @@ const metaCache = new WeakMap<object, FileRenderMeta>();
 export function fileRenderMeta(patch: string): FileRenderMeta {
   const hunks: DiffHunk[] = parsePatch(patch);
   const hit = metaCache.get(hunks);
-  if (hit) return hit;
+  if (hit) {
+    return hit;
+  }
   const indentUnit = detectIndentUnit(hunks);
   const guideByRow = new Map<DiffRow, number>();
   for (const hunk of hunks) {
     const levels = guideLevelsForHunk(hunk.rows, indentUnit);
     hunk.rows.forEach((row, i) => {
       const lvl = levels[i];
-      if (lvl != null) guideByRow.set(row, lvl);
+      if (lvl != null) {
+        guideByRow.set(row, lvl);
+      }
     });
   }
   const meta: FileRenderMeta = {
-    intraByRow: intralinePairs(hunks),
     guideByRow,
     indentUnit,
+    intraByRow: intralinePairs(hunks),
   };
   metaCache.set(hunks, meta);
   return meta;

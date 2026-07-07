@@ -3,13 +3,13 @@ import type { ComponentType } from "react";
 export type KeyHandler = (e: KeyboardEvent) => void;
 
 export interface Binding {
-  keys: string | string[];
   description: string;
-  group?: string;
-  icon?: ComponentType<{ size?: number | string; className?: string }>;
-  run: KeyHandler;
   global?: boolean;
+  group?: string;
   hidden?: boolean;
+  icon?: ComponentType<{ size?: number | string; className?: string }>;
+  keys: string | string[];
+  run: KeyHandler;
 }
 
 export interface RegisteredBinding extends Binding {
@@ -18,8 +18,8 @@ export interface RegisteredBinding extends Binding {
 }
 
 export interface KeyboardContextValue {
-  registerSource: (scope: string, get: () => Binding[]) => () => void;
-  pushScope: (scope: string) => () => void;
   getBindings: (scope: string) => RegisteredBinding[];
+  pushScope: (scope: string) => () => void;
+  registerSource: (scope: string, get: () => Binding[]) => () => void;
   version: number;
 }

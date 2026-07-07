@@ -6,16 +6,20 @@
  */
 
 export interface FuzzyResult {
-  score: number;
   indices: number[];
+  score: number;
 }
 
 const BOUNDARY = /[\s/\-_.#:]/;
 
 function isBoundaryStart(text: string, i: number): boolean {
-  if (i === 0) return true;
+  if (i === 0) {
+    return true;
+  }
   const prev = text[i - 1];
-  if (BOUNDARY.test(prev)) return true;
+  if (BOUNDARY.test(prev)) {
+    return true;
+  }
   return prev === prev.toLowerCase() && text[i] === text[i].toUpperCase();
 }
 
@@ -24,7 +28,9 @@ function isBoundaryStart(text: string, i: number): boolean {
  * Greedy left-to-right with a simple retry: prefer boundary starts.
  */
 function matchTerm(term: string, text: string): FuzzyResult | null {
-  if (!term) return { score: 0, indices: [] };
+  if (!term) {
+    return { indices: [], score: 0 };
+  }
   const lowerText = text.toLowerCase();
   const lowerTerm = term.toLowerCase();
 
@@ -32,10 +38,14 @@ function matchTerm(term: string, text: string): FuzzyResult | null {
   if (sub !== -1) {
     const indices = Array.from({ length: term.length }, (_, k) => sub + k);
     let score = 100 + term.length * 8;
-    if (isBoundaryStart(text, sub)) score += 40;
-    if (sub === 0) score += 20;
+    if (isBoundaryStart(text, sub)) {
+      score += 40;
+    }
+    if (sub === 0) {
+      score += 20;
+    }
     score -= Math.min(sub, 20); // earlier is better
-    return { score, indices };
+    return { indices, score };
   }
 
   const indices: number[] = [];
@@ -49,8 +59,12 @@ function matchTerm(term: string, text: string): FuzzyResult | null {
         break;
       }
     }
-    if (found === -1) found = lowerText.indexOf(c, ti);
-    if (found === -1) return null;
+    if (found === -1) {
+      found = lowerText.indexOf(c, ti);
+    }
+    if (found === -1) {
+      return null;
+    }
     indices.push(found);
     ti = found + 1;
   }
@@ -58,11 +72,15 @@ function matchTerm(term: string, text: string): FuzzyResult | null {
   let score = term.length * 4;
   for (let k = 0; k < indices.length; k++) {
     const i = indices[k];
-    if (isBoundaryStart(text, i)) score += 12;
-    if (k > 0 && indices[k - 1] === i - 1) score += 10; // consecutive run
+    if (isBoundaryStart(text, i)) {
+      score += 12;
+    }
+    if (k > 0 && indices[k - 1] === i - 1) {
+      score += 10; // consecutive run
+    }
     score -= Math.floor(i / 24); // light penalty for late matches
   }
-  return { score, indices };
+  return { indices, score };
 }
 
 /**
@@ -72,16 +90,22 @@ function matchTerm(term: string, text: string): FuzzyResult | null {
  */
 export function fuzzyMatch(query: string, text: string): FuzzyResult | null {
   const terms = query.trim().split(/\s+/).filter(Boolean);
-  if (terms.length === 0) return { score: 0, indices: [] };
+  if (terms.length === 0) {
+    return { indices: [], score: 0 };
+  }
   let score = 0;
   const all = new Set<number>();
   for (const term of terms) {
     const m = matchTerm(term, text);
-    if (!m) return null;
+    if (!m) {
+      return null;
+    }
     score += m.score;
-    for (const i of m.indices) all.add(i);
+    for (const i of m.indices) {
+      all.add(i);
+    }
   }
-  return { score, indices: [...all].sort((a, b) => a - b) };
+  return { indices: [...all].sort((a, b) => a - b), score };
 }
 
 /**
@@ -91,18 +115,22 @@ export function fuzzyMatch(query: string, text: string): FuzzyResult | null {
  */
 export function fuzzyMatchFields(
   query: string,
-  fields: Record<string, string>,
+  fields: Record<string, string>
 ): { score: number; indices: Record<string, number[]> } | null {
   const entries = Object.entries(fields);
-  let best = -Infinity;
+  let best = Number.NEGATIVE_INFINITY;
   const indices: Record<string, number[]> = {};
   for (const [key, value] of entries) {
     const m = fuzzyMatch(query, value);
     if (m) {
       indices[key] = m.indices;
-      if (m.score > best) best = m.score;
+      if (m.score > best) {
+        best = m.score;
+      }
     }
   }
-  if (best === -Infinity) return null;
-  return { score: best, indices };
+  if (best === Number.NEGATIVE_INFINITY) {
+    return null;
+  }
+  return { indices, score: best };
 }

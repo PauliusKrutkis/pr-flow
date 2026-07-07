@@ -1,5 +1,5 @@
-import { expect, test } from "./test";
-import { setupApp } from "./bridge";
+import { setupApp } from "./bridge.ts";
+import { expect, test } from "./test.ts";
 
 test.beforeEach(async ({ page }) => {
   await setupApp(page);
@@ -8,21 +8,33 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
 });
 
-test("continuous scroll: all files render with sticky headers", async ({ page }) => {
-  await expect(page.locator('.qf-fsec-head[data-file-index="0"]').first()).toContainText("fuzzy.ts");
-  await expect(page.locator('.qf-fsec-head[data-file-index="1"]').first()).toContainText("search.ts");
-  await expect(page.locator('.qf-fsec-head[data-file-index="2"]').first()).toContainText("retry.ts");
+test("continuous scroll: all files render with sticky headers", async ({
+  page,
+}) => {
+  await expect(
+    page.locator('.qf-fsec-head[data-file-index="0"]').first()
+  ).toContainText("fuzzy.ts");
+  await expect(
+    page.locator('.qf-fsec-head[data-file-index="1"]').first()
+  ).toContainText("search.ts");
+  await expect(
+    page.locator('.qf-fsec-head[data-file-index="2"]').first()
+  ).toContainText("retry.ts");
 });
 
-test("j moves the line cursor; sidebar follows the cursor's file", async ({ page }) => {
+test("j moves the line cursor; sidebar follows the cursor's file", async ({
+  page,
+}) => {
   await page.keyboard.press("j");
   await expect(page.locator(".qf-row-active")).toHaveCount(1);
   await expect(
-    page.locator(".js-comment").getByText("Is this constant right?"),
+    page.locator(".js-comment").getByText("Is this constant right?")
   ).toBeVisible();
 });
 
-test("c opens the composer; adding batches a pending card", async ({ page }) => {
+test("c opens the composer; adding batches a pending card", async ({
+  page,
+}) => {
   await page.keyboard.press("j");
   await page.keyboard.press("c");
   const box = page.getByRole("textbox", { name: "Add a review comment…" });
@@ -31,13 +43,19 @@ test("c opens the composer; adding batches a pending card", async ({ page }) => 
   await page.getByRole("button", { name: "Add to review" }).click();
   await expect(page.getByText("Pending")).toBeVisible();
   await expect(page.getByText("Tighten this up?")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Submit review/ })).toContainText("1");
+  await expect(
+    page.getByRole("button", { name: /Submit review/ })
+  ).toContainText("1");
 });
 
-test("pending drafts survive leaving and reopening the PR", async ({ page }) => {
+test("pending drafts survive leaving and reopening the PR", async ({
+  page,
+}) => {
   await page.keyboard.press("j");
   await page.keyboard.press("c");
-  await page.getByRole("textbox", { name: "Add a review comment…" }).fill("Draft to keep");
+  await page
+    .getByRole("textbox", { name: "Add a review comment…" })
+    .fill("Draft to keep");
   await page.getByRole("button", { name: "Add to review" }).click();
   await page.keyboard.press("Escape"); // back to inbox
   await expect(page.getByRole("option").first()).toBeVisible();
@@ -45,7 +63,9 @@ test("pending drafts survive leaving and reopening the PR", async ({ page }) => 
   await expect(page.getByText("Draft to keep")).toBeVisible();
 });
 
-test("text search (mod+r) lands on the line and seeds the comment cursor", async ({ page }) => {
+test("text search (mod+r) lands on the line and seeds the comment cursor", async ({
+  page,
+}) => {
   await page.keyboard.press("Control+r");
   const input = page.getByPlaceholder("Search code in this PR…");
   await expect(input).toBeFocused();
@@ -54,10 +74,14 @@ test("text search (mod+r) lands on the line and seeds the comment cursor", async
   await page.keyboard.press("Enter");
   await expect(page.locator(".qf-row-flash")).toHaveCount(1);
   await page.keyboard.press("c");
-  await expect(page.getByRole("textbox", { name: "Add a review comment…" })).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "Add a review comment…" })
+  ).toBeVisible();
 });
 
-test("find bar: mod+f opens it, typing counts, Enter steps and wraps", async ({ page }) => {
+test("find bar: mod+f opens it, typing counts, Enter steps and wraps", async ({
+  page,
+}) => {
   await page.keyboard.press("Control+f");
   const input = page.getByPlaceholder("Find in diff");
   await expect(input).toBeFocused();
@@ -69,15 +93,21 @@ test("find bar: mod+f opens it, typing counts, Enter steps and wraps", async ({ 
 
   await page.keyboard.press("Enter");
   await expect(count).toHaveText("1/3");
-  await expect(page.locator('.qf-row-flash[data-file-index="0"]')).toHaveCount(1);
+  await expect(page.locator('.qf-row-flash[data-file-index="0"]')).toHaveCount(
+    1
+  );
   await expect(page.locator("mark.qf-find-current")).toHaveCount(1);
-  await expect(page.locator('.qf-row[data-file-index="0"] mark.qf-find-current')).toHaveCount(1);
+  await expect(
+    page.locator('.qf-row[data-file-index="0"] mark.qf-find-current')
+  ).toHaveCount(1);
 
   await page.keyboard.press("Enter");
   await expect(count).toHaveText("2/3");
   await page.keyboard.press("Enter");
   await expect(count).toHaveText("3/3");
-  await expect(page.locator('.qf-row[data-file-index="1"] mark.qf-find-current')).toHaveCount(1);
+  await expect(
+    page.locator('.qf-row[data-file-index="1"] mark.qf-find-current')
+  ).toHaveCount(1);
 
   await page.keyboard.press("Enter");
   await expect(count).toHaveText("1/3");
@@ -85,11 +115,13 @@ test("find bar: mod+f opens it, typing counts, Enter steps and wraps", async ({ 
   await expect(count).toHaveText("3/3");
 });
 
-test("next file lands cleanly: current file's header pinned, no previous rows peeking", async ({ page }) => {
+test("next file lands cleanly: current file's header pinned, no previous rows peeking", async ({
+  page,
+}) => {
   await page.keyboard.press("r");
   await page.waitForFunction(() => {
     const pinned = document.querySelector<HTMLElement>(
-      '[data-testid="virtuoso-top-item-list"] .qf-fsec-head',
+      '[data-testid="virtuoso-top-item-list"] .qf-fsec-head'
     );
     return pinned?.dataset.fileIndex === "1";
   });
@@ -97,20 +129,22 @@ test("next file lands cleanly: current file's header pinned, no previous rows pe
     const host = document.querySelector(".qf-scrollhost")!;
     const top = host.getBoundingClientRect().top;
     return Array.from(
-      document.querySelectorAll('.qf-row[data-file-index="0"]'),
+      document.querySelectorAll('.qf-row[data-file-index="0"]')
     ).some((r) => r.getBoundingClientRect().bottom > top + 2);
   });
   expect(prevPeeking).toBe(false);
   await page.keyboard.press("t");
   await page.waitForFunction(() => {
     const pinned = document.querySelector<HTMLElement>(
-      '[data-testid="virtuoso-top-item-list"] .qf-fsec-head',
+      '[data-testid="virtuoso-top-item-list"] .qf-fsec-head'
     );
     return pinned?.dataset.fileIndex === "0";
   });
 });
 
-test("resume: reopening paints the spot you left — no visible jump after", async ({ page }) => {
+test("resume: reopening paints the spot you left — no visible jump after", async ({
+  page,
+}) => {
   await page.keyboard.press("r");
   await page.keyboard.press("r");
   const fileRow = page.locator('.qf-row[data-file-index="2"]').first();
@@ -118,7 +152,8 @@ test("resume: reopening paints the spot you left — no visible jump after", asy
   await page.waitForFunction(() => {
     const host = document.querySelector(".qf-scrollhost")!;
     const row = document.querySelector('.qf-row[data-file-index="2"]')!;
-    const d = row.getBoundingClientRect().top - host.getBoundingClientRect().top;
+    const d =
+      row.getBoundingClientRect().top - host.getBoundingClientRect().top;
     return d >= 0 && d < 120;
   });
   await page.evaluate(() => {
@@ -135,14 +170,16 @@ test("resume: reopening paints the spot you left — no visible jump after", asy
   await page.reload();
   await expect(page.locator(".qf-diff").first()).toBeVisible();
   await expect(
-    page.locator('[data-anchor][data-file-index="2"]').first(),
+    page.locator('[data-anchor][data-file-index="2"]').first()
   ).toBeVisible();
 
   const measure = () =>
     page.evaluate(() => {
       const host = document.querySelector(".qf-scrollhost")!;
       const row = document.querySelector('[data-anchor][data-file-index="2"]');
-      if (!row) return null;
+      if (!row) {
+        return null;
+      }
       return row.getBoundingClientRect().top - host.getBoundingClientRect().top;
     });
   const after = await measure();
@@ -153,13 +190,18 @@ test("resume: reopening paints the spot you left — no visible jump after", asy
   expect(Math.abs((settled as number) - (after as number))).toBeLessThan(24);
 });
 
-test("find seeds from the viewport: the current match is the one near you, not the top", async ({ page }) => {
+test("find seeds from the viewport: the current match is the one near you, not the top", async ({
+  page,
+}) => {
   await page.keyboard.press("r");
-  await expect(page.locator('.qf-row[data-file-index="1"]').first()).toBeVisible();
+  await expect(
+    page.locator('.qf-row[data-file-index="1"]').first()
+  ).toBeVisible();
   await page.waitForFunction(() => {
     const host = document.querySelector(".qf-scrollhost")!;
     const row = document.querySelector('.qf-row[data-file-index="1"]')!;
-    const d = row.getBoundingClientRect().top - host.getBoundingClientRect().top;
+    const d =
+      row.getBoundingClientRect().top - host.getBoundingClientRect().top;
     return d >= 0 && d < 120;
   });
 
@@ -171,20 +213,26 @@ test("find seeds from the viewport: the current match is the one near you, not t
 
   await page.keyboard.press("Enter");
   await expect(count).toHaveText("3/3");
-  await expect(page.locator('.qf-row-flash[data-file-index="1"]')).toHaveCount(1);
+  await expect(page.locator('.qf-row-flash[data-file-index="1"]')).toHaveCount(
+    1
+  );
 
   await page.keyboard.press("Enter");
   await expect(count).toHaveText("1/3");
 });
 
-test("find bar: Esc closes, clears marks, and j moves the cursor immediately", async ({ page }) => {
+test("find bar: Esc closes, clears marks, and j moves the cursor immediately", async ({
+  page,
+}) => {
   await page.keyboard.press("Control+f");
   const input = page.getByPlaceholder("Find in diff");
   await input.fill("gamma");
   await expect(page.locator(".qf-findbar-count")).toHaveText("1/2");
 
   await page.keyboard.press("Enter");
-  await expect(page.locator('.qf-row-flash[data-file-index="1"]')).toHaveCount(1);
+  await expect(page.locator('.qf-row-flash[data-file-index="1"]')).toHaveCount(
+    1
+  );
 
   await page.keyboard.press("Escape");
   await expect(page.locator(".qf-findbar")).toHaveCount(0);
@@ -193,7 +241,9 @@ test("find bar: Esc closes, clears marks, and j moves the cursor immediately", a
   await expect(page.locator(".qf-row-active")).toHaveCount(1);
 });
 
-test("find bar: reopening keeps the query selected; typing replaces it", async ({ page }) => {
+test("find bar: reopening keeps the query selected; typing replaces it", async ({
+  page,
+}) => {
   await page.keyboard.press("Control+f");
   const input = page.getByPlaceholder("Find in diff");
   await input.fill("gamma");
@@ -204,14 +254,22 @@ test("find bar: reopening keeps the query selected; typing replaces it", async (
   await expect(page.locator(".qf-findbar-count")).toHaveText("1/1");
 });
 
-test("info drawer: i opens with the conversation, esc closes drawer first", async ({ page }) => {
+test("info drawer: i opens with the conversation, esc closes drawer first", async ({
+  page,
+}) => {
   await page.keyboard.press("i");
-  await expect(page.locator(".qf-drawer")).toHaveAttribute("aria-hidden", "false");
+  await expect(page.locator(".qf-drawer")).toHaveAttribute(
+    "aria-hidden",
+    "false"
+  );
   await expect(page.getByText("Nice direction overall.")).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(page.locator(".qf-drawer")).toHaveAttribute("aria-hidden", "true");
+  await expect(page.locator(".qf-drawer")).toHaveAttribute(
+    "aria-hidden",
+    "true"
+  );
   await expect(
-    page.getByRole("heading", { name: "Add fuzzy matching to search" }),
+    page.getByRole("heading", { name: "Add fuzzy matching to search" })
   ).toBeVisible();
 });
 
@@ -229,16 +287,24 @@ test("y and mod+shift+c copy with toast confirmations", async ({ page }) => {
 test("the palette lists the copy actions in review scope", async ({ page }) => {
   await page.keyboard.press("Control+k");
   await page.getByPlaceholder("Run a command…").fill("copy");
-  await expect(page.getByRole("button", { name: /Copy file path/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Copy PR link/ })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Copy file path/ })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Copy PR link/ })
+  ).toBeVisible();
 });
 
 test("esc returns to the inbox", async ({ page }) => {
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: /Review requests/ })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Review requests/ })
+  ).toBeVisible();
 });
 
-test("info timeline: review verdicts interleave with comments, oldest first", async ({ page }) => {
+test("info timeline: review verdicts interleave with comments, oldest first", async ({
+  page,
+}) => {
   await page.keyboard.press("i");
   const drawer = page.locator(".qf-drawer");
   await expect(drawer.getByText("LGTM, ship it.")).toBeVisible();
@@ -249,56 +315,84 @@ test("info timeline: review verdicts interleave with comments, oldest first", as
   await expect(items.nth(1)).toContainText("dave");
 });
 
-test("info code discussion lists inline threads; a row jumps to the diff", async ({ page }) => {
+test("info code discussion lists inline threads; a row jumps to the diff", async ({
+  page,
+}) => {
   await page.keyboard.press("i");
   const row = page.locator(".qf-thread-row");
   await expect(row).toContainText("src/lib/fuzzy.ts");
   await expect(row).toContainText(":2");
   await expect(row).toContainText("Is this constant right?");
   await row.click();
-  await expect(page.locator(".qf-drawer")).toHaveAttribute("aria-hidden", "true");
+  await expect(page.locator(".qf-drawer")).toHaveAttribute(
+    "aria-hidden",
+    "true"
+  );
   const thread = page.locator('[data-comment-root="100"]');
   await expect(thread).toBeVisible();
   await expect(thread).toHaveClass(/qf-row-flash/);
 });
 
-test("the i button advertises how much conversation the drawer holds", async ({ page }) => {
+test("the i button advertises how much conversation the drawer holds", async ({
+  page,
+}) => {
   await expect(page.locator(".qf-info-count")).toHaveText("3");
 });
 
-test("esc in the drawer composer closes the drawer and releases the keyboard", async ({ page }) => {
+test("esc in the drawer composer closes the drawer and releases the keyboard", async ({
+  page,
+}) => {
   await page.keyboard.press("i");
-  const box = page.getByRole("textbox", { name: "Comment on this pull request…" });
+  const box = page.getByRole("textbox", {
+    name: "Comment on this pull request…",
+  });
   await box.click();
   await box.fill("half-typed thought");
   await page.keyboard.press("Escape");
-  await expect(page.locator(".qf-drawer")).toHaveAttribute("aria-hidden", "true");
+  await expect(page.locator(".qf-drawer")).toHaveAttribute(
+    "aria-hidden",
+    "true"
+  );
   await expect(
-    page.getByRole("heading", { name: "Add fuzzy matching to search" }),
+    page.getByRole("heading", { name: "Add fuzzy matching to search" })
   ).toBeVisible();
   await page.keyboard.press("j");
   await expect(page.locator(".qf-row-active")).toHaveCount(1);
 });
 
-test("after esc-closing from the composer, i reopens the drawer", async ({ page }) => {
+test("after esc-closing from the composer, i reopens the drawer", async ({
+  page,
+}) => {
   await page.keyboard.press("i");
-  await page.getByRole("textbox", { name: "Comment on this pull request…" }).click();
+  await page
+    .getByRole("textbox", { name: "Comment on this pull request…" })
+    .click();
   await page.keyboard.press("Escape");
-  await expect(page.locator(".qf-drawer")).toHaveAttribute("aria-hidden", "true");
+  await expect(page.locator(".qf-drawer")).toHaveAttribute(
+    "aria-hidden",
+    "true"
+  );
   await page.keyboard.press("i");
-  await expect(page.locator(".qf-drawer")).toHaveAttribute("aria-hidden", "false");
+  await expect(page.locator(".qf-drawer")).toHaveAttribute(
+    "aria-hidden",
+    "false"
+  );
 });
 
-test("comment posting is optimistic even when the network hangs", async ({ page }) => {
+test("comment posting is optimistic even when the network hangs", async ({
+  page,
+}) => {
   await setupApp(page, { hangIssueComment: true });
   await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
   await page.keyboard.press("i");
-  const box = page.getByRole("textbox", { name: "Comment on this pull request…" });
+  const box = page.getByRole("textbox", {
+    name: "Comment on this pull request…",
+  });
   await box.click();
   await box.fill("Ship it when green");
   await page.keyboard.press("Control+Enter");
   await expect(
-    page.locator(".qf-convo").getByText("Ship it when green"),
+    page.locator(".qf-convo").getByText("Ship it when green")
   ).toBeVisible({ timeout: 1000 });
   await expect(box).toHaveText("");
 });

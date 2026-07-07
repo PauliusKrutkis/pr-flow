@@ -6,7 +6,7 @@ import {
   highlightLineWithMatch,
   highlightLineWithOccurrences,
   isHighlightable,
-} from "./highlight";
+} from "./highlight.ts";
 
 describe("language resolution", () => {
   it("resolves by extension and special basenames", () => {
@@ -21,7 +21,7 @@ describe("language resolution", () => {
 describe("highlightLine", () => {
   it("escapes HTML for unknown languages", () => {
     expect(highlightLine("<b>&x</b>", "notes.unknownext")).toBe(
-      "&lt;b&gt;&amp;x&lt;/b&gt;",
+      "&lt;b&gt;&amp;x&lt;/b&gt;"
     );
   });
 
@@ -55,7 +55,6 @@ describe("highlightLineWithMatch", () => {
   });
 
   it("marks matches that span token boundaries", () => {
-
     const html = highlightLineWithMatch("const x = 1;", "a.ts", "st x");
     const text = html.replace(/<[^>]+>/g, "");
     expect(text).toBe("const x = 1;");
@@ -70,7 +69,13 @@ describe("highlightLineWithMatch", () => {
 
 describe("highlightLineWithFind", () => {
   it("marks every occurrence and singles out the current one", () => {
-    const html = highlightLineWithFind("foo(foo, foo)", "a.ts", "foo", false, 1);
+    const html = highlightLineWithFind(
+      "foo(foo, foo)",
+      "a.ts",
+      "foo",
+      false,
+      1
+    );
     expect((html.match(/qf-find-mark/g) ?? []).length).toBe(3);
     expect((html.match(/qf-find-current/g) ?? []).length).toBe(1);
 
@@ -87,13 +92,13 @@ describe("highlightLineWithFind", () => {
   it("respects the case toggle", () => {
     expect(
       highlightLineWithFind("Value value", "a.ts", "value", true, null).match(
-        /<mark/g,
-      ),
+        /<mark/g
+      )
     ).toHaveLength(1);
     expect(
       highlightLineWithFind("Value value", "a.ts", "value", false, null).match(
-        /<mark/g,
-      ),
+        /<mark/g
+      )
     ).toHaveLength(2);
   });
 
@@ -115,30 +120,33 @@ describe("highlightLineWithIntra", () => {
 
   it("null or empty ranges leave the highlighted line untouched", () => {
     expect(highlightLineWithIntra(code, "a.ts", null)).toBe(
-      highlightLine(code, "a.ts"),
+      highlightLine(code, "a.ts")
     );
     expect(highlightLineWithIntra(code, "a.ts", [])).toBe(
-      highlightLine(code, "a.ts"),
+      highlightLine(code, "a.ts")
     );
   });
 
   it("find marks nest inside intraline marks (intra is layered first)", () => {
-
     const html = highlightLineWithFind(code, "a.ts", "Lim", false, 0, [
       [11, 16],
     ]);
     expect(html).toContain("qf-intra-mark");
     expect(html).toContain("qf-find-mark");
     expect(html.indexOf("qf-intra-mark")).toBeLessThan(
-      html.indexOf("qf-find-mark"),
+      html.indexOf("qf-find-mark")
     );
     expect(html.replace(/<[^>]+>/g, "")).toBe(code);
   });
 
   it("occurrence marks nest inside intraline marks too", () => {
-    const html = highlightLineWithOccurrences(code, "a.ts", "retryLimit", true, [
-      [11, 16],
-    ]);
+    const html = highlightLineWithOccurrences(
+      code,
+      "a.ts",
+      "retryLimit",
+      true,
+      [[11, 16]]
+    );
     expect(html).toContain("qf-intra-mark");
     expect(html).toContain("qf-occ-mark");
     expect(html.replace(/<[^>]+>/g, "")).toBe(code);
@@ -148,7 +156,9 @@ describe("highlightLineWithIntra", () => {
 describe("mark layering", () => {
   it("layers find marks over intraline emphasis with the text intact", () => {
     const code = "    const retryLimit = 3;";
-    const html = highlightLineWithFind(code, "a.ts", "Lim", false, 0, [[15, 20]]);
+    const html = highlightLineWithFind(code, "a.ts", "Lim", false, 0, [
+      [15, 20],
+    ]);
     expect(html).toContain("qf-intra-mark");
     expect(html).toContain("qf-find-mark");
     expect(html.replace(/<[^>]+>/g, "")).toBe(code);
@@ -161,14 +171,19 @@ describe("highlightLineWithOccurrences", () => {
       "const id = width(id);",
       "a.ts",
       "id",
-      true,
+      true
     );
     expect((html.match(/qf-occ-mark/g) ?? []).length).toBe(2);
     expect(html).not.toContain("qf-find-mark");
   });
 
   it("substring mode marks hits inside identifiers", () => {
-    const html = highlightLineWithOccurrences("width widen", "a.ts", "wid", false);
+    const html = highlightLineWithOccurrences(
+      "width widen",
+      "a.ts",
+      "wid",
+      false
+    );
     expect((html.match(/qf-occ-mark/g) ?? []).length).toBe(2);
   });
 

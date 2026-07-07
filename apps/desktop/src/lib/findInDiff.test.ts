@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { findInDiff, findMatchRangesInLine, patchMayMatch } from "./findInDiff";
-import { parsePatch, rowAnchor } from "./diff";
+import { parsePatch, rowAnchor } from "./diff.ts";
+import {
+  findInDiff,
+  findMatchRangesInLine,
+  patchMayMatch,
+} from "./findInDiff.ts";
 
 /** @@ -1,3 +1,4 @@ resolves to: context old1/new1, del old2, add new2, add new3. */
 
@@ -13,7 +17,7 @@ const PATCH = `@@ -1,3 +1,4 @@
 const FILES = [
   { patch: PATCH },
   { patch: null }, // binary / oversized file — no patch to search
-  { patch: `@@ -0,0 +1,1 @@\n+foo foo foo` },
+  { patch: "@@ -0,0 +1,1 @@\n+foo foo foo" },
 ];
 
 describe("findMatchRangesInLine", () => {
@@ -68,18 +72,18 @@ describe("findInDiff", () => {
   it("reports every occurrence on a line with column offsets", () => {
     const matches = findInDiff(FILES, "foo");
     expect(matches).toEqual([
-      { fileIndex: 2, anchor: "RIGHT:1", start: 0, end: 3 },
-      { fileIndex: 2, anchor: "RIGHT:1", start: 4, end: 7 },
-      { fileIndex: 2, anchor: "RIGHT:1", start: 8, end: 11 },
+      { anchor: "RIGHT:1", end: 3, fileIndex: 2, start: 0 },
+      { anchor: "RIGHT:1", end: 7, fileIndex: 2, start: 4 },
+      { anchor: "RIGHT:1", end: 11, fileIndex: 2, start: 8 },
     ]);
   });
 
   it("matches case-insensitively by default; the toggle narrows it", () => {
     expect(findInDiff(FILES, "beta")).toHaveLength(2);
     expect(findInDiff(FILES, "beta", { caseSensitive: true })).toHaveLength(1);
-    expect(
-      findInDiff(FILES, "Beta", { caseSensitive: true })[0].anchor,
-    ).toBe("RIGHT:2");
+    expect(findInDiff(FILES, "Beta", { caseSensitive: true })[0].anchor).toBe(
+      "RIGHT:2"
+    );
   });
 
   it("skips files without a patch but keeps later file indices right", () => {
@@ -89,7 +93,9 @@ describe("findInDiff", () => {
 
   it("caps at maxMatches; Infinity lifts the cap", () => {
     expect(findInDiff(FILES, "foo", { maxMatches: 2 })).toHaveLength(2);
-    expect(findInDiff(FILES, "foo", { maxMatches: Infinity })).toHaveLength(3);
+    expect(
+      findInDiff(FILES, "foo", { maxMatches: Number.POSITIVE_INFINITY })
+    ).toHaveLength(3);
   });
 
   it("a needle with a newline never matches (rows are single lines)", () => {
@@ -97,10 +103,9 @@ describe("findInDiff", () => {
   });
 
   it("agrees with the per-line matcher when a periodic needle overlaps the marker column", () => {
-
     const files = [{ patch: "@@ -1,1 +1,1 @@\n-a-a-a" }];
     expect(findInDiff(files, "-a-a")).toEqual([
-      { fileIndex: 0, anchor: "LEFT:1", start: 1, end: 5 },
+      { anchor: "LEFT:1", end: 5, fileIndex: 0, start: 1 },
     ]);
     expect(findMatchRangesInLine("a-a-a", "-a-a")).toEqual([[1, 5]]);
   });
@@ -113,7 +118,7 @@ describe("findInDiff", () => {
           const ranges = findMatchRangesInLine(
             contentAt(FILES[m.fileIndex].patch!, m.anchor),
             query,
-            caseSensitive,
+            caseSensitive
           );
           expect(ranges).toContainEqual([m.start, m.end]);
         }
@@ -126,7 +131,9 @@ describe("findInDiff", () => {
 function contentAt(patch: string, anchor: string): string {
   for (const hunk of parsePatch(patch)) {
     for (const row of hunk.rows) {
-      if (rowAnchor(row) === anchor) return row.content;
+      if (rowAnchor(row) === anchor) {
+        return row.content;
+      }
     }
   }
   throw new Error(`no row for anchor ${anchor}`);

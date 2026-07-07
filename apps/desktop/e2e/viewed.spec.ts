@@ -1,6 +1,6 @@
-import { expect, test } from "./test";
-import { setupApp } from "./bridge";
-import { DETAIL, DETAIL_CHANGED, INBOX, INBOX_UPDATED } from "./fixtures";
+import { setupApp } from "./bridge.ts";
+import { DETAIL, DETAIL_CHANGED, INBOX, INBOX_UPDATED } from "./fixtures.ts";
+import { expect, test } from "./test.ts";
 
 test("a viewed file whose content changed is auto-unviewed on reopen, with a notice", async ({
   page,
@@ -18,7 +18,7 @@ test("a viewed file whose content changed is auto-unviewed on reopen, with a not
   await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
 
   await expect(page.locator(".qb-toast")).toContainText(
-    "src/lib/fuzzy.ts changed since you viewed it — marked unviewed.",
+    "src/lib/fuzzy.ts changed since you viewed it — marked unviewed."
   );
   await expect(page.locator(".qf-side-count")).toHaveText("0/3 viewed");
   await expect(page.locator(".qf-file-dot")).toHaveCount(1);
@@ -30,7 +30,9 @@ test("a viewed file whose content changed is auto-unviewed on reopen, with a not
   await expect(page.locator(".qf-side-count")).toHaveText("1/3 viewed");
 });
 
-test("an unchanged viewed file keeps its mark across reopen", async ({ page }) => {
+test("an unchanged viewed file keeps its mark across reopen", async ({
+  page,
+}) => {
   await setupApp(page, { detailByLoad: [DETAIL, DETAIL_CHANGED] });
   await expect(page.getByRole("option").first()).toBeVisible();
   await page.keyboard.press("Enter");
@@ -39,7 +41,7 @@ test("an unchanged viewed file keeps its mark across reopen", async ({ page }) =
   await page.keyboard.press("r"); // next file
   await expect(page.locator(".qf-file-active")).toHaveAttribute(
     "data-file-index",
-    "1",
+    "1"
   );
   await page.keyboard.press("v");
   await expect(page.locator(".qf-side-count")).toHaveText("1/3 viewed");
@@ -76,7 +78,7 @@ test("an inbox heartbeat that sees the PR move refreshes the open diff", async (
 
   await expect(page.getByText("const two = 2;")).toBeVisible();
   await expect(page.locator(".qb-toast")).toContainText(
-    "changed since you viewed it — marked unviewed.",
+    "changed since you viewed it — marked unviewed."
   );
   await expect(page.locator(".qf-side-count")).toHaveText("0/3 viewed");
   await expect(page.locator(".qf-file-dot")).toHaveCount(1);
@@ -85,7 +87,9 @@ test("an inbox heartbeat that sees the PR move refreshes the open diff", async (
 test.describe("path copy", () => {
   test.use({ permissions: ["clipboard-read", "clipboard-write"] });
 
-  test("clicking the file path in the diff header copies it", async ({ page }) => {
+  test("clicking the file path in the diff header copies it", async ({
+    page,
+  }) => {
     await setupApp(page);
     await expect(page.getByRole("option").first()).toBeVisible();
     await page.keyboard.press("Enter");

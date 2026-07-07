@@ -8,7 +8,9 @@ export function HighlightIndices({
   text: string;
   indices: number[];
 }) {
-  if (indices.length === 0) return <>{text}</>;
+  if (indices.length === 0) {
+    return <>{text}</>;
+  }
   const set = new Set(indices);
   const nodes: ReactNode[] = [];
   let start = 0;
@@ -24,7 +26,7 @@ export function HighlightIndices({
           </mark>
         ) : (
           <Fragment key={start}>{seg}</Fragment>
-        ),
+        )
       );
       start = i;
       inHl = hl;
@@ -42,20 +44,28 @@ export function HighlightMatch({
   query: string;
 }) {
   const q = query.trim().toLowerCase();
-  if (!q) return <>{text}</>;
+  if (!q) {
+    return <>{text}</>;
+  }
   const lower = text.toLowerCase();
   const nodes: ReactNode[] = [];
   let pos = 0;
   for (let idx = lower.indexOf(q); idx !== -1; idx = lower.indexOf(q, pos)) {
-    if (idx > pos) nodes.push(<Fragment key={pos}>{text.slice(pos, idx)}</Fragment>);
+    if (idx > pos) {
+      nodes.push(<Fragment key={pos}>{text.slice(pos, idx)}</Fragment>);
+    }
     nodes.push(
       <mark className="q-hl" key={idx}>
         {text.slice(idx, idx + q.length)}
-      </mark>,
+      </mark>
     );
     pos = idx + q.length;
   }
-  if (nodes.length === 0) return <>{text}</>;
-  if (pos < text.length) nodes.push(<Fragment key={pos}>{text.slice(pos)}</Fragment>);
+  if (nodes.length === 0) {
+    return <>{text}</>;
+  }
+  if (pos < text.length) {
+    nodes.push(<Fragment key={pos}>{text.slice(pos)}</Fragment>);
+  }
   return <>{nodes}</>;
 }

@@ -1,20 +1,20 @@
-import { useRef, useState } from "react";
 import { Layers, Send } from "lucide-react";
-import { Kbd } from "../ui/Kbd";
+import { useRef, useState } from "react";
+import { Kbd } from "../ui/Kbd.tsx";
 import {
   ComposerEditor,
   type ComposerEditorHandle,
-} from "./ComposerEditor";
+} from "./ComposerEditor.tsx";
 
 interface AddCommentBoxProps {
-  onSubmit: (body: string) => Promise<void> | void;
+  autoFocus?: boolean;
   onCancel: () => void;
+  onSecondary?: (body: string) => Promise<void> | void;
+  onSubmit: (body: string) => Promise<void> | void;
   pending: boolean;
   placeholder?: string;
-  autoFocus?: boolean;
-  submitLabel?: string;
-  onSecondary?: (body: string) => Promise<void> | void;
   secondaryLabel?: string;
+  submitLabel?: string;
   suggestionText?: string;
 }
 
@@ -39,16 +39,20 @@ export function AddCommentBox({
   const [mode, setMode] = useState<"batch" | "now">("batch");
   const [empty, setEmpty] = useState(true);
   const editorRef = useRef<ComposerEditorHandle>(null);
-  const canSubmit = !pending && !empty;
+  const canSubmit = !(pending || empty);
 
   const primaryAction = onSecondary && mode === "now" ? onSecondary : onSubmit;
   const primaryLabel =
     onSecondary && mode === "now" ? secondaryLabel : submitLabel;
 
   async function run(action: (body: string) => Promise<void> | void) {
-    if (pending) return;
+    if (pending) {
+      return;
+    }
     const body = editorRef.current?.getMarkdown().trim() ?? "";
-    if (!body) return;
+    if (!body) {
+      return;
+    }
     await action(body);
     editorRef.current?.clear();
   }
@@ -56,63 +60,67 @@ export function AddCommentBox({
   return (
     <div className="qa-inline">
       <ComposerEditor
-        ref={editorRef}
-        placeholder={placeholder ?? "Leave a comment…  ⌘↵ to save"}
         autoFocus={autoFocus}
-        suggestionText={suggestionText}
-        onSubmitRequest={() => void run(primaryAction)}
         onCancel={onCancel}
+        onEmptyChange={setEmpty}
         onModeFlip={
           onSecondary
             ? () => setMode((m) => (m === "batch" ? "now" : "batch"))
             : undefined
         }
-        onEmptyChange={setEmpty}
+        onSubmitRequest={() => void run(primaryAction)}
+        placeholder={placeholder ?? "Leave a comment…  ⌘↵ to save"}
+        ref={editorRef}
+        suggestionText={suggestionText}
       />
 
       <div className="qa-foot">
         {onSecondary ? (
-          <div className="qa-seg" role="radiogroup" aria-label="When to post">
+          <div aria-label="When to post" className="qa-seg" role="radiogroup">
             <button
-              type="button"
-              role="radio"
               aria-checked={mode === "batch"}
               className={
-                "qa-seg-btn q-focus" + (mode === "batch" ? " qa-seg-on" : "")
+                "qa-seg-btn q-focus" + (mode === "batch" ? "qa-seg-on" : "")
               }
               onClick={() => setMode("batch")}
+              role="radio"
+              type="button"
             >
-              <Layers size={13} aria-hidden />
+              <Layers aria-hidden size={13} />
               {submitLabel}
             </button>
             <button
-              type="button"
-              role="radio"
               aria-checked={mode === "now"}
               className={
-                "qa-seg-btn q-focus" + (mode === "now" ? " qa-seg-on" : "")
+                "qa-seg-btn q-focus" + (mode === "now" ? "qa-seg-on" : "")
               }
               onClick={() => setMode("now")}
+              role="radio"
+              type="button"
             >
-              <Send size={13} aria-hidden />
+              <Send aria-hidden size={13} />
               {secondaryLabel}
             </button>
           </div>
         ) : (
-          <span className="text-xs text-faint">
+          <span className="text-faint text-xs">
             ⌘↵ to submit · Esc to cancel
           </span>
         )}
 
         <div className="qa-actions">
-          <button type="button" onClick={onCancel} className="q-btn q-btn-ghost">
+          <button
+            className="q-btn q-btn-ghost"
+            onClick={onCancel}
+            type="button"
+          >
             Cancel
           </button>
           <button
-            type="button"
-            onClick={() => void run(primaryAction)}
-            disabled={!canSubmit}
             className="q-btn q-btn-primary"
+            disabled={!canSubmit}
+            onClick={() => void run(primaryAction)}
+            type="button"
           >
             {pending ? "Submitting…" : primaryLabel}
             <Kbd combo="mod+enter" />

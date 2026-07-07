@@ -7,10 +7,10 @@
 export type DiffRowType = "hunk" | "context" | "add" | "del";
 
 export interface DiffRow {
-  type: DiffRowType;
   content: string;
-  oldLine: number | null;
   newLine: number | null;
+  oldLine: number | null;
+  type: DiffRowType;
 }
 
 export interface DiffHunk {
@@ -33,11 +33,17 @@ const parseCache = new Map<string, DiffHunk[]>();
 const PARSE_CACHE_MAX = 500;
 
 export function parsePatch(patch: string | null | undefined): DiffHunk[] {
-  if (!patch) return [];
+  if (!patch) {
+    return [];
+  }
   const hit = parseCache.get(patch);
-  if (hit !== undefined) return hit;
+  if (hit !== undefined) {
+    return hit;
+  }
   const hunks = parsePatchUncached(patch);
-  if (parseCache.size >= PARSE_CACHE_MAX) parseCache.clear();
+  if (parseCache.size >= PARSE_CACHE_MAX) {
+    parseCache.clear();
+  }
   parseCache.set(patch, hunks);
   return hunks;
 }
@@ -52,11 +58,11 @@ function parsePatchUncached(patch: string): DiffHunk[] {
   for (const line of lines) {
     if (line.startsWith("@@")) {
       const m = HUNK_RE.exec(line);
-      oldLine = m ? parseInt(m[1], 10) : 0;
-      newLine = m ? parseInt(m[2], 10) : 0;
+      oldLine = m ? Number.parseInt(m[1], 10) : 0;
+      newLine = m ? Number.parseInt(m[2], 10) : 0;
       current = {
         header: line,
-        rows: [{ type: "hunk", content: line, oldLine: null, newLine: null }],
+        rows: [{ content: line, newLine: null, oldLine: null, type: "hunk" }],
       };
       hunks.push(current);
       continue;
@@ -67,19 +73,21 @@ function parsePatchUncached(patch: string): DiffHunk[] {
       hunks.push(current);
     }
 
-    if (line.startsWith("\\")) continue;
+    if (line.startsWith("\\")) {
+      continue;
+    }
 
     const marker = line[0];
     const text = line.slice(1);
 
     if (marker === "+") {
-      current.rows.push({ type: "add", content: text, oldLine: null, newLine });
+      current.rows.push({ content: text, newLine, oldLine: null, type: "add" });
       newLine += 1;
     } else if (marker === "-") {
-      current.rows.push({ type: "del", content: text, oldLine, newLine: null });
+      current.rows.push({ content: text, newLine: null, oldLine, type: "del" });
       oldLine += 1;
     } else {
-      current.rows.push({ type: "context", content: text, oldLine, newLine });
+      current.rows.push({ content: text, newLine, oldLine, type: "context" });
       oldLine += 1;
       newLine += 1;
     }
@@ -92,11 +100,13 @@ function parsePatchUncached(patch: string): DiffHunk[] {
  *  that can't be anchored. Deletions anchor to their old-side line, everything
  *  else to the new side — the same convention findInDiff and DiffViewer use. */
 export function rowAnchor(row: DiffRow): string | null {
-  if (row.type === "hunk") return null;
-  if (row.type === "del") {
-    return row.oldLine != null ? `LEFT:${row.oldLine}` : null;
+  if (row.type === "hunk") {
+    return null;
   }
-  return row.newLine != null ? `RIGHT:${row.newLine}` : null;
+  if (row.type === "del") {
+    return row.oldLine == null ? null : `LEFT:${row.oldLine}`;
+  }
+  return row.newLine == null ? null : `RIGHT:${row.newLine}`;
 }
 
 /**
@@ -111,21 +121,29 @@ export function rowAnchor(row: DiffRow): string | null {
 const fractionsCache = new Map<string, Map<string, number>>();
 
 export function anchorFractions(
-  patch: string | null | undefined,
+  patch: string | null | undefined
 ): Map<string, number> {
   if (patch) {
     const hit = fractionsCache.get(patch);
-    if (hit !== undefined) return hit;
+    if (hit !== undefined) {
+      return hit;
+    }
   }
   const out = new Map<string, number>();
   if (patch) {
-    if (fractionsCache.size >= PARSE_CACHE_MAX) fractionsCache.clear();
+    if (fractionsCache.size >= PARSE_CACHE_MAX) {
+      fractionsCache.clear();
+    }
     fractionsCache.set(patch, out);
   }
   const hunks = parsePatch(patch);
   let total = 0;
-  for (const h of hunks) total += h.rows.length;
-  if (total === 0) return out;
+  for (const h of hunks) {
+    total += h.rows.length;
+  }
+  if (total === 0) {
+    return out;
+  }
   let i = 0;
   for (const h of hunks) {
     for (const row of h.rows) {
@@ -144,7 +162,11 @@ export function changedRowCount(patch: string | null | undefined): number {
   const hunks = parsePatch(patch);
   let n = 0;
   for (const h of hunks) {
-    for (const r of h.rows) if (r.type === "add" || r.type === "del") n += 1;
+    for (const r of h.rows) {
+      if (r.type === "add" || r.type === "del") {
+        n += 1;
+      }
+    }
   }
   return n;
 }

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { anchorFractions, changedRowCount, parsePatch, rowAnchor } from "./diff";
+import {
+  anchorFractions,
+  changedRowCount,
+  parsePatch,
+  rowAnchor,
+} from "./diff.ts";
 
 const PATCH = `@@ -1,4 +1,5 @@
  context one
@@ -52,14 +57,15 @@ describe("parsePatch", () => {
   });
 
   it("ignores no-newline metadata lines", () => {
-    const rows = parsePatch("@@ -1 +1 @@\n-old\n\\ No newline at end of file\n+new")[0]
-      .rows.filter((r) => r.type !== "hunk");
+    const rows = parsePatch(
+      "@@ -1 +1 @@\n-old\n\\ No newline at end of file\n+new"
+    )[0].rows.filter((r) => r.type !== "hunk");
     expect(rows.map((r) => r.type)).toEqual(["del", "add"]);
   });
 
   it("strips the +/-/space marker from content", () => {
     const rows = parsePatch("@@ -1 +1 @@\n-a\n+b")[0].rows.filter(
-      (r) => r.type !== "hunk",
+      (r) => r.type !== "hunk"
     );
     expect(rows.map((r) => r.content)).toEqual(["a", "b"]);
   });

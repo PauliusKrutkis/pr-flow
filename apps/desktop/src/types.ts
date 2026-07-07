@@ -11,36 +11,36 @@
  */
 
 export interface GitHubUser {
-  login: string;
   avatarUrl: string;
+  login: string;
   name: string;
 }
 
 export interface PullRequest {
-  id: number;
-  number: number;
-  title: string;
-  repo: string;
-  owner: string;
-  name: string;
+  additions: number;
   author: string;
   authorAvatarUrl: string;
-  url: string;
-  state: string;
-  draft: boolean;
-  merged: boolean;
-  updatedAt: string;
-  createdAt: string;
-  commentsCount: number;
-  headSha: string;
-  baseSha: string;
-  headRef: string;
   baseRef: string;
-  additions: number;
-  deletions: number;
-  changedFiles: number;
+  baseSha: string;
   body: string;
+  changedFiles: number;
+  commentsCount: number;
+  createdAt: string;
+  deletions: number;
+  draft: boolean;
+  headRef: string;
+  headSha: string;
+  id: number;
   lastComment?: LastComment;
+  merged: boolean;
+  name: string;
+  number: number;
+  owner: string;
+  repo: string;
+  state: string;
+  title: string;
+  updatedAt: string;
+  url: string;
 }
 
 export interface LastComment {
@@ -60,56 +60,56 @@ export type FileStatus =
   | string;
 
 export interface ChangedFile {
-  filename: string;
-  previousFilename?: string | null;
-  status: FileStatus;
   additions: number;
-  deletions: number;
   changes: number;
+  deletions: number;
+  filename: string;
   patch?: string | null;
+  previousFilename?: string | null;
   sha: string;
+  status: FileStatus;
 }
 
 export interface ReviewComment {
+  body: string;
+  createdAt: string;
+  diffHunk: string;
   id: number;
-  path: string;
+  inReplyToId: number | null;
   line: number | null;
   originalLine: number | null;
+  path: string;
+  resolved: boolean;
   side: string;
-  diffHunk: string;
-  body: string;
+  threadId: string | null;
   user: string;
   userAvatarUrl: string;
-  createdAt: string;
-  inReplyToId: number | null;
-  threadId: string | null;
-  resolved: boolean;
 }
 
 export interface IssueComment {
-  id: number;
   body: string;
+  createdAt: string;
+  id: number;
   user: string;
   userAvatarUrl: string;
-  createdAt: string;
 }
 
 export interface ReviewSummary {
+  body: string;
   id: number;
+  state: string;
+  submittedAt: string;
   user: string;
   userAvatarUrl: string;
-  state: string;
-  body: string;
-  submittedAt: string;
 }
 
 export interface PullRequestDetail {
-  pr: PullRequest;
-  files: ChangedFile[];
   comments: ReviewComment[];
-  issueComments: IssueComment[];
-  reviews: ReviewSummary[];
   fetchedAt: number;
+  files: ChangedFile[];
+  issueComments: IssueComment[];
+  pr: PullRequest;
+  reviews: ReviewSummary[];
 }
 
 export interface InboxBucket {
@@ -118,10 +118,10 @@ export interface InboxBucket {
 }
 
 export interface InboxData {
-  reviewRequested: InboxBucket;
   assigned: InboxBucket;
   created: InboxBucket;
   involved: InboxBucket;
+  reviewRequested: InboxBucket;
 }
 
 export type InboxTabKey = keyof InboxData | "subscribed";
@@ -129,11 +129,11 @@ export type InboxTabKey = keyof InboxData | "subscribed";
 export type ReviewEvent = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
 
 export interface PendingComment {
-  id: string;
-  path: string;
-  line: number;
-  side: string;
   body: string;
+  id: string;
+  line: number;
+  path: string;
+  side: string;
   startLine?: number;
 }
 
@@ -142,8 +142,8 @@ export type ViewedFileMap = Record<string, string>;
 export type ViewedMap = Record<string, ViewedFileMap>;
 
 export interface RepoHit {
-  fullName: string;
   description: string;
+  fullName: string;
 }
 
 export interface FileBlob {
@@ -152,11 +152,11 @@ export interface FileBlob {
 }
 
 export interface AccountInfo {
-  id: string;
-  provider: string;
-  host: string;
-  login: string;
   avatarUrl: string;
+  host: string;
+  id: string;
+  login: string;
+  provider: string;
 }
 
 export interface AccountsInfo {
@@ -165,15 +165,15 @@ export interface AccountsInfo {
 }
 
 export interface UpdateInfo {
-  version: string;
   currentVersion: string;
   notes: string | null;
+  version: string;
 }
 
 export interface PRRef {
-  owner: string;
   name: string;
   number: number;
+  owner: string;
 }
 
 /** Stable identity for a PR, used as the key for viewed/last-seen state. */

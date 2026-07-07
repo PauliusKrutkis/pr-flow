@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { useAppStore } from "./appStore";
+import { useAppStore } from "./appStore.ts";
 
 const KEY = "pr#1";
 
@@ -26,7 +26,7 @@ describe("archive (dismiss until update)", () => {
   it("resurfaces on newer activity", () => {
     useAppStore.getState().dismiss(KEY, "2026-07-01T10:00:00Z");
     expect(
-      useAppStore.getState().isDismissed(KEY, "2026-07-01T10:00:01Z"),
+      useAppStore.getState().isDismissed(KEY, "2026-07-01T10:00:01Z")
     ).toBe(false);
   });
 
@@ -44,7 +44,7 @@ describe("archive (dismiss until update)", () => {
   it("persists to localStorage", () => {
     useAppStore.getState().dismiss(KEY, "2026-07-01T10:00:00Z");
     expect(
-      JSON.parse(localStorage.getItem("pr-flow:dismissed") ?? "{}")[KEY],
+      JSON.parse(localStorage.getItem("pr-flow:dismissed") ?? "{}")[KEY]
     ).toBe("2026-07-01T10:00:00Z");
   });
 });
@@ -63,8 +63,18 @@ describe("unread tracking", () => {
 describe("pending review comments", () => {
   it("adds with unique ids, removes by id, clears per PR", () => {
     const s = useAppStore.getState();
-    s.addPendingComment(KEY, { path: "a.ts", line: 1, side: "RIGHT", body: "x" });
-    s.addPendingComment(KEY, { path: "a.ts", line: 2, side: "RIGHT", body: "y" });
+    s.addPendingComment(KEY, {
+      body: "x",
+      line: 1,
+      path: "a.ts",
+      side: "RIGHT",
+    });
+    s.addPendingComment(KEY, {
+      body: "y",
+      line: 2,
+      path: "a.ts",
+      side: "RIGHT",
+    });
     let pending = useAppStore.getState().pendingComments[KEY];
     expect(pending).toHaveLength(2);
     expect(pending[0].id).not.toBe(pending[1].id);
@@ -79,11 +89,14 @@ describe("pending review comments", () => {
   });
 
   it("persists drafts to localStorage", () => {
-    useAppStore
-      .getState()
-      .addPendingComment(KEY, { path: "a.ts", line: 1, side: "RIGHT", body: "x" });
+    useAppStore.getState().addPendingComment(KEY, {
+      body: "x",
+      line: 1,
+      path: "a.ts",
+      side: "RIGHT",
+    });
     const stored = JSON.parse(
-      localStorage.getItem("pr-flow:pendingComments") ?? "{}",
+      localStorage.getItem("pr-flow:pendingComments") ?? "{}"
     );
     expect(stored[KEY]).toHaveLength(1);
   });

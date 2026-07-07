@@ -1,8 +1,8 @@
-import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "../lib/api";
-import { queryClient, queryKeys } from "../lib/queryClient";
-import type { InboxData } from "../types";
+import { useEffect } from "react";
+import { api } from "../lib/api.ts";
+import { queryClient, queryKeys } from "../lib/queryClient.ts";
+import type { InboxData } from "../types.ts";
 
 /**
  * The whole inbox (all four tabs + counts) in a single GraphQL request. Seeds
@@ -15,15 +15,18 @@ export function useInbox() {
       .getCachedInbox()
       .then((data) => {
         if (data) {
-          queryClient.setQueryData<InboxData>(queryKeys.inbox, (cur) => cur ?? data);
+          queryClient.setQueryData<InboxData>(
+            queryKeys.inbox,
+            (cur) => cur ?? data
+          );
         }
       })
       .catch(() => {});
   }, []);
 
   return useQuery({
-    queryKey: queryKeys.inbox,
     queryFn: () => api.listInbox(),
+    queryKey: queryKeys.inbox,
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
     staleTime: 0,

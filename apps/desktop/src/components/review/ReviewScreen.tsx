@@ -1,10 +1,3 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ArrowDown,
@@ -30,7 +23,34 @@ import {
   Send,
   TextSearch,
 } from "lucide-react";
-import { prKey } from "../../types";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCommentMutations } from "../../hooks/useComments.ts";
+import { useInbox } from "../../hooks/useInbox.ts";
+import { useLatest } from "../../hooks/useLatest.ts";
+import { usePullRequestDetail } from "../../hooks/usePullRequestDetail.ts";
+import type { Binding } from "../../keyboard/types.ts";
+import { useHotkeys } from "../../keyboard/useHotkeys.ts";
+import { cn } from "../../lib/cn.ts";
+import { type FindMatch, findInDiff } from "../../lib/findInDiff.ts";
+import { warmHighlightCache } from "../../lib/highlight.ts";
+import {
+  type OccurrenceMatch,
+  type OccurrenceSpec,
+  occurrenceMatches,
+  occurrenceSpecFromSelection,
+} from "../../lib/occurrences.ts";
+import { usePerfStore } from "../../lib/perf.ts";
+import { queryClient, queryKeys } from "../../lib/queryClient.ts";
+import {
+  adjacentSelectableAnchor,
+  anchorLine,
+  buildReviewItems,
+  fileAnchorKey,
+  type ReviewListModel,
+} from "../../lib/reviewItems.ts";
+import { getReviewMemory, updateReviewMemory } from "../../lib/reviewMemory.ts";
+import { fingerprintFile } from "../../lib/viewedFingerprint.ts";
+import { useAppStore } from "../../store/appStore.ts";
 import type {
   ChangedFile,
   InboxBucket,
@@ -39,51 +59,25 @@ import type {
   PullRequest,
   ReviewComment,
   ReviewEvent,
-} from "../../types";
-import { useAppStore } from "../../store/appStore";
-import { useHotkeys } from "../../keyboard/useHotkeys";
-import type { Binding } from "../../keyboard/types";
-import { usePullRequestDetail } from "../../hooks/usePullRequestDetail";
-import { useInbox } from "../../hooks/useInbox";
-import { useCommentMutations } from "../../hooks/useComments";
-import { queryClient, queryKeys } from "../../lib/queryClient";
-import { useLatest } from "../../hooks/useLatest";
-import { getReviewMemory, updateReviewMemory } from "../../lib/reviewMemory";
-import { fingerprintFile } from "../../lib/viewedFingerprint";
-import { usePerfStore } from "../../lib/perf";
-import { warmHighlightCache } from "../../lib/highlight";
-import { findInDiff, type FindMatch } from "../../lib/findInDiff";
+} from "../../types.ts";
+import { prKey } from "../../types.ts";
+import { Avatar } from "../ui/Avatar.tsx";
+import { Kbd } from "../ui/Kbd.tsx";
+import { TicketTitle } from "../ui/TicketTitle.tsx";
+import { FileSidebar } from "./FileSidebar.tsx";
+import { FindBar } from "./FindBar.tsx";
+import { isImageFile } from "./ImageDiff.tsx";
+import { OverviewRuler } from "./OverviewRuler.tsx";
+import { PrSearch } from "./PrSearch.tsx";
 import {
-  occurrenceMatches,
-  occurrenceSpecFromSelection,
-  type OccurrenceMatch,
-  type OccurrenceSpec,
-} from "../../lib/occurrences";
-import {
-  adjacentSelectableAnchor,
-  anchorLine,
-  buildReviewItems,
-  fileAnchorKey,
-  type ReviewListModel,
-} from "../../lib/reviewItems";
-import { cn } from "../../lib/cn";
-import { Kbd } from "../ui/Kbd";
-import { TicketTitle } from "../ui/TicketTitle";
-import { Avatar } from "../ui/Avatar";
-import { FileSidebar } from "./FileSidebar";
-import { isImageFile } from "./ImageDiff";
-import {
-  ReviewList,
   type FindCurrent,
   type MarkSpec,
+  ReviewList,
   type ReviewListCallbacks,
   type ReviewListHandle,
-} from "./ReviewList";
-import { RightPanel } from "./RightPanel";
-import { SubmitReviewModal } from "./SubmitReviewModal";
-import { PrSearch } from "./PrSearch";
-import { FindBar } from "./FindBar";
-import { OverviewRuler } from "./OverviewRuler";
+} from "./ReviewList.tsx";
+import { RightPanel } from "./RightPanel.tsx";
+import { SubmitReviewModal } from "./SubmitReviewModal.tsx";
 
 /**
  * Full-screen PR review: a virtualized diff list, keyboard cursor, multi-line
@@ -98,25 +92,25 @@ import { OverviewRuler } from "./OverviewRuler";
  * - Find-in-diff (mod+f) seeds from the viewport, not the top of the PR.
  */
 interface ReviewScreenProps {
+  number: number;
   owner: string;
   repo: string;
-  number: number;
 }
 
 type OccState = OccurrenceSpec & { fileIndex: number };
 
 interface CursorPos {
-  fileIndex: number;
   anchor: string;
+  fileIndex: number;
 }
 
 /** A multi-line comment range: a one-side, hunk-contiguous run of rows.
  *  `from` is the fixed end (where extension started), `to` the moving end. */
 interface LineSelection {
   fileIndex: number;
-  side: string;
-  hunkIndex: number;
   from: string;
+  hunkIndex: number;
+  side: string;
   to: string;
 }
 
@@ -128,11 +122,16 @@ const EMPTY_FRACTIONS: number[] = [];
 const EMPTY_COLLAPSED: ReadonlyMap<number, ReadonlySet<number>> = new Map();
 
 export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
-  const keyValue = prKey({ owner, name: repo, number });
+  const keyValue = prKey({ name: repo, number, owner });
 
   const { data, isError, error } = usePullRequestDetail(owner, repo, number);
-  const { addReviewComment, reply, addIssueComment, resolveThread, submitReview } =
-    useCommentMutations(owner, repo, number);
+  const {
+    addReviewComment,
+    reply,
+    addIssueComment,
+    resolveThread,
+    submitReview,
+  } = useCommentMutations(owner, repo, number);
 
   const detail = data;
   const pr = detail?.pr;
@@ -146,18 +145,19 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const [submitOpen, setSubmitOpen] = useState(false);
   const [prSearch, setPrSearch] = useState<null | "files" | "text">(null);
   const [changedSinceViewed, setChangedSinceViewed] = useState<Set<string>>(
-    () => new Set(),
+    () => new Set()
   );
-  const [replyReq, setReplyReq] = useState<
-    { rootId: number; path: string; nonce: number } | null
-  >(null);
+  const [replyReq, setReplyReq] = useState<{
+    rootId: number;
+    path: string;
+    nonce: number;
+  } | null>(null);
 
-  const [collapsed, setCollapsed] = useState<
-    ReadonlyMap<number, ReadonlySet<number>>
-  >(EMPTY_COLLAPSED);
-  const [openBoxes, setOpenBoxes] = useState<ReadonlyMap<string, number | null>>(
-    () => new Map<string, number | null>(),
-  );
+  const [collapsed, setCollapsed] =
+    useState<ReadonlyMap<number, ReadonlySet<number>>>(EMPTY_COLLAPSED);
+  const [openBoxes, setOpenBoxes] = useState<
+    ReadonlyMap<string, number | null>
+  >(() => new Map<string, number | null>());
   const [cursor, setCursor] = useState<CursorPos | null>(null);
   const [selection, setSelection] = useState<LineSelection | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -205,15 +205,15 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const setFlash = useAppStore((s) => s.setFlash);
   const setToast = useAppStore((s) => s.setToast);
   const activeLogin = useAppStore(
-    (s) => s.accounts.find((a) => a.id === s.activeAccountId)?.login,
+    (s) => s.accounts.find((a) => a.id === s.activeAccountId)?.login
   );
   const trackerBase = useAppStore((s) =>
-    s.activeAccountId ? s.issueTrackers[s.activeAccountId] : undefined,
+    s.activeAccountId ? s.issueTrackers[s.activeAccountId] : undefined
   );
   const viewedFiles = viewed[keyValue];
   const viewedSet = useMemo(
     () => new Set(Object.keys(viewedFiles ?? {})),
-    [viewedFiles],
+    [viewedFiles]
   );
 
   const files = useMemo(() => detail?.files ?? [], [detail]);
@@ -225,7 +225,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const fileCountRef = useLatest(fileCount);
   const filesRef = useLatest(files);
   const commentsRef = useLatest<ReviewComment[]>(
-    detail?.comments ?? EMPTY_COMMENTS,
+    detail?.comments ?? EMPTY_COMMENTS
   );
 
   useEffect(() => {
@@ -252,48 +252,57 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   }, [pending]);
 
   const model: ReviewListModel = buildReviewItems({
+    collapsed,
+    commentsByFile,
     files,
     isImage: isImageFile,
-    collapsed,
     openBoxes,
-    commentsByFile,
     pendingByFile,
   });
   const modelRef = useLatest(model);
 
   const liveCursor =
-    cursor && model.navIndexOf.has(fileAnchorKey(cursor.fileIndex, cursor.anchor))
+    cursor &&
+    model.navIndexOf.has(fileAnchorKey(cursor.fileIndex, cursor.anchor))
       ? cursor
       : null;
 
   const liveSelection = (() => {
-    if (!selection) return null;
+    if (!selection) {
+      return null;
+    }
     const a = model.anchorItem.get(
-      fileAnchorKey(selection.fileIndex, selection.from),
+      fileAnchorKey(selection.fileIndex, selection.from)
     );
     const b = model.anchorItem.get(
-      fileAnchorKey(selection.fileIndex, selection.to),
+      fileAnchorKey(selection.fileIndex, selection.to)
     );
-    if (a == null || b == null || a === b) return null;
+    if (a == null || b == null || a === b) {
+      return null;
+    }
     return {
-      fileIndex: selection.fileIndex,
-      side: selection.side,
-      hunkIndex: selection.hunkIndex,
-      fromItem: Math.min(a, b),
-      toItem: Math.max(a, b),
       endItem: b,
+      fileIndex: selection.fileIndex,
+      fromItem: Math.min(a, b),
+      hunkIndex: selection.hunkIndex,
+      side: selection.side,
+      toItem: Math.max(a, b),
     };
   })();
   const selectionRef = useLatest(selection);
   const liveSelectionRef = useLatest(liveSelection);
 
   useEffect(() => {
-    if (files.length === 0) return;
+    if (files.length === 0) {
+      return;
+    }
     return warmHighlightCache(files);
   }, [files]);
 
   useEffect(() => {
-    if (!pr) return;
+    if (!pr) {
+      return;
+    }
     const seen = mountShaRef.current;
     if (!seen) {
       usePerfStore.getState().completeOpen();
@@ -305,8 +314,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       mountShaRef.current = pr.headSha;
       updateReviewMemory(keyValue, { headSha: pr.headSha });
       setToast({
-        title: "Pull request updated",
         message: "Showing the latest changes.",
+        title: "Pull request updated",
       });
     }
   }, [pr, keyValue, setToast]);
@@ -314,7 +323,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const { data: inboxHeartbeat } = useInbox();
   const nudgedForRef = useRef("");
   useEffect(() => {
-    if (!pr) return;
+    if (!pr) {
+      return;
+    }
     const buckets = inboxHeartbeat
       ? [
           inboxHeartbeat.reviewRequested,
@@ -324,14 +335,14 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         ]
       : [];
     const subscribed = queryClient.getQueryData<InboxBucket>(
-      queryKeys.subscribed,
+      queryKeys.subscribed
     );
-    if (subscribed) buckets.push(subscribed);
+    if (subscribed) {
+      buckets.push(subscribed);
+    }
     const hit = buckets
       .flatMap((b) => b.prs)
-      .find(
-        (p) => p.owner === owner && p.name === repo && p.number === number,
-      );
+      .find((p) => p.owner === owner && p.name === repo && p.number === number);
     if (
       hit &&
       hit.updatedAt > pr.updatedAt &&
@@ -345,51 +356,63 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   }, [inboxHeartbeat, pr, owner, repo, number]);
 
   useEffect(() => {
-    if (!pr || files.length === 0) return;
+    if (!pr || files.length === 0) {
+      return;
+    }
     const unviewed = reconcileViewed(keyValue, files, pr.headSha);
     if (unviewed.length > 0) {
       setChangedSinceViewed((prev) => {
         const next = new Set(prev);
-        for (const f of unviewed) next.add(f);
+        for (const f of unviewed) {
+          next.add(f);
+        }
         return next;
       });
       setToast({
-        title: "Pull request updated",
         message:
           unviewed.length === 1
             ? `${unviewed[0]} changed since you viewed it — marked unviewed.`
             : `${unviewed.length} files changed since you viewed them — marked unviewed.`,
+        title: "Pull request updated",
       });
     }
   }, [pr, files, viewedFiles, keyValue, reconcileViewed, setToast]);
 
   useEffect(() => {
-    if (!detail || fileCount === 0) return;
+    if (!detail || fileCount === 0) {
+      return;
+    }
     updateReviewMemory(keyValue, { fileIndex: clampedIndex });
   }, [detail, fileCount, clampedIndex, keyValue]);
 
   const resumeCorrectedRef = useRef(false);
   useEffect(() => {
-    if (resumeCorrectedRef.current) return;
-    if (modelRef.current.items.length === 0) return; 
+    if (resumeCorrectedRef.current) {
+      return;
+    }
+    if (modelRef.current.items.length === 0) {
+      return;
+    }
     resumeCorrectedRef.current = true;
     const t = initialMem?.topRow;
-    if (!t || !initialMem?.listState) return;
+    if (!(t && initialMem?.listState)) {
+      return;
+    }
     const idx = modelRef.current.anchorItem.get(
-      fileAnchorKey(t.fileIndex, t.anchor),
+      fileAnchorKey(t.fileIndex, t.anchor)
     );
     let tries = 0;
     let raf = 0;
     let settled = 0;
     const step = () => {
       const scroller = listRef.current?.scroller();
-      if (!scroller) return;
+      if (!scroller) {
+        return;
+      }
       const row = scroller.querySelector<HTMLElement>(
-        `[data-anchor="${t.anchor}"][data-file-index="${t.fileIndex}"]`,
+        `[data-anchor="${t.anchor}"][data-file-index="${t.fileIndex}"]`
       );
-      if (!row) {
-        if (idx != null) listRef.current?.scrollItemTo(idx, t.top);
-      } else {
+      if (row) {
         const delta =
           row.getBoundingClientRect().top -
           scroller.getBoundingClientRect().top -
@@ -399,11 +422,17 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
           settled = 0;
         } else {
           settled += 1;
-          if (settled >= 2) return;
+          if (settled >= 2) {
+            return;
+          }
         }
+      } else if (idx != null) {
+        listRef.current?.scrollItemTo(idx, t.top);
       }
       tries += 1;
-      if (tries < 12) raf = requestAnimationFrame(step);
+      if (tries < 12) {
+        raf = requestAnimationFrame(step);
+      }
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
@@ -415,13 +444,24 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   useEffect(() => {
     return () => {
-      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
-      if (threadFlashRef.current) clearTimeout(threadFlashRef.current);
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-      if (saveStateTimerRef.current) clearTimeout(saveStateTimerRef.current);
-      if (fileRafRef.current != null) cancelAnimationFrame(fileRafRef.current);
-      if (cursorRafRef.current != null)
+      if (flashTimerRef.current) {
+        clearTimeout(flashTimerRef.current);
+      }
+      if (threadFlashRef.current) {
+        clearTimeout(threadFlashRef.current);
+      }
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current);
+      }
+      if (saveStateTimerRef.current) {
+        clearTimeout(saveStateTimerRef.current);
+      }
+      if (fileRafRef.current != null) {
+        cancelAnimationFrame(fileRafRef.current);
+      }
+      if (cursorRafRef.current != null) {
         cancelAnimationFrame(cursorRafRef.current);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -431,7 +471,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
    * The snapshot IS the resume position (restoreStateFrom on next mount).
    */
   function handleListScroll() {
-    if (saveStateTimerRef.current) clearTimeout(saveStateTimerRef.current);
+    if (saveStateTimerRef.current) {
+      clearTimeout(saveStateTimerRef.current);
+    }
     saveStateTimerRef.current = setTimeout(() => {
       const topRow = listRef.current?.firstVisibleRow() ?? undefined;
       listRef.current?.getState((state) => {
@@ -442,7 +484,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   function pageScroll(dir: number) {
     const el = listRef.current?.scroller();
-    if (el) el.scrollBy({ top: dir * el.clientHeight * 0.85 });
+    if (el) {
+      el.scrollBy({ top: dir * el.clientHeight * 0.85 });
+    }
   }
 
   const cursorRef = useLatest(liveCursor);
@@ -474,18 +518,18 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const heldRepeatsRef = useRef(0);
 
   const cursorMoverRefs = {
-    modelRef,
-    cursorRef,
     activeIndexRef,
-    pendingDeltaRef,
     cursorRafRef,
+    cursorRef,
     heldRepeatsRef,
     keyboardHoldRef,
-    userMovedCursorRef,
     listRef,
-    setCursor,
+    modelRef,
+    pendingDeltaRef,
     setActiveIndex,
+    setCursor,
     setInputMode,
+    userMovedCursorRef,
   };
 
   /**
@@ -505,18 +549,22 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         sel.side,
         sel.hunkIndex,
         sel.to,
-        delta,
+        delta
       );
-      if (!next) return;
+      if (!next) {
+        return;
+      }
       if (next === sel.from) {
         setSelection(null);
-        setCursor({ fileIndex: sel.fileIndex, anchor: next });
+        setCursor({ anchor: next, fileIndex: sel.fileIndex });
         return;
       }
       setSelection({ ...sel, to: next });
-      setCursor({ fileIndex: sel.fileIndex, anchor: next });
+      setCursor({ anchor: next, fileIndex: sel.fileIndex });
       const itemIndex = m.anchorItem.get(fileAnchorKey(sel.fileIndex, next));
-      if (itemIndex != null) listRef.current?.nudgeItemIntoView(itemIndex);
+      if (itemIndex != null) {
+        listRef.current?.nudgeItemIntoView(itemIndex);
+      }
       return;
     }
 
@@ -525,27 +573,34 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       buildCursorMover(cursorMoverRefs).move(delta, false);
       return;
     }
-    const item = m.items[m.anchorItem.get(fileAnchorKey(cur.fileIndex, cur.anchor)) ?? -1];
-    if (item?.kind !== "row" || item.target == null) return;
+    const item =
+      m.items[m.anchorItem.get(fileAnchorKey(cur.fileIndex, cur.anchor)) ?? -1];
+    if (item?.kind !== "row" || item.target == null) {
+      return;
+    }
     const next = adjacentSelectableAnchor(
       m,
       cur.fileIndex,
       item.target.side,
       item.hunkIndex,
       cur.anchor,
-      delta,
+      delta
     );
-    if (!next) return;
+    if (!next) {
+      return;
+    }
     setSelection({
       fileIndex: cur.fileIndex,
-      side: item.target.side,
-      hunkIndex: item.hunkIndex,
       from: cur.anchor,
+      hunkIndex: item.hunkIndex,
+      side: item.target.side,
       to: next,
     });
-    setCursor({ fileIndex: cur.fileIndex, anchor: next });
+    setCursor({ anchor: next, fileIndex: cur.fileIndex });
     const itemIndex = m.anchorItem.get(fileAnchorKey(cur.fileIndex, next));
-    if (itemIndex != null) listRef.current?.nudgeItemIntoView(itemIndex);
+    if (itemIndex != null) {
+      listRef.current?.nudgeItemIntoView(itemIndex);
+    }
   }
 
   const dragRef = useRef<{
@@ -556,132 +611,6 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   } | null>(null);
 
   const cbRef = useLatest({
-    onRowEnter(fileIndex: number, anchor: string, x: number, y: number) {
-      if (!isRealPointer(x, y)) return;
-      setInputMode((mo) => (mo === "mouse" ? mo : "mouse"));
-      setCursor((cur) =>
-        cur && cur.fileIndex === fileIndex && cur.anchor === anchor
-          ? cur
-          : { fileIndex, anchor },
-      );
-      setActiveIndex((cur) => (cur === fileIndex ? cur : fileIndex));
-    },
-    onOpenBox(fileIndex: number, anchor: string, startLine?: number) {
-      setOpenBoxes((prev) =>
-        new Map(prev).set(fileAnchorKey(fileIndex, anchor), startLine ?? null),
-      );
-    },
-    onCloseBox(fileIndex: number, anchor: string) {
-      setOpenBoxes((prev) => {
-        const next = new Map(prev);
-        next.delete(fileAnchorKey(fileIndex, anchor));
-        return next;
-      });
-      setSelection(null);
-    },
-    onPlusDragStart(fileIndex: number, anchor: string) {
-      const m = modelRef.current;
-      const item = m.items[m.anchorItem.get(fileAnchorKey(fileIndex, anchor)) ?? -1];
-      if (item?.kind !== "row" || item.target == null) return;
-      dragRef.current = {
-        fileIndex,
-        side: item.target.side,
-        hunkIndex: item.hunkIndex,
-        from: anchor,
-      };
-      setDragging(true);
-    },
-    onPlusDragOver(fileIndex: number, anchor: string) {
-      const d = dragRef.current;
-      if (!d || fileIndex !== d.fileIndex) return;
-      setCursor({ fileIndex, anchor });
-      if (anchor === d.from) {
-        setSelection(null);
-        return;
-      }
-
-      const m = modelRef.current;
-      const fromIdx = m.navIndexOf.get(fileAnchorKey(fileIndex, d.from));
-      const toIdx = m.navIndexOf.get(fileAnchorKey(fileIndex, anchor));
-      if (fromIdx == null || toIdx == null) return;
-      const delta = toIdx > fromIdx ? (1 as const) : (-1 as const);
-      let last = d.from;
-      while (last !== anchor) {
-        const next = adjacentSelectableAnchor(
-          m,
-          d.fileIndex,
-          d.side,
-          d.hunkIndex,
-          last,
-          delta,
-        );
-        if (!next) break;
-        last = next;
-      }
-      if (last === d.from) {
-        setSelection(null);
-        return;
-      }
-      setSelection({
-        fileIndex: d.fileIndex,
-        side: d.side,
-        hunkIndex: d.hunkIndex,
-        from: d.from,
-        to: last,
-      });
-    },
-    onPlusDragEnd() {
-      const d = dragRef.current;
-      dragRef.current = null;
-      setDragging(false);
-      if (!d) return;
-      const live = liveSelectionRef.current;
-      const m = modelRef.current;
-      if (live && live.fileIndex === d.fileIndex) {
-        const endItem = m.items[live.toItem];
-        const startItem = m.items[live.fromItem];
-        if (endItem?.kind === "row" && endItem.anchor && startItem?.kind === "row") {
-          cbRef.current.onOpenBox(
-            d.fileIndex,
-            endItem.anchor,
-            anchorLine(startItem.anchor ?? endItem.anchor),
-          );
-          return;
-        }
-      }
-      cbRef.current.onOpenBox(d.fileIndex, d.from);
-    },
-    onToggleHunk(fileIndex: number, hunkIndex: number) {
-      setCollapsed((prev) => {
-        const next = new Map(prev);
-        const set = new Set(next.get(fileIndex) ?? []);
-        if (set.has(hunkIndex)) set.delete(hunkIndex);
-        else set.add(hunkIndex);
-        next.set(fileIndex, set);
-        return next;
-      });
-    },
-    onToggleViewed(fileIndex: number) {
-      const f = filesRef.current[fileIndex];
-      if (f) toggleViewedWithFp(f);
-    },
-    onCopyPath(fileIndex: number) {
-      const f = filesRef.current[fileIndex];
-      if (!f) return;
-      void navigator.clipboard?.writeText(f.filename).catch(() => {});
-      setCopiedPathIndex(fileIndex);
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-      copyTimerRef.current = setTimeout(() => setCopiedPathIndex(null), 1200);
-    },
-    onAddPending(c: {
-      path: string;
-      line: number;
-      side: string;
-      body: string;
-      startLine?: number;
-    }) {
-      addPendingStore(keyValue, c);
-    },
     async onAddComment(a: {
       path: string;
       line: number;
@@ -692,11 +621,141 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       await addReviewComment.mutateAsync({
         body: a.body,
         commitId: headShaRef.current,
-        path: a.path,
         line: a.line,
+        path: a.path,
         side: a.side,
         startLine: a.startLine,
       });
+    },
+    onAddPending(c: {
+      path: string;
+      line: number;
+      side: string;
+      body: string;
+      startLine?: number;
+    }) {
+      addPendingStore(keyValue, c);
+    },
+    onCloseBox(fileIndex: number, anchor: string) {
+      setOpenBoxes((prev) => {
+        const next = new Map(prev);
+        next.delete(fileAnchorKey(fileIndex, anchor));
+        return next;
+      });
+      setSelection(null);
+    },
+    onCopyPath(fileIndex: number) {
+      const f = filesRef.current[fileIndex];
+      if (!f) {
+        return;
+      }
+      void navigator.clipboard?.writeText(f.filename).catch(() => {});
+      setCopiedPathIndex(fileIndex);
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current);
+      }
+      copyTimerRef.current = setTimeout(() => setCopiedPathIndex(null), 1200);
+    },
+    onMouseMove(x: number, y: number) {
+      if (!isRealPointer(x, y)) {
+        return;
+      }
+      setInputMode((mo) => (mo === "mouse" ? mo : "mouse"));
+    },
+    onOpenBox(fileIndex: number, anchor: string, startLine?: number) {
+      setOpenBoxes((prev) =>
+        new Map(prev).set(fileAnchorKey(fileIndex, anchor), startLine ?? null)
+      );
+    },
+    onPlusDragEnd() {
+      const d = dragRef.current;
+      dragRef.current = null;
+      setDragging(false);
+      if (!d) {
+        return;
+      }
+      const live = liveSelectionRef.current;
+      const m = modelRef.current;
+      if (live && live.fileIndex === d.fileIndex) {
+        const endItem = m.items[live.toItem];
+        const startItem = m.items[live.fromItem];
+        if (
+          endItem?.kind === "row" &&
+          endItem.anchor &&
+          startItem?.kind === "row"
+        ) {
+          cbRef.current.onOpenBox(
+            d.fileIndex,
+            endItem.anchor,
+            anchorLine(startItem.anchor ?? endItem.anchor)
+          );
+          return;
+        }
+      }
+      cbRef.current.onOpenBox(d.fileIndex, d.from);
+    },
+    onPlusDragOver(fileIndex: number, anchor: string) {
+      const d = dragRef.current;
+      if (!d || fileIndex !== d.fileIndex) {
+        return;
+      }
+      setCursor({ anchor, fileIndex });
+      if (anchor === d.from) {
+        setSelection(null);
+        return;
+      }
+
+      const m = modelRef.current;
+      const fromIdx = m.navIndexOf.get(fileAnchorKey(fileIndex, d.from));
+      const toIdx = m.navIndexOf.get(fileAnchorKey(fileIndex, anchor));
+      if (fromIdx == null || toIdx == null) {
+        return;
+      }
+      const delta = toIdx > fromIdx ? (1 as const) : (-1 as const);
+      let last = d.from;
+      while (last !== anchor) {
+        const next = adjacentSelectableAnchor(
+          m,
+          d.fileIndex,
+          d.side,
+          d.hunkIndex,
+          last,
+          delta
+        );
+        if (!next) {
+          break;
+        }
+        last = next;
+      }
+      if (last === d.from) {
+        setSelection(null);
+        return;
+      }
+      setSelection({
+        fileIndex: d.fileIndex,
+        from: d.from,
+        hunkIndex: d.hunkIndex,
+        side: d.side,
+        to: last,
+      });
+    },
+    onPlusDragStart(fileIndex: number, anchor: string) {
+      const m = modelRef.current;
+      const item =
+        m.items[m.anchorItem.get(fileAnchorKey(fileIndex, anchor)) ?? -1];
+      if (item?.kind !== "row" || item.target == null) {
+        return;
+      }
+      dragRef.current = {
+        fileIndex,
+        from: anchor,
+        hunkIndex: item.hunkIndex,
+        side: item.target.side,
+      };
+      setDragging(true);
+    },
+    onRemovePending(id: string) {
+      removePendingStore(keyValue, id);
     },
     async onReply(a: { inReplyTo: number; body: string }) {
       await reply.mutateAsync(a);
@@ -704,40 +763,64 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     onResolveThread(a: { threadId: string; resolved: boolean }) {
       resolveThread.mutate(a);
     },
-    onThreadHover(t: { rootId: number; path: string } | null) {
-      activeThreadRef.current = t;
-    },
-    onRemovePending(id: string) {
-      removePendingStore(keyValue, id);
+    onRowEnter(fileIndex: number, anchor: string, x: number, y: number) {
+      if (!isRealPointer(x, y)) {
+        return;
+      }
+      setInputMode((mo) => (mo === "mouse" ? mo : "mouse"));
+      setCursor((cur) =>
+        cur && cur.fileIndex === fileIndex && cur.anchor === anchor
+          ? cur
+          : { anchor, fileIndex }
+      );
+      setActiveIndex((cur) => (cur === fileIndex ? cur : fileIndex));
     },
     onScroll() {
       handleListScroll();
     },
-    onMouseMove(x: number, y: number) {
-      if (!isRealPointer(x, y)) return;
-      setInputMode((mo) => (mo === "mouse" ? mo : "mouse"));
+    onThreadHover(t: { rootId: number; path: string } | null) {
+      activeThreadRef.current = t;
+    },
+    onToggleHunk(fileIndex: number, hunkIndex: number) {
+      setCollapsed((prev) => {
+        const next = new Map(prev);
+        const set = new Set(next.get(fileIndex) ?? []);
+        if (set.has(hunkIndex)) {
+          set.delete(hunkIndex);
+        } else {
+          set.add(hunkIndex);
+        }
+        next.set(fileIndex, set);
+        return next;
+      });
+    },
+    onToggleViewed(fileIndex: number) {
+      const f = filesRef.current[fileIndex];
+      if (f) {
+        toggleViewedWithFp(f);
+      }
     },
   });
   const [listCallbacks] = useState<ReviewListCallbacks>(() => {
     const r = cbRef;
     return {
-      onRowEnter: (...a) => r.current.onRowEnter(...a),
-      onOpenBox: (...a) => r.current.onOpenBox(...a),
-      onCloseBox: (...a) => r.current.onCloseBox(...a),
-      onPlusDragStart: (...a) => r.current.onPlusDragStart(...a),
-      onPlusDragOver: (...a) => r.current.onPlusDragOver(...a),
-      onPlusDragEnd: () => r.current.onPlusDragEnd(),
-      onToggleHunk: (...a) => r.current.onToggleHunk(...a),
-      onToggleViewed: (...a) => r.current.onToggleViewed(...a),
-      onCopyPath: (...a) => r.current.onCopyPath(...a),
-      onAddPending: (...a) => r.current.onAddPending(...a),
       onAddComment: (...a) => r.current.onAddComment(...a),
+      onAddPending: (...a) => r.current.onAddPending(...a),
+      onCloseBox: (...a) => r.current.onCloseBox(...a),
+      onCopyPath: (...a) => r.current.onCopyPath(...a),
+      onMouseMove: (...a) => r.current.onMouseMove(...a),
+      onOpenBox: (...a) => r.current.onOpenBox(...a),
+      onPlusDragEnd: () => r.current.onPlusDragEnd(),
+      onPlusDragOver: (...a) => r.current.onPlusDragOver(...a),
+      onPlusDragStart: (...a) => r.current.onPlusDragStart(...a),
+      onRemovePending: (...a) => r.current.onRemovePending(...a),
       onReply: (...a) => r.current.onReply(...a),
       onResolveThread: (...a) => r.current.onResolveThread(...a),
-      onThreadHover: (...a) => r.current.onThreadHover(...a),
-      onRemovePending: (...a) => r.current.onRemovePending(...a),
+      onRowEnter: (...a) => r.current.onRowEnter(...a),
       onScroll: () => r.current.onScroll(),
-      onMouseMove: (...a) => r.current.onMouseMove(...a),
+      onThreadHover: (...a) => r.current.onThreadHover(...a),
+      onToggleHunk: (...a) => r.current.onToggleHunk(...a),
+      onToggleViewed: (...a) => r.current.onToggleViewed(...a),
     };
   });
 
@@ -757,16 +840,18 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         cbRef.current.onOpenBox(
           sel.fileIndex,
           endItem.anchor,
-          anchorLine(startItem.anchor),
+          anchorLine(startItem.anchor)
         );
         return;
       }
     }
     const cur = cursorRef.current;
     const entry = cur ?? m.nav[0];
-    if (!entry) return;
+    if (!entry) {
+      return;
+    }
     if (!cur) {
-      setCursor({ fileIndex: entry.fileIndex, anchor: entry.anchor });
+      setCursor({ anchor: entry.anchor, fileIndex: entry.fileIndex });
       setActiveIndex(entry.fileIndex);
       activeIndexRef.current = entry.fileIndex;
     }
@@ -774,7 +859,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   }
 
   function scrollToFile(i: number) {
-    if (fileCountRef.current === 0) return;
+    if (fileCountRef.current === 0) {
+      return;
+    }
     const target = Math.min(Math.max(i, 0), fileCountRef.current - 1);
     usePerfStore.getState().markFileStart();
     setActiveIndex(target);
@@ -791,11 +878,15 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     fileRafRef.current = null;
     const delta = fileDeltaRef.current;
     fileDeltaRef.current = 0;
-    if (delta === 0) return;
+    if (delta === 0) {
+      return;
+    }
     scrollToFile(activeIndexRef.current + delta);
   }
   function moveFile(delta: number) {
-    if (fileCountRef.current === 0) return;
+    if (fileCountRef.current === 0) {
+      return;
+    }
     fileDeltaRef.current += delta;
     if (fileRafRef.current == null) {
       fileRafRef.current = requestAnimationFrame(flushFileMove);
@@ -804,10 +895,11 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const nextFile = () => moveFile(1);
   const prevFile = () => moveFile(-1);
 
-
   function cycleFile(dir: number) {
     const n = fileCountRef.current;
-    if (n === 0) return;
+    if (n === 0) {
+      return;
+    }
     scrollToFile((activeIndexRef.current + dir + n) % n);
   }
 
@@ -821,14 +913,14 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     if (entry) {
       keyboardHoldRef.current = true;
       setInputMode("keyboard");
-      setCursor({ fileIndex: entry.fileIndex, anchor: entry.anchor });
+      setCursor({ anchor: entry.anchor, fileIndex: entry.fileIndex });
     }
   }
 
   function selectLine(
     fileIndex: number,
     anchor: string,
-    opts: { keepOccurrences?: boolean } = {},
+    opts: { keepOccurrences?: boolean } = {}
   ) {
     const m = modelRef.current;
     const key = fileAnchorKey(fileIndex, anchor);
@@ -836,15 +928,21 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     setActiveIndex(fileIndex);
     activeIndexRef.current = fileIndex;
     setCommentIndex(0);
-    if (!findOpenRef.current && !opts.keepOccurrences) setOccSpec(null);
+    if (!(findOpenRef.current || opts.keepOccurrences)) {
+      setOccSpec(null);
+    }
     keyboardHoldRef.current = true;
     setInputMode("keyboard");
-    setCursor({ fileIndex, anchor });
+    setCursor({ anchor, fileIndex });
     setFlashKey(key);
-    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    if (flashTimerRef.current) {
+      clearTimeout(flashTimerRef.current);
+    }
     flashTimerRef.current = setTimeout(() => setFlashKey(null), 1600);
     const itemIndex = m.anchorItem.get(key);
-    if (itemIndex != null) listRef.current?.centerItem(itemIndex);
+    if (itemIndex != null) {
+      listRef.current?.centerItem(itemIndex);
+    }
   }
 
   const selectLineRef = useLatest(selectLine);
@@ -894,7 +992,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
       const selected =
         window.getSelection()?.toString().split("\n")[0].trim() ?? "";
-      if (selected) changeFindQuery(selected);
+      if (selected) {
+        changeFindQuery(selected);
+      }
     }
     setFindFocusSeq((s) => s + 1);
   }
@@ -911,7 +1011,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
    */
   function findStep(dir: 1 | -1) {
     const n = findMatches.length;
-    if (n === 0) return;
+    if (n === 0) {
+      return;
+    }
     const next = findJumpedRef.current
       ? (findSafeIndex + dir + n) % n
       : findSafeIndex;
@@ -928,9 +1030,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   const occNavRefs = {
     occMatchListRef,
-    occSpecRef,
     occNavRef,
     occOriginRef,
+    occSpecRef,
     selectLineRef,
   };
 
@@ -938,9 +1040,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const occNav = buildOccNav({
       occMatchListRef,
-      occSpecRef,
       occNavRef,
       occOriginRef,
+      occSpecRef,
       selectLineRef,
     });
 
@@ -962,7 +1064,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       ) {
         return;
       }
-      if (prev === next) return;
+      if (prev === next) {
+        return;
+      }
       occRestoreRef.current = captureCodeSelection();
       setOccSpec(next);
     }
@@ -976,22 +1080,30 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
     /** The file index a code element belongs to (rows carry it directly). */
     function fileIndexOf(el: Element): number | null {
-      const v = el.closest("[data-file-index]")?.getAttribute("data-file-index");
-      const n = v == null ? NaN : Number(v);
+      const v = el
+        .closest("[data-file-index]")
+        ?.getAttribute("data-file-index");
+      const n = v == null ? Number.NaN : Number(v);
       return Number.isFinite(n) ? n : null;
     }
 
     function specFromDomSelection(): OccState | null {
       const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+        return null;
+      }
       const container = sel.getRangeAt(0).commonAncestorContainer;
       const el =
         container instanceof Element ? container : container.parentElement;
 
       const code = codeAround(el);
-      if (!code) return null;
+      if (!code) {
+        return null;
+      }
       const fileIndex = fileIndexOf(code);
-      if (fileIndex == null) return null;
+      if (fileIndex == null) {
+        return null;
+      }
       const spec = occurrenceSpecFromSelection(sel.toString());
       return spec && { ...spec, fileIndex };
     }
@@ -1001,7 +1113,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       const doc = document as Document & {
         caretPositionFromPoint?: (
           x: number,
-          y: number,
+          y: number
         ) => { offsetNode: Node; offset: number } | null;
         caretRangeFromPoint?: (x: number, y: number) => Range | null;
       };
@@ -1020,64 +1132,100 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
           offset = r.startOffset;
         }
       }
-      if (!node || node.nodeType !== Node.TEXT_NODE) return null;
+      if (!node || node.nodeType !== Node.TEXT_NODE) {
+        return null;
+      }
       const parent = node.parentElement;
-      if (!parent) return null;
+      if (!parent) {
+        return null;
+      }
       const code = codeAround(parent);
-      if (!code) return null;
+      if (!code) {
+        return null;
+      }
       const fileIndex = fileIndexOf(code);
-      if (fileIndex == null) return null;
+      if (fileIndex == null) {
+        return null;
+      }
 
       const text = code.textContent ?? "";
       const nodeStart = codeColumnOf(code, node);
-      if (nodeStart == null) return null;
+      if (nodeStart == null) {
+        return null;
+      }
       const col = nodeStart + offset;
       let s = col;
       let e = col;
-      while (s > 0 && /\w/.test(text[s - 1])) s -= 1;
-      while (e < text.length && /\w/.test(text[e])) e += 1;
-      if (s === e) return null;
+      while (s > 0 && /\w/.test(text[s - 1])) {
+        s -= 1;
+      }
+      while (e < text.length && /\w/.test(text[e])) {
+        e += 1;
+      }
+      if (s === e) {
+        return null;
+      }
 
       const start = codePositionAt(code, s);
       const end = codePositionAt(code, e);
-      if (!start || !end) return null;
+      if (!(start && end)) {
+        return null;
+      }
       const range = document.createRange();
       range.setStart(start.node, start.offset);
       range.setEnd(end.node, end.offset);
       const hit = Array.from(range.getClientRects()).some(
-        (r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom,
+        (r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom
       );
-      if (!hit) return null;
+      if (!hit) {
+        return null;
+      }
       const spec = occurrenceSpecFromSelection(text.slice(s, e));
       return spec && { ...spec, fileIndex };
     }
 
     function apply() {
       timer = null;
-      if (findOpenRef.current) return;
+      if (findOpenRef.current) {
+        return;
+      }
       const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+        return;
+      }
       commit(specFromDomSelection());
     }
 
     function onSelectionChange() {
-      if (timer != null) clearTimeout(timer);
+      if (timer != null) {
+        clearTimeout(timer);
+      }
       timer = setTimeout(apply, 150);
     }
 
     function onClick(e: MouseEvent) {
-      if (findOpenRef.current) return;
-      if (e.detail > 1) return;
+      if (findOpenRef.current) {
+        return;
+      }
+      if (e.detail > 1) {
+        return;
+      }
       const target = e.target instanceof Element ? e.target : null;
-      if (!codeAround(target)) return;
+      if (!codeAround(target)) {
+        return;
+      }
 
       const sel = window.getSelection();
-      if (sel && !sel.isCollapsed) return;
+      if (sel && !sel.isCollapsed) {
+        return;
+      }
 
       const mark = target?.closest("mark.qf-occ-mark");
       if (mark && occSpecRef.current) {
         const code = codeAround(mark);
-        const anchor = mark.closest("[data-anchor]")?.getAttribute("data-anchor");
+        const anchor = mark
+          .closest("[data-anchor]")
+          ?.getAttribute("data-anchor");
         const textNode = mark.firstChild;
         if (code && anchor && textNode) {
           const column = codeColumnOf(code, textNode);
@@ -1094,26 +1242,37 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     return () => {
       document.removeEventListener("selectionchange", onSelectionChange);
       document.removeEventListener("click", onClick);
-      if (timer != null) clearTimeout(timer);
+      if (timer != null) {
+        clearTimeout(timer);
+      }
     };
-  }, [findOpenRef, occSpecRef, occMatchListRef, occNavRef, occOriginRef, selectLineRef]);
+  }, [
+    findOpenRef,
+    occSpecRef,
+    occMatchListRef,
+    occNavRef,
+    occOriginRef,
+    selectLineRef,
+  ]);
 
   useLayoutEffect(() => {
     const captured = occRestoreRef.current;
     occRestoreRef.current = null;
-    if (captured) restoreCodeSelection(captured);
+    if (captured) {
+      restoreCodeSelection(captured);
+    }
   }, [occSpec]);
 
   const marks: MarkSpec | null = findOpen
     ? findQuery
-      ? { kind: "find", query: findQuery, caseSensitive: findCase }
+      ? { caseSensitive: findCase, kind: "find", query: findQuery }
       : null
     : occSpec
       ? {
+          fileIndex: occSpec.fileIndex,
           kind: "occurrence",
           query: occSpec.query,
           wholeWord: occSpec.wholeWord,
-          fileIndex: occSpec.fileIndex,
         }
       : null;
 
@@ -1123,14 +1282,14 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       : findOpen && findQuery
         ? findMatches.map((m) => {
             const idx = model.anchorItem.get(
-              fileAnchorKey(m.fileIndex, m.anchor),
+              fileAnchorKey(m.fileIndex, m.anchor)
             );
             return idx == null ? -1 : idx / model.items.length;
           })
         : occSpec
           ? occMatchList.map((m) => {
               const idx = model.anchorItem.get(
-                fileAnchorKey(occSpec.fileIndex, m.anchor),
+                fileAnchorKey(occSpec.fileIndex, m.anchor)
               );
               return idx == null ? -1 : idx / model.items.length;
             })
@@ -1141,7 +1300,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   const toggleViewedWithFp = (f: ChangedFile) => {
     toggleViewed(keyValue, f.filename, fingerprintFile(f, headShaRef.current));
     setChangedSinceViewed((prev) => {
-      if (!prev.has(f.filename)) return prev;
+      if (!prev.has(f.filename)) {
+        return prev;
+      }
       const next = new Set(prev);
       next.delete(f.filename);
       return next;
@@ -1149,7 +1310,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   };
 
   function toggleViewedFile() {
-    if (activeFile) toggleViewedWithFp(activeFile);
+    if (activeFile) {
+      toggleViewedWithFp(activeFile);
+    }
   }
   /**
    * `e`: toggle the current file's viewed state. Marking advances to the next
@@ -1157,22 +1320,30 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
    */
 
   function markViewedAndNext() {
-    if (!activeFile) return;
+    if (!activeFile) {
+      return;
+    }
     const wasViewed = viewedSet.has(activeFile.filename);
     toggleViewedWithFp(activeFile);
-    if (!wasViewed) scrollToFile(activeIndexRef.current + 1);
+    if (!wasViewed) {
+      scrollToFile(activeIndexRef.current + 1);
+    }
   }
   /** Both copies confirm through the shared toast host. */
 
   function copyLink() {
-    if (!pr?.url) return;
+    if (!pr?.url) {
+      return;
+    }
     void navigator.clipboard?.writeText(pr.url).catch(() => {});
-    setToast({ title: "Copied PR link", message: pr.url });
+    setToast({ message: pr.url, title: "Copied PR link" });
   }
   function copyFilePath() {
-    if (!activeFile) return;
+    if (!activeFile) {
+      return;
+    }
     void navigator.clipboard?.writeText(activeFile.filename).catch(() => {});
-    setToast({ title: "Copied file path", message: activeFile.filename });
+    setToast({ message: activeFile.filename, title: "Copied file path" });
   }
 
   /** After submitting, jump to the next review-requested PR (or back to inbox). */
@@ -1190,8 +1361,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       const store = useAppStore.getState();
       store.openReview(next.owner, next.name, next.number);
       store.markSeen(
-        prKey({ owner: next.owner, name: next.name, number: next.number }),
-        next.updatedAt,
+        prKey({ name: next.name, number: next.number, owner: next.owner }),
+        next.updatedAt
       );
     } else {
       goInbox();
@@ -1202,7 +1373,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
   function jumpToThread(path: string, rootId: number) {
     const m = modelRef.current;
     const fileIndex = filesRef.current.findIndex((f) => f.filename === path);
-    if (fileIndex < 0) return;
+    if (fileIndex < 0) {
+      return;
+    }
     setRightOpen(false);
     usePerfStore.getState().markFileStart();
     setActiveIndex(fileIndex);
@@ -1227,14 +1400,18 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         ?.querySelector<HTMLElement>(`[data-comment-root="${rootId}"]`);
       if (!el) {
         tries += 1;
-        if (tries < 20) requestAnimationFrame(land);
+        if (tries < 20) {
+          requestAnimationFrame(land);
+        }
         return;
       }
       el.classList.add("qf-row-flash");
-      if (threadFlashRef.current) clearTimeout(threadFlashRef.current);
+      if (threadFlashRef.current) {
+        clearTimeout(threadFlashRef.current);
+      }
       threadFlashRef.current = setTimeout(
         () => el.classList.remove("qf-row-flash"),
-        1600,
+        1600
       );
     };
     requestAnimationFrame(land);
@@ -1247,7 +1424,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   function goToComment(delta: number) {
     const list = modelRef.current.commentItems;
-    if (list.length === 0) return;
+    if (list.length === 0) {
+      return;
+    }
     const next = (commentIndex + delta + list.length) % list.length;
     setCommentIndex(next);
     listRef.current?.centerItem(list[next]);
@@ -1256,8 +1435,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     activeThreadRef.current =
       item?.kind === "comments" && item.threads.length > 0
         ? {
-            rootId: item.threads[0][0].id,
             path: filesRef.current[item.fileIndex]?.filename ?? "",
+            rootId: item.threads[0][0].id,
           }
         : null;
   }
@@ -1287,10 +1466,14 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   function resolveActiveThread() {
     const t = activeThreadRef.current;
-    if (!t) return;
+    if (!t) {
+      return;
+    }
     const root = commentsRef.current.find((c) => c.id === t.rootId);
-    if (!root || root.threadId == null) return;
-    resolveThread.mutate({ threadId: root.threadId, resolved: !root.resolved });
+    if (!root || root.threadId == null) {
+      return;
+    }
+    resolveThread.mutate({ resolved: !root.resolved, threadId: root.threadId });
   }
 
   function openSubmit() {
@@ -1302,16 +1485,16 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
   function handleSubmitReview(event: ReviewEvent, body: string) {
     const payload = {
-      event,
       body,
-      commitId: pr?.headSha ?? "",
       comments: pending.map((p) => ({
-        path: p.path,
-        line: p.line,
-        side: p.side,
         body: p.body,
+        line: p.line,
+        path: p.path,
+        side: p.side,
         startLine: p.startLine,
       })),
+      commitId: pr?.headSha ?? "",
+      event,
     };
     setSubmitOpen(false);
     advanceAfterSubmit();
@@ -1320,196 +1503,200 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
       .then(() => clearPendingComments(keyValue))
       .catch((e) => {
         setFlash(
-          `Review for ${owner}/${repo}#${number} didn't submit — your comments are still pending. ${String(e)}`,
+          `Review for ${owner}/${repo}#${number} didn't submit — your comments are still pending. ${String(e)}`
         );
       });
   }
 
   useHotkeys("review", [
     {
-      keys: ["j", "down"],
       description: "Next line",
       group: "Navigation",
       icon: ArrowDown,
+      keys: ["j", "down"],
       run: (e) => {
         setSelection(null);
         buildCursorMover(cursorMoverRefs).move(1, e.repeat);
       },
     },
     {
-      keys: ["k", "up"],
       description: "Previous line",
       group: "Navigation",
       icon: ArrowUp,
+      keys: ["k", "up"],
       run: (e) => {
         setSelection(null);
         buildCursorMover(cursorMoverRefs).move(-1, e.repeat);
       },
     },
     {
-      keys: ["shift+j", "shift+down"],
       description: "Extend selection down",
       group: "Comments",
       icon: ArrowDown,
+      keys: ["shift+j", "shift+down"],
       run: () => extendSelection(1),
     },
     {
-      keys: ["shift+k", "shift+up"],
       description: "Extend selection up",
       group: "Comments",
       icon: ArrowUp,
+      keys: ["shift+k", "shift+up"],
       run: () => extendSelection(-1),
     },
     {
-      keys: "c",
       description: "Comment on line / selection",
       group: "Comments",
       icon: MessageSquarePlus,
+      keys: "c",
       run: commentAtCursor,
     },
     {
-      keys: ["r"],
       description: "Reply to comment / next file",
       group: "Files",
       icon: ChevronRight,
+      keys: ["r"],
       run: replyToActiveThreadOrNextFile,
     },
     {
-      keys: ["t"],
       description: "Previous file",
       group: "Files",
       icon: ChevronLeft,
+      keys: ["t"],
       run: prevFile,
     },
     {
-      keys: "tab",
       description: "Cycle files",
       group: "Files",
       icon: ArrowLeftRight,
+      keys: "tab",
       run: (e) => cycleFile(e.shiftKey ? -1 : 1),
     },
     {
-      keys: ["space", "pagedown"],
       description: "Page down",
       group: "Navigation",
       icon: ChevronsDown,
+      keys: ["space", "pagedown"],
       run: () => pageScroll(1),
     },
     {
-      keys: ["pageup"],
       description: "Page up",
       group: "Navigation",
       icon: ChevronsUp,
+      keys: ["pageup"],
       run: () => pageScroll(-1),
     },
     {
-      keys: "]c",
       description: "Next comment",
       group: "Comments",
       icon: MessageSquare,
+      keys: "]c",
       run: () => goToComment(1),
     },
     {
-      keys: "[c",
       description: "Previous comment",
       group: "Comments",
       icon: MessageSquare,
+      keys: "[c",
       run: () => goToComment(-1),
     },
     {
-      keys: "x",
       description: "Resolve / unresolve comment",
       group: "Comments",
       icon: CheckCircle2,
+      keys: "x",
       run: resolveActiveThread,
     },
     {
-      keys: "e",
       description: "Mark viewed & next",
       group: "Files",
       icon: CheckCheck,
+      keys: "e",
       run: markViewedAndNext,
     },
     {
-      keys: "v",
       description: "Toggle file viewed",
       group: "Files",
       icon: Check,
+      keys: "v",
       run: toggleViewedFile,
     },
     {
-      keys: "s",
       description: "Submit review",
       group: "Review",
       icon: Send,
+      keys: "s",
       run: openSubmit,
     },
     {
-      keys: "o",
       description: "Open files in the browser",
       group: "General",
       icon: ExternalLink,
+      keys: "o",
       run: () => {
-        if (!pr) return;
+        if (!pr) {
+          return;
+        }
 
-        const files = pr.url.includes("/-/merge_requests/") ? "/diffs" : "/files";
+        const files = pr.url.includes("/-/merge_requests/")
+          ? "/diffs"
+          : "/files";
         void openUrl(pr.url + files);
       },
     },
     {
-      keys: "y",
       description: "Copy PR link",
       group: "General",
       icon: Link,
+      keys: "y",
       run: copyLink,
     },
     {
-      keys: "mod+shift+c",
       description: "Copy file path",
       group: "Files",
       icon: Copy,
+      keys: "mod+shift+c",
       run: copyFilePath,
     },
     {
-      keys: "i",
       description: "Toggle info panel",
       group: "General",
       icon: Info,
+      keys: "i",
       run: () => setRightOpen((o) => !o),
     },
     {
-      keys: "mod+t",
       description: "Find a file",
       group: "Navigation",
       icon: FileSearch,
+      keys: "mod+t",
       run: () => setPrSearch("files"),
     },
     {
-      keys: "mod+r",
       description: "Search code",
       group: "Navigation",
       icon: Search,
+      keys: "mod+r",
       run: () => setPrSearch("text"),
     },
     {
-      keys: "mod+f",
       description: "Find in diff",
       group: "Navigation",
       icon: TextSearch,
+      keys: "mod+f",
       run: openFind,
     },
     ...(findOpen
       ? ([
           {
-            keys: ["enter", "f3"],
             description: "Next find match",
             hidden: true,
+            keys: ["enter", "f3"],
             run: (e) => findStep(e.shiftKey ? -1 : 1),
           },
           {
-            keys: "mod+g",
             description: "Next find match",
             hidden: true,
+            keys: "mod+g",
             run: (e) => findStep(e.shiftKey ? -1 : 1),
           },
         ] satisfies Binding[])
@@ -1517,51 +1704,56 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     ...(occSpec
       ? ([
           {
-            keys: "n",
             description: "Next occurrence",
             hidden: true,
+            keys: "n",
             run: () => buildOccNav(occNavRefs).step(1),
           },
           {
-            keys: "p",
             description: "Previous occurrence",
             hidden: true,
+            keys: "p",
             run: () => buildOccNav(occNavRefs).step(-1),
           },
         ] satisfies Binding[])
       : []),
     {
-      keys: "esc",
       description: "Close panel / back to inbox",
       group: "Navigation",
       icon: Inbox,
+      keys: "esc",
       run: () => {
-        if (selectionRef.current) setSelection(null);
-        else if (findOpenRef.current) closeFind();
-        else if (rightOpenRef.current) setRightOpen(false);
-        else goInbox();
+        if (selectionRef.current) {
+          setSelection(null);
+        } else if (findOpenRef.current) {
+          closeFind();
+        } else if (rightOpenRef.current) {
+          setRightOpen(false);
+        } else {
+          goInbox();
+        }
       },
     },
   ]);
 
-  if (!detail || !pr) {
+  if (!(detail && pr)) {
     if (isError) {
       return (
         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-          <p className="text-sm font-medium text-danger">
+          <p className="font-medium text-danger text-sm">
             Couldn't load this pull request
           </p>
-          <p className="max-w-md break-words text-xs text-muted">
+          <p className="max-w-md break-words text-muted text-xs">
             {String(error)}
           </p>
           <button
-            type="button"
+            className="rounded-card border border-line px-3 py-1.5 text-fg text-sm hover:bg-elevated"
             onClick={goInbox}
-            className="rounded-card border border-line px-3 py-1.5 text-sm text-fg hover:bg-elevated"
+            type="button"
           >
             Back to inbox
           </button>
-          <p className="text-xs text-faint">Press Esc to go back</p>
+          <p className="text-faint text-xs">Press Esc to go back</p>
         </div>
       );
     }
@@ -1569,7 +1761,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     const cached = findCachedInboxPr(owner, repo, number);
     return (
       <div className="dir-quiet relative flex h-full min-h-0 overflow-hidden">
-        <aside className="w-[300px] shrink-0 border-r border-line">
+        <aside className="w-[300px] shrink-0 border-line border-r">
           <div className="qf-sidebar flex h-full flex-col">
             <div className="qf-side-head flex items-center justify-between px-4 py-3">
               <span className="qf-side-title">Files</span>
@@ -1577,8 +1769,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
             <div className="px-3 py-1">
               {Array.from({ length: 9 }).map((_, i) => (
                 <div
-                  key={i}
                   className="qf-skel"
+                  key={i}
                   style={{
                     height: 17,
                     margin: "10px 8px",
@@ -1604,9 +1796,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
                   <span>{cached.repo}</span>
                   <span className="qf-dot">·</span>
                   <Avatar
-                    url={cached.authorAvatarUrl}
                     name={cached.author}
                     size={15}
+                    url={cached.authorAvatarUrl}
                   />
                   <span className="qf-muted">{cached.author}</span>
                 </div>
@@ -1616,7 +1808,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
                 <div className="qf-skel" style={{ height: 16, width: 340 }} />
                 <div
                   className="qf-skel"
-                  style={{ height: 11, width: 190, marginTop: 9 }}
+                  style={{ height: 11, marginTop: 9, width: 190 }}
                 />
               </>
             )}
@@ -1624,8 +1816,8 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
           <div className="min-w-0 flex-1 overflow-hidden px-6 py-5">
             {Array.from({ length: 16 }).map((_, i) => (
               <div
-                key={i}
                 className="qf-skel"
+                key={i}
                 style={{
                   height: 12,
                   margin: "11px 0",
@@ -1664,15 +1856,15 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
     detail.comments.filter((c) => c.inReplyToId == null).length;
   return (
     <div className="dir-quiet relative flex h-full min-h-0 overflow-hidden">
-      <aside className="w-[300px] shrink-0 border-r border-line">
+      <aside className="w-[300px] shrink-0 border-line border-r">
         <FileSidebar
-          files={files}
-          selectedIndex={clampedIndex}
-          onSelect={scrollToFile}
-          prKeyValue={keyValue}
-          comments={detail.comments}
-          pending={pending}
           changed={changedSinceViewed}
+          comments={detail.comments}
+          files={files}
+          onSelect={scrollToFile}
+          pending={pending}
+          prKeyValue={keyValue}
+          selectedIndex={clampedIndex}
         />
       </aside>
 
@@ -1680,7 +1872,7 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
         <header className="qf-header flex shrink-0 items-center gap-4 px-6 py-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className={"qf-state " + stateClass}>
+              <span className={"qf-state" + stateClass}>
                 <span className="qf-state-dot" />
                 {stateLabel}
               </span>
@@ -1693,20 +1885,20 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
               <span className="qf-dot">·</span>
               <span>{pr.repo}</span>
               <span className="qf-dot">·</span>
-              <Avatar url={pr.authorAvatarUrl} name={pr.author} size={15} />
+              <Avatar name={pr.author} size={15} url={pr.authorAvatarUrl} />
               <span className="qf-muted">{pr.author}</span>
               {pr.baseRef && pr.headRef && (
                 <>
                   <span className="qf-dot">·</span>
                   <span className="qf-branch">
                     <BranchChip
-                      name={pr.baseRef}
                       label="Target branch — click to copy"
+                      name={pr.baseRef}
                     />
                     <span className="qf-arrow">←</span>
                     <BranchChip
-                      name={pr.headRef}
                       label="PR branch — click to copy"
+                      name={pr.headRef}
                     />
                   </span>
                 </>
@@ -1723,19 +1915,19 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
               <span className="qf-del">−{pr.deletions}</span>
             </div>
             <button
-              type="button"
-              onClick={() => void openUrl(pr.url)}
               className="qf-back qf-focusable"
+              onClick={() => void openUrl(pr.url)}
               title="Open on GitHub (o)"
+              type="button"
             >
               Open ↗
             </button>
             <button
-              type="button"
+              aria-pressed={rightOpen}
               className="qf-info-btn qf-focusable"
               onClick={() => setRightOpen((o) => !o)}
-              aria-pressed={rightOpen}
               title="PR description & conversation (i)"
+              type="button"
             >
               i
               {convoCount > 0 && (
@@ -1743,9 +1935,9 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
               )}
             </button>
             <button
-              type="button"
-              onClick={openSubmit}
               className="qf-submit qf-focusable"
+              onClick={openSubmit}
+              type="button"
             >
               {pending.length > 0 ? "Submit review" : "Review"}
               {pending.length > 0 && (
@@ -1758,101 +1950,101 @@ export function ReviewScreen({ owner, repo, number }: ReviewScreenProps) {
 
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <FindBar
-            open={findOpen}
-            query={findQuery}
             caseSensitive={findCase}
             current={findMatches.length > 0 ? findSafeIndex + 1 : 0}
-            total={findMatches.length}
             focusSeq={findFocusSeq}
-            onQueryChange={changeFindQuery}
-            onToggleCase={toggleFindCase}
+            onClose={closeFind}
             onNext={() => findStep(1)}
             onPrev={() => findStep(-1)}
-            onClose={closeFind}
+            onQueryChange={changeFindQuery}
+            onToggleCase={toggleFindCase}
+            open={findOpen}
+            query={findQuery}
+            total={findMatches.length}
           />
           {fileCount === 0 ? (
             <div className="qf-empty">No files changed.</div>
           ) : (
             <ReviewList
-              ref={listRef}
-              model={model}
-              files={files}
+              activeIndex={clampedIndex}
+              addPending={false}
+              baseSha={pr.baseSha}
+              callbacks={listCallbacks}
+              changedSinceViewed={changedSinceViewed}
+              copiedPathIndex={copiedPathIndex}
               cursorKey={
                 liveCursor
                   ? fileAnchorKey(liveCursor.fileIndex, liveCursor.anchor)
                   : null
               }
+              dragging={dragging}
+              files={files}
+              findCurrent={findCurrent}
+              flashKey={flashKey}
+              headSha={pr.headSha}
+              initialFileIndex={initialMem?.fileIndex ?? 0}
+              inputMode={inputMode}
+              marks={marks}
+              model={model}
+              owner={owner}
+              ref={listRef}
+              replyRequest={replyReq}
+              repo={repo}
+              restoreState={initialMem?.listState}
               selection={
                 liveSelection
                   ? {
+                      endItem: liveSelection.endItem,
                       fileIndex: liveSelection.fileIndex,
                       fromItem: liveSelection.fromItem,
                       toItem: liveSelection.toItem,
-                      endItem: liveSelection.endItem,
                     }
                   : null
               }
-              dragging={dragging}
-              flashKey={flashKey}
-              inputMode={inputMode}
-              marks={marks}
-              findCurrent={findCurrent}
-              activeIndex={clampedIndex}
               viewedSet={viewedSet}
-              changedSinceViewed={changedSinceViewed}
-              copiedPathIndex={copiedPathIndex}
-              owner={owner}
-              repo={repo}
-              baseSha={pr.baseSha}
-              headSha={pr.headSha}
-              addPending={false}
-              restoreState={initialMem?.listState}
-              initialFileIndex={initialMem?.fileIndex ?? 0}
-              replyRequest={replyReq}
-              callbacks={listCallbacks}
             />
           )}
           <OverviewRuler
-            kind={findOpen ? "find" : "occurrence"}
-            fractions={rulerFractions}
             currentIndex={
               findOpen && findMatches.length > 0 ? findSafeIndex : null
             }
+            fractions={rulerFractions}
+            kind={findOpen ? "find" : "occurrence"}
           />
         </div>
       </main>
 
       <RightPanel
-        pr={pr}
-        fileCount={fileCount}
         conversation={detail.issueComments ?? []}
-        reviews={reviews}
+        fileCount={fileCount}
         inlineComments={detail.comments}
-        open={rightOpen}
-        onClose={() => setRightOpen(false)}
         onAddIssueComment={async (body) => {
           await addIssueComment.mutateAsync({ body });
         }}
+        onClose={() => setRightOpen(false)}
         onJumpToThread={jumpToThread}
+        open={rightOpen}
+        pr={pr}
+        reviews={reviews}
       />
 
       <SubmitReviewModal
-        open={submitOpen}
-        ownPr={isOwnPr}
-        pendingCount={pending.length}
         busy={false}
         error={null}
         onClose={() => setSubmitOpen(false)}
         onSubmit={handleSubmitReview}
+        open={submitOpen}
+        ownPr={isOwnPr}
+        pendingCount={pending.length}
       />
 
       <PrSearch
-        open={prSearch !== null}
+        files={files}
         mode={prSearch ?? "files"}
         onClose={() => setPrSearch(null)}
-        files={files}
         onSelectFile={selectFileFromSearch}
         onSelectLine={selectLine}
+        open={prSearch !== null}
       />
     </div>
   );
@@ -1876,7 +2068,7 @@ function buildCursorMover(refs: {
   setInputMode: (m: "keyboard" | "mouse") => void;
 }): { move(delta: number, isRepeat: boolean): void } {
   const place = (entry: { fileIndex: number; anchor: string }) => {
-    refs.setCursor({ fileIndex: entry.fileIndex, anchor: entry.anchor });
+    refs.setCursor({ anchor: entry.anchor, fileIndex: entry.fileIndex });
     refs.setActiveIndex(entry.fileIndex);
     refs.activeIndexRef.current = entry.fileIndex; // eager — see scrollToFile
   };
@@ -1885,7 +2077,9 @@ function buildCursorMover(refs: {
     const m = refs.modelRef.current;
     const delta = refs.pendingDeltaRef.current;
     refs.pendingDeltaRef.current = 0;
-    if (delta === 0 || m.nav.length === 0) return;
+    if (delta === 0 || m.nav.length === 0) {
+      return;
+    }
     const cur = refs.cursorRef.current;
     refs.userMovedCursorRef.current = true;
     const curIdx = cur
@@ -1898,7 +2092,9 @@ function buildCursorMover(refs: {
       return;
     }
     const nextIdx = Math.min(Math.max(curIdx + delta, 0), m.nav.length - 1);
-    if (nextIdx === curIdx) return;
+    if (nextIdx === curIdx) {
+      return;
+    }
     const entry = m.nav[nextIdx];
     place(entry);
     refs.listRef.current?.nudgeItemIntoView(entry.itemIndex);
@@ -1937,27 +2133,44 @@ function buildOccNav(refs: {
   occNavRef: React.RefObject<number>;
   occOriginRef: React.RefObject<{ anchor: string; column: number } | null>;
   selectLineRef: React.RefObject<
-    (fileIndex: number, anchor: string, opts?: { keepOccurrences?: boolean }) => void
+    (
+      fileIndex: number,
+      anchor: string,
+      opts?: { keepOccurrences?: boolean }
+    ) => void
   >;
 }): OccNav {
-  const { occMatchListRef, occSpecRef, occNavRef, occOriginRef, selectLineRef } =
-    refs;
+  const {
+    occMatchListRef,
+    occSpecRef,
+    occNavRef,
+    occOriginRef,
+    selectLineRef,
+  } = refs;
   const indexAt = (anchor: string, column: number): number =>
     occMatchListRef.current.findIndex(
-      (m) => m.anchor === anchor && m.start <= column && column <= m.end,
+      (m) => m.anchor === anchor && m.start <= column && column <= m.end
     );
   const jumpTo = (index: number): void => {
     const spec = occSpecRef.current;
     const n = occMatchListRef.current.length;
-    if (!spec || n === 0) return;
+    if (!spec || n === 0) {
+      return;
+    }
     const next = ((index % n) + n) % n;
     occNavRef.current = next;
-    selectLineRef.current(spec.fileIndex, occMatchListRef.current[next].anchor, {
-      keepOccurrences: true,
-    });
+    selectLineRef.current(
+      spec.fileIndex,
+      occMatchListRef.current[next].anchor,
+      {
+        keepOccurrences: true,
+      }
+    );
   };
   const step = (dir: 1 | -1): void => {
-    if (occMatchListRef.current.length === 0) return;
+    if (occMatchListRef.current.length === 0) {
+      return;
+    }
     let at = occNavRef.current;
     if (at < 0) {
       const origin = occOriginRef.current;
@@ -1977,13 +2190,17 @@ function buildOccNav(refs: {
 function seededMatchIndex(
   matches: FindMatch[],
   model: ReviewListModel,
-  seedItemIndex: number | null,
+  seedItemIndex: number | null
 ): number {
-  if (seedItemIndex == null || matches.length === 0) return 0;
+  if (seedItemIndex == null || matches.length === 0) {
+    return 0;
+  }
   for (let i = 0; i < matches.length; i++) {
     const m = matches[i];
     const idx = model.anchorItem.get(fileAnchorKey(m.fileIndex, m.anchor));
-    if (idx != null && idx >= seedItemIndex) return i;
+    if (idx != null && idx >= seedItemIndex) {
+      return i;
+    }
   }
   return 0;
 }
@@ -1994,17 +2211,21 @@ function seededMatchIndex(
  */
 function currentMatchAt(
   matches: FindMatch[],
-  index: number,
+  index: number
 ): FindCurrent | null {
   const m = matches[index];
-  if (!m) return null;
+  if (!m) {
+    return null;
+  }
   let ordinal = 0;
   for (let i = index - 1; i >= 0; i--) {
     const p = matches[i];
-    if (p.fileIndex !== m.fileIndex || p.anchor !== m.anchor) break;
+    if (p.fileIndex !== m.fileIndex || p.anchor !== m.anchor) {
+      break;
+    }
     ordinal += 1;
   }
-  return { fileIndex: m.fileIndex, anchor: m.anchor, ordinal };
+  return { anchor: m.anchor, fileIndex: m.fileIndex, ordinal };
 }
 
 /**
@@ -2015,8 +2236,8 @@ function currentMatchAt(
  */
 interface CapturedSelection {
   code: Element;
-  start: number;
   end: number;
+  start: number;
 }
 
 /**
@@ -2028,7 +2249,9 @@ function codeColumnOf(code: Element, target: Node): number | null {
   const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
   while (walker.nextNode()) {
     const node = walker.currentNode as Text;
-    if (node === target) return offset;
+    if (node === target) {
+      return offset;
+    }
     offset += node.data.length;
   }
   return null;
@@ -2038,7 +2261,7 @@ function codeColumnOf(code: Element, target: Node): number | null {
  *  codeColumnOf, for building Ranges across mark-fragmented lines. */
 function codePositionAt(
   code: Element,
-  column: number,
+  column: number
 ): { node: Text; offset: number } | null {
   let offset = 0;
   const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
@@ -2058,14 +2281,20 @@ function codePositionAt(
  */
 function occurrenceOriginFromDom(): { anchor: string; column: number } | null {
   const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return null;
+  if (!sel || sel.rangeCount === 0) {
+    return null;
+  }
   const range = sel.getRangeAt(0);
   const node = range.startContainer;
-  if (node.nodeType !== Node.TEXT_NODE) return null;
+  if (node.nodeType !== Node.TEXT_NODE) {
+    return null;
+  }
   const el = node.parentElement;
   const code = el?.closest(".qf-code");
   const anchor = el?.closest("[data-anchor]")?.getAttribute("data-anchor");
-  if (!code || !anchor) return null;
+  if (!(code && anchor)) {
+    return null;
+  }
   const base = codeColumnOf(code, node);
   return base == null ? null : { anchor, column: base + range.startOffset };
 }
@@ -2073,29 +2302,41 @@ function occurrenceOriginFromDom(): { anchor: string; column: number } | null {
 /** The current selection as offsets within its diff code line, if it has one. */
 function captureCodeSelection(): CapturedSelection | null {
   const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    return null;
+  }
   const range = sel.getRangeAt(0);
   const container = range.commonAncestorContainer;
   const el = container instanceof Element ? container : container.parentElement;
   const code = el?.closest(".qf-code");
-  if (!code) return null;
+  if (!code) {
+    return null;
+  }
   let offset = 0;
   let start = -1;
   let end = -1;
   const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
   while (walker.nextNode()) {
     const node = walker.currentNode as Text;
-    if (node === range.startContainer) start = offset + range.startOffset;
-    if (node === range.endContainer) end = offset + range.endOffset;
+    if (node === range.startContainer) {
+      start = offset + range.startOffset;
+    }
+    if (node === range.endContainer) {
+      end = offset + range.endOffset;
+    }
     offset += node.data.length;
   }
-  if (start < 0 || end < 0 || start >= end) return null;
-  return { code, start, end };
+  if (start < 0 || end < 0 || start >= end) {
+    return null;
+  }
+  return { code, end, start };
 }
 
 /** Re-selects the captured offsets over the element's current text nodes. */
 function restoreCodeSelection({ code, start, end }: CapturedSelection): void {
-  if (!code.isConnected) return;
+  if (!code.isConnected) {
+    return;
+  }
   let offset = 0;
   let startNode: Text | null = null;
   let startOffset = 0;
@@ -2115,12 +2356,16 @@ function restoreCodeSelection({ code, start, end }: CapturedSelection): void {
     }
     offset += len;
   }
-  if (!startNode || !endNode) return;
+  if (!(startNode && endNode)) {
+    return;
+  }
   const range = document.createRange();
   range.setStart(startNode, startOffset);
   range.setEnd(endNode, endOffset);
   const sel = window.getSelection();
-  if (!sel) return;
+  if (!sel) {
+    return;
+  }
   sel.removeAllRanges();
   sel.addRange(range);
 }
@@ -2129,15 +2374,22 @@ function restoreCodeSelection({ code, start, end }: CapturedSelection): void {
 function findCachedInboxPr(
   owner: string,
   repo: string,
-  number: number,
+  number: number
 ): PullRequest | undefined {
   const match = (p: PullRequest) =>
     p.owner === owner && p.name === repo && p.number === number;
   const inbox = queryClient.getQueryData<InboxData>(queryKeys.inbox);
   if (inbox) {
-    for (const key of ["reviewRequested", "assigned", "created", "involved"] as const) {
+    for (const key of [
+      "reviewRequested",
+      "assigned",
+      "created",
+      "involved",
+    ] as const) {
       const hit = inbox[key].prs.find(match);
-      if (hit) return hit;
+      if (hit) {
+        return hit;
+      }
     }
   }
   return queryClient
@@ -2149,27 +2401,32 @@ function findCachedInboxPr(
 function BranchChip({ name, label }: { name: string; label: string }) {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, []);
+  useEffect(
+    () => () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    },
+    []
+  );
   return (
     <button
-      type="button"
       className={cn("qf-branch-chip", copied && "qf-branch-copied")}
-      title={copied ? "Copied" : label}
       onClick={() => {
         void navigator.clipboard?.writeText(name).catch(() => {});
         setCopied(true);
-        if (timerRef.current) clearTimeout(timerRef.current);
+        if (timerRef.current) {
+          clearTimeout(timerRef.current);
+        }
         timerRef.current = setTimeout(() => setCopied(false), 1200);
       }}
+      title={copied ? "Copied" : label}
+      type="button"
     >
       {copied ? (
-        <Check size={11} aria-hidden />
+        <Check aria-hidden size={11} />
       ) : (
-        <GitBranch size={11} aria-hidden />
+        <GitBranch aria-hidden size={11} />
       )}
       {name}
     </button>

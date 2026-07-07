@@ -1,22 +1,30 @@
-import { useEffect, useState, type KeyboardEvent } from "react";
-import { useHotkeys } from "../../keyboard";
-import { cn } from "../../lib/cn";
-import type { ReviewEvent } from "../../types";
+import { type KeyboardEvent, useEffect, useState } from "react";
+import { useHotkeys } from "../../keyboard/index.ts";
+import { cn } from "../../lib/cn.ts";
+import type { ReviewEvent } from "../../types.ts";
 
 const EVENTS: { value: ReviewEvent; label: string; hint: string }[] = [
-  { value: "COMMENT", label: "Comment", hint: "General feedback without an explicit verdict." },
-  { value: "APPROVE", label: "Approve", hint: "Approve these changes." },
-  { value: "REQUEST_CHANGES", label: "Request changes", hint: "Block until changes are made." },
+  {
+    hint: "General feedback without an explicit verdict.",
+    label: "Comment",
+    value: "COMMENT",
+  },
+  { hint: "Approve these changes.", label: "Approve", value: "APPROVE" },
+  {
+    hint: "Block until changes are made.",
+    label: "Request changes",
+    value: "REQUEST_CHANGES",
+  },
 ];
 
 interface Props {
-  open: boolean;
-  ownPr?: boolean;
-  pendingCount: number;
   busy: boolean;
   error?: string | null;
   onClose: () => void;
   onSubmit: (event: ReviewEvent, body: string) => void;
+  open: boolean;
+  ownPr?: boolean;
+  pendingCount: number;
 }
 
 export function SubmitReviewModal({
@@ -40,17 +48,21 @@ export function SubmitReviewModal({
 
   useHotkeys(
     "submit",
-    [{ keys: "esc", description: "Close", hidden: true, run: onClose }],
-    { enabled: open },
+    [{ description: "Close", hidden: true, keys: "esc", run: onClose }],
+    { enabled: open }
   );
 
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   const needsBody = event === "COMMENT" && pendingCount === 0;
   const canSubmit = !busy && (!needsBody || body.trim().length > 0);
 
   function submit() {
-    if (!canSubmit) return;
+    if (!canSubmit) {
+      return;
+    }
     onSubmit(event, body.trim());
   }
 
@@ -61,7 +73,9 @@ export function SubmitReviewModal({
       let i = EVENTS.findIndex((ev) => ev.value === cur);
       for (let step = 0; step < EVENTS.length; step++) {
         i = (i + dir + EVENTS.length) % EVENTS.length;
-        if (!disabledEvent(EVENTS[i].value)) return EVENTS[i].value;
+        if (!disabledEvent(EVENTS[i].value)) {
+          return EVENTS[i].value;
+        }
       }
       return cur;
     });
@@ -84,13 +98,15 @@ export function SubmitReviewModal({
     <div
       className="q-overlay"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
       }}
     >
-      <div className="q-dialog q-dialog-top" role="dialog" aria-modal="true">
-        <div className="border-b border-line px-5 py-3.5">
-          <h2 className="text-sm font-semibold text-fg">Submit review</h2>
-          <p className="mt-0.5 text-xs text-muted">
+      <div aria-modal="true" className="q-dialog q-dialog-top" role="dialog">
+        <div className="border-line border-b px-5 py-3.5">
+          <h2 className="font-semibold text-fg text-sm">Submit review</h2>
+          <p className="mt-0.5 text-muted text-xs">
             {pendingCount > 0
               ? `${pendingCount} pending comment${pendingCount === 1 ? "" : "s"} will be included.`
               : "No pending comments — submits the verdict and summary only."}
@@ -99,7 +115,7 @@ export function SubmitReviewModal({
 
         <div className="px-5 py-4">
           {ownPr && (
-            <p className="mb-2.5 text-xs text-faint">
+            <p className="mb-2.5 text-faint text-xs">
               This is your own PR — only a comment review can be submitted.
             </p>
           )}
@@ -108,22 +124,23 @@ export function SubmitReviewModal({
               const disabled = disabledEvent(opt.value);
               return (
                 <button
-                  key={opt.value}
-                  type="button"
+                  className={cn(
+                    "flex-1 rounded-lg border px-2 py-2 font-semibold text-xs transition-colors",
+                    event === opt.value
+                      ? "border-accent bg-accent/15 text-fg"
+                      : "border-line text-muted hover:bg-surface-2 hover:text-fg",
+                    disabled &&
+                      "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted"
+                  )}
                   disabled={disabled}
+                  key={opt.value}
                   onClick={() => setEvent(opt.value)}
                   title={
                     disabled
                       ? "You can't approve or request changes on your own PR"
                       : opt.hint
                   }
-                  className={cn(
-                    "flex-1 rounded-lg border px-2 py-2 text-xs font-semibold transition-colors",
-                    event === opt.value
-                      ? "border-accent bg-accent/15 text-fg"
-                      : "border-line text-muted hover:bg-surface-2 hover:text-fg",
-                    disabled && "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted",
-                  )}
+                  type="button"
                 >
                   {opt.label}
                 </button>
@@ -133,7 +150,7 @@ export function SubmitReviewModal({
 
           <textarea
             autoFocus
-            value={body}
+            className="q-input mt-3"
             onChange={(e) => setBody(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder={
@@ -144,27 +161,31 @@ export function SubmitReviewModal({
                   : "Review summary…"
             }
             rows={4}
-            className="q-input mt-3"
+            value={body}
           />
 
           {error ? (
-            <p className="mt-2 break-words text-xs text-danger">{error}</p>
+            <p className="mt-2 break-words text-danger text-xs">{error}</p>
           ) : null}
         </div>
 
-        <div className="flex items-center justify-between border-t border-line px-5 py-3.5">
-          <span className="text-xs text-faint">
+        <div className="flex items-center justify-between border-line border-t px-5 py-3.5">
+          <span className="text-faint text-xs">
             Tab switches verdict · ⌘↵ to submit · Esc to cancel
           </span>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={onClose} className="q-btn q-btn-ghost">
+            <button
+              className="q-btn q-btn-ghost"
+              onClick={onClose}
+              type="button"
+            >
               Cancel
             </button>
             <button
-              type="button"
-              onClick={submit}
-              disabled={!canSubmit}
               className="q-btn q-btn-primary"
+              disabled={!canSubmit}
+              onClick={submit}
+              type="button"
             >
               {busy ? "Submitting…" : "Submit review"}
             </button>

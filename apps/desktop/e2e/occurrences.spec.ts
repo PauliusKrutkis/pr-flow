@@ -1,6 +1,6 @@
-import { expect, test } from "./test";
 import type { Page } from "@playwright/test";
-import { setupApp } from "./bridge";
+import { setupApp } from "./bridge.ts";
+import { expect, test } from "./test.ts";
 
 test.beforeEach(async ({ page }) => {
   await setupApp(page);
@@ -18,14 +18,16 @@ async function tokenCenter(page: Page, section: number, token: string) {
   const rect = await page.evaluate(
     ({ section, token }) => {
       const codes = document.querySelectorAll(
-        `.qf-row[data-file-index="${section}"]:not(.qf-row-hunk) .qf-code`,
+        `.qf-row[data-file-index="${section}"]:not(.qf-row-hunk) .qf-code`
       );
       for (const code of codes) {
         const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
         while (walker.nextNode()) {
           const node = walker.currentNode as Text;
           const i = node.data.indexOf(token);
-          if (i === -1) continue;
+          if (i === -1) {
+            continue;
+          }
           const range = document.createRange();
           range.setStart(node, i);
           range.setEnd(node, i + token.length);
@@ -35,9 +37,11 @@ async function tokenCenter(page: Page, section: number, token: string) {
       }
       return null;
     },
-    { section, token },
+    { section, token }
   );
-  if (!rect) throw new Error(`token not found in diff: ${token}`);
+  if (!rect) {
+    throw new Error(`token not found in diff: ${token}`);
+  }
   return rect;
 }
 
@@ -53,14 +57,16 @@ async function selectInCode(page: Page, section: number, text: string) {
   const ok = await page.evaluate(
     ({ section, text }) => {
       const codes = document.querySelectorAll(
-        `.qf-row[data-file-index="${section}"]:not(.qf-row-hunk) .qf-code`,
+        `.qf-row[data-file-index="${section}"]:not(.qf-row-hunk) .qf-code`
       );
       for (const code of codes) {
         const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
         while (walker.nextNode()) {
           const node = walker.currentNode as Text;
           const i = node.data.indexOf(text);
-          if (i === -1) continue;
+          if (i === -1) {
+            continue;
+          }
           const range = document.createRange();
           range.setStart(node, i);
           range.setEnd(node, i + text.length);
@@ -72,14 +78,18 @@ async function selectInCode(page: Page, section: number, text: string) {
       }
       return false;
     },
-    { section, text },
+    { section, text }
   );
-  if (!ok) throw new Error(`text not found in diff: ${text}`);
+  if (!ok) {
+    throw new Error(`text not found in diff: ${text}`);
+  }
 }
 
 const occMarks = (page: Page) => page.locator("mark.qf-occ-mark");
 
-test("single-clicking a token marks its occurrences within that file", async ({ page }) => {
+test("single-clicking a token marks its occurrences within that file", async ({
+  page,
+}) => {
   const { x, y } = await tokenCenter(page, 0, "return");
   await page.mouse.move(x, y);
   await page.waitForTimeout(100); // settle the hover-driven row re-render
@@ -87,7 +97,7 @@ test("single-clicking a token marks its occurrences within that file", async ({ 
   await expect(occMarks(page)).toHaveCount(2);
   expect(await occMarks(page).allTextContents()).toEqual(["return", "return"]);
   await expect(
-    page.locator('.qf-row[data-file-index="1"] mark.qf-occ-mark'),
+    page.locator('.qf-row[data-file-index="1"] mark.qf-occ-mark')
   ).toHaveCount(0);
 
   const alpha = await tokenCenter(page, 0, "alpha");
@@ -107,19 +117,25 @@ test("double-clicking a token marks its occurrences", async ({ page }) => {
   await expect(occMarks(page)).toHaveCount(2);
 });
 
-test("clicking blank space right of a line ending in a word clears, not highlights", async ({ page }) => {
+test("clicking blank space right of a line ending in a word clears, not highlights", async ({
+  page,
+}) => {
   await dblclickToken(page, 1, "gamma");
   await expect(occMarks(page)).toHaveCount(2);
 
   const lineEnd = await page.evaluate(() => {
     const codes = document.querySelectorAll(
-      '.qf-row[data-file-index="1"]:not(.qf-row-hunk) .qf-code',
+      '.qf-row[data-file-index="1"]:not(.qf-row-hunk) .qf-code'
     );
     for (const code of codes) {
-      if (!code.textContent?.includes("export default search")) continue;
+      if (!code.textContent?.includes("export default search")) {
+        continue;
+      }
       const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
       let last: Text | null = null;
-      while (walker.nextNode()) last = walker.currentNode as Text;
+      while (walker.nextNode()) {
+        last = walker.currentNode as Text;
+      }
       const range = document.createRange();
       range.selectNodeContents(last!);
       const r = range.getBoundingClientRect();
@@ -131,7 +147,9 @@ test("clicking blank space right of a line ending in a word clears, not highligh
   await expect(occMarks(page)).toHaveCount(0);
 });
 
-test("marks are paint-only — the line's geometry does not move", async ({ page }) => {
+test("marks are paint-only — the line's geometry does not move", async ({
+  page,
+}) => {
   const codeLine = page
     .locator('.qf-row[data-file-index="1"]:not(.qf-row-hunk) .qf-code')
     .first();
@@ -143,14 +161,18 @@ test("marks are paint-only — the line's geometry does not move", async ({ page
   const after = await codeLine.boundingBox();
   expect(after).toEqual(before);
 
-  const style = await occMarks(page).first().evaluate((el) => {
-    const s = getComputedStyle(el);
-    return { padding: s.padding, margin: s.margin, border: s.borderWidth };
-  });
-  expect(style).toEqual({ padding: "0px", margin: "0px", border: "0px" });
+  const style = await occMarks(page)
+    .first()
+    .evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { border: s.borderWidth, margin: s.margin, padding: s.padding };
+    });
+  expect(style).toEqual({ border: "0px", margin: "0px", padding: "0px" });
 });
 
-test("whitespace or single-character selections mark nothing", async ({ page }) => {
+test("whitespace or single-character selections mark nothing", async ({
+  page,
+}) => {
   await dblclickToken(page, 1, "gamma");
   await expect(occMarks(page)).toHaveCount(2);
 
@@ -164,7 +186,9 @@ test("whitespace or single-character selections mark nothing", async ({ page }) 
   await expect(occMarks(page)).toHaveCount(0);
 });
 
-test("the find bar suppresses occurrence marks; closing it restores them", async ({ page }) => {
+test("the find bar suppresses occurrence marks; closing it restores them", async ({
+  page,
+}) => {
   await dblclickToken(page, 1, "gamma");
   await expect(occMarks(page)).toHaveCount(2);
 
@@ -179,10 +203,14 @@ test("the find bar suppresses occurrence marks; closing it restores them", async
   await expect(occMarks(page)).toHaveCount(2);
 });
 
-test("Esc goes straight to the inbox — occurrence marks don't consume it", async ({ page }) => {
+test("Esc goes straight to the inbox — occurrence marks don't consume it", async ({
+  page,
+}) => {
   await dblclickToken(page, 1, "gamma");
   await expect(occMarks(page)).toHaveCount(2);
 
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: /Review requests/ })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Review requests/ })
+  ).toBeVisible();
 });

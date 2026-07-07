@@ -11,14 +11,20 @@ const COLORS = [
 ];
 function colorFor(seed: string): string {
   let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = (h * 31 + seed.charCodeAt(i)) | 0;
+  }
   return COLORS[Math.abs(h) % COLORS.length];
 }
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  if (parts.length === 0) {
+    return "?";
+  }
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
@@ -42,30 +48,30 @@ export function Avatar({
   if (showImage) {
     return (
       <img
-        className="q-avatar"
-        src={url ?? undefined}
         alt=""
+        aria-hidden
+        className="q-avatar"
+        height={size}
+        onError={() => setBroken(true)}
+        src={url ?? undefined}
+        style={{ height: size, width: size }}
         title={name}
         width={size}
-        height={size}
-        style={{ width: size, height: size }}
-        onError={() => setBroken(true)}
-        aria-hidden
       />
     );
   }
 
   return (
     <span
+      aria-hidden
       className="q-avatar"
       style={{
-        width: size,
-        height: size,
         background: colorFor(name),
         fontSize: Math.round(size * 0.42),
+        height: size,
+        width: size,
       }}
       title={name}
-      aria-hidden
     >
       {initials(name)}
     </span>

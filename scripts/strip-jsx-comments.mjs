@@ -8,12 +8,19 @@ import { fileURLToPath } from "url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function walk(dir, acc = []) {
-  if (!fs.existsSync(dir)) return acc;
+  if (!fs.existsSync(dir)) {
+    return acc;
+  }
   for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, ent.name);
-    if (ent.name === "node_modules" || ent.name === "dist") continue;
-    if (ent.isDirectory()) walk(p, acc);
-    else if (/\.(tsx|jsx)$/.test(ent.name)) acc.push(p);
+    if (ent.name === "node_modules" || ent.name === "dist") {
+      continue;
+    }
+    if (ent.isDirectory()) {
+      walk(p, acc);
+    } else if (/\.(tsx|jsx)$/.test(ent.name)) {
+      acc.push(p);
+    }
   }
   return acc;
 }

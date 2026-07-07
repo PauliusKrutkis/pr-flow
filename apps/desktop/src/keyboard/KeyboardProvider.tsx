@@ -1,25 +1,25 @@
 import {
   createContext,
+  type ReactNode,
   useCallback,
   useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
 import type {
   Binding,
   KeyboardContextValue,
   RegisteredBinding,
-} from "./types";
+} from "./types.ts";
 
 const KeyboardContext = createContext<KeyboardContextValue | null>(null);
 
 interface Source {
+  get: () => Binding[];
   id: string;
   scope: string;
-  get: () => Binding[];
 }
 
 interface ScopeEntry {
@@ -56,7 +56,9 @@ function normalizeKey(e: KeyboardEvent): string {
 }
 
 function isEditableTarget(el: EventTarget | null): boolean {
-  if (!(el instanceof HTMLElement)) return false;
+  if (!(el instanceof HTMLElement)) {
+    return false;
+  }
   const tag = el.tagName;
   return (
     tag === "INPUT" ||
@@ -87,14 +89,14 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
   const registerSource = useCallback(
     (scope: string, get: () => Binding[]) => {
       const id = nextId();
-      sourcesRef.current = [...sourcesRef.current, { id, scope, get }];
+      sourcesRef.current = [...sourcesRef.current, { get, id, scope }];
       setVersion((v) => v + 1);
       return () => {
         sourcesRef.current = sourcesRef.current.filter((s) => s.id !== id);
         setVersion((v) => v + 1);
       };
     },
-    [nextId],
+    [nextId]
   );
 
   const pushScope = useCallback(
@@ -102,28 +104,27 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
       const id = nextId();
       scopeStackRef.current = [...scopeStackRef.current, { id, scope }];
       return () => {
-        scopeStackRef.current = scopeStackRef.current.filter((s) => s.id !== id);
+        scopeStackRef.current = scopeStackRef.current.filter(
+          (s) => s.id !== id
+        );
       };
     },
-    [nextId],
+    [nextId]
   );
 
-  const getBindings = useCallback(
-    (scope: string): RegisteredBinding[] => {
-      const out: RegisteredBinding[] = [];
-      let i = 0;
-      for (const src of sourcesRef.current) {
-        if (src.scope === scope || src.scope === "global") {
-          for (const b of src.get()) {
-            out.push({ ...b, id: `${src.id}-${i}`, scope: src.scope });
-            i += 1;
-          }
+  const getBindings = useCallback((scope: string): RegisteredBinding[] => {
+    const out: RegisteredBinding[] = [];
+    let i = 0;
+    for (const src of sourcesRef.current) {
+      if (src.scope === scope || src.scope === "global") {
+        for (const b of src.get()) {
+          out.push({ ...b, id: `${src.id}-${i}`, scope: src.scope });
+          i += 1;
         }
       }
-      return out;
-    },
-    [],
-  );
+    }
+    return out;
+  }, []);
 
   const eligibleBindings = useCallback((): RegisteredBinding[] => {
     const stack = scopeStackRef.current;
@@ -152,14 +153,14 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     function findByKey(
       bindings: RegisteredBinding[],
-      descriptor: string,
+      descriptor: string
     ): RegisteredBinding | undefined {
       return bindings.find((b) => asArray(b.keys).includes(descriptor));
     }
 
     function isPrefix(bindings: RegisteredBinding[], buf: string): boolean {
       return bindings.some((b) =>
-        asArray(b.keys).some((k) => k.length > buf.length && k.startsWith(buf)),
+        asArray(b.keys).some((k) => k.length > buf.length && k.startsWith(buf))
       );
     }
 
@@ -169,23 +170,38 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
       const hasMod = e.metaKey || e.ctrlKey;
       const key = normalizeKey(e);
 
-      if (editable && !hasMod) return;
+      if (editable && !hasMod) {
+        return;
+      }
 
       if (hasMod || e.altKey) {
         clearSeq();
-        if (key === "meta" || key === "control" || key === "alt" || key === "shift") {
+        if (
+          key === "meta" ||
+          key === "control" ||
+          key === "alt" ||
+          key === "shift"
+        ) {
           return;
         }
         const parts: string[] = [];
-        if (hasMod) parts.push("mod");
-        if (e.altKey) parts.push("alt");
-        if (e.shiftKey) parts.push("shift");
+        if (hasMod) {
+          parts.push("mod");
+        }
+        if (e.altKey) {
+          parts.push("alt");
+        }
+        if (e.shiftKey) {
+          parts.push("shift");
+        }
         parts.push(key);
         const combo = parts.join("+");
 
         const altCombo = combo.replace("shift+", "");
         let match = findByKey(bindings, combo) ?? findByKey(bindings, altCombo);
-        if (editable && match && !match.global) match = undefined;
+        if (editable && match && !match.global) {
+          match = undefined;
+        }
         if (match) {
           e.preventDefault();
           match.run(e);
@@ -193,7 +209,9 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      if (key === "shift") return;
+      if (key === "shift") {
+        return;
+      }
 
       if (e.shiftKey) {
         const shifted = findByKey(bindings, `shift+${key}`);
@@ -217,7 +235,9 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
 
       if (isPrefix(bindings, buf)) {
         seqRef.current = buf;
-        if (seqTimerRef.current) clearTimeout(seqTimerRef.current);
+        if (seqTimerRef.current) {
+          clearTimeout(seqTimerRef.current);
+        }
         seqTimerRef.current = setTimeout(() => {
           seqRef.current = "";
           seqTimerRef.current = null;
@@ -233,7 +253,9 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      if (key === "tab") e.preventDefault();
+      if (key === "tab") {
+        e.preventDefault();
+      }
     }
 
     window.addEventListener("keydown", onKeyDown);
@@ -241,12 +263,14 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
   }, [eligibleBindings, clearSeq]);
 
   const value = useMemo<KeyboardContextValue>(
-    () => ({ registerSource, pushScope, getBindings, version }),
-    [registerSource, pushScope, getBindings, version],
+    () => ({ getBindings, pushScope, registerSource, version }),
+    [registerSource, pushScope, getBindings, version]
   );
 
   return (
-    <KeyboardContext.Provider value={value}>{children}</KeyboardContext.Provider>
+    <KeyboardContext.Provider value={value}>
+      {children}
+    </KeyboardContext.Provider>
   );
 }
 

@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
-import { ACCOUNT, DETAIL, INBOX } from "./fixtures";
-import type { BucketFixture, InboxFixture } from "./fixtures";
+import type { BucketFixture, InboxFixture } from "./fixtures.ts";
+import { ACCOUNT, DETAIL, INBOX } from "./fixtures.ts";
 
 /**
  * The mocked Tauri bridge. @tauri-apps/api routes every call through
@@ -9,34 +9,33 @@ import type { BucketFixture, InboxFixture } from "./fixtures";
  */
 
 export interface AppOptions {
-  hasToken?: boolean;
-  hangIssueComment?: boolean;
-  detailByLoad?: unknown[];
   detailByCall?: unknown[];
-  inboxByCall?: unknown[];
+  detailByLoad?: unknown[];
+  hangIssueComment?: boolean;
+  hasToken?: boolean;
   inbox?: InboxFixture;
+  inboxByCall?: unknown[];
+  repoHits?: { fullName: string; description: string }[];
   subscribed?: BucketFixture;
   watchedRepos?: string[];
-  repoHits?: { fullName: string; description: string }[];
 }
 
 export async function setupApp(page: Page, opts: AppOptions = {}) {
   const config = {
-    hasToken: opts.hasToken ?? true,
-    hangIssueComment: opts.hangIssueComment ?? false,
-    inbox: opts.inbox ?? INBOX,
-    subscribed: opts.subscribed ?? { count: 0, prs: [] },
-    detail: DETAIL,
-    detailByLoad: opts.detailByLoad ?? null,
-    detailByCall: opts.detailByCall ?? null,
-    inboxByCall: opts.inboxByCall ?? null,
-    watchedRepos: opts.watchedRepos ?? [],
-    repoHits: opts.repoHits ?? [],
     account: ACCOUNT,
+    detail: DETAIL,
+    detailByCall: opts.detailByCall ?? null,
+    detailByLoad: opts.detailByLoad ?? null,
+    hangIssueComment: opts.hangIssueComment ?? false,
+    hasToken: opts.hasToken ?? true,
+    inbox: opts.inbox ?? INBOX,
+    inboxByCall: opts.inboxByCall ?? null,
+    repoHits: opts.repoHits ?? [],
+    subscribed: opts.subscribed ?? { count: 0, prs: [] },
+    watchedRepos: opts.watchedRepos ?? [],
   };
 
   await page.addInitScript((cfg) => {
-
     const load = Number(localStorage.getItem("e2e:load") ?? "0");
     localStorage.setItem("e2e:load", String(load + 1));
     const byLoad = cfg.detailByLoad;
@@ -49,64 +48,70 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
     const seq = (arr: unknown[] | null, n: number, fallback: unknown) =>
       arr ? arr[Math.min(n, arr.length - 1)] : fallback;
 
-    const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
-      has_token: () => cfg.hasToken,
-      is_oauth_configured: () => false,
-      is_gitlab_oauth_configured: () => false,
-      list_accounts: () =>
-        cfg.hasToken
-          ? { accounts: [cfg.account], activeId: cfg.account.id }
-          : { accounts: [], activeId: null },
-      get_cached_inbox: () => null,
-      list_inbox: () => seq(cfg.inboxByCall, inboxCalls++, cfg.inbox),
-      get_cached_subscribed: () => null,
-      list_subscribed: () => cfg.subscribed,
-      get_watched_repos: () => cfg.watchedRepos,
-      set_watched_repos: () => null,
-      search_repos: () =>
-        new Promise((resolve) => setTimeout(() => resolve(cfg.repoHits), 200)),
-      get_viewed_map: () =>
-        JSON.parse(localStorage.getItem("e2e:viewed") ?? "{}"),
-      set_viewed_map: (args) => {
-        localStorage.setItem("e2e:viewed", JSON.stringify(args.map));
-        return null;
-      },
-      get_cached_pull_request_detail: () => null,
-      get_pull_request_detail: () => seq(cfg.detailByCall, detailCalls++, detail),
-      create_review_comment: (args) => ({
-        id: 900,
-        path: args.path,
-        line: args.line,
-        originalLine: null,
-        side: args.side,
-        diffHunk: "",
-        body: args.body,
-        user: "me",
-        userAvatarUrl: "",
-        createdAt: new Date().toISOString(),
-        inReplyToId: null,
-        threadId: null,
-        resolved: false,
-      }),
-      resolve_thread: (args) => {
-        for (const c of cfg.detail.comments as Array<{
-          threadId: string | null;
-          resolved: boolean;
-        }>) {
-          if (c.threadId === args.threadId) c.resolved = args.resolved as boolean;
-        }
-        return null;
-      },
-      create_issue_comment: () =>
-        cfg.hangIssueComment ? new Promise(() => {}) : null,
-      submit_review: (args) => {
-        localStorage.setItem("e2e:lastReview", JSON.stringify(args));
-        return null;
-      },
-      check_for_update: () => null,
-      "plugin:opener|open_url": () => null,
-      "plugin:opener|open": () => null,
-    };
+    const handlers: Record<string, (args: Record<string, unknown>) => unknown> =
+      {
+        check_for_update: () => null,
+        create_issue_comment: () =>
+          cfg.hangIssueComment ? new Promise(() => {}) : null,
+        create_review_comment: (args) => ({
+          body: args.body,
+          createdAt: new Date().toISOString(),
+          diffHunk: "",
+          id: 900,
+          inReplyToId: null,
+          line: args.line,
+          originalLine: null,
+          path: args.path,
+          resolved: false,
+          side: args.side,
+          threadId: null,
+          user: "me",
+          userAvatarUrl: "",
+        }),
+        get_cached_inbox: () => null,
+        get_cached_pull_request_detail: () => null,
+        get_cached_subscribed: () => null,
+        get_pull_request_detail: () =>
+          seq(cfg.detailByCall, detailCalls++, detail),
+        get_viewed_map: () =>
+          JSON.parse(localStorage.getItem("e2e:viewed") ?? "{}"),
+        get_watched_repos: () => cfg.watchedRepos,
+        has_token: () => cfg.hasToken,
+        is_gitlab_oauth_configured: () => false,
+        is_oauth_configured: () => false,
+        list_accounts: () =>
+          cfg.hasToken
+            ? { accounts: [cfg.account], activeId: cfg.account.id }
+            : { accounts: [], activeId: null },
+        list_inbox: () => seq(cfg.inboxByCall, inboxCalls++, cfg.inbox),
+        list_subscribed: () => cfg.subscribed,
+        "plugin:opener|open": () => null,
+        "plugin:opener|open_url": () => null,
+        resolve_thread: (args) => {
+          for (const c of cfg.detail.comments as Array<{
+            threadId: string | null;
+            resolved: boolean;
+          }>) {
+            if (c.threadId === args.threadId) {
+              c.resolved = args.resolved as boolean;
+            }
+          }
+          return null;
+        },
+        search_repos: () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve(cfg.repoHits), 200)
+          ),
+        set_viewed_map: (args) => {
+          localStorage.setItem("e2e:viewed", JSON.stringify(args.map));
+          return null;
+        },
+        set_watched_repos: () => null,
+        submit_review: (args) => {
+          localStorage.setItem("e2e:lastReview", JSON.stringify(args));
+          return null;
+        },
+      };
 
     Object.defineProperty(window, "__TAURI_INTERNALS__", {
       configurable: true,
@@ -119,14 +124,14 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
           }
           return Promise.resolve(handler(args ?? {}));
         },
-        transformCallback: (() => {
-          let id = 0;
-          return () => ++id;
-        })(),
         metadata: {
           currentWebview: { label: "main" },
           currentWindow: { label: "main" },
         },
+        transformCallback: (() => {
+          let id = 0;
+          return () => ++id;
+        })(),
       },
     });
   }, config);

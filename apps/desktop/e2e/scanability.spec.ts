@@ -1,6 +1,6 @@
-import { expect, test } from "./test";
 import type { Page } from "@playwright/test";
-import { setupApp } from "./bridge";
+import { setupApp } from "./bridge.ts";
+import { expect, test } from "./test.ts";
 
 /**
  * Viewport-centre of `token`'s first occurrence within a real (non-hunk) diff
@@ -10,14 +10,16 @@ async function tokenCenter(page: Page, section: number, token: string) {
   const rect = await page.evaluate(
     ({ section, token }) => {
       const codes = document.querySelectorAll(
-        `.qf-row[data-file-index="${section}"]:not(.qf-row-hunk) .qf-code`,
+        `.qf-row[data-file-index="${section}"]:not(.qf-row-hunk) .qf-code`
       );
       for (const code of codes) {
         const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
         while (walker.nextNode()) {
           const node = walker.currentNode as Text;
           const i = node.data.indexOf(token);
-          if (i === -1) continue;
+          if (i === -1) {
+            continue;
+          }
           const range = document.createRange();
           range.setStart(node, i);
           range.setEnd(node, i + token.length);
@@ -27,9 +29,11 @@ async function tokenCenter(page: Page, section: number, token: string) {
       }
       return null;
     },
-    { section, token },
+    { section, token }
   );
-  if (!rect) throw new Error(`token not found in diff: ${token}`);
+  if (!rect) {
+    throw new Error(`token not found in diff: ${token}`);
+  }
   return rect;
 }
 
@@ -48,28 +52,32 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
 });
 
-test("a clean rename emphasizes exactly the changed word pieces", async ({ page }) => {
-
+test("a clean rename emphasizes exactly the changed word pieces", async ({
+  page,
+}) => {
   const marks = page.locator('.qf-row[data-file-index="2"] mark.qf-intra-mark');
   await expect(marks).toHaveCount(2);
   expect(await marks.allTextContents()).toEqual(["Count", "Limit"]);
   await expect(
-    page.locator('.qf-row-del[data-file-index="2"] mark.qf-intra-mark'),
+    page.locator('.qf-row-del[data-file-index="2"] mark.qf-intra-mark')
   ).toHaveText("Count");
   await expect(
-    page.locator('.qf-row-add[data-file-index="2"] mark.qf-intra-mark'),
+    page.locator('.qf-row-add[data-file-index="2"] mark.qf-intra-mark')
   ).toHaveText("Limit");
 });
 
-test("a rewrite pair fails the noise guard and renders without emphasis", async ({ page }) => {
+test("a rewrite pair fails the noise guard and renders without emphasis", async ({
+  page,
+}) => {
   await expect(page.locator('.qf-row-del[data-file-index="0"]')).toHaveCount(1);
   await expect(
-    page.locator('.qf-row[data-file-index="0"] mark.qf-intra-mark'),
+    page.locator('.qf-row[data-file-index="0"] mark.qf-intra-mark')
   ).toHaveCount(0);
 });
 
-test("clicking inside an intraline-emphasized token still selects the whole word", async ({ page }) => {
-
+test("clicking inside an intraline-emphasized token still selects the whole word", async ({
+  page,
+}) => {
   const target = page.locator('.qf-row-add[data-file-index="2"]', {
     hasText: "retryLimit",
   });
@@ -80,7 +88,9 @@ test("clicking inside an intraline-emphasized token still selects the whole word
     while (w.nextNode()) {
       const n = w.currentNode as Text;
       const i = n.data.indexOf("retry");
-      if (i === -1) continue;
+      if (i === -1) {
+        continue;
+      }
       const r = document.createRange();
       r.setStart(n, i);
       r.setEnd(n, i + 5);
@@ -98,8 +108,9 @@ test("clicking inside an intraline-emphasized token still selects the whole word
   expect((await marks.allTextContents()).join("")).toBe("retryLimit");
 });
 
-test("indent guides paint on deep lines' code element, and nothing else", async ({ page }) => {
-
+test("indent guides paint on deep lines' code element, and nothing else", async ({
+  page,
+}) => {
   const deep = page
     .locator('.qf-row[data-file-index="2"]:not(.qf-row-hunk)', {
       hasText: "attempt,",
@@ -109,14 +120,14 @@ test("indent guides paint on deep lines' code element, and nothing else", async 
   const style = await deep.evaluate((el) => {
     const s = getComputedStyle(el, "::before");
     return {
-      lvl: (el as HTMLElement).style.getPropertyValue("--qf-lvl"),
       image: s.backgroundImage,
+      lvl: (el as HTMLElement).style.getPropertyValue("--qf-lvl"),
       width: s.width,
     };
   });
   expect(style.lvl).toBe("4");
   expect(style.image).toContain("repeating-linear-gradient");
-  expect(parseFloat(style.width)).toBeGreaterThan(0);
+  expect(Number.parseFloat(style.width)).toBeGreaterThan(0);
 
   const drift = await deep.evaluate((el) => {
     const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
@@ -126,12 +137,12 @@ test("indent guides paint on deep lines' code element, and nothing else", async 
     r.setStart(n, 0);
     r.setEnd(n, 8); // 4 levels × 2-space unit
     const spaces = r.getBoundingClientRect().width;
-    const before = parseFloat(getComputedStyle(el, "::before").width);
+    const before = Number.parseFloat(getComputedStyle(el, "::before").width);
     return Math.abs(before - (spaces - 1));
   });
   expect(drift).toBeLessThan(0.35);
   await expect(
-    page.locator('.qf-row[data-file-index="2"] mark.qf-indent'),
+    page.locator('.qf-row[data-file-index="2"] mark.qf-indent')
   ).toHaveCount(0);
 
   const shallow = page
@@ -149,12 +160,14 @@ test("indent guides paint on deep lines' code element, and nothing else", async 
     .first()
     .locator(".qf-code");
   const flatW = await flat.evaluate(
-    (el) => getComputedStyle(el, "::before").width,
+    (el) => getComputedStyle(el, "::before").width
   );
-  expect(parseFloat(flatW) > 0).toBe(false);
+  expect(Number.parseFloat(flatW) > 0).toBe(false);
 });
 
-test("intraline emphasis is paint-only and survives find marks on top", async ({ page }) => {
+test("intraline emphasis is paint-only and survives find marks on top", async ({
+  page,
+}) => {
   const row = page.locator('.qf-row-add[data-file-index="2"]').first();
   const before = await row.boundingBox();
 
@@ -163,7 +176,7 @@ test("intraline emphasis is paint-only and survives find marks on top", async ({
   await expect(page.locator(".qf-findbar-count")).toHaveText("1/1");
   await expect(page.locator("mark.qf-find-mark")).toHaveCount(2);
   await expect(
-    page.locator('.qf-row[data-file-index="2"] mark.qf-intra-mark'),
+    page.locator('.qf-row[data-file-index="2"] mark.qf-intra-mark')
   ).toHaveCount(2);
 
   const after = await row.boundingBox();
@@ -174,14 +187,16 @@ test("intraline emphasis is paint-only and survives find marks on top", async ({
     .first()
     .evaluate((el) => {
       const s = getComputedStyle(el);
-      return { padding: s.padding, margin: s.margin, border: s.borderWidth };
+      return { border: s.borderWidth, margin: s.margin, padding: s.padding };
     });
-  expect(style).toEqual({ padding: "0px", margin: "0px", border: "0px" });
+  expect(style).toEqual({ border: "0px", margin: "0px", padding: "0px" });
 
   await page.keyboard.press("Escape");
 });
 
-test("overview ruler: find ticks map matches across the whole PR", async ({ page }) => {
+test("overview ruler: find ticks map matches across the whole PR", async ({
+  page,
+}) => {
   await expect(page.locator(".qf-ruler")).toHaveCount(0);
 
   await page.keyboard.press("Control+f");
@@ -192,7 +207,7 @@ test("overview ruler: find ticks map matches across the whole PR", async ({ page
   await expect(page.locator(".qf-ruler-current")).toHaveCount(1);
 
   const ys = await ticks.evaluateAll((els) =>
-    els.map((el) => el.getBoundingClientRect().y),
+    els.map((el) => el.getBoundingClientRect().y)
   );
   expect([...ys]).toEqual([...ys].sort((a, b) => a - b));
   expect(ys[ys.length - 1] - ys[0]).toBeGreaterThan(50);
@@ -201,7 +216,9 @@ test("overview ruler: find ticks map matches across the whole PR", async ({ page
   await expect(page.locator(".qf-ruler")).toHaveCount(0);
 });
 
-test("overview ruler: occurrence ticks on click, cleared by a blank click", async ({ page }) => {
+test("overview ruler: occurrence ticks on click, cleared by a blank click", async ({
+  page,
+}) => {
   await clickToken(page, 1, "gamma");
   await expect(page.locator("mark.qf-occ-mark")).toHaveCount(2);
   await expect(page.locator(".qf-ruler-tick.qf-ruler-occ")).toHaveCount(2);
@@ -216,7 +233,9 @@ test("overview ruler: occurrence ticks on click, cleared by a blank click", asyn
   await expect(page.locator(".qf-ruler")).toHaveCount(0);
 });
 
-test("occurrence navigation: n/p and mark clicks jump between occurrences", async ({ page }) => {
+test("occurrence navigation: n/p and mark clicks jump between occurrences", async ({
+  page,
+}) => {
   await clickToken(page, 1, "gamma");
   const marks = page.locator("mark.qf-occ-mark");
   await expect(marks).toHaveCount(2);
@@ -234,9 +253,15 @@ test("occurrence navigation: n/p and mark clicks jump between occurrences", asyn
   await expect(flash).toContainText("return gamma");
 
   const markBox = (await marks.nth(1).boundingBox())!;
-  await page.mouse.move(markBox.x + markBox.width / 2, markBox.y + markBox.height / 2);
+  await page.mouse.move(
+    markBox.x + markBox.width / 2,
+    markBox.y + markBox.height / 2
+  );
   await page.waitForTimeout(100); // settle the hover-driven row re-render
-  await page.mouse.click(markBox.x + markBox.width / 2, markBox.y + markBox.height / 2);
+  await page.mouse.click(
+    markBox.x + markBox.width / 2,
+    markBox.y + markBox.height / 2
+  );
   await expect(flash).toContainText("const gamma");
   await expect(marks).toHaveCount(2);
 

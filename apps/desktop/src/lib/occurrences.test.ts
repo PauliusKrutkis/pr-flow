@@ -3,7 +3,7 @@ import {
   occurrenceMatches,
   occurrenceRangesInLine,
   occurrenceSpecFromSelection,
-} from "./occurrences";
+} from "./occurrences.ts";
 
 describe("occurrenceSpecFromSelection", () => {
   it("accepts a word selection and asks for whole-word matching", () => {
@@ -80,7 +80,7 @@ describe("occurrenceRangesInLine", () => {
       occurrenceRangesInLine("q.trim(); return q.trim();", {
         query: "q.trim",
         wholeWord: false,
-      }),
+      })
     ).toEqual([
       [0, 6],
       [17, 23],
@@ -89,13 +89,13 @@ describe("occurrenceRangesInLine", () => {
 
   it("matching is case-sensitive, the editor convention", () => {
     expect(
-      occurrenceRangesInLine("Gamma gamma", { query: "gamma", wholeWord: true }),
+      occurrenceRangesInLine("Gamma gamma", { query: "gamma", wholeWord: true })
     ).toEqual([[6, 11]]);
   });
 
   it("finds every occurrence on a line, left to right", () => {
     expect(
-      occurrenceRangesInLine("foo foo foo", { query: "foo", wholeWord: true }),
+      occurrenceRangesInLine("foo foo foo", { query: "foo", wholeWord: true })
     ).toHaveLength(3);
   });
 });
@@ -112,12 +112,15 @@ describe("occurrenceMatches", () => {
   };
 
   it("walks the whole patch in document order with row anchors", () => {
-    const matches = occurrenceMatches(file, { query: "gamma", wholeWord: true });
+    const matches = occurrenceMatches(file, {
+      query: "gamma",
+      wholeWord: true,
+    });
     expect(matches).toEqual([
-      { anchor: "RIGHT:1", start: 6, end: 11 },
-      { anchor: "LEFT:2", start: 4, end: 9 },
-      { anchor: "RIGHT:2", start: 4, end: 9 },
-      { anchor: "RIGHT:2", start: 11, end: 16 },
+      { anchor: "RIGHT:1", end: 11, start: 6 },
+      { anchor: "LEFT:2", end: 9, start: 4 },
+      { anchor: "RIGHT:2", end: 9, start: 4 },
+      { anchor: "RIGHT:2", end: 16, start: 11 },
     ]);
   });
 
@@ -125,11 +128,16 @@ describe("occurrenceMatches", () => {
     const noisy = {
       patch: "@@ -1,1 +1,1 @@ fn gamma() {\n+gammaray(gamma);",
     };
-    const matches = occurrenceMatches(noisy, { query: "gamma", wholeWord: true });
-    expect(matches).toEqual([{ anchor: "RIGHT:1", start: 9, end: 14 }]);
+    const matches = occurrenceMatches(noisy, {
+      query: "gamma",
+      wholeWord: true,
+    });
+    expect(matches).toEqual([{ anchor: "RIGHT:1", end: 14, start: 9 }]);
   });
 
   it("handles missing patches", () => {
-    expect(occurrenceMatches({}, { query: "xy", wholeWord: false })).toEqual([]);
+    expect(occurrenceMatches({}, { query: "xy", wholeWord: false })).toEqual(
+      []
+    );
   });
 });

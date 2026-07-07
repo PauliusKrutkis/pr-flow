@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
-import { useKeyboard } from "./KeyboardProvider";
-import type { Binding } from "./types";
+import { useKeyboard } from "./KeyboardProvider.tsx";
+import type { Binding } from "./types.ts";
 
 interface Options {
-  enabled?: boolean;
   activate?: boolean;
+  enabled?: boolean;
 }
 
 /**
@@ -15,7 +15,7 @@ interface Options {
 export function useHotkeys(
   scope: string,
   bindings: Binding[],
-  options: Options = {},
+  options: Options = {}
 ): void {
   const { enabled = true, activate = true } = options;
   const { registerSource, pushScope } = useKeyboard();
@@ -23,7 +23,9 @@ export function useHotkeys(
   ref.current = bindings;
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      return;
+    }
     const unregister = registerSource(scope, () => ref.current);
     const pop = activate ? pushScope(scope) : undefined;
     return () => {

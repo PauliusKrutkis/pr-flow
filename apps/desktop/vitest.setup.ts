@@ -6,17 +6,23 @@
 if (typeof globalThis.localStorage === "undefined") {
   const store = new Map<string, string>();
   const ls: Storage = {
-    getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => void store.set(k, String(v)),
-    removeItem: (k: string) => void store.delete(k),
     clear: () => store.clear(),
+    getItem: (k: string) => store.get(k) ?? null,
     key: (i: number) => [...store.keys()][i] ?? null,
     get length() {
       return store.size;
     },
+    removeItem: (k: string) => void store.delete(k),
+    setItem: (k: string, v: string) => void store.set(k, String(v)),
   };
-  Object.defineProperty(globalThis, "localStorage", { value: ls, writable: true });
+  Object.defineProperty(globalThis, "localStorage", {
+    value: ls,
+    writable: true,
+  });
   if (typeof window !== "undefined") {
-    Object.defineProperty(window, "localStorage", { value: ls, writable: true });
+    Object.defineProperty(window, "localStorage", {
+      value: ls,
+      writable: true,
+    });
   }
 }

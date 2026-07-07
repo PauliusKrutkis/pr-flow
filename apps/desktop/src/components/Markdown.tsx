@@ -1,18 +1,18 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { Check, Copy } from "lucide-react";
 import {
+  type ComponentPropsWithoutRef,
+  type MouseEvent,
   useEffect,
   useRef,
   useState,
-  type ComponentPropsWithoutRef,
-  type MouseEvent,
 } from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkBreaks from "remark-breaks";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
-import { openUrl } from "@tauri-apps/plugin-opener";
-import { Check, Copy } from "lucide-react";
-import { cn } from "../lib/cn";
+import remarkBreaks from "remark-breaks";
+import remarkGfm from "remark-gfm";
+import { cn } from "../lib/cn.ts";
 
 /**
  * GitHub PR/issue bodies routinely contain raw HTML (Dependabot's <details>
@@ -35,7 +35,9 @@ type AnchorProps = ComponentPropsWithoutRef<"a"> & { node?: unknown };
 function Anchor({ href, children, node: _node, ...rest }: AnchorProps) {
   const onClick = (e: MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
-    if (href) void openUrl(href);
+    if (href) {
+      void openUrl(href);
+    }
   };
   return (
     <a {...rest} href={href} onClick={onClick}>
@@ -48,21 +50,29 @@ function Anchor({ href, children, node: _node, ...rest }: AnchorProps) {
 function fenceLang(node: unknown): string | null {
   const cls = (node as { properties?: { className?: unknown } } | undefined)
     ?.properties?.className;
-  if (!Array.isArray(cls)) return null;
+  if (!Array.isArray(cls)) {
+    return null;
+  }
   const lang = cls.find(
-    (c): c is string => typeof c === "string" && c.startsWith("language-"),
+    (c): c is string => typeof c === "string" && c.startsWith("language-")
   );
   return lang ? lang.slice("language-".length) : null;
 }
 
 function isSuggestionLang(lang: string | null): boolean {
-  return lang != null && (lang === "suggestion" || lang.startsWith("suggestion:"));
+  return (
+    lang != null && (lang === "suggestion" || lang.startsWith("suggestion:"))
+  );
 }
 
 /** Flatten a code element's children to the raw fenced text. */
 function codeText(children: unknown): string {
-  if (typeof children === "string") return children;
-  if (Array.isArray(children)) return children.map(codeText).join("");
+  if (typeof children === "string") {
+    return children;
+  }
+  if (Array.isArray(children)) {
+    return children.map(codeText).join("");
+  }
   return "";
 }
 
@@ -74,11 +84,14 @@ function codeText(children: unknown): string {
 function SuggestionCard({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, []);
+  useEffect(
+    () => () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    },
+    []
+  );
 
   const body = text.replace(/\n$/, "");
   const lines = body.split("\n");
@@ -87,22 +100,28 @@ function SuggestionCard({ text }: { text: string }) {
       <div className="md-suggestion-head">
         <span>Suggested change</span>
         <button
-          type="button"
           className={cn("md-suggestion-copy", copied && "md-suggestion-copied")}
           onClick={() => {
             void navigator.clipboard?.writeText(body).catch(() => {});
             setCopied(true);
-            if (timerRef.current) clearTimeout(timerRef.current);
+            if (timerRef.current) {
+              clearTimeout(timerRef.current);
+            }
             timerRef.current = setTimeout(() => setCopied(false), 1200);
           }}
+          type="button"
         >
-          {copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
+          {copied ? (
+            <Check aria-hidden size={12} />
+          ) : (
+            <Copy aria-hidden size={12} />
+          )}
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
       <div className="md-suggestion-body">
         {lines.map((line, i) => (
-          <div key={i} className="md-suggestion-line">
+          <div className="md-suggestion-line" key={i}>
             {line}
           </div>
         ))}
@@ -118,7 +137,9 @@ type PreProps = ComponentPropsWithoutRef<"pre"> & {
 /** Unwrap suggestion fences from <pre> so the card isn't nested in a code box. */
 function Pre({ node, children, ...rest }: PreProps) {
   const codeNode = node?.children?.[0];
-  if (isSuggestionLang(fenceLang(codeNode))) return <>{children}</>;
+  if (isSuggestionLang(fenceLang(codeNode))) {
+    return <>{children}</>;
+  }
   return <pre {...rest}>{children}</pre>;
 }
 
@@ -142,13 +163,15 @@ export function Markdown({
   children: string;
   className?: string;
 }) {
-  if (!children) return null;
+  if (!children) {
+    return null;
+  }
   return (
     <div className={cn("md", className)}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkBreaks]}
+        components={{ a: Anchor, code: Code, pre: Pre }}
         rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
-        components={{ a: Anchor, pre: Pre, code: Code }}
+        remarkPlugins={[remarkGfm, remarkBreaks]}
       >
         {children}
       </ReactMarkdown>

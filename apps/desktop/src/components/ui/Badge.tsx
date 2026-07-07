@@ -1,16 +1,16 @@
 import type { ReactNode } from "react";
-import { cn } from "../../lib/cn";
+import { cn } from "../../lib/cn.ts";
 
 type Tone = "default" | "accent" | "success" | "danger" | "warning" | "muted";
 
 /** Map tones onto the shared Quiet pill variants. */
 const toneClasses: Record<Tone, string> = {
-  default: "q-pill-muted",
   accent: "q-pill-commented",
-  success: "q-pill-open",
   danger: "q-pill-changes",
-  warning: "q-pill-draft",
+  default: "q-pill-muted",
   muted: "q-pill-muted",
+  success: "q-pill-open",
+  warning: "q-pill-draft",
 };
 
 export function Badge({
@@ -23,6 +23,8 @@ export function Badge({
   className?: string;
 }) {
   return (
-    <span className={cn("q-pill", toneClasses[tone], className)}>{children}</span>
+    <span className={cn("q-pill", toneClasses[tone], className)}>
+      {children}
+    </span>
   );
 }

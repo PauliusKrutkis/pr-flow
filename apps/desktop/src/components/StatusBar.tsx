@@ -24,12 +24,12 @@ const HINTS: Record<string, Hint[]> = {
 };
 
 const KEY_LABEL: Record<string, string> = {
+  down: "↓",
   enter: "↵",
   esc: "Esc",
-  up: "↑",
-  down: "↓",
   mod: "⌘",
   space: "␣",
+  up: "↑",
 };
 
 function display(key: string): string {
@@ -56,10 +56,10 @@ function HintGroup({ hint }: { hint: Hint }) {
 export function StatusBar({ baseScope }: { baseScope: string }) {
   const hints = HINTS[baseScope] ?? [];
   return (
-    <div className="flex shrink-0 items-center justify-between gap-4 border-t border-line bg-surface px-4 py-1.5 text-[11px]">
+    <div className="flex shrink-0 items-center justify-between gap-4 border-line border-t bg-surface px-4 py-1.5 text-[11px]">
       <div className="flex min-w-0 items-center gap-4 overflow-x-auto">
         {hints.map((h) => (
-          <HintGroup key={h.label} hint={h} />
+          <HintGroup hint={h} key={h.label} />
         ))}
       </div>
       <div className="flex shrink-0 items-center gap-4">

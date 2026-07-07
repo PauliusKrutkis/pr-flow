@@ -30,7 +30,8 @@ export async function applyZoom(factor: number): Promise<void> {
   try {
     await getCurrentWebview().setZoom(factor);
   } catch {
-    (document.documentElement.style as CSSStyleDeclaration & { zoom: string }).zoom =
-      factor === 1 ? "" : String(factor);
+    (
+      document.documentElement.style as CSSStyleDeclaration & { zoom: string }
+    ).zoom = factor === 1 ? "" : String(factor);
   }
 }

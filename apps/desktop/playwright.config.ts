@@ -13,27 +13,27 @@ import { defineConfig } from "@playwright/test";
  * Override with E2E_PORT to run suites from several checkouts in parallel.
  */
 
-const port = Number(process.env.E2E_PORT ?? 14205);
+const port = Number(process.env.E2E_PORT ?? 14_205);
 
 export default defineConfig({
-  testDir: "./e2e",
-  timeout: 15_000,
-  use: {
-    baseURL: `http://localhost:${port}`,
-    viewport: { width: 1280, height: 800 },
-  },
   projects: [
     { name: "chromium", use: { browserName: "chromium" } },
     ...(process.env.CI || process.env.E2E_WEBKIT
       ? [
           {
             name: "webkit-perf",
-            use: { browserName: "webkit" as const },
             testMatch: /(find|open|scroll)-perf\.spec\.ts/,
+            use: { browserName: "webkit" as const },
           },
         ]
       : []),
   ],
+  testDir: "./e2e",
+  timeout: 15_000,
+  use: {
+    baseURL: `http://localhost:${port}`,
+    viewport: { height: 800, width: 1280 },
+  },
   webServer: {
     command: `pnpm exec vite --port ${port} --strictPort`,
     port,

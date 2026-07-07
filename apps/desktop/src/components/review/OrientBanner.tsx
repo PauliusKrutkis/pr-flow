@@ -1,5 +1,5 @@
 import { GitPullRequestArrow, X } from "lucide-react";
-import { cn } from "../../lib/cn";
+import { cn } from "../../lib/cn.ts";
 
 /**
  * A slim, inset banner at the top of the diff area. Two uses:
@@ -21,22 +21,22 @@ export function OrientBanner({
     <div
       className={cn(
         "qb-banner mx-6 my-2 shrink-0",
-        tone === "update" ? "qb-banner-update" : "qb-banner-info",
+        tone === "update" ? "qb-banner-update" : "qb-banner-info"
       )}
       role="status"
     >
       <span className="qb-banner-icon">
-        <GitPullRequestArrow size={15} aria-hidden />
+        <GitPullRequestArrow aria-hidden size={15} />
       </span>
       <span className="qb-banner-text">{message}</span>
       {onDismiss && (
         <button
-          type="button"
-          onClick={onDismiss}
-          className="qb-x q-focus"
           aria-label="Dismiss"
+          className="qb-x q-focus"
+          onClick={onDismiss}
+          type="button"
         >
-          <X size={14} aria-hidden />
+          <X aria-hidden size={14} />
         </button>
       )}
     </div>

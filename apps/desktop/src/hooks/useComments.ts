@@ -1,8 +1,12 @@
 import { useMutation } from "@tanstack/react-query";
-import { api } from "../lib/api";
-import { queryClient, queryKeys } from "../lib/queryClient";
-import { useAppStore } from "../store/appStore";
-import type { PullRequestDetail, ReviewComment, ReviewEvent } from "../types";
+import { api } from "../lib/api.ts";
+import { queryClient, queryKeys } from "../lib/queryClient.ts";
+import { useAppStore } from "../store/appStore.ts";
+import type {
+  PullRequestDetail,
+  ReviewComment,
+  ReviewEvent,
+} from "../types.ts";
 
 /**
  * Comment mutations for a PR — OPTIMISTIC by design principle ("no loading
@@ -26,45 +30,54 @@ function optimisticComment(c: {
   const s = useAppStore.getState();
   const account = s.accounts.find((a) => a.id === s.activeAccountId);
   return {
+    body: c.body,
+    createdAt: new Date().toISOString(),
+    diffHunk: "",
     id: tempId--,
-    path: c.path,
+    inReplyToId: c.inReplyToId,
     line: c.line,
     originalLine: null,
+    path: c.path,
+    resolved: c.resolved ?? false,
     side: c.side,
-    diffHunk: "",
-    body: c.body,
+    threadId: c.threadId ?? null,
     user: account?.login ?? "you",
     userAvatarUrl: account?.avatarUrl ?? "",
-    createdAt: new Date().toISOString(),
-    inReplyToId: c.inReplyToId,
-    threadId: c.threadId ?? null,
-    resolved: c.resolved ?? false,
   };
 }
 
 export function useCommentMutations(
   owner: string,
   repo: string,
-  number: number,
+  number: number
 ) {
   const detailKey = queryKeys.prDetail(owner, repo, number);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: detailKey });
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: detailKey });
 
   const insertOptimistic = async (comment: ReviewComment) => {
     await queryClient.cancelQueries({ queryKey: detailKey });
     const before = queryClient.getQueryData<PullRequestDetail>(detailKey);
     queryClient.setQueryData<PullRequestDetail>(detailKey, (cur) =>
-      cur ? { ...cur, comments: [...cur.comments, comment] } : cur,
+      cur ? { ...cur, comments: [...cur.comments, comment] } : cur
     );
     return before;
   };
 
-  const rollback = (before: PullRequestDetail | undefined, what: string, e: unknown) => {
-    if (before) queryClient.setQueryData(detailKey, before);
+  const rollback = (
+    before: PullRequestDetail | undefined,
+    what: string,
+    e: unknown
+  ) => {
+    if (before) {
+      queryClient.setQueryData(detailKey, before);
+    }
     useAppStore
       .getState()
-      .setFlash(`${what} didn't post on ${owner}/${repo}#${number} — ${String(e)}`);
+      .setFlash(
+        `${what} didn't post on ${owner}/${repo}#${number} — ${String(e)}`
+      );
   };
 
   const addReviewComment = useMutation({
@@ -75,47 +88,47 @@ export function useCommentMutations(
       line: number;
       side: string;
       startLine?: number;
-    }) => api.createReviewComment({ owner, repo, number, ...args }),
+    }) => api.createReviewComment({ number, owner, repo, ...args }),
+    onError: (e, _args, before) => rollback(before, "Comment", e),
     onMutate: (args) =>
       insertOptimistic(
         optimisticComment({
-          path: args.path,
-          line: args.line,
-          side: args.side,
           body: args.body,
           inReplyToId: null,
-        }),
+          line: args.line,
+          path: args.path,
+          side: args.side,
+        })
       ),
-    onError: (e, _args, before) => rollback(before, "Comment", e),
     onSettled: invalidate,
   });
 
   const reply = useMutation({
     mutationFn: (args: { body: string; inReplyTo: number }) =>
-      api.replyToReviewComment({ owner, repo, number, ...args }),
+      api.replyToReviewComment({ number, owner, repo, ...args }),
+    onError: (e, _args, before) => rollback(before, "Reply", e),
     onMutate: (args) => {
-
       const detail = queryClient.getQueryData<PullRequestDetail>(detailKey);
       const root = detail?.comments.find((c) => c.id === args.inReplyTo);
       return insertOptimistic(
         optimisticComment({
-          path: root?.path ?? "",
-          line: null,
-          side: root?.side ?? "RIGHT",
           body: args.body,
           inReplyToId: args.inReplyTo,
-          threadId: root?.threadId,
+          line: null,
+          path: root?.path ?? "",
           resolved: root?.resolved,
-        }),
+          side: root?.side ?? "RIGHT",
+          threadId: root?.threadId,
+        })
       );
     },
-    onError: (e, _args, before) => rollback(before, "Reply", e),
     onSettled: invalidate,
   });
 
   const addIssueComment = useMutation({
     mutationFn: (args: { body: string }) =>
-      api.createIssueComment({ owner, repo, number, ...args }),
+      api.createIssueComment({ number, owner, repo, ...args }),
+    onError: (e, _args, before) => rollback(before, "Comment", e),
     onMutate: async (args) => {
       await queryClient.cancelQueries({ queryKey: detailKey });
       const before = queryClient.getQueryData<PullRequestDetail>(detailKey);
@@ -128,25 +141,26 @@ export function useCommentMutations(
               issueComments: [
                 ...(cur.issueComments ?? []),
                 {
-                  id: tempId--,
                   body: args.body,
+                  createdAt: new Date().toISOString(),
+                  id: tempId--,
                   user: account?.login ?? "you",
                   userAvatarUrl: account?.avatarUrl ?? "",
-                  createdAt: new Date().toISOString(),
                 },
               ],
             }
-          : cur,
+          : cur
       );
       return before;
     },
-    onError: (e, _args, before) => rollback(before, "Comment", e),
     onSettled: invalidate,
   });
 
   const resolveThread = useMutation({
     mutationFn: (args: { threadId: string; resolved: boolean }) =>
-      api.resolveThread({ owner, repo, number, ...args }),
+      api.resolveThread({ number, owner, repo, ...args }),
+    onError: (e, args, before) =>
+      rollback(before, args.resolved ? "Resolve" : "Unresolve", e),
     onMutate: async (args) => {
       await queryClient.cancelQueries({ queryKey: detailKey });
       const before = queryClient.getQueryData<PullRequestDetail>(detailKey);
@@ -157,15 +171,13 @@ export function useCommentMutations(
               comments: cur.comments.map((c) =>
                 c.threadId === args.threadId
                   ? { ...c, resolved: args.resolved }
-                  : c,
+                  : c
               ),
             }
-          : cur,
+          : cur
       );
       return before;
     },
-    onError: (e, args, before) =>
-      rollback(before, args.resolved ? "Resolve" : "Unresolve", e),
     onSettled: invalidate,
   });
 
@@ -175,9 +187,15 @@ export function useCommentMutations(
       body: string;
       commitId: string;
       comments: { path: string; line: number; side: string; body: string }[];
-    }) => api.submitReview({ owner, repo, number, ...args }),
+    }) => api.submitReview({ number, owner, repo, ...args }),
     onSettled: invalidate,
   });
 
-  return { addReviewComment, reply, addIssueComment, resolveThread, submitReview };
+  return {
+    addIssueComment,
+    addReviewComment,
+    reply,
+    resolveThread,
+    submitReview,
+  };
 }

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import { api } from "../lib/api";
-import { normalizeViewedMap } from "../lib/viewedFingerprint";
-import { useAppStore } from "../store/appStore";
+import { api } from "../lib/api.ts";
+import { normalizeViewedMap } from "../lib/viewedFingerprint.ts";
+import { useAppStore } from "../store/appStore.ts";
 
 /**
  * Loads persisted viewed-file state into the store once on startup.

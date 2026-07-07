@@ -11,13 +11,13 @@
  * identity; the per-keystroke cost is the sweep itself plus O(hits).
  */
 
-import { parsePatch, rowAnchor, type DiffRow } from "./diff";
+import { type DiffRow, parsePatch, rowAnchor } from "./diff.ts";
 
 export interface FindMatch {
-  fileIndex: number;
   anchor: string;
-  start: number;
   end: number;
+  fileIndex: number;
+  start: number;
 }
 
 export interface FindOptions {
@@ -41,13 +41,19 @@ const MAX_MATCHES = 5000;
 export function findMatchRangesInLine(
   text: string,
   query: string,
-  caseSensitive = false,
+  caseSensitive = false
 ): Array<[number, number]> {
-  if (!query || !text) return [];
+  if (!(query && text)) {
+    return [];
+  }
   const hay = caseSensitive ? text : text.toLowerCase();
   const needle = caseSensitive ? query : query.toLowerCase();
   const out: Array<[number, number]> = [];
-  for (let i = hay.indexOf(needle); i !== -1; i = hay.indexOf(needle, i + needle.length)) {
+  for (
+    let i = hay.indexOf(needle);
+    i !== -1;
+    i = hay.indexOf(needle, i + needle.length)
+  ) {
     out.push([i, i + needle.length]);
   }
   return out;
@@ -65,9 +71,13 @@ const lowerCache = new Map<string, string>();
 
 function lowered(patch: string): string {
   const hit = lowerCache.get(patch);
-  if (hit !== undefined) return hit;
+  if (hit !== undefined) {
+    return hit;
+  }
   const low = patch.toLowerCase();
-  if (lowerCache.size >= CACHE_MAX) lowerCache.clear();
+  if (lowerCache.size >= CACHE_MAX) {
+    lowerCache.clear();
+  }
   lowerCache.set(patch, low);
   return low;
 }
@@ -83,12 +93,16 @@ const lineStartCache = new Map<string, number[]>();
 
 function lineStarts(text: string): number[] {
   const hit = lineStartCache.get(text);
-  if (hit !== undefined) return hit;
+  if (hit !== undefined) {
+    return hit;
+  }
   const out = [0];
   for (let i = text.indexOf("\n"); i !== -1; i = text.indexOf("\n", i + 1)) {
     out.push(i + 1);
   }
-  if (lineStartCache.size >= CACHE_MAX) lineStartCache.clear();
+  if (lineStartCache.size >= CACHE_MAX) {
+    lineStartCache.clear();
+  }
   lineStartCache.set(text, out);
   return out;
 }
@@ -105,10 +119,14 @@ const lineAnchorCache = new Map<string, ReadonlyArray<string | null>>();
 
 function lineAnchors(patch: string): ReadonlyArray<string | null> {
   const hit = lineAnchorCache.get(patch);
-  if (hit !== undefined) return hit;
+  if (hit !== undefined) {
+    return hit;
+  }
   const rows: DiffRow[] = [];
   for (const hunk of parsePatch(patch)) {
-    for (const row of hunk.rows) rows.push(row);
+    for (const row of hunk.rows) {
+      rows.push(row);
+    }
   }
   const out: Array<string | null> = [];
   let ri = 0;
@@ -118,9 +136,11 @@ function lineAnchors(patch: string): ReadonlyArray<string | null> {
       continue;
     }
     const row = rows[ri++];
-    out.push(row !== undefined ? rowAnchor(row) : null);
+    out.push(row === undefined ? null : rowAnchor(row));
   }
-  if (lineAnchorCache.size >= CACHE_MAX) lineAnchorCache.clear();
+  if (lineAnchorCache.size >= CACHE_MAX) {
+    lineAnchorCache.clear();
+  }
   lineAnchorCache.set(patch, out);
   return out;
 }
@@ -136,9 +156,11 @@ function lineAnchors(patch: string): ReadonlyArray<string | null> {
 export function patchMayMatch(
   patch: string | null | undefined,
   query: string,
-  caseSensitive = false,
+  caseSensitive = false
 ): boolean {
-  if (!patch || !query) return false;
+  if (!(patch && query)) {
+    return false;
+  }
   return caseSensitive
     ? patch.includes(query)
     : lowered(patch).includes(query.toLowerCase());
@@ -154,9 +176,11 @@ export function patchMayMatch(
 export function findInDiff(
   files: ReadonlyArray<{ patch?: string | null }>,
   query: string,
-  opts: FindOptions = {},
+  opts: FindOptions = {}
 ): FindMatch[] {
-  if (!query || query.includes("\n")) return [];
+  if (!query || query.includes("\n")) {
+    return [];
+  }
   const caseSensitive = opts.caseSensitive ?? false;
   const max = opts.maxMatches ?? MAX_MATCHES;
   const needle = caseSensitive ? query : query.toLowerCase();
@@ -164,15 +188,21 @@ export function findInDiff(
 
   for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
     const patch = files[fileIndex].patch;
-    if (!patch) continue;
-    if (!patchMayMatch(patch, query, caseSensitive)) continue;
+    if (!patch) {
+      continue;
+    }
+    if (!patchMayMatch(patch, query, caseSensitive)) {
+      continue;
+    }
     const hay = caseSensitive ? patch : lowered(patch);
     const starts = lineStarts(hay);
     const anchors = lineAnchors(patch);
 
     let li = 0;
     for (let o = hay.indexOf(needle); o !== -1; ) {
-      while (li + 1 < starts.length && starts[li + 1] <= o) li++;
+      while (li + 1 < starts.length && starts[li + 1] <= o) {
+        li++;
+      }
       const anchor = anchors[li];
 
       const col = o - starts[li] - 1;
@@ -180,8 +210,10 @@ export function findInDiff(
         o = hay.indexOf(needle, o + 1);
         continue;
       }
-      out.push({ fileIndex, anchor, start: col, end: col + needle.length });
-      if (out.length >= max) return out;
+      out.push({ anchor, end: col + needle.length, fileIndex, start: col });
+      if (out.length >= max) {
+        return out;
+      }
       o = hay.indexOf(needle, o + needle.length);
     }
   }

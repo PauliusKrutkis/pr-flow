@@ -17,9 +17,13 @@ export const test = base.extend<{ pageErrorGuard: void }>({
         errors.push(`pageerror: ${err.message}`);
       });
       page.on("console", (msg) => {
-        if (msg.type() !== "error") return;
+        if (msg.type() !== "error") {
+          return;
+        }
         const text = msg.text();
-        if (text.startsWith("Failed to load resource")) return;
+        if (text.startsWith("Failed to load resource")) {
+          return;
+        }
         errors.push(`console.error: ${text}`);
       });
       await use();

@@ -9,7 +9,7 @@
  * clicks, or the mark layers.
  */
 
-import type { DiffHunk } from "./diff";
+import type { DiffHunk } from "./diff.ts";
 
 export interface IndentUnit {
   ch: number;
@@ -35,17 +35,25 @@ const LEADING_WS = /^[\t ]*/;
  * when nothing in the patch is indented.
  */
 export function detectIndentUnit(hunks: DiffHunk[]): IndentUnit {
-  let minSpaces = Infinity;
+  let minSpaces = Number.POSITIVE_INFINITY;
   for (const hunk of hunks) {
     for (const row of hunk.rows) {
-      if (row.type === "hunk") continue;
+      if (row.type === "hunk") {
+        continue;
+      }
       const ws = LEADING_WS.exec(row.content)![0];
-      if (ws.length === 0 || ws.length === row.content.length) continue;
-      if (ws.includes("\t")) return TAB_UNIT;
+      if (ws.length === 0 || ws.length === row.content.length) {
+        continue;
+      }
+      if (ws.includes("\t")) {
+        return TAB_UNIT;
+      }
       minSpaces = Math.min(minSpaces, ws.length);
     }
   }
-  if (!Number.isFinite(minSpaces)) return { ch: 2, chars: 2 };
+  if (!Number.isFinite(minSpaces)) {
+    return { ch: 2, chars: 2 };
+  }
   const unit = minSpaces >= 8 ? 8 : minSpaces >= 4 ? 4 : 2;
   return { ch: unit, chars: unit };
 }
@@ -61,17 +69,23 @@ export function detectIndentUnit(hunks: DiffHunk[]): IndentUnit {
  */
 export function guideLevelsForHunk(
   rows: ReadonlyArray<{ type: string; content: string }>,
-  unit: IndentUnit,
+  unit: IndentUnit
 ): Array<number | null> {
   const own = rows.map((row) => {
-    if (row.type === "hunk") return null;
+    if (row.type === "hunk") {
+      return null;
+    }
     const ws = LEADING_WS.exec(row.content)![0];
-    if (ws.length === row.content.length) return null;
+    if (ws.length === row.content.length) {
+      return null;
+    }
     return Math.floor(ws.length / unit.chars);
   });
   const out: Array<number | null> = own.slice();
   for (let i = 0; i < rows.length; i++) {
-    if (rows[i].type === "hunk" || own[i] !== null) continue;
+    if (rows[i].type === "hunk" || own[i] !== null) {
+      continue;
+    }
     let prev: number | null = null;
     for (let j = i - 1; j >= 0 && rows[j].type !== "hunk"; j--) {
       if (own[j] !== null) {

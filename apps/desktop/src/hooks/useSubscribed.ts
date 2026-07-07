@@ -1,8 +1,8 @@
-import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "../lib/api";
-import { queryClient, queryKeys } from "../lib/queryClient";
-import type { InboxBucket } from "../types";
+import { useEffect } from "react";
+import { api } from "../lib/api.ts";
+import { queryClient, queryKeys } from "../lib/queryClient.ts";
+import type { InboxBucket } from "../types.ts";
 
 /**
  * Open PRs across the watched repositories (the "Watching" tab). Seeds from
@@ -17,7 +17,7 @@ export function useSubscribed() {
         if (data) {
           queryClient.setQueryData<InboxBucket>(
             queryKeys.subscribed,
-            (cur) => cur ?? data,
+            (cur) => cur ?? data
           );
         }
       })
@@ -25,8 +25,8 @@ export function useSubscribed() {
   }, []);
 
   return useQuery({
-    queryKey: queryKeys.subscribed,
     queryFn: () => api.listSubscribed(),
+    queryKey: queryKeys.subscribed,
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
   });
@@ -35,8 +35,8 @@ export function useSubscribed() {
 /** The watched-repo list itself (for the manage dialog). */
 export function useWatchedRepos() {
   return useQuery({
-    queryKey: queryKeys.watchedRepos,
     queryFn: () => api.getWatchedRepos(),
-    staleTime: Infinity,
+    queryKey: queryKeys.watchedRepos,
+    staleTime: Number.POSITIVE_INFINITY,
   });
 }
