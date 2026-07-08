@@ -7,6 +7,7 @@ import {
   type TokenProvider,
   useTokenGate,
 } from "../hooks/use-token-gate.ts";
+import { cn } from "../lib/cn.ts";
 import { Spinner } from "./ui/spinner.tsx";
 
 function GitHubMark() {
@@ -90,7 +91,7 @@ function IdentityPanel({
   return (
     <>
       <fieldset className="qg-stack">
-        <legend className="qg-label">Sign in</legend>
+        <legend className="sr-only">Sign in</legend>
         <button
           className="qg-row q-focus"
           disabled={disabled}
@@ -331,9 +332,9 @@ function TokenPanel({
   return (
     <>
       <fieldset className="qa-seg mb-4">
-        <legend className="qg-label">Provider</legend>
+        <legend className="sr-only">Provider</legend>
         <label
-          className={`qa-seg-btn${tokenProvider === "github" ? "qa-seg-on" : ""}`}
+          className={cn("qa-seg-btn", tokenProvider === "github" && "qa-seg-on")}
         >
           <input
             checked={tokenProvider === "github"}
@@ -346,7 +347,7 @@ function TokenPanel({
           <GitHubMark /> GitHub
         </label>
         <label
-          className={`qa-seg-btn${tokenProvider === "gitlab" ? "qa-seg-on" : ""}`}
+          className={cn("qa-seg-btn", tokenProvider === "gitlab" && "qa-seg-on")}
         >
           <input
             checked={tokenProvider === "gitlab"}

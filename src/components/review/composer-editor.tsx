@@ -12,6 +12,7 @@ import {
   useInsertionEffect,
   useState,
 } from "react";
+import { cn } from "../../lib/cn.ts";
 import { Kbd } from "../ui/kbd.tsx";
 
 export interface ComposerEditorHandle {
@@ -305,7 +306,7 @@ export function ComposerEditor({
             <button
               aria-label="Bold"
               aria-pressed={active.bold}
-              className={`qa-tool q-focus${active.bold ? "qa-tool-on" : ""}`}
+              className={cn("qa-tool q-focus", active.bold && "qa-tool-on")}
               onClick={handleToggleBold}
               onMouseDown={keepEditorFocus}
               title="Bold"
@@ -317,7 +318,7 @@ export function ComposerEditor({
             <button
               aria-label="Italic"
               aria-pressed={active.italic}
-              className={`qa-tool q-focus${active.italic ? "qa-tool-on" : ""}`}
+              className={cn("qa-tool q-focus", active.italic && "qa-tool-on")}
               onClick={handleToggleItalic}
               onMouseDown={keepEditorFocus}
               title="Italic"
@@ -329,7 +330,7 @@ export function ComposerEditor({
             <button
               aria-label="Code"
               aria-pressed={active.code}
-              className={`qa-tool q-focus${active.code ? "qa-tool-on" : ""}`}
+              className={cn("qa-tool q-focus", active.code && "qa-tool-on")}
               onClick={handleToggleCode}
               onMouseDown={keepEditorFocus}
               title="Inline code"
@@ -341,7 +342,7 @@ export function ComposerEditor({
             <button
               aria-label="Link"
               aria-pressed={active.link}
-              className={`qa-tool q-focus${active.link ? "qa-tool-on" : ""}`}
+              className={cn("qa-tool q-focus", active.link && "qa-tool-on")}
               onClick={handleToggleLink}
               onMouseDown={keepEditorFocus}
               title="Link the selection"

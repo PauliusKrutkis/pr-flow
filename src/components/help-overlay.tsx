@@ -3,6 +3,7 @@ import { useModalDialog } from "../hooks/use-modal-dialog.ts";
 import { useKeyboard } from "../keyboard/keyboard-provider.tsx";
 import type { KeyboardContextValue } from "../keyboard/types.ts";
 import { useHotkeys } from "../keyboard/use-hotkeys.ts";
+import { cn } from "../lib/cn.ts";
 import { useAppStore } from "../store/app-store.ts";
 import { Kbd } from "./ui/kbd.tsx";
 
@@ -139,7 +140,7 @@ export function HelpOverlay({ baseScope }: { baseScope: string }) {
           <div className="qh-col" key={colKey}>
             {col.map((g) => (
               <section
-                className={`qh-scope${g.active ? "qh-scope-active" : ""}`}
+                className={cn("qh-scope", g.active && "qh-scope-active")}
                 key={g.scope}
               >
                 <div className="qh-scope-head">
