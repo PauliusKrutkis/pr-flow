@@ -138,6 +138,7 @@ function WatchReposDialogContent({ onClose }: { onClose: () => void }) {
   const searching =
     searchActive &&
     (searchResult?.forQuery !== trimmedInput || searchResult.searching);
+  const repoSet = new Set(repos);
 
   const persist = (next: string[]) => {
     setRepos(next);
@@ -165,7 +166,7 @@ function WatchReposDialogContent({ onClose }: { onClose: () => void }) {
     if (!cleaned.includes("/")) {
       return;
     }
-    if (!repos.includes(cleaned)) {
+    if (!repoSet.has(cleaned)) {
       persist([...repos, cleaned]);
     }
     setInput("");
@@ -318,7 +319,7 @@ function WatchReposDialogContent({ onClose }: { onClose: () => void }) {
                 onSelect={setSel}
                 onWatch={watch}
                 selected={i === sel}
-                watched={repos.includes(hit.fullName)}
+                watched={repoSet.has(hit.fullName)}
               />
             ))}
             {!searching && hits.length === 0 ? (

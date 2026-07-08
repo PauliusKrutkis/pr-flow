@@ -1,13 +1,13 @@
 import { useEffect, useRef } from "react";
 import { usePerfStore } from "../lib/perf.ts";
 import { updateReviewMemory } from "../lib/review-memory.ts";
+import { useAppStore } from "../store/app-store.ts";
 import type { PullRequest } from "../types.ts";
 
 /** Tracks head SHA changes for perf + memory and nudges when the PR updates. */
 export function useReviewHeadShaSync(
   routeKey: string,
-  pr: PullRequest | undefined,
-  setToast: (toast: { title: string; message: string }) => void
+  pr: PullRequest | undefined
 ): void {
   const mountShaRef = useRef<string | null>(null);
 
@@ -25,10 +25,10 @@ export function useReviewHeadShaSync(
     if (pr.headSha && pr.headSha !== seen) {
       mountShaRef.current = pr.headSha;
       updateReviewMemory(routeKey, { headSha: pr.headSha });
-      setToast({
+      useAppStore.getState().setToast({
         message: "Showing the latest changes.",
         title: "Pull request updated",
       });
     }
-  }, [pr, routeKey, setToast]);
+  }, [pr, routeKey]);
 }

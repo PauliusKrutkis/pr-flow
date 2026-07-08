@@ -15,11 +15,23 @@ import { Kbd } from "./ui/kbd.tsx";
  * Enter opens it, Esc dismisses. No webhooks, no desktop-notification perms.
  */
 
-const KNOWN_KEY = "pr-flow:knownReviewRequested";
+const KNOWN_KEY = "pr-flow:knownReviewRequested:v1";
+const LEGACY_KNOWN_KEY = "pr-flow:knownReviewRequested";
 const AUTO_DISMISS_MS = 12_000;
 
 function loadKnown(): Set<string> | null {
-  const raw = localStorage.getItem(KNOWN_KEY);
+  let raw = localStorage.getItem(KNOWN_KEY);
+  if (raw === null) {
+    raw = localStorage.getItem(LEGACY_KNOWN_KEY);
+    if (raw !== null) {
+      try {
+        localStorage.setItem(KNOWN_KEY, raw);
+        localStorage.removeItem(LEGACY_KNOWN_KEY);
+      } catch {
+        /* ignore quota / private-mode errors */
+      }
+    }
+  }
   if (raw === null) {
     return null; // null = never seeded (first ever run)
   }

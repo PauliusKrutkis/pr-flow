@@ -420,6 +420,7 @@ function TokenPanel({
 
 function TokenGateScreen() {
   const gate = useTokenGate();
+  const gateError: string | null = gate.error;
 
   return (
     <div className="flex h-full items-center justify-center bg-bg px-6">
@@ -499,11 +500,9 @@ function TokenGateScreen() {
             {gate.busyLabel}
           </p>
         ) : null}
-        {/* Biome's type-aware pass treats `error` as always set; runtime it is `string | null`. */}
-        {/* biome-ignore lint/suspicious/noUnnecessaryConditions: error is cleared to null on reset */}
-        {gate.error === null ? null : (
-          <p className="mt-3 break-words text-danger text-sm">{gate.error}</p>
-        )}
+        {gateError ? (
+          <p className="mt-3 break-words text-danger text-sm">{gateError}</p>
+        ) : null}
 
         {gate.view === "identity" ? null : (
           <button

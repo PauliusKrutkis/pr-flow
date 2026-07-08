@@ -18,7 +18,7 @@ import {
 import { type IntralineRanges, intralinePairs } from "./intraline.ts";
 
 /** A stable key for anchoring comments/boxes to a (side, line) location. */
-export function anchorKey(side: string, line: number): string {
+function anchorKey(side: string, line: number): string {
   return `${side}:${line}`;
 }
 
@@ -28,7 +28,7 @@ export function fileAnchorKey(fileIndex: number, anchor: string): string {
 }
 
 /** Resolve the comment target for a diff row. */
-export function rowTarget(row: DiffRow): { line: number; side: string } | null {
+function rowTarget(row: DiffRow): { line: number; side: string } | null {
   if (row.type === "del") {
     return row.oldLine === null ? null : { line: row.oldLine, side: "LEFT" };
   }

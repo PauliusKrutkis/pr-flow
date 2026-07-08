@@ -35,12 +35,6 @@ importers:
       '@fontsource/inter':
         specifier: ^5.2.8
         version: 5.2.8
-      '@pr-flow/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@pr-flow/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
       '@tanstack/react-query':
         specifier: ^5.62.0
         version: 5.101.1(react@19.2.7)

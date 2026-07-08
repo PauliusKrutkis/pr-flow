@@ -238,7 +238,7 @@ interface AppState {
   viewedCount: (prKey: string) => number;
 }
 
-export interface AppToast {
+interface AppToast {
   action?: () => void;
   actionLabel?: string;
   message: string;

@@ -114,6 +114,7 @@ export function FindBar({
         {query.length > 0 ? `${current}/${total}` : ""}
       </span>
       <button
+        aria-label="Match case"
         aria-pressed={caseSensitive}
         className={cn("qf-findbar-btn", caseSensitive && "qf-findbar-btn-on")}
         onClick={onToggleCase}

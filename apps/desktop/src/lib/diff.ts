@@ -4,7 +4,7 @@
  * anchor inline comments to a line.
  */
 
-export type DiffRowType = "hunk" | "context" | "add" | "del";
+type DiffRowType = "hunk" | "context" | "add" | "del";
 
 export interface DiffRow {
   content: string;

@@ -43,7 +43,7 @@ export interface PullRequest {
   url: string;
 }
 
-export interface LastComment {
+interface LastComment {
   author: string;
   authorAvatarUrl: string;
   body: string;

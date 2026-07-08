@@ -5,6 +5,13 @@
     "ultracite/biome/type-aware",
     "ultracite/biome/react"
   ],
+  "linter": {
+    "rules": {
+      "performance": {
+        "noJsxPropsBind": "off"
+      }
+    }
+  },
   "files": {
     "includes": [
       "!!**/apps/desktop/src-tauri",

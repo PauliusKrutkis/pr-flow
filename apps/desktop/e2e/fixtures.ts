@@ -40,7 +40,7 @@ export const makePr = (
   url: `https://github.com/acme/rocket/pull/${n}`,
 });
 
-export type PrFixture = ReturnType<typeof makePr>;
+type PrFixture = ReturnType<typeof makePr>;
 export interface BucketFixture {
   count: number;
   prs: PrFixture[];

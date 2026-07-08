@@ -126,5 +126,3 @@ export const api = {
     }[];
   }) => invoke<void>("submit_review", args),
 };
-
-export type Api = typeof api;

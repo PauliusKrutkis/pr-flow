@@ -2185,7 +2185,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     return warmHighlightCache(cachedFiles);
   }, [filesForHighlightRef]);
 
-  useReviewHeadShaSync(keyValue, pr, setToast);
+  useReviewHeadShaSync(keyValue, pr);
   useInboxDetailNudge(keyValue, pr);
   useViewedFileReconcile(
     keyValue,

@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 
-export type KeyHandler = (e: KeyboardEvent) => void;
+type KeyHandler = (e: KeyboardEvent) => void;
 
 export interface Binding {
   description: string;
