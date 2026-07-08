@@ -514,7 +514,10 @@ function handleOccPointerClick(
   occSpecRef: React.RefObject<OccState | null>,
   occNav: OccNav,
   occNavRef: React.RefObject<number>,
-  commit: (next: OccState | null) => void
+  commit: (
+    next: OccState | null,
+    origin?: { anchor: string; column: number } | null
+  ) => void
 ): void {
   if (findOpenRef.current) {
     return;
