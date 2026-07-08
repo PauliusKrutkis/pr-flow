@@ -6,12 +6,13 @@ export function HighlightIndices({
   indices,
 }: {
   text: string;
-  indices: number[];
+  indices?: number[];
 }) {
-  if (indices.length === 0) {
+  const hits = indices ?? [];
+  if (hits.length === 0) {
     return <>{text}</>;
   }
-  const set = new Set(indices);
+  const set = new Set(hits);
   const nodes: ReactNode[] = [];
   let start = 0;
   let inHl = set.has(0);

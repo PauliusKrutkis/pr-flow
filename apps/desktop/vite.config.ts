@@ -17,6 +17,9 @@ export default defineConfig(async () => ({
     }),
     tailwindcss(),
   ],
+  resolve: {
+    dedupe: ["react", "react-dom", "zustand"],
+  },
   server: {
     hmr: host
       ? {

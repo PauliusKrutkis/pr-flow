@@ -745,7 +745,7 @@ impl GitHubPlatform {
 }"#;
         let mut map = std::collections::HashMap::new();
         let mut cursor: Option<String> = None;
-        /// Same page cap as get_all_pages — a runaway cursor never loops forever.
+        // Same page cap as get_all_pages — a runaway cursor never loops forever.
         let mut pages = 0u32;
         loop {
             pages += 1;
@@ -937,7 +937,7 @@ impl GitHubPlatform {
     ) -> Result<FileBlob, String> {
         use base64::{engine::general_purpose::STANDARD, Engine as _};
 
-        /// Build via Url so exotic path characters are percent-encoded safely.
+        // Build via Url so exotic path characters are percent-encoded safely.
         let mut u = url::Url::parse(API).map_err(|e| e.to_string())?;
         u.set_path(&format!("repos/{owner}/{repo}/contents/{path}"));
         u.query_pairs_mut().append_pair("ref", r#ref);

@@ -1130,17 +1130,22 @@ function ReviewScreenPending({
             <span className="qf-side-title">Files</span>
           </div>
           <div className="px-3 py-1">
-            {SIDEBAR_SKELETON_WIDTHS.map((width) => (
-              <div
-                className="qf-skel"
-                key={width}
-                style={{
-                  height: 17,
-                  margin: "10px 8px",
-                  width: `${width}%`,
-                }}
-              />
-            ))}
+            {SIDEBAR_SKELETON_WIDTHS.map((width, index, widths) => {
+              const n = widths
+                .slice(0, index)
+                .filter((w) => w === width).length;
+              return (
+                <div
+                  className="qf-skel"
+                  key={`${width}-${n}`}
+                  style={{
+                    height: 17,
+                    margin: "10px 8px",
+                    width: `${width}%`,
+                  }}
+                />
+              );
+            })}
           </div>
         </div>
       </aside>

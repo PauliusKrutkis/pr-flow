@@ -284,7 +284,7 @@ impl GitLabPlatform {
             .mr_bucket(&format!("assignee_username={}", enc(&me)))
             .await?;
         let created = self.mr_bucket(&format!("author_username={}", enc(&me))).await?;
-        /// GitLab has no "involves" filter — union the other buckets instead.
+        // GitLab has no "involves" filter — union the other buckets instead.
         let mut involved_prs: Vec<PullRequest> = Vec::new();
         for pr in review_requested
             .prs
@@ -399,10 +399,10 @@ impl GitLabPlatform {
                 .unwrap_or_default();
             let Some(root) = notes.first() else { continue };
             if fbool(root, "system") {
-                /// System notes are host chatter (pushes, labels, …) and stay
-                /// hidden — except approval events, which ARE the review verdict
-                /// on GitLab. Map them onto the shared ReviewSummary shape.
-                /// "unapproved" is checked first: it contains "approved".
+                // System notes are host chatter (pushes, labels, …) and stay
+                // hidden — except approval events, which ARE the review verdict
+                // on GitLab. Map them onto the shared ReviewSummary shape.
+                // "unapproved" is checked first: it contains "approved".
                 let body = fstr(root, "body");
                 let state = if body.starts_with("unapproved this merge request") {
                     Some("DISMISSED")
@@ -438,9 +438,9 @@ impl GitLabPlatform {
                 }
                 continue;
             }
-            /// Diff-anchored threads become review comments. The discussion id
-            /// is the thread handle for resolve/unresolve; non-resolvable
-            /// threads (rare for diff notes) get no handle, hiding the action.
+            // Diff-anchored threads become review comments. The discussion id
+            // is the thread handle for resolve/unresolve; non-resolvable
+            // threads (rare for diff notes) get no handle, hiding the action.
             let disc_id = fstr(disc, "id");
             let thread = if fbool(root, "resolvable") && !disc_id.is_empty() {
                 Some((disc_id.as_str(), fbool(root, "resolved")))
@@ -542,8 +542,8 @@ impl GitLabPlatform {
             .and_then(|n| n.first())
             .cloned()
             .ok_or_else(|| "GitLab did not return the created note".to_string())?;
-        /// The response IS the new discussion — carry its id so the fresh
-        /// thread is resolvable without waiting for a detail refetch.
+        // The response IS the new discussion — carry its id so the fresh
+        // thread is resolvable without waiting for a detail refetch.
         let disc_id = fstr(&v, "id");
         let thread = if fbool(&note, "resolvable") && !disc_id.is_empty() {
             Some((disc_id.as_str(), false))
@@ -561,7 +561,7 @@ impl GitLabPlatform {
         body: &str,
         in_reply_to: u64,
     ) -> Result<ReviewComment, String> {
-        /// Our API keys replies by note id; GitLab wants the discussion id.
+        // Our API keys replies by note id; GitLab wants the discussion id.
         let discussions = get_all_pages(
             &self.client,
             &format!("{}/discussions", self.mr_url(owner, repo, number)),
@@ -668,7 +668,7 @@ impl GitLabPlatform {
             )
             .await?;
         }
-        /// No REQUEST_CHANGES on GitLab — say it in the summary note instead.
+        // No REQUEST_CHANGES on GitLab — say it in the summary note instead.
         let summary = match (event, body.trim().is_empty()) {
             ("REQUEST_CHANGES", true) => "**Changes requested.**".to_string(),
             ("REQUEST_CHANGES", false) => format!("**Changes requested.**\n\n{body}"),

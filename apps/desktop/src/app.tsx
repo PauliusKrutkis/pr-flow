@@ -34,9 +34,6 @@ import { loadLastRoute, useAppStore } from "./store/app-store.ts";
 export default function App() {
   const route = useAppStore((s) => s.route);
   const setRoute = useAppStore((s) => s.setRoute);
-  const togglePalette = useAppStore((s) => s.togglePalette);
-  const toggleHelp = useAppStore((s) => s.toggleHelp);
-  const setSearchOpen = useAppStore((s) => s.setSearchOpen);
   const accounts = useAppStore((s) => s.accounts);
   const activeAccountId = useAppStore((s) => s.activeAccountId);
   const setAccounts = useAppStore((s) => s.setAccounts);
@@ -143,7 +140,7 @@ export default function App() {
         group: "General",
         icon: CommandIcon,
         keys: "mod+k",
-        run: () => togglePalette(),
+        run: () => useAppStore.getState().togglePalette(),
       },
       {
         description: "Show keyboard shortcuts",
@@ -151,7 +148,7 @@ export default function App() {
         group: "General",
         icon: HelpCircle,
         keys: "?",
-        run: () => toggleHelp(),
+        run: () => useAppStore.getState().toggleHelp(),
       },
       {
         description: "Search pull requests",
@@ -159,7 +156,7 @@ export default function App() {
         group: "General",
         icon: Search,
         keys: "/",
-        run: () => setSearchOpen(true),
+        run: () => useAppStore.setState({ searchOpen: true }),
       },
       {
         description: "Zoom in",

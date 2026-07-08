@@ -227,7 +227,7 @@ pub async fn add_account(
         return Err("Token is empty".to_string());
     }
     let host = normalize_host(&provider, host);
-    /// Validate before persisting so we never store a bad token.
+    // Validate before persisting so we never store a bad token.
     let probe = Account {
         id: String::new(),
         provider: provider.clone(),

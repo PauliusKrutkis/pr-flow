@@ -62,23 +62,11 @@ function asArray(keys: string | string[]): string[] {
   return Array.isArray(keys) ? keys : [keys];
 }
 
-function keyIndex(
-  bindings: RegisteredBinding[]
-): Map<string, RegisteredBinding> {
-  const index = new Map<string, RegisteredBinding>();
-  for (const binding of bindings) {
-    for (const key of asArray(binding.keys)) {
-      index.set(key, binding);
-    }
-  }
-  return index;
-}
-
 function findByKey(
-  index: Map<string, RegisteredBinding>,
+  bindings: RegisteredBinding[],
   descriptor: string
 ): RegisteredBinding | undefined {
-  return index.get(descriptor);
+  return bindings.find((b) => asArray(b.keys).includes(descriptor));
 }
 
 function isPrefix(bindings: RegisteredBinding[], buf: string): boolean {
@@ -122,7 +110,7 @@ function runMatch(
 
 function handleModKeyDown(
   e: KeyboardEvent,
-  index: Map<string, RegisteredBinding>,
+  bindings: RegisteredBinding[],
   editable: boolean,
   clearSeq: () => void
 ): boolean {
@@ -133,7 +121,7 @@ function handleModKeyDown(
   }
   const combo = modCombo(e, key);
   const altCombo = combo.replace("shift+", "");
-  let match = findByKey(index, combo) ?? findByKey(index, altCombo);
+  let match = findByKey(bindings, combo) ?? findByKey(bindings, altCombo);
   if (editable && match && !match.global) {
     match = undefined;
   }
@@ -142,11 +130,11 @@ function handleModKeyDown(
 
 function handleShiftedKey(
   e: KeyboardEvent,
-  index: Map<string, RegisteredBinding>,
+  bindings: RegisteredBinding[],
   key: string,
   clearSeq: () => void
 ): boolean {
-  const shifted = findByKey(index, `shift+${key}`);
+  const shifted = findByKey(bindings, `shift+${key}`);
   if (!shifted) {
     return false;
   }
@@ -157,13 +145,12 @@ function handleShiftedKey(
 function handleSequenceKey(
   e: KeyboardEvent,
   bindings: RegisteredBinding[],
-  index: Map<string, RegisteredBinding>,
   buf: string,
   seqRef: { current: string },
   seqTimerRef: { current: ReturnType<typeof setTimeout> | null },
   clearSeq: () => void
 ): boolean {
-  const exact = findByKey(index, buf);
+  const exact = findByKey(bindings, buf);
   if (exact) {
     clearSeq();
     return runMatch(e, exact);
@@ -185,7 +172,6 @@ function handleSequenceKey(
 function handlePlainKeyDown(
   e: KeyboardEvent,
   bindings: RegisteredBinding[],
-  index: Map<string, RegisteredBinding>,
   key: string,
   seqRef: { current: string },
   seqTimerRef: { current: ReturnType<typeof setTimeout> | null },
@@ -195,19 +181,17 @@ function handlePlainKeyDown(
     return;
   }
 
-  if (e.shiftKey && handleShiftedKey(e, index, key, clearSeq)) {
+  if (e.shiftKey && handleShiftedKey(e, bindings, key, clearSeq)) {
     return;
   }
 
   const buf = seqRef.current + key;
-  if (
-    handleSequenceKey(e, bindings, index, buf, seqRef, seqTimerRef, clearSeq)
-  ) {
+  if (handleSequenceKey(e, bindings, buf, seqRef, seqTimerRef, clearSeq)) {
     return;
   }
 
   clearSeq();
-  if (runMatch(e, findByKey(index, key))) {
+  if (runMatch(e, findByKey(bindings, key))) {
     return;
   }
 
@@ -275,7 +259,6 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
   const onKeyDown = useEffectEvent((e: KeyboardEvent) => {
     const editable = isEditableTarget(e.target);
     const bindings = eligibleBindings();
-    const index = keyIndex(bindings);
     const hasMod = e.metaKey || e.ctrlKey;
     const key = normalizeKey(e);
 
@@ -284,11 +267,11 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
     }
 
     if (hasMod || e.altKey) {
-      handleModKeyDown(e, index, editable, clearSeq);
+      handleModKeyDown(e, bindings, editable, clearSeq);
       return;
     }
 
-    handlePlainKeyDown(e, bindings, index, key, seqRef, seqTimerRef, clearSeq);
+    handlePlainKeyDown(e, bindings, key, seqRef, seqTimerRef, clearSeq);
   });
 
   useEffect(() => {

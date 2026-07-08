@@ -98,6 +98,7 @@ export function AddCommentBox({
               className={`qa-seg-btn q-focus${mode === "batch" ? "qa-seg-on" : ""}`}
             >
               <input
+                aria-checked={mode === "batch"}
                 checked={mode === "batch"}
                 className="sr-only"
                 name="post-mode"
@@ -111,6 +112,7 @@ export function AddCommentBox({
               className={`qa-seg-btn q-focus${mode === "now" ? "qa-seg-on" : ""}`}
             >
               <input
+                aria-checked={mode === "now"}
                 checked={mode === "now"}
                 className="sr-only"
                 name="post-mode"

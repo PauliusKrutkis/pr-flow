@@ -22,8 +22,8 @@ fn preload_host_libwayland() {
     if std::env::var_os(GUARD).is_some() {
         return;
     }
-    /// Only relevant when launched from an AppImage on a Wayland session, and
-    /// only when the bundle actually carries its own libwayland-client.
+    // Only relevant when launched from an AppImage on a Wayland session, and
+    // only when the bundle actually carries its own libwayland-client.
     let Some(appdir) = std::env::var_os("APPDIR") else {
         return;
     };
@@ -67,8 +67,8 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     preload_host_libwayland();
 
-    /// Load OAuth credentials from a local `.env` (src-tauri/.env) if present.
-    /// Real environment variables already set in the shell take precedence.
+    // Load OAuth credentials from a local `.env` (src-tauri/.env) if present.
+    // Real environment variables already set in the shell take precedence.
     let _ = dotenvy::dotenv();
 
     tauri::Builder::default()

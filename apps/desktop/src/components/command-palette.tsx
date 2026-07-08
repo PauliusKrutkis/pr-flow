@@ -111,7 +111,7 @@ function CommandPaletteContent({ baseScope }: { baseScope: string }) {
     listRef.current
       ?.querySelector('[data-active="true"]')
       ?.scrollIntoView({ block: "nearest" });
-  }, []);
+  }, [activeIndex]);
 
   useHotkeys(
     "palette",
