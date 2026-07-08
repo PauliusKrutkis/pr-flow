@@ -5,7 +5,7 @@
     "knip": "^6.25.0",
     "react-doctor": "^0.7.1",
     "typescript": "~5.8.3",
-    "ultracite": "7.9.2"
+    "ultracite": "7.9.3"
   },
   "name": "pr-flow",
   "scripts": {

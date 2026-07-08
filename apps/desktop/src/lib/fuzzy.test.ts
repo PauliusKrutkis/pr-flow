@@ -4,7 +4,6 @@ import { type FuzzyResult, fuzzyMatch, fuzzyMatchFields } from "./fuzzy.ts";
 
 function mustMatch(query: string, text: string): FuzzyResult {
   const m = fuzzyMatch(query, text);
-  expect(m).not.toBeNull();
   if (!m) {
     throw new Error("expected match");
   }

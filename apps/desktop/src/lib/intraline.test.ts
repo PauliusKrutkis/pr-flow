@@ -16,7 +16,6 @@ function slices(text: string, ranges: [number, number][]): string[] {
 
 function mustDiff(del: string, add: string): IntralinePair {
   const d = intralineDiff(del, add);
-  expect(d).not.toBeNull();
   if (!d) {
     throw new Error("expected diff");
   }
@@ -25,7 +24,6 @@ function mustDiff(del: string, add: string): IntralinePair {
 
 function rowByContent(rows: DiffRow[], content: string): DiffRow {
   const row = rows.find((r) => r.content === content);
-  expect(row).toBeDefined();
   if (!row) {
     throw new Error("row not found");
   }
@@ -37,7 +35,6 @@ function mustRanges(
   row: DiffRow
 ): [number, number][] {
   const ranges = map.get(row);
-  expect(ranges).toBeDefined();
   if (!ranges) {
     throw new Error("expected ranges");
   }

@@ -33,8 +33,8 @@ test("a stored account boots into the inbox", async ({ page }) => {
 });
 
 test.describe("todo", () => {
-  test.fixme(true, "needs a mocked OAuth round-trip");
-  test("oauth loopback captures the token and lands in the inbox", async () => {
+  // biome-ignore lint/suspicious/noSkippedTests: OAuth round-trip needs mocking infrastructure
+  test.fixme("oauth loopback captures the token and lands in the inbox", async () => {
     /* fixme: needs a mocked OAuth round-trip */
   });
 });
