@@ -231,6 +231,51 @@ function codeAround(el: Element | null | undefined): Element | null {
   return code && !el?.closest(".qf-row-hunk") ? code : null;
 }
 
+/** Resolve the code cell under a pointer, including trailing padding where
+ *  `elementFromPoint` returns null because no glyph is painted there. */
+function codeAtPoint(x: number, y: number): Element | null {
+  const fromTarget = codeAround(document.elementFromPoint(x, y));
+  if (fromTarget) {
+    return fromTarget;
+  }
+  for (const row of document.querySelectorAll(".qf-row:not(.qf-row-hunk)")) {
+    const code = row.querySelector(".qf-code");
+    if (!code) {
+      continue;
+    }
+    const box = code.getBoundingClientRect();
+    if (y >= box.top && y <= box.bottom && x >= box.left && x <= box.right) {
+      return code;
+    }
+  }
+  return null;
+}
+
+/** True when a click lands in the code cell's trailing padding, past the text. */
+function isPastLineContent(code: Element, x: number, y: number): boolean {
+  const box = code.getBoundingClientRect();
+  if (y < box.top || y > box.bottom) {
+    return false;
+  }
+  if (x >= box.right - 12) {
+    return true;
+  }
+  let maxRight = box.left;
+  const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text;
+    if (!node.textContent?.trim()) {
+      continue;
+    }
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    for (const rect of range.getClientRects()) {
+      maxRight = Math.max(maxRight, rect.right);
+    }
+  }
+  return x > maxRight + 2;
+}
+
 function fileIndexOfElement(el: Element): number | null {
   const v = el.closest("[data-file-index]")?.getAttribute("data-file-index");
   const n = v === null ? Number.NaN : Number(v);
@@ -278,6 +323,34 @@ function wordBoundsInText(text: string, col: number): [number, number] | null {
     return null;
   }
   return [s, e];
+}
+
+function occurrenceOriginFromPoint(
+  x: number,
+  y: number
+): { anchor: string; column: number } | null {
+  const caret = caretNodeAtPoint(x, y);
+  if (!caret || caret.node.nodeType !== Node.TEXT_NODE) {
+    return null;
+  }
+  const code = codeAround(caret.node.parentElement);
+  if (!code) {
+    return null;
+  }
+  const anchor = caret.node.parentElement
+    ?.closest("[data-anchor]")
+    ?.getAttribute("data-anchor");
+  if (!anchor) {
+    return null;
+  }
+  const nodeStart = codeColumnOf(code, caret.node);
+  if (nodeStart === null) {
+    return null;
+  }
+  const text = code.textContent ?? "";
+  const col = nodeStart + caret.offset;
+  const bounds = wordBoundsInText(text, col);
+  return { anchor, column: bounds ? bounds[0] : col };
 }
 
 function wordAtPoint(x: number, y: number): OccState | null {
@@ -450,12 +523,13 @@ function handleOccPointerClick(
     return;
   }
   const target = e.target instanceof Element ? e.target : null;
-  if (!codeAround(target)) {
-    return;
-  }
-
-  const sel = window.getSelection();
-  if (sel && !sel.isCollapsed) {
+  const row = target?.closest(".qf-row:not(.qf-row-hunk)");
+  const code = codeAtPoint(e.clientX, e.clientY);
+  if (!(row || code)) {
+    if (occSpecRef.current) {
+      window.getSelection()?.removeAllRanges();
+      commit(null);
+    }
     return;
   }
 
@@ -463,7 +537,25 @@ function handleOccPointerClick(
   if (mark && occSpecRef.current && jumpFromOccMark(mark, occNav, occNavRef)) {
     return;
   }
-  commit(wordAtPoint(e.clientX, e.clientY));
+
+  if (!code) {
+    window.getSelection()?.removeAllRanges();
+    commit(null);
+    return;
+  }
+
+  window.getSelection()?.removeAllRanges();
+  const clickOrigin = occurrenceOriginFromPoint(e.clientX, e.clientY);
+  if (isPastLineContent(code, e.clientX, e.clientY)) {
+    commit(null);
+    return;
+  }
+  const spec = wordAtPoint(e.clientX, e.clientY);
+  if (!spec) {
+    commit(null);
+    return;
+  }
+  commit(spec, clickOrigin);
 }
 
 function useOccurrenceTracking(refs: {
@@ -503,9 +595,14 @@ function useOccurrenceTracking(refs: {
       selectLineRef,
     });
 
-    function commit(next: OccState | null) {
+    function commit(
+      next: OccState | null,
+      origin?: { anchor: string; column: number } | null
+    ) {
       const prev = occSpecRef.current;
-      occOriginRef.current = next ? occurrenceOriginFromDom() : null;
+      occOriginRef.current = next
+        ? (origin ?? occurrenceOriginFromDom())
+        : null;
       occNavRef.current = -1;
       if (
         prev &&
@@ -543,6 +640,10 @@ function useOccurrenceTracking(refs: {
     }
 
     function onOccClick(e: MouseEvent) {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
       handleOccPointerClick(
         e,
         findOpenRef,

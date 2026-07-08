@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { reconcileViewedEntry } from "../lib/viewed-fingerprint.ts";
 import { useAppStore } from "../store/app-store.ts";
 import type { ChangedFile, PullRequest } from "../types.ts";
@@ -31,6 +31,7 @@ export function useViewedFileReconcile(
 ): void {
   const viewedFiles = useAppStore((s) => s.viewed[routeKey]);
   const [lastReconcileKey, setLastReconcileKey] = useState<string | null>(null);
+  const unviewedRef = useRef<string[]>([]);
 
   const preview =
     pr && files.length > 0
@@ -42,17 +43,27 @@ export function useViewedFileReconcile(
       ? `${routeKey}\0${pr.headSha}\0${unviewed.join("\0")}`
       : null;
 
-  if (reconcileKey && reconcileKey !== lastReconcileKey) {
+  useEffect(() => {
+    if (!reconcileKey || reconcileKey === lastReconcileKey) {
+      return;
+    }
+    unviewedRef.current = unviewed;
     setLastReconcileKey(reconcileKey);
     setChangedSinceViewed((prev) => {
       const next = new Set(prev);
-      for (const f of unviewed) {
+      for (const f of unviewedRef.current) {
         next.add(f);
       }
       return next;
     });
-    setToast(unviewedToastMessage(unviewed));
-  }
+    setToast(unviewedToastMessage(unviewedRef.current));
+  }, [
+    reconcileKey,
+    lastReconcileKey,
+    unviewed,
+    setChangedSinceViewed,
+    setToast,
+  ]);
 
   useEffect(() => {
     if (!(reconcileKey && pr)) {

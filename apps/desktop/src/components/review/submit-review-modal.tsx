@@ -24,6 +24,10 @@ const PLACEHOLDERS: Record<ReviewEvent, string> = {
   REQUEST_CHANGES: "What needs to change?",
 };
 
+function focusOnMount(el: HTMLTextAreaElement | null) {
+  el?.focus();
+}
+
 interface Props {
   busy: boolean;
   error?: string | null;
@@ -184,6 +188,7 @@ function SubmitReviewModalContent({
           onChange={handleBodyChange}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
+          ref={focusOnMount}
           rows={4}
           value={body}
         />

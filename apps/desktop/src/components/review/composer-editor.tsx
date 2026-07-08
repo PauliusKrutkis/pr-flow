@@ -74,10 +74,6 @@ const ComposerKeys = Extension.create({
         HANDLERS.get(editor)?.cancel();
         return true;
       },
-      "Mod-Enter": ({ editor }) => {
-        HANDLERS.get(editor)?.submit();
-        return true;
-      },
       "Mod-k": ({ editor }) => HANDLERS.get(editor)?.openLink(editor) ?? false,
       "Shift-Tab": ({ editor }) => {
         const flip = HANDLERS.get(editor)?.flip;
@@ -141,12 +137,30 @@ export function ComposerEditor({
         role: "textbox",
       },
       handleKeyDown: (_view, event) => {
-        if (
-          (event.metaKey || event.ctrlKey) &&
-          !event.shiftKey &&
-          event.key === "k"
-        ) {
+        const mod = (event.metaKey || event.ctrlKey) && !event.shiftKey;
+        if (!mod) {
+          return false;
+        }
+        const key = event.key.toLowerCase();
+        if (key === "enter") {
+          HANDLERS.get(editor)?.submit();
+          return true;
+        }
+        if (key === "b") {
+          editor.chain().focus().toggleBold().run();
+          return true;
+        }
+        if (key === "i") {
+          editor.chain().focus().toggleItalic().run();
+          return true;
+        }
+        if (key === "e") {
+          editor.chain().focus().toggleCode().run();
+          return true;
+        }
+        if (key === "k") {
           event.stopPropagation();
+          return openLink(editor);
         }
         return false;
       },

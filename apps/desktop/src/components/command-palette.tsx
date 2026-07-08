@@ -109,7 +109,7 @@ function CommandPaletteContent({ baseScope }: { baseScope: string }) {
 
   useEffect(() => {
     listRef.current
-      ?.querySelector('[data-active="true"]')
+      ?.querySelector(`[data-index="${activeIndex}"]`)
       ?.scrollIntoView({ block: "nearest" });
   }, [activeIndex]);
 

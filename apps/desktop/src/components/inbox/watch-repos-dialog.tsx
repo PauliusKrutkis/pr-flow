@@ -115,7 +115,8 @@ function WatchReposDialogContent({ onClose }: { onClose: () => void }) {
   const { data } = useWatchedRepos();
   const listId = useId();
   const { dialogRef, onDialogCancel, onDialogClose } = useModalDialog(onClose);
-  const [repos, setRepos] = useState<string[]>(data ?? []);
+  const [optimisticRepos, setOptimisticRepos] = useState<string[] | null>(null);
+  const repos = optimisticRepos ?? data ?? [];
   const [input, setInput] = useState("");
   const [searchResult, setSearchResult] = useState<{
     forQuery: string;
@@ -141,14 +142,15 @@ function WatchReposDialogContent({ onClose }: { onClose: () => void }) {
   const repoSet = new Set(repos);
 
   const persist = (next: string[]) => {
-    setRepos(next);
+    setOptimisticRepos(next);
     api
       .setWatchedRepos(next)
       .then(() => {
         queryClient.setQueryData(queryKeys.watchedRepos, next);
         queryClient.invalidateQueries({ queryKey: queryKeys.subscribed });
+        setOptimisticRepos(null);
       })
-      .catch(() => undefined);
+      .catch(() => setOptimisticRepos(null));
   };
 
   const stopWatching = (repo: string) => {

@@ -12,11 +12,6 @@ export function useModalDialog(onClose: () => void) {
     if (!dialog.open) {
       dialog.showModal();
     }
-    return () => {
-      if (dialog.open) {
-        dialog.close();
-      }
-    };
   }, []);
 
   const onDialogClose = () => {

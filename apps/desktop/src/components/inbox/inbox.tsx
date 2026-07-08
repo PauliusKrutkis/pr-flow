@@ -247,7 +247,7 @@ export function Inbox() {
 
   const setInboxPaneVisible = useAppStore((s) => s.setInboxPaneVisible);
   const paneVisible =
-    selectedPR !== null && !(isLoading && !data) && !(isError && !data);
+    selectedPR !== undefined && !(isLoading && !data) && !(isError && !data);
 
   useEffect(() => {
     const el = listRef.current?.querySelector<HTMLElement>(

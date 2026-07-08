@@ -129,31 +129,13 @@ test("clicking blank space right of a line ending in a word clears, not highligh
   await dblclickToken(page, 1, "gamma");
   await expect(occMarks(page)).toHaveCount(2);
 
-  const lineEnd = await page.evaluate(() => {
-    const codes = document.querySelectorAll(
-      '.qf-row[data-file-index="1"]:not(.qf-row-hunk) .qf-code'
-    );
-    for (const code of codes) {
-      if (!code.textContent?.includes("export default search")) {
-        continue;
-      }
-      const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
-      let last: Text | null = null;
-      while (walker.nextNode()) {
-        last = walker.currentNode as Text;
-      }
-      if (!last) {
-        continue;
-      }
-      const range = document.createRange();
-      range.selectNodeContents(last);
-      const r = range.getBoundingClientRect();
-      return { x: r.right, y: r.y + r.height / 2 };
-    }
-    return null;
-  });
-  expect(lineEnd).not.toBeNull();
-  await page.mouse.click(lineEnd.x + 60, lineEnd.y);
+  const line = page
+    .locator('.qf-row[data-file-index="1"]:not(.qf-row-hunk) .qf-code')
+    .filter({ hasText: "export default search" })
+    .first();
+  const box = await line.boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.click(box.x + box.width - 8, box.y + box.height / 2);
   await expect(occMarks(page)).toHaveCount(0);
 });
 

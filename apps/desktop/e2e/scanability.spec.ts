@@ -113,12 +113,18 @@ test("clicking inside an intraline-emphasized token still selects the whole word
 test("indent guides paint on deep lines' code element, and nothing else", async ({
   page,
 }) => {
+  await page
+    .locator('.qf-fsec-head[data-file-index="2"]')
+    .scrollIntoViewIfNeeded();
+  await page.mouse.wheel(0, 4000);
+  await page.waitForTimeout(200);
+
   const deep = page
-    .locator('.qf-row[data-file-index="2"]:not(.qf-row-hunk)', {
-      hasText: "attempt,",
-    })
+    .locator('.qf-row[data-file-index="2"]:not(.qf-row-hunk)')
+    .filter({ hasText: "attempt," })
     .first()
     .locator(".qf-code");
+  await deep.scrollIntoViewIfNeeded();
   const style = await deep.evaluate((el) => {
     const s = getComputedStyle(el, "::before");
     return {
