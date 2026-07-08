@@ -152,6 +152,13 @@ export function ComposerEditor({
         class: "qa-editor-content",
         role: "textbox",
       },
+      handleKeyDown: (_view, event): boolean => {
+        const mod = (event.metaKey || event.ctrlKey) && !event.shiftKey;
+        if (mod && event.key.toLowerCase() === "k") {
+          event.stopPropagation();
+        }
+        return false;
+      },
     },
     extensions: [
       StarterKit.configure({
