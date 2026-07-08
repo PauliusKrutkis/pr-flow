@@ -49,7 +49,6 @@ async function repeatSequential<T>(
 ): Promise<T[]> {
   const results: T[] = [];
   for (let i = 0; i < count; i += 1) {
-    // biome-ignore lint/performance/noAwaitInLoops: warm opens must run sequentially
     results.push(await fn());
   }
   return results;

@@ -1,25 +1,4 @@
 {
-  "extends": [
-    "ultracite/biome/core",
-    "ultracite/biome/type-aware",
-    "ultracite/biome/react",
-    "ultracite/biome/tanstack",
-    "ultracite/biome/vitest"
-  ],
-  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "linter": {
-    "rules": {
-      "performance": {
-        "noJsxPropsBind": "off"
-      }
-    }
-  },
-  "files": {
-    "includes": [
-      "!!**/apps/desktop/src-tauri",
-      "!!**/test-results",
-      "!!**/playwright-report",
-      "!!**/target"
-    ]
-  }
+  "$schema": "https://biomejs.dev/schemas/2.5.2/schema.json",
+  "extends": ["ultracite/core", "ultracite/react"]
 }

@@ -1,4 +1,3 @@
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { Clock, CornerDownLeft, Search } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useModalDialog } from "../../hooks/use-modal-dialog.ts";

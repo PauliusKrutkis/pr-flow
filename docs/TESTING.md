@@ -17,14 +17,14 @@ near-pure modules today — high value, low setup cost.
 
 | Layer | Runner | Notes |
 | --- | --- | --- |
-| TS unit + component | [Vitest](https://vitest.dev) + `@testing-library/react` + jsdom | Native Vite integration (we're on Vite 7); `pnpm --filter @pr-flow/desktop test` |
+| TS unit + component | [Vitest](https://vitest.dev) + `@testing-library/react` + jsdom | Native Vite integration (we're on Vite 7); `pnpm test` |
 | Rust unit + integration | `cargo test` (built-in) | Fixture JSON under `src-tauri/tests/fixtures/`; no new deps beyond `serde_json` already present |
 | CI | Extend `.github/workflows` with a `test` job on PRs | Typecheck + vitest + cargo test; no bundling |
 
 Vitest over Jest: shares the Vite pipeline/config, no transform drift, faster
 watch mode.
 
-## Coverage map — TypeScript (`apps/desktop/src`)
+## Coverage map — TypeScript (`src`)
 
 ### Priority 1 — pure logic (unit)
 
@@ -60,7 +60,7 @@ than calling handlers directly — the dispatch path is where the bugs were.
 query cache is empty), `useComments` mutation → query invalidation. Mock
 `lib/api.ts` at the module boundary; no Tauri runtime needed.
 
-## Coverage map — Rust (`apps/desktop/src-tauri`)
+## Coverage map — Rust (`src-tauri`)
 
 ### Priority 1 — provider mapping (unit, fixture-driven)
 

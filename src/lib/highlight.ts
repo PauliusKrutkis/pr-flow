@@ -1,4 +1,3 @@
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import hljs from "highlight.js";
 import { createElement, type ReactNode } from "react";
 import { parsePatch } from "./diff.ts";

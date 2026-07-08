@@ -8,7 +8,6 @@ import {
   X,
   ZoomIn,
   ZoomOut,
-  // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CommandPalette } from "./components/command-palette.tsx";

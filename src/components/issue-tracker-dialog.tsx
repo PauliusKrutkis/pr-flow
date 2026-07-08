@@ -1,4 +1,3 @@
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { Ticket } from "lucide-react";
 import { type KeyboardEvent, useEffect, useRef } from "react";
 import { useModalDialog } from "../hooks/use-modal-dialog.ts";

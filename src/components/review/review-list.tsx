@@ -1,4 +1,3 @@
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { Check } from "lucide-react";
 import {
   type CSSProperties,
@@ -16,7 +15,6 @@ import {
   GroupedVirtuoso,
   type GroupedVirtuosoHandle,
   type StateSnapshot,
-  // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 } from "react-virtuoso";
 import { useLatest } from "../../hooks/use-latest.ts";
 import { cn } from "../../lib/cn.ts";

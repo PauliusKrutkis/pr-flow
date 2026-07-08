@@ -1,4 +1,3 @@
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { describe, expect, it } from "vitest";
 import type { DiffRow } from "./diff.ts";
 import { parsePatch } from "./diff.ts";

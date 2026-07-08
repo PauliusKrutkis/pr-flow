@@ -1,6 +1,4 @@
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { useQuery } from "@tanstack/react-query";
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { Download, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { api } from "../lib/api.ts";

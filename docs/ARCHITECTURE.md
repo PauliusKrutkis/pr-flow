@@ -27,17 +27,17 @@ Key directories:
 
 | Path | Role |
 | ---- | ---- |
-| `apps/desktop/src/components/` | Screens and UI |
-| `apps/desktop/src/lib/` | Pure logic (diff parsing, find, highlights) |
-| `apps/desktop/src/store/` | Zustand UI state (viewed files, pending comments, route) |
-| `apps/desktop/src/keyboard/` | Global hotkey layer |
-| `apps/desktop/src-tauri/src/` | Backend — see [RUST.md](./RUST.md) |
+| `src/components/` | Screens and UI |
+| `src/lib/` | Pure logic (diff parsing, find, highlights) |
+| `src/store/` | Zustand UI state (viewed files, pending comments, route) |
+| `src/keyboard/` | Global hotkey layer |
+| `src-tauri/src/` | Backend — see [RUST.md](./RUST.md) |
 
 ---
 
 ## Comments
 
-These rules apply to production code (`apps/desktop/`, `packages/`, Rust
+These rules apply to production code (`src/`, Rust
 backend).
 
 Do **not** use inline `//` line comments in production source files. Comments
@@ -58,7 +58,7 @@ belong in one of three places:
 
 - **Type or interface members** — no `/** … */` on individual properties inside
   `interface`, `type`, props, or store shapes. Fold non-obvious field meaning
-  into the file header (see `apps/desktop/src/types.ts`).
+  into the file header (see `src/types.ts`).
 - **Exported types and constants** — no separate doc block on `export interface
   Foo`, `export const BAR`, or `export const Foo = forwardRef(…)`; describe them
   in the file header if needed.
@@ -69,7 +69,7 @@ belong in one of three places:
   from structure and class names; non-obvious UI behaviour belongs in the file
   header.
 - **CSS** — no mid-file `/* … */` comments in production stylesheets. One
-  file-header block at the top only. `apps/desktop/src/quiet.css` is legacy
+  file-header block at the top only. `src/quiet.css` is legacy
   and being migrated incrementally.
 
 ### Allowed exceptions
@@ -127,6 +127,4 @@ See [TESTING.md](./TESTING.md) for what to test when touching these layers.
 | `pnpm fix` | Auto-fix safe issues |
 | `pnpm exec ultracite doctor` | Verify setup |
 
-Config: `biome.jsonc` extends `ultracite/biome/{core,type-aware,react}`.
-The Lint workflow runs on every PR; it is expected to fail until existing code
-is cleaned up.
+Config: `biome.jsonc` extends `ultracite/biome/{core,react,vitest}`.

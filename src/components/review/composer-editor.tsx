@@ -1,14 +1,8 @@
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { type Editor, Extension } from "@tiptap/core";
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { Placeholder } from "@tiptap/extensions";
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { Markdown } from "@tiptap/markdown";
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import StarterKit from "@tiptap/starter-kit";
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { Diff } from "lucide-react";
 import {
   type ChangeEvent,

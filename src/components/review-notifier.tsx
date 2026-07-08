@@ -1,4 +1,3 @@
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useInbox } from "../hooks/use-inbox.ts";

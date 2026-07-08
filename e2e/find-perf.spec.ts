@@ -35,7 +35,6 @@ async function forEachCharSequential(
   fn: (ch: string) => Promise<void>
 ): Promise<void> {
   for (const ch of chars) {
-    // biome-ignore lint/performance/noAwaitInLoops: sequential keystrokes measure find perf
     await fn(ch);
   }
 }

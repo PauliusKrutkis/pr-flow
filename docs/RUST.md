@@ -1,6 +1,6 @@
 # Rust backend (Tauri)
 
-The desktop app's backend lives in `apps/desktop/src-tauri/src/`. It holds
+The desktop app's backend lives in `src-tauri/src/`. It holds
 tokens, talks to GitHub/GitLab, and writes on-disk caches. The React webview
 never calls host APIs directly.
 
@@ -96,7 +96,7 @@ All handlers are registered in `lib.rs`. Grouped by source file:
 
 - `check_for_update`, `install_update`
 
-TypeScript wrappers live in `apps/desktop/src/lib/api.ts`.
+TypeScript wrappers live in `src/lib/api.ts`.
 
 ---
 

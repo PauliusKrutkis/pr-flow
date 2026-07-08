@@ -239,7 +239,7 @@ git tag v0.1.1 && git push origin v0.1.1
 The `release.yml` workflow builds macOS (arm64 + x64), Windows and Linux
 bundles, signs the updater artifacts, publishes a GitHub Release with
 `latest.json`, and bumps the Homebrew tap (when the `TAP_REPO_TOKEN` secret is
-set). Bump `version` in `apps/desktop/src-tauri/tauri.conf.json` before
+set). Bump `version` in `src-tauri/tauri.conf.json` before
 tagging — that's the version the updater compares against.
 
 Signing secrets (already configured): `TAURI_SIGNING_PRIVATE_KEY` (from

@@ -1,4 +1,3 @@
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ArrowDown,
@@ -23,7 +22,6 @@ import {
   Search,
   Send,
   TextSearch,
-  // biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useCommentMutations } from "../../hooks/use-comments.ts";

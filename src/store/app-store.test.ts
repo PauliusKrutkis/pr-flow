@@ -1,4 +1,3 @@
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { beforeEach, describe, expect, it } from "vitest";
 import { useAppStore } from "./app-store.ts";
 

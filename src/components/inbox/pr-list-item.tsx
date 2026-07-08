@@ -1,4 +1,3 @@
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { MessageSquare } from "lucide-react";
 
 import { cn } from "../../lib/cn.ts";

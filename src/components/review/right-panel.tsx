@@ -1,4 +1,3 @@
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { CheckCircle2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { cn } from "../../lib/cn.ts";

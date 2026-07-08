@@ -39,7 +39,6 @@ test("scrolling a large PR stays smooth, with a bounded DOM", async ({
     let last = performance.now();
     while (host.scrollTop + host.clientHeight < host.scrollHeight - 4) {
       host.scrollTop += 150;
-      // biome-ignore lint/performance/noAwaitInLoops: scroll frames must be measured sequentially
       await new Promise((r) => requestAnimationFrame(r));
       const now = performance.now();
       frames.push(now - last);
@@ -60,7 +59,7 @@ test("scrolling a large PR stays smooth, with a bounded DOM", async ({
     };
   }, stallThresholdMs);
   console.log(
-    `scroll frames: n ${result.n} p50 ${result.p50.toFixed(1)} p95 ${result.p95.toFixed(1)} max ${result.max.toFixed(1)} over${stallThresholdMs}ms ${result.stalls} maxRows ${result.maxRows}`
+    `scroll frames: n ${result.n} p50 ${result.p50.toFixed(1)} p95 ${result.p95.toFixed(1)} max ${result.max?.toFixed(1)} over${stallThresholdMs}ms ${result.stalls} maxRows ${result.maxRows}`
   );
 
   expect(result.maxRows).toBeLessThan(300);
@@ -142,7 +141,7 @@ test("resuming deep in a large PR holds position while the list restores", async
     }, rowSel);
   const after = await measure();
   expect(after).not.toBeNull();
-  expect(Math.abs((after as number) - before?.top)).toBeLessThan(40);
+  expect(Math.abs((after as number) - (before?.top ?? 0))).toBeLessThan(40);
   await page.waitForTimeout(700);
   const settled = await measure();
   expect(Math.abs((settled as number) - (after as number))).toBeLessThan(24);

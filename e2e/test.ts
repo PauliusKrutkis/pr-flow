@@ -1,4 +1,3 @@
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { test as base, expect as playwrightExpect } from "@playwright/test";
 
 /**

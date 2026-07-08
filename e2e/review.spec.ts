@@ -213,19 +213,15 @@ test("find seeds from the viewport: the current match is the one near you, not t
   page,
 }) => {
   await page.keyboard.press("r");
+  await page.waitForFunction(() => {
+    const pinned = document.querySelector<HTMLElement>(
+      '[data-testid="virtuoso-top-item-list"] .qf-fsec-head'
+    );
+    return pinned?.dataset.fileIndex === "1";
+  });
   await expect(
     page.locator('.qf-row[data-file-index="1"]').first()
   ).toBeVisible();
-  await page.waitForFunction(() => {
-    const host = document.querySelector(".qf-scrollhost");
-    const row = document.querySelector('.qf-row[data-file-index="1"]');
-    if (!(host && row)) {
-      return false;
-    }
-    const d =
-      row.getBoundingClientRect().top - host.getBoundingClientRect().top;
-    return d >= 0 && d < 120;
-  });
 
   await page.keyboard.press("Control+f");
   await page.getByPlaceholder("Find in diff").fill("return");

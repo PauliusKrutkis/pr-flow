@@ -1,4 +1,3 @@
-// biome-ignore lint/correctness/noUnresolvedImports: Biome cannot resolve pnpm-linked package exports
 import { Check } from "lucide-react";
 import { type MouseEvent, useRef } from "react";
 import { cn } from "../../lib/cn.ts";

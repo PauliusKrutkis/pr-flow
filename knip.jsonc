@@ -4,14 +4,5 @@
   "tags": ["-lintignore"],
   // Rust/Tauri build output — not part of the JS/TS project graph.
   "ignoreFiles": ["**/src-tauri/target/**"],
-  "workspaces": {
-    ".": {
-      // Biome is invoked via the ultracite CLI, not imported directly.
-      "ignoreDependencies": ["@biomejs/biome"]
-    },
-    "packages/ui": {
-      // Peer-typed React package; types are needed once components land.
-      "ignoreDependencies": ["@types/react", "@types/react-dom"]
-    }
-  }
+  "ignoreDependencies": ["@biomejs/biome"]
 }
