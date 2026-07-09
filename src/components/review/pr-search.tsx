@@ -208,9 +208,9 @@ function PrSearchContent({
 
   useEffect(() => {
     listRef.current
-      ?.querySelector('[data-active="true"]')
+      ?.querySelector(`[data-index="${sel}"]`)
       ?.scrollIntoView({ block: "nearest" });
-  }, []);
+  }, [sel]);
 
   const choose = (it: Item) => {
     if (it.kind === "line" && it.anchor !== null) {
