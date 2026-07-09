@@ -38,6 +38,31 @@ test("j moves the line cursor; sidebar follows the cursor's file", async ({
   ).toBeVisible();
 });
 
+test("} and { move the cursor between diff chunks", async ({ page }) => {
+  const active = page.locator(".qf-row-active");
+
+  await page.keyboard.press("}");
+  await expect(active).toHaveAttribute("data-file-index", "0");
+
+  await page.keyboard.press("}");
+  await expect(active).toHaveAttribute("data-file-index", "1");
+
+  await page.keyboard.press("}");
+  await expect(active).toHaveAttribute("data-file-index", "2");
+  const hunk0Anchor = await active.getAttribute("data-anchor");
+
+  await page.keyboard.press("}");
+  await expect(active).toHaveAttribute("data-file-index", "2");
+  expect(await active.getAttribute("data-anchor")).not.toBe(hunk0Anchor);
+
+  await page.keyboard.press("{");
+  await expect(active).toHaveAttribute("data-file-index", "2");
+  expect(await active.getAttribute("data-anchor")).toBe(hunk0Anchor);
+
+  await page.keyboard.press("{");
+  await expect(active).toHaveAttribute("data-file-index", "1");
+});
+
 test("c opens the composer; adding batches a pending card", async ({
   page,
 }) => {

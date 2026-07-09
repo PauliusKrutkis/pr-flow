@@ -1314,6 +1314,7 @@ function useReviewHotkeys(config: {
   findStep: (dir: 1 | -1) => void;
   goInbox: () => void;
   goToComment: (delta: number) => void;
+  goToHunk: (delta: 1 | -1) => void;
   markViewedAndNext: () => void;
   occNavRefs: Parameters<typeof buildOccNav>[0];
   occSpec: OccState | null;
@@ -1386,6 +1387,20 @@ function useReviewHotkeys(config: {
       icon: ChevronLeft,
       keys: ["t"],
       run: config.prevFile,
+    },
+    {
+      description: "Next chunk",
+      group: "Navigation",
+      icon: ChevronsDown,
+      keys: "}",
+      run: () => config.goToHunk(1),
+    },
+    {
+      description: "Previous chunk",
+      group: "Navigation",
+      icon: ChevronsUp,
+      keys: "{",
+      run: () => config.goToHunk(-1),
     },
     {
       description: "Cycle files",
@@ -1908,6 +1923,37 @@ function useReviewFileNavigation(args: {
     }
   };
 
+  const goToHunk = (delta: 1 | -1) => {
+    const m = args.modelRef.current;
+    const starts = m.hunkStarts;
+    if (starts.length === 0) {
+      return;
+    }
+    markKeyboardNavigation(args);
+    const cur = args.cursorRef.current;
+    const curNav = cur
+      ? m.navIndexOf.get(fileAnchorKey(cur.fileIndex, cur.anchor))
+      : undefined;
+    const last = starts.at(-1) ?? starts[0];
+    let targetNav: number;
+    if (curNav === undefined) {
+      targetNav = delta > 0 ? starts[0] : last;
+    } else if (delta > 0) {
+      targetNav = starts.find((s) => s > curNav) ?? starts[0];
+    } else {
+      const before = starts.filter((s) => s < curNav);
+      targetNav = before.at(-1) ?? last;
+    }
+    const entry = m.nav[targetNav];
+    if (!entry) {
+      return;
+    }
+    args.setCursor({ anchor: entry.anchor, fileIndex: entry.fileIndex });
+    args.setActiveIndex(entry.fileIndex);
+    args.activeIndexRef.current = entry.fileIndex;
+    args.listRef.current?.centerItem(entry.itemIndex);
+  };
+
   const extendSelection = (delta: 1 | -1) => {
     const m = args.modelRef.current;
     markKeyboardNavigation(args);
@@ -1966,6 +2012,7 @@ function useReviewFileNavigation(args: {
     cycleFile,
     extendSelection,
     fileRafRef,
+    goToHunk,
     nextFile,
     pageScroll,
     prevFile,
@@ -2395,6 +2442,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     cycleFile,
     extendSelection,
     fileRafRef,
+    goToHunk,
     nextFile,
     pageScroll,
     prevFile,
@@ -2604,6 +2652,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     findStep,
     goInbox,
     goToComment,
+    goToHunk,
     markViewedAndNext,
     occNavRefs,
     occSpec,
