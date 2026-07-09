@@ -21,7 +21,6 @@ import { TokenGate } from "./components/token-gate.tsx";
 import { Kbd } from "./components/ui/kbd.tsx";
 import { Spinner } from "./components/ui/spinner.tsx";
 import { UpdatePrompt } from "./components/update-prompt.tsx";
-import { useLoadViewed } from "./hooks/use-viewed.ts";
 import type { Binding } from "./keyboard/types.ts";
 import { useHotkeys } from "./keyboard/use-hotkeys.ts";
 import { api } from "./lib/api.ts";
@@ -58,8 +57,6 @@ export default function App() {
     const t = window.setTimeout(() => setToast(null), 8000);
     return () => window.clearTimeout(t);
   }, [toast, setToast]);
-
-  useLoadViewed();
 
   useEffect(() => {
     const z = loadZoom();
