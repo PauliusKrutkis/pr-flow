@@ -278,9 +278,9 @@ mod tests {
 
     #[test]
     fn account_ids_are_filesystem_safe_and_deterministic() {
-        let id = account_id("gitlab", "https://gitlab.acme.dev", "paulius.k");
-        assert_eq!(id, "gitlab-https-gitlab-acme-dev-paulius-k");
-        assert_eq!(id, account_id("gitlab", "https://gitlab.acme.dev", "paulius.k"));
+        let id = account_id("gitlab", "https://gitlab.acme.dev", "demo-user");
+        assert_eq!(id, "gitlab-https-gitlab-acme-dev-demo-user");
+        assert_eq!(id, account_id("gitlab", "https://gitlab.acme.dev", "demo-user"));
     }
 
     #[test]

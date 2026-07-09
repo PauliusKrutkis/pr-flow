@@ -15,10 +15,8 @@ import { GlobalSearch } from "./components/global-search.tsx";
 import { HelpOverlay } from "./components/help-overlay.tsx";
 import { Inbox } from "./components/inbox/inbox.tsx";
 import { IssueTrackerDialog } from "./components/issue-tracker-dialog.tsx";
-import { PerfOverlay } from "./components/perf-overlay.tsx";
 import { ReviewScreen } from "./components/review/review-screen.tsx";
 import { ReviewNotifier } from "./components/review-notifier.tsx";
-import { StatusBar } from "./components/status-bar.tsx";
 import { TokenGate } from "./components/token-gate.tsx";
 import { Kbd } from "./components/ui/kbd.tsx";
 import { Spinner } from "./components/ui/spinner.tsx";
@@ -212,7 +210,7 @@ export default function App() {
       data-route={route.name}
     >
       {isMac && <div className="q-titlebar shrink-0" data-tauri-drag-region />}
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 flex-1 overflow-hidden">
         {route.name === "loading" && (
           <div className="flex h-full items-center justify-center">
             <Spinner label="Loading…" />
@@ -227,9 +225,6 @@ export default function App() {
           />
         )}
       </div>
-
-      {showRouteChrome ? <StatusBar baseScope={baseScope} /> : null}
-      <PerfOverlay />
 
       <div aria-live="polite" className="qb-stack qb-stack-host">
         {showRouteChrome ? <UpdatePrompt /> : null}

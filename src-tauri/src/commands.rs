@@ -16,9 +16,18 @@ fn inbox_cache_name(account_id: &str) -> String {
     format!("inbox_{account_id}.json")
 }
 
+fn cache_path_segment(segment: &str) -> String {
+    segment.replace(['/', '\\'], "_")
+}
+
 fn detail_cache_name(account_id: &str, owner: &str, repo: &str, number: u64) -> String {
-    let safe_owner = owner.replace(['/', '\\'], "_");
-    format!("pr_{account_id}_{safe_owner}_{repo}_{number}.json")
+    format!(
+        "pr_{}_{}_{}_{}.json",
+        cache_path_segment(account_id),
+        cache_path_segment(owner),
+        cache_path_segment(repo),
+        number
+    )
 }
 
 fn viewed_name(account_id: &str) -> String {
@@ -262,4 +271,27 @@ pub async fn get_viewed_map(app: AppHandle) -> Result<Value, String> {
 pub async fn set_viewed_map(app: AppHandle, map: Value) -> Result<(), String> {
     let account = accounts::active_account(&app).await?;
     storage::write_json(&app, &viewed_name(&account.id), &map)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{cache_path_segment, detail_cache_name};
+
+    #[test]
+    fn detail_cache_name_sanitizes_slashes_in_owner_and_repo() {
+        assert_eq!(
+            detail_cache_name(
+                "gitlab-https-gitlab-acme-dev-demo-user",
+                "acme-corp",
+                "frontend/widget-app",
+                42
+            ),
+            "pr_gitlab-https-gitlab-acme-dev-demo-user_acme-corp_frontend_widget-app_42.json"
+        );
+    }
+
+    #[test]
+    fn cache_path_segment_replaces_slashes_and_backslashes() {
+        assert_eq!(cache_path_segment("a/b\\c"), "a_b_c");
+    }
 }
