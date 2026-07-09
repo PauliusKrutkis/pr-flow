@@ -2,7 +2,9 @@
 //! redirect (RFC 8252 style). The app opens the browser to GitHub's authorize
 //! page, runs a one-shot `http://127.0.0.1` listener to catch the redirect,
 //! exchanges the `code` for an access token, validates it, and stores it — so
-//! the only thing the user does is log in once in the browser.
+//! the only thing the user does is log in once in the browser. The loopback
+//! listener is always bound before the browser is opened so the redirect can
+//! never race a closed port.
 //!
 //! Credentials come from the environment (kept out of the repo):
 //!   PRFLOW_GH_CLIENT_ID, PRFLOW_GH_CLIENT_SECRET
@@ -69,8 +71,6 @@ pub async fn login_with_github(app: AppHandle) -> Result<GitHubUser, String> {
     let (client_id, client_secret) = oauth_credentials()?;
     let state = make_state();
 
-    // Bind the loopback listener BEFORE opening the browser so the redirect
-    // never races a closed port.
     let listener = TcpListener::bind(("127.0.0.1", OAUTH_PORT)).map_err(|e| {
         format!("Couldn't start the local sign-in listener on port {OAUTH_PORT}: {e}")
     })?;
@@ -85,7 +85,6 @@ pub async fn login_with_github(app: AppHandle) -> Result<GitHubUser, String> {
         .append_pair("state", &state);
     open_in_browser(authorize.as_str())?;
 
-    // Wait for the redirect on a blocking thread so we don't stall the runtime.
     let wait_state = state.clone();
     let code = tokio::task::spawn_blocking(move || wait_for_code(listener, &wait_state))
         .await
@@ -224,7 +223,6 @@ pub async fn login_with_gitlab(
         .await
         .map_err(|e| format!("sign-in task failed: {e}"))??;
 
-    // Exchange the code — PKCE verifier instead of a client secret.
     let client = reqwest::Client::new();
     let resp = client
         .post(format!("{host}/oauth/token"))
@@ -253,7 +251,6 @@ pub async fn login_with_gitlab(
         .map(|s| s.to_string())
         .ok_or_else(|| "GitLab did not return an access token".to_string())?;
 
-    // Validate + store as a first-class account.
     let platform = GitLabPlatform::new(&host, &token)?;
     let user = platform.current_user().await?;
     accounts::upsert(
@@ -349,6 +346,9 @@ fn wait_for_code(listener: TcpListener, expected_state: &str) -> Result<String, 
     }
 }
 
+/// Parses one redirect hit from the raw HTTP request line
+/// (`GET /callback?code=…&state=… HTTP/1.1`): checks the `/callback` path,
+/// verifies `state`, and returns the `code`.
 fn handle_connection(
     stream: &mut TcpStream,
     expected_state: &str,
@@ -357,7 +357,6 @@ fn handle_connection(
     let n = stream.read(&mut buf).map_err(|e| e.to_string())?;
     let req = String::from_utf8_lossy(&buf[..n]);
     let first_line = req.lines().next().unwrap_or("");
-    // "GET /callback?code=...&state=... HTTP/1.1"
     let path = first_line.split_whitespace().nth(1).unwrap_or("");
 
     if !path.starts_with("/callback") {
