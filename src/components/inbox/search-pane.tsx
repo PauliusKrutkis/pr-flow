@@ -117,9 +117,9 @@ function SearchPaneContent({
 
   useEffect(() => {
     listRef.current
-      ?.querySelector('[data-active="true"]')
+      ?.querySelector(`[data-index="${sel}"]`)
       ?.scrollIntoView({ block: "nearest" });
-  }, []);
+  }, [sel]);
 
   const empty = q.length > 0 && results.length === 0;
 
@@ -225,6 +225,7 @@ function SearchResultRow({
       aria-selected={selected}
       className={cn("qsp-row", selected && "qsp-row-on")}
       data-active={selected}
+      data-index={index}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       onMouseMove={handleMouseMove}
