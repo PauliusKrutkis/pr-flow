@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
+import { useLatest } from "../hooks/use-latest.ts";
 import { useKeyboard } from "./keyboard-provider.tsx";
 import type { Binding } from "./types.ts";
 
@@ -19,20 +20,17 @@ export function useHotkeys(
 ): void {
   const { enabled = true, activate = true } = options;
   const { registerSource, pushScope } = useKeyboard();
-  const ref = useRef(bindings);
-  useEffect(() => {
-    ref.current = bindings;
-  });
+  const bindingsRef = useLatest(bindings);
 
   useEffect(() => {
     if (!enabled) {
       return;
     }
-    const unregister = registerSource(scope, () => ref.current);
+    const unregister = registerSource(scope, () => bindingsRef.current);
     const pop = activate ? pushScope(scope) : undefined;
     return () => {
       unregister();
       pop?.();
     };
-  }, [registerSource, pushScope, scope, enabled, activate]);
+  }, [registerSource, pushScope, scope, enabled, activate, bindingsRef]);
 }
