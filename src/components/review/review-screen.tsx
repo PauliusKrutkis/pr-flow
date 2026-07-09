@@ -2188,10 +2188,6 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     detail?.comments ?? EMPTY_COMMENTS
   );
 
-  useEffect(() => {
-    activeThreadRef.current = null;
-  }, []);
-
   const commentsByFile = buildCommentsByFile(
     detail?.comments ?? EMPTY_COMMENTS
   );
@@ -2280,7 +2276,6 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
   useLayoutEffect(() => {
     selectLineRef.current = selectLine;
   });
-  const selectLineLatestRef = useLatest(selectLine);
 
   const filesForHighlightRef = useLatest(files);
 
@@ -2473,7 +2468,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     occNavRef,
     occOriginRef,
     occSpecRef,
-    selectLineRef: selectLineLatestRef,
+    selectLineRef,
   };
 
   useOccurrenceTracking({
@@ -2483,7 +2478,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     occOriginRef,
     occRestoreRef,
     occSpecRef,
-    selectLineRef: selectLineLatestRef,
+    selectLineRef,
     setOccSpec,
   });
 
