@@ -273,18 +273,12 @@ pub async fn login_with_gitlab(
     Ok(user)
 }
 
+/// Opens the OAuth authorize page in the system default browser. Delegates to
+/// the opener plugin, which uses each platform's URL handler — notably
+/// `ShellExecute` on Windows, where spawning `explorer <url>` mis-parsed the
+/// `https://` argument and opened the Documents folder instead.
 fn open_in_browser(url: &str) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    let program = "open";
-    #[cfg(target_os = "windows")]
-    let program = "explorer";
-    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
-    let program = "xdg-open";
-
-    std::process::Command::new(program)
-        .arg(url)
-        .spawn()
-        .map(|_| ())
+    tauri_plugin_opener::open_url(url, None::<&str>)
         .map_err(|e| format!("couldn't open the browser: {e}"))
 }
 
