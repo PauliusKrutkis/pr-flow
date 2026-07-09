@@ -50,6 +50,7 @@ interface ComposerKeyHandlers {
   cancel: () => void;
   emptyChange: (empty: boolean) => void;
   flip: (() => void) | undefined;
+  insertSuggestion: (() => void) | undefined;
   openLink: (ed: Editor) => boolean;
   submit: () => void;
 }
@@ -86,6 +87,14 @@ const ComposerKeys = Extension.create({
         return true;
       },
       "Mod-k": ({ editor }) => HANDLERS.get(editor)?.openLink(editor) ?? false,
+      "Mod-Shift-g": ({ editor }) => {
+        const insert = HANDLERS.get(editor)?.insertSuggestion;
+        if (!insert) {
+          return false;
+        }
+        insert();
+        return true;
+      },
       "Shift-Tab": ({ editor }) => {
         const flip = HANDLERS.get(editor)?.flip;
         if (!flip || editor.isActive("listItem")) {
@@ -167,11 +176,37 @@ export function ComposerEditor({
     onUpdate: ({ editor: e }) => HANDLERS.get(e)?.emptyChange(e.isEmpty),
   });
 
+  /**
+   * A real block, rendered like the shipped suggestion card and serialized to
+   * the ```suggestion fence both hosts apply natively. The prefilled line is
+   * left selected so typing replaces it in place.
+   */
+  const insertSuggestion = () => {
+    const line = suggestionText ?? "";
+    editor
+      .chain()
+      .focus()
+      .insertContent({
+        attrs: { language: "suggestion" },
+        content: line ? [{ text: line, type: "text" }] : undefined,
+        type: "codeBlock",
+      })
+      .run();
+    if (line) {
+      const { to: selectionEnd } = editor.state.selection;
+      editor.commands.setTextSelection({
+        from: selectionEnd - line.length,
+        to: selectionEnd,
+      });
+    }
+  };
+
   useInsertionEffect(() => {
     HANDLERS.set(editor, {
       cancel: onCancel,
       emptyChange: onEmptyChange,
       flip: onModeFlip,
+      insertSuggestion: suggestionText === null ? undefined : insertSuggestion,
       openLink,
       submit: onSubmitRequest,
     });
@@ -196,32 +231,6 @@ export function ComposerEditor({
       link: e.isActive("link"),
     }),
   });
-
-  /**
-   * A real block, rendered like the shipped suggestion card and serialized to
-   * the ```suggestion fence both hosts apply natively. The prefilled line is
-   * left selected so typing replaces it in place.
-   */
-
-  const insertSuggestion = () => {
-    const line = suggestionText ?? "";
-    editor
-      .chain()
-      .focus()
-      .insertContent({
-        attrs: { language: "suggestion" },
-        content: line ? [{ text: line, type: "text" }] : undefined,
-        type: "codeBlock",
-      })
-      .run();
-    if (line) {
-      const { to: selectionEnd } = editor.state.selection;
-      editor.commands.setTextSelection({
-        from: selectionEnd - line.length,
-        to: selectionEnd,
-      });
-    }
-  };
 
   const applyLink = () => {
     setLinkOpen(false);
@@ -300,6 +309,7 @@ export function ComposerEditor({
                 type="button"
               >
                 <Diff aria-hidden size={12} />
+                <Kbd combo="mod+shift+g" />
                 Suggestion
               </button>
             )}
