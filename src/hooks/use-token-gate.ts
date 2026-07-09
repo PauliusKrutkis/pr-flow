@@ -1,12 +1,9 @@
+import { useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import {
-  type ChangeEvent,
-  type KeyboardEvent,
-  useEffect,
-  useState,
-} from "react";
+import { type ChangeEvent, type KeyboardEvent, useState } from "react";
 import { useHotkeys } from "../keyboard/use-hotkeys.ts";
 import { api } from "../lib/api.ts";
+import { queryKeys } from "../lib/query-client.ts";
 import { useAppStore } from "../store/app-store.ts";
 
 type View = "identity" | "selfhosted" | "token";
@@ -74,19 +71,16 @@ export function useTokenGate() {
   const [tokenHost, setTokenHost] = useState("");
   const [token, setToken] = useState("");
 
-  const [ghOauthReady, setGhOauthReady] = useState(true);
-  const [glOauthReady, setGlOauthReady] = useState(true);
-
-  useEffect(() => {
-    api
-      .isOAuthConfigured()
-      .then(setGhOauthReady)
-      .catch(() => setGhOauthReady(false));
-    api
-      .isGitlabOAuthConfigured()
-      .then(setGlOauthReady)
-      .catch(() => setGlOauthReady(false));
-  }, []);
+  const { data: ghOauthReady = true } = useQuery({
+    queryFn: () => api.isOAuthConfigured().catch(() => false),
+    queryKey: queryKeys.oauthConfigured("github"),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  const { data: glOauthReady = true } = useQuery({
+    queryFn: () => api.isGitlabOAuthConfigured().catch(() => false),
+    queryKey: queryKeys.oauthConfigured("gitlab"),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
 
   const instances = (() => {
     const list = loadInstances();
