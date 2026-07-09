@@ -89,6 +89,18 @@ test("the suggestion block round-trips: insert, edit in place, pending card", as
   );
 });
 
+test("mod+shift+g inserts the suggestion block from the keyboard", async ({
+  page,
+}) => {
+  const ed = box(page);
+  await page.keyboard.press("Control+Shift+g");
+  const sugg = ed.locator("pre code.language-suggestion");
+  await expect(sugg).toHaveText("export function alpha() {");
+  await expect(ed).toBeFocused();
+  await page.keyboard.type("export function alpha(): number {");
+  await expect(sugg).toHaveText("export function alpha(): number {");
+});
+
 test("esc backs out of the composer without leaving the review", async ({
   page,
 }) => {
