@@ -95,7 +95,10 @@ export function AddCommentBox({
         {onSecondary ? (
           <div aria-label="When to post" className="qa-seg" role="radiogroup">
             <label
-              className={cn("qa-seg-btn q-focus", mode === "batch" && "qa-seg-on")}
+              className={cn(
+                "qa-seg-btn q-focus",
+                mode === "batch" && "qa-seg-on"
+              )}
             >
               <input
                 aria-checked={mode === "batch"}
@@ -109,7 +112,10 @@ export function AddCommentBox({
               {submitLabel}
             </label>
             <label
-              className={cn("qa-seg-btn q-focus", mode === "now" && "qa-seg-on")}
+              className={cn(
+                "qa-seg-btn q-focus",
+                mode === "now" && "qa-seg-on"
+              )}
             >
               <input
                 aria-checked={mode === "now"}

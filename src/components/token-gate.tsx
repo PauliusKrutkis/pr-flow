@@ -334,7 +334,10 @@ function TokenPanel({
       <fieldset className="qa-seg mb-4">
         <legend className="sr-only">Provider</legend>
         <label
-          className={cn("qa-seg-btn", tokenProvider === "github" && "qa-seg-on")}
+          className={cn(
+            "qa-seg-btn",
+            tokenProvider === "github" && "qa-seg-on"
+          )}
         >
           <input
             checked={tokenProvider === "github"}
@@ -347,7 +350,10 @@ function TokenPanel({
           <GitHubMark /> GitHub
         </label>
         <label
-          className={cn("qa-seg-btn", tokenProvider === "gitlab" && "qa-seg-on")}
+          className={cn(
+            "qa-seg-btn",
+            tokenProvider === "gitlab" && "qa-seg-on"
+          )}
         >
           <input
             checked={tokenProvider === "gitlab"}
