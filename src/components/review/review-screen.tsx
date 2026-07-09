@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsDown,
+  ChevronsDownUp,
   ChevronsUp,
   Copy,
   ExternalLink,
@@ -1329,6 +1330,7 @@ function useReviewHotkeys(config: {
   setPrSearch: (mode: null | "files" | "text") => void;
   setRightOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setSelection: (s: LineSelection | null) => void;
+  toggleActiveThread: () => void;
   toggleViewedFile: () => void;
 }): void {
   const bindings = [
@@ -1428,6 +1430,13 @@ function useReviewHotkeys(config: {
       icon: CheckCircle2,
       keys: "x",
       run: config.resolveActiveThread,
+    },
+    {
+      description: "Expand / collapse comment",
+      group: "Comments",
+      icon: ChevronsDownUp,
+      keys: "z",
+      run: config.toggleActiveThread,
     },
     {
       description: "Mark viewed & next",
@@ -1626,7 +1635,15 @@ function useReviewThreadActions(args: {
     } | null>
   >;
   setRightOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setToggleReq: React.Dispatch<
+    React.SetStateAction<{
+      rootId: number;
+      path: string;
+      nonce: number;
+    } | null>
+  >;
   threadFlashRef: React.RefObject<ReturnType<typeof setTimeout> | null>;
+  toggleNonceRef: React.RefObject<number>;
 }) {
   const jumpToThread = (path: string, rootId: number) => {
     const m = args.modelRef.current;
@@ -1700,11 +1717,21 @@ function useReviewThreadActions(args: {
     });
   };
 
+  const toggleActiveThread = () => {
+    const t = args.activeThreadRef.current;
+    if (!t) {
+      return;
+    }
+    args.toggleNonceRef.current += 1;
+    args.setToggleReq({ ...t, nonce: args.toggleNonceRef.current });
+  };
+
   return {
     goToComment,
     jumpToThread,
     replyToActiveThreadOrNextFile,
     resolveActiveThread,
+    toggleActiveThread,
   };
 }
 
@@ -2108,6 +2135,11 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     path: string;
     nonce: number;
   } | null>(null);
+  const [toggleReq, setToggleReq] = useState<{
+    rootId: number;
+    path: string;
+    nonce: number;
+  } | null>(null);
 
   const [collapsed, setCollapsed] =
     useState<ReadonlyMap<number, ReadonlySet<number>>>(EMPTY_COLLAPSED);
@@ -2133,6 +2165,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveStateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replyNonceRef = useRef(0);
+  const toggleNonceRef = useRef(0);
   const threadFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeThreadRef = useRef<{ rootId: number; path: string } | null>(null);
@@ -2509,6 +2542,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     jumpToThread,
     replyToActiveThreadOrNextFile,
     resolveActiveThread,
+    toggleActiveThread,
   } = useReviewThreadActions({
     activeIndexRef,
     activeThreadRef,
@@ -2524,7 +2558,9 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     setCommentIndex,
     setReplyReq,
     setRightOpen,
+    setToggleReq,
     threadFlashRef,
+    toggleNonceRef,
   });
 
   const {
@@ -2619,6 +2655,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     setPrSearch,
     setRightOpen,
     setSelection,
+    toggleActiveThread,
     toggleViewedFile,
   });
 
@@ -2793,6 +2830,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
                     }
                   : null
               }
+              toggleRequest={toggleReq}
               viewedSet={viewedSet}
             />
           )}

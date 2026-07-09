@@ -12,6 +12,11 @@ export interface ReplyRequest {
   rootId: number;
 }
 
+export interface ToggleRequest {
+  nonce: number;
+  rootId: number;
+}
+
 interface CommentThreadProps {
   comments: ReviewComment[];
   onHoverChange?: (hovering: boolean) => void;
@@ -19,6 +24,7 @@ interface CommentThreadProps {
   onResolve?: (a: { threadId: string; resolved: boolean }) => void;
   replyPending: boolean;
   replyRequest?: ReplyRequest | null;
+  toggleRequest?: ToggleRequest | null;
 }
 
 export function CommentThread({
@@ -28,6 +34,7 @@ export function CommentThread({
   onResolve,
   onHoverChange,
   replyRequest,
+  toggleRequest,
 }: CommentThreadProps) {
   const [replying, setReplying] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -47,6 +54,13 @@ export function CommentThread({
     });
     return () => cancelAnimationFrame(raf);
   }, [replyRequest, rootId]);
+
+  useEffect(() => {
+    if (!toggleRequest || toggleRequest.rootId !== rootId) {
+      return;
+    }
+    setExpanded((v) => !v);
+  }, [toggleRequest, rootId]);
 
   const submitReply = (body: string) => {
     if (rootId !== undefined) {

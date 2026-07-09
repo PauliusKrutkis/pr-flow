@@ -39,6 +39,23 @@ test("resolve collapses the thread; expanding offers unresolve", async ({
   ).toBeVisible();
 });
 
+test("z expands and collapses the active resolved thread", async ({ page }) => {
+  const thread = page.locator('[data-comment-root="100"]');
+  await thread.hover();
+  await page.keyboard.press("x");
+  const collapsed = page.locator(".qf-thread-collapsed");
+  await expect(collapsed).toBeVisible();
+
+  await collapsed.hover();
+  await page.keyboard.press("z");
+  await expect(page.locator(".qf-thread-collapsed")).toHaveCount(0);
+  await expect(thread.getByText("Is this constant right?")).toBeVisible();
+
+  await thread.hover();
+  await page.keyboard.press("z");
+  await expect(page.locator(".qf-thread-collapsed")).toBeVisible();
+});
+
 test("r on a hovered thread opens its reply composer", async ({ page }) => {
   const thread = page.locator('[data-comment-root="100"]');
   await thread.hover();
