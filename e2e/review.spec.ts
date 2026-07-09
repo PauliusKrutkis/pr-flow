@@ -6,6 +6,7 @@ const COPY_FILE_PATH = /Copy file path/;
 const COPY_PR_LINK = /Copy PR link/;
 const REVIEW_REQUESTS = /Review requests/;
 const QF_ROW_FLASH = /qf-row-flash/;
+const QF_FILE_ACTIVE = /qf-file-active/;
 
 test.beforeEach(async ({ page }) => {
   await setupApp(page);
@@ -393,6 +394,22 @@ test("after esc-closing from the composer, i reopens the drawer", async ({
     "aria-hidden",
     "false"
   );
+});
+
+test("clicking a sidebar file blurs it so no focus ring lingers after r/t", async ({
+  page,
+}) => {
+  const file2 = page.locator('.qf-file[data-file-index="2"]');
+  await file2.click();
+  await expect(file2).toHaveClass(QF_FILE_ACTIVE);
+  await expect(page.locator(".qf-file:focus")).toHaveCount(0);
+
+  await page.keyboard.press("t");
+  await expect(page.locator('.qf-file[data-file-index="1"]')).toHaveClass(
+    QF_FILE_ACTIVE
+  );
+  await expect(file2).not.toHaveClass(QF_FILE_ACTIVE);
+  await expect(page.locator(".qf-file:focus")).toHaveCount(0);
 });
 
 test("comment posting is optimistic even when the network hangs", async ({

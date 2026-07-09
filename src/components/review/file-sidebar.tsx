@@ -51,7 +51,9 @@ function splitPath(filename: string): { dir: string; base: string } {
 /**
  * The Quiet review sidebar: a calm flat file list. Progress reads through the
  * viewed ticks and the header count; directory grouping is intentionally
- * dropped in favor of the flat list.
+ * dropped in favor of the flat list. A mouse click blurs the row after
+ * selecting so its focus ring never lingers once keyboard nav (r/t) moves the
+ * active file elsewhere.
  */
 export function FileSidebar({
   files,
@@ -109,6 +111,7 @@ export function FileSidebar({
   const handleFileClick = (e: MouseEvent<HTMLButtonElement>) => {
     const index = Number(e.currentTarget.dataset.fileIndex);
     onSelect(index);
+    e.currentTarget.blur();
   };
 
   return (
