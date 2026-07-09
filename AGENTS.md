@@ -121,3 +121,11 @@ Biome's linter will catch most issues automatically. Focus your attention on:
 ---
 
 Most formatting and common issues are automatically fixed by Biome. Run `pnpm dlx ultracite fix` before committing to ensure compliance.
+
+## Skills
+
+Reusable agent workflows live in `skills/<name>/SKILL.md` ([Agent Skills](https://agentskills.io) format, agent-agnostic).
+
+- **skills/split-pr/SKILL.md**: follow this whenever splitting a large branch into PRs, opening a PR, or judging whether a diff is too large. It defines the PR quality gate (CI + knip green, ~300-line soft budget, one intent per PR) and UI evidence requirements (screenshots always, video for interactions).
+
+Agents with native skill discovery can symlink their skills directory to `skills/` (Factory already does via `.factory/skills`).
