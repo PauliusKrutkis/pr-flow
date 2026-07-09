@@ -215,6 +215,8 @@ pub async fn list_accounts(app: AppHandle) -> Result<AccountsInfo, String> {
     Ok(info_file(&load_migrated(&app).await?))
 }
 
+/// Probes the token against the host before persisting so a bad token is never
+/// written to `accounts.json`.
 #[tauri::command]
 pub async fn add_account(
     app: AppHandle,
@@ -227,7 +229,6 @@ pub async fn add_account(
         return Err("Token is empty".to_string());
     }
     let host = normalize_host(&provider, host);
-    // Validate before persisting so we never store a bad token.
     let probe = Account {
         id: String::new(),
         provider: provider.clone(),

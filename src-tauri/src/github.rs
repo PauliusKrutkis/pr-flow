@@ -745,7 +745,6 @@ impl GitHubPlatform {
 }"#;
         let mut map = std::collections::HashMap::new();
         let mut cursor: Option<String> = None;
-        // Same page cap as get_all_pages — a runaway cursor never loops forever.
         let mut pages = 0u32;
         loop {
             pages += 1;
@@ -928,6 +927,8 @@ impl GitHubPlatform {
 
     /// Fetches a file's raw contents at a given ref (sha or branch). Used by
     /// the image diff view to load the before/after versions of a binary file.
+    /// The request URL is built through `url::Url` so exotic characters in the
+    /// path are percent-encoded safely.
     pub async fn file_blob(
         &self,
         owner: &str,
@@ -937,7 +938,6 @@ impl GitHubPlatform {
     ) -> Result<FileBlob, String> {
         use base64::{engine::general_purpose::STANDARD, Engine as _};
 
-        // Build via Url so exotic path characters are percent-encoded safely.
         let mut u = url::Url::parse(API).map_err(|e| e.to_string())?;
         u.set_path(&format!("repos/{owner}/{repo}/contents/{path}"));
         u.query_pairs_mut().append_pair("ref", r#ref);
