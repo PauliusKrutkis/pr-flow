@@ -23,7 +23,6 @@ jobs:
         # webkit runs the perf specs (playwright.config.ts webkit-perf): the
         # app ships on Tauri's WebKitGTK, and Chromium-only budgets can pass
         # while the real engine lags.
-        run: npx --prefix apps/desktop playwright install --with-deps chromium webkit
+        run: pnpm exec playwright install --with-deps chromium webkit
       - name: Run e2e
-        working-directory: apps/desktop
         run: pnpm e2e

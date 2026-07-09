@@ -67,7 +67,7 @@ jobs:
 
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: apps/desktop/src-tauri
+          workspaces: src-tauri
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
@@ -85,7 +85,7 @@ jobs:
           PRFLOW_GH_CLIENT_SECRET: ${{ secrets.PRFLOW_GH_CLIENT_SECRET }}
           NOD_GITLAB_CLIENT_ID: ${{ vars.NOD_GITLAB_CLIENT_ID }}
         with:
-          projectPath: apps/desktop
+          projectPath: .
           tagName: ${{ github.ref_name }}
           releaseName: "Nod ${{ github.ref_name }}"
           releaseBody: "See the assets below to install this version. The app auto-updates from here on."

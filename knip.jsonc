@@ -1,0 +1,8 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
+  // Suppress exports tagged @lintignore in source (see knip docs).
+  "tags": ["-lintignore"],
+  // Rust/Tauri build output — not part of the JS/TS project graph.
+  "ignoreFiles": ["**/src-tauri/target/**"],
+  "ignoreDependencies": ["@biomejs/biome"]
+}

@@ -36,13 +36,10 @@ jobs:
 
       - uses: millionco/react-doctor@v2
         with:
-          # The React app lives in the desktop workspace package; the repo
-          # root is a pnpm monorepo with no React of its own.
-          directory: apps/desktop
           # Fail the check on ANY new finding (relative to the merge base) —
           # errors and warnings alike. The branch slate is clean (0/0);
           # deliberate style disagreements are configured in
-          # apps/desktop/doctor.config.json instead of tolerated as noise.
+          # doctor.config.json instead of tolerated as noise.
           blocking: warning
         # Full reference: https://www.react.doctor/ci
         # with:

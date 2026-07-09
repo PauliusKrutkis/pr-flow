@@ -17,14 +17,14 @@ near-pure modules today — high value, low setup cost.
 
 | Layer | Runner | Notes |
 | --- | --- | --- |
-| TS unit + component | [Vitest](https://vitest.dev) + `@testing-library/react` + jsdom | Native Vite integration (we're on Vite 7); `pnpm --filter @pr-flow/desktop test` |
+| TS unit + component | [Vitest](https://vitest.dev) + `@testing-library/react` + jsdom | Native Vite integration (we're on Vite 7); `pnpm test` |
 | Rust unit + integration | `cargo test` (built-in) | Fixture JSON under `src-tauri/tests/fixtures/`; no new deps beyond `serde_json` already present |
 | CI | Extend `.github/workflows` with a `test` job on PRs | Typecheck + vitest + cargo test; no bundling |
 
 Vitest over Jest: shares the Vite pipeline/config, no transform drift, faster
 watch mode.
 
-## Coverage map — TypeScript (`apps/desktop/src`)
+## Coverage map — TypeScript (`src`)
 
 ### Priority 1 — pure logic (unit)
 
@@ -32,9 +32,9 @@ watch mode.
 | --- | --- |
 | `lib/diff.ts` | `parsePatch`: hunk headers, add/del/context numbering, `\ No newline` metadata, empty/undefined patch, multi-hunk offsets, `changedRowCount` |
 | `lib/highlight.ts` | language resolution by extension/basename; block-comment continuation heuristic (`* …`, `*/`, false-positive guard for `*ptr`); `highlightLineWithMatch` mark wrapping across token boundaries; HTML escaping of un-highlightable input |
-| `components/ui/Highlight.tsx` | `fuzzyIndices` (match/no-match/empty query); `HighlightMatch` multi-occurrence segmentation |
-| `store/appStore.ts` | archive semantics (`dismiss`/`undoDismiss`/`isDismissed` resurfacing on newer `updatedAt`); unread (`markSeen`/`isUnread`); route persistence (`loadLastRoute` validation of malformed JSON) |
-| `lib/reviewMemory.ts` | debounced write, merge-on-update, corrupt-storage fallback |
+| `components/ui/highlight.tsx` | `fuzzyIndices` (match/no-match/empty query); `HighlightMatch` multi-occurrence segmentation |
+| `store/app-store.ts` | archive semantics (`dismiss`/`undoDismiss`/`isDismissed` resurfacing on newer `updatedAt`); unread (`markSeen`/`isUnread`); route persistence (`loadLastRoute` validation of malformed JSON) |
+| `lib/review-memory.ts` | debounced write, merge-on-update, corrupt-storage fallback |
 | `lib/time.ts` | relative formatting boundaries |
 
 ### Priority 2 — keyboard & interaction model (component/integration)
@@ -44,7 +44,7 @@ invisible to typecheck.
 
 | Area | What to pin down |
 | --- | --- |
-| `keyboard/KeyboardProvider.tsx` | scope precedence (active vs global), two-key sequences (`]c`) + timeout, editable-target bypass, modifier combos (`mod+k`, shift-stripped alt combo), unbound-Tab swallowing, first-match-wins source ordering |
+| `keyboard/keyboard-provider.tsx` | scope precedence (active vs global), two-key sequences (`]c`) + timeout, editable-target bypass, modifier combos (`mod+k`, shift-stripped alt combo), unbound-Tab swallowing, first-match-wins source ordering |
 | `DiffViewer` cursor model | rAF-coalesced j/k (fake timers), hover→cursor sync, pointer-intent gate (hover with unmoved coordinates is ignored while a keyboard hold is active), boundary exit → `onCursorExit`, seed placement (`first`/`last`), jump landing + flash |
 | `ReviewScreen` file navigation | active-index hysteresis (eager down / reluctant up), Tab wrap-around, `e` mark-viewed-and-advance, windowing set only grows |
 | `Inbox` | archive flow end-to-end with the store (row disappears, cursor lands on neighbor, `z` restores), tab cycling incl. Shift |
@@ -60,7 +60,7 @@ than calling handlers directly — the dispatch path is where the bugs were.
 query cache is empty), `useComments` mutation → query invalidation. Mock
 `lib/api.ts` at the module boundary; no Tauri runtime needed.
 
-## Coverage map — Rust (`apps/desktop/src-tauri`)
+## Coverage map — Rust (`src-tauri`)
 
 ### Priority 1 — provider mapping (unit, fixture-driven)
 

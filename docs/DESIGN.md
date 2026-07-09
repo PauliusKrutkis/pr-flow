@@ -94,29 +94,29 @@ for the rework; the goal is to make them feel like one system.
 
 | View | File | Purpose & key elements |
 | --- | --- | --- |
-| **Auth / Token gate** | `components/TokenGate.tsx` | First-run. "Sign in with GitHub" (OAuth loopback) + PAT fallback; OAuth "needs setup" hint. |
-| **Inbox** | `components/inbox/Inbox.tsx`, `PRListItem.tsx` | Home. Four tabs (Review requests · Assigned · Created · Involved) with counts; `j/k` cursor; unread dots; transient `/` search; **zero-state**. |
-| **Review** | `components/review/ReviewScreen.tsx` | The heart of the app. Header (title, state/draft badge, `+/−`, viewed count, pending count, Review/Open). Composes the panels below. |
+| **Auth / Token gate** | `components/token-gate.tsx` | First-run. "Sign in with GitHub" (OAuth loopback) + PAT fallback; OAuth "needs setup" hint. |
+| **Inbox** | `components/inbox/inbox.tsx`, `PRListItem.tsx` | Home. Four tabs (Review requests · Assigned · Created · Involved) with counts; `j/k` cursor; unread dots; transient `/` search; **zero-state**. |
+| **Review** | `components/review/review-screen.tsx` | The heart of the app. Header (title, state/draft badge, `+/−`, viewed count, pending count, Review/Open). Composes the panels below. |
 
 ### Review sub-surfaces
 
 | View | File | Purpose & key elements |
 | --- | --- | --- |
-| **File sidebar** | `review/FileSidebar.tsx` | The changed-file tree; per-file `+/−` and viewed state; cursor follows `n`/`p`. |
+| **File sidebar** | `review/file-sidebar.tsx` | The changed-file tree; per-file `+/−` and viewed state; cursor follows `n`/`p`. |
 | **Diff viewer** | `review/DiffViewer.tsx` | Syntax-highlighted, collapsible hunks; a **line cursor** (`j`/`k`); gutter `+` to comment (`c`). |
-| **Comment thread** | `review/CommentThread.tsx` | Grouped inline threads (root + replies) anchored to a line; reply box. |
-| **Add-comment box** | `review/AddCommentBox.tsx` | Inline composer: "add to review" (batch) vs "comment now". |
-| **Info panel** | `review/RightPanel.tsx` | PR description (markdown) + PR-level comment composer. Toggled with `i`. |
-| **Submit review modal** | `review/SubmitReviewModal.tsx` | Approve / Request changes / Comment, with the batched pending count. |
+| **Comment thread** | `review/comment-thread.tsx` | Grouped inline threads (root + replies) anchored to a line; reply box. |
+| **Add-comment box** | `review/add-comment-box.tsx` | Inline composer: "add to review" (batch) vs "comment now". |
+| **Info panel** | `review/right-panel.tsx` | PR description (markdown) + PR-level comment composer. Toggled with `i`. |
+| **Submit review modal** | `review/submit-review-modal.tsx` | Approve / Request changes / Comment, with the batched pending count. |
 
 ### Global overlays & chrome
 
 | View | File | Purpose |
 | --- | --- | --- |
-| **Command palette** | `components/CommandPalette.tsx` | `⌘K` — run any command or jump to any PR by number / title / author. |
-| **Help overlay** | `components/HelpOverlay.tsx` | `?` — shortcut cheatsheet, generated from live bindings. |
-| **Status bar** | `components/StatusBar.tsx` | Persistent footer legend of context-relevant keys. |
-| **Markdown** | `components/Markdown.tsx` | Shared sanitized markdown renderer (`.md` styles in `index.css`). |
+| **Command palette** | `components/command-palette.tsx` | `⌘K` — run any command or jump to any PR by number / title / author. |
+| **Help overlay** | `components/help-overlay.tsx` | `?` — shortcut cheatsheet, generated from live bindings. |
+| **Status bar** | `components/status-bar.tsx` | Persistent footer legend of context-relevant keys. |
+| **Markdown** | `components/markdown.tsx` | Shared sanitized markdown renderer (`.md` styles in `index.css`). |
 | **UI primitives** | `components/ui/` | `Badge`, `EmptyState`, `Kbd`, `Spinner` — the seeds of a component layer. |
 
 ### Incoming surfaces (in flight on the `docs/backlog` PR)

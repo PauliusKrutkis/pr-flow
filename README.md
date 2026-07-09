@@ -71,6 +71,10 @@ comments: use the composer in the info panel (`i`).
 
 ## Architecture
 
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for layering and comment conventions,
+[docs/RUST.md](docs/RUST.md) for the Tauri backend module map,
+and state/caching notes. Overview:
+
 ```
 ┌──────────────────────────── Webview (React) ────────────────────────────┐
 │  Inbox / Review screens  ·  keyboard layer  ·  zustand UI state          │
@@ -235,7 +239,7 @@ git tag v0.1.1 && git push origin v0.1.1
 The `release.yml` workflow builds macOS (arm64 + x64), Windows and Linux
 bundles, signs the updater artifacts, publishes a GitHub Release with
 `latest.json`, and bumps the Homebrew tap (when the `TAP_REPO_TOKEN` secret is
-set). Bump `version` in `apps/desktop/src-tauri/tauri.conf.json` before
+set). Bump `version` in `src-tauri/tauri.conf.json` before
 tagging — that's the version the updater compares against.
 
 Signing secrets (already configured): `TAURI_SIGNING_PRIVATE_KEY` (from

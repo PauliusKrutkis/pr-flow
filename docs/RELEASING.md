@@ -8,7 +8,7 @@ public later.
 
 ```bash
 # 1. Bump the app version (this is what the updater compares against)
-#    apps/desktop/src-tauri/tauri.conf.json  →  "version": "0.1.1"
+#    src-tauri/tauri.conf.json  →  "version": "0.1.1"
 
 # 2. Commit, tag, push
 git commit -am "release: v0.1.1"
@@ -65,7 +65,7 @@ drive the whole loop on your machine:
 1. **Build + install the "old" version** (0.1.0):
 
    ```bash
-   cd apps/desktop
+   cd /path/to/pr-flow
    TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/prflow.key)" pnpm tauri build --bundles app
    cp -r "src-tauri/target/release/bundle/macos/Nod.app" /Applications/
    ```
@@ -118,7 +118,7 @@ drive the whole loop on your machine:
 ## Local builds (for handing someone a one-off)
 
 ```bash
-cd apps/desktop
+cd /path/to/pr-flow
 TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/prflow.key)" pnpm tauri build --bundles app
 ```
 
@@ -138,8 +138,8 @@ Gotchas learned the hard way:
   final before the first real release — it now is. Note: the *repo* is still
   `pr-flow`; renaming it on GitHub is optional (GitHub redirects old URLs,
   including release downloads, so the updater endpoint keeps working).
-- [x] **Icon: the keycap** (resting variant from the design-lab gallery,
-  view 9) — `apps/desktop/app-icon.svg` is the source; platform sizes in
+- [x] **Icon: the keycap** (resting variant from the original design exploration,
+  view 9) — `app-icon.svg` is the source; platform sizes in
   `src-tauri/icons/` were regenerated with `pnpm tauri icon`. To change it
   later: edit the SVG, export 1024×1024 PNG, re-run `pnpm tauri icon <png>`.
 - [ ] Decide repo visibility (public vs releases-only repo, above).

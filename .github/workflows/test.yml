@@ -23,9 +23,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Typecheck
-        run: pnpm -r typecheck
+        run: pnpm typecheck
       - name: Unit tests
-        run: pnpm --filter @pr-flow/desktop test
+        run: pnpm test
 
   rust:
     runs-on: ubuntu-22.04
@@ -40,6 +40,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: apps/desktop/src-tauri
+          workspaces: src-tauri
       - name: Unit tests
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
+        run: cargo test --manifest-path src-tauri/Cargo.toml
