@@ -508,7 +508,6 @@ function jumpFromOccMark(
 
 function handleOccPointerClick(
   e: MouseEvent,
-  findOpenRef: React.RefObject<boolean>,
   occSpecRef: React.RefObject<OccState | null>,
   occNav: OccNav,
   occNavRef: React.RefObject<number>,
@@ -517,9 +516,6 @@ function handleOccPointerClick(
     origin?: { anchor: string; column: number } | null
   ) => void
 ): void {
-  if (findOpenRef.current) {
-    return;
-  }
   if (e.detail > 1) {
     return;
   }
@@ -560,6 +556,7 @@ function handleOccPointerClick(
 }
 
 function useOccurrenceTracking(refs: {
+  closeFindRef: React.RefObject<() => void>;
   findOpenRef: React.RefObject<boolean>;
   occMatchListRef: React.RefObject<OccurrenceMatch[]>;
   occNavRef: React.RefObject<number>;
@@ -576,6 +573,7 @@ function useOccurrenceTracking(refs: {
   setOccSpec: (next: OccState | null) => void;
 }): void {
   const {
+    closeFindRef,
     findOpenRef,
     occMatchListRef,
     occNavRef,
@@ -617,15 +615,15 @@ function useOccurrenceTracking(refs: {
       if (prev === next) {
         return;
       }
+      if (next && findOpenRef.current) {
+        closeFindRef.current();
+      }
       occRestoreRef.current = captureCodeSelection();
       setOccSpec(next);
     }
 
     function apply() {
       timer = null;
-      if (findOpenRef.current) {
-        return;
-      }
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
         return;
@@ -645,14 +643,7 @@ function useOccurrenceTracking(refs: {
         clearTimeout(timer);
         timer = null;
       }
-      handleOccPointerClick(
-        e,
-        findOpenRef,
-        occSpecRef,
-        occNav,
-        occNavRef,
-        commit
-      );
+      handleOccPointerClick(e, occSpecRef, occNav, occNavRef, commit);
     }
 
     document.addEventListener("selectionchange", onSelectionChange);
@@ -665,6 +656,7 @@ function useOccurrenceTracking(refs: {
       }
     };
   }, [
+    closeFindRef,
     findOpenRef,
     occMatchListRef,
     occNavRef,
@@ -1797,6 +1789,7 @@ function useReviewFind(args: {
   const closeFind = () => {
     setFindOpen(false);
   };
+  const closeFindRef = useLatest(closeFind);
 
   const findStep = (dir: 1 | -1) => {
     const n = findMatches.length;
@@ -1818,6 +1811,7 @@ function useReviewFind(args: {
   return {
     changeFindQuery,
     closeFind,
+    closeFindRef,
     findCase,
     findCurrent,
     findFocusSeq,
@@ -2224,6 +2218,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
   const {
     changeFindQuery,
     closeFind,
+    closeFindRef,
     findCase,
     findCurrent,
     findFocusSeq,
@@ -2472,6 +2467,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
   };
 
   useOccurrenceTracking({
+    closeFindRef,
     findOpenRef,
     occMatchListRef,
     occNavRef,
