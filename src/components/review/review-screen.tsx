@@ -1950,7 +1950,7 @@ function useReviewFileNavigation(args: {
     }
     args.setCursor({ anchor: entry.anchor, fileIndex: entry.fileIndex });
     args.setActiveIndex(entry.fileIndex);
-    args.activeIndexRef.current = entry.fileIndex;
+    syncActiveIndexRef(args.activeIndexRef, entry.fileIndex);
     args.listRef.current?.centerItem(entry.itemIndex);
   };
 
