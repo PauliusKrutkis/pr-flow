@@ -60,7 +60,7 @@ Given a large branch, diff, or described change:
    - Use `git checkout -b <slice-branch> <base>` then apply the relevant hunks (`git checkout <source-branch> -- <files>` for whole files, `git apply` with extracted patches, or interactive staging for mixed files).
    - Never mutate the user's original branch; it stays untouched as the source of truth.
 4. **Run the full gate** (rules 4-5 above). Fix failures within the slice's intent; if a fix belongs to another slice, move the hunk there and re-plan.
-5. **Capture UI evidence** if the slice touches UI (see below).
+5. **Capture, host, and embed UI evidence** if the slice touches UI — upload to the `pr-evidence` release and put the resulting URLs in the body (see "UI evidence"). A bare `evidence/*.png` path in the description does not render.
 6. **Open the PR** with `gh pr create`, base set correctly (main, or previous stack branch). Description template:
 
    ```markdown
@@ -76,7 +76,8 @@ Given a large branch, diff, or described change:
    - <specific tests added/updated and what they prove>
 
    ## Evidence (UI PRs)
-   <screenshots; video if interaction/animation changed>
+   ![<caption>](https://github.com/<owner>/<repo>/releases/download/pr-evidence/<asset>.png)
+   <one embedded image per screenshot; for video, link the asset: [▶ <caption>](…/pr-evidence/<asset>.webm)>
 
    Stack: N/M, based on `<base-branch>` (omit if standalone)
    Size note: <justification, only if over ~300 line budget>
@@ -89,14 +90,36 @@ Do not push or open PRs without the user's go-ahead on the plan.
 
 A PR counts as a UI PR if it changes anything rendered (components, styles, layout) under `src/`.
 
+### Capture
+
 - **Screenshots: always.** Capture from the Playwright run at 1280x800 (the configured viewport), showing the changed surface before/after where meaningful. Use `page.screenshot()` in the relevant spec or `--update-snapshots` artifacts.
 - **Video: only when interaction or animation changed** (hover, drag, transitions, scrolling behavior, keyboard flows). Run the relevant spec with video enabled:
   ```sh
   pnpm exec playwright test <spec> --project=chromium
   ```
-  with `use: { video: 'on' }` passed via a temporary config override or `--config` variant; attach the resulting `test-results/**/video.webm`.
+  with `use: { video: 'on' }` passed via a temporary config override or `--config` variant; use the resulting `test-results/**/video.webm`.
 - Every UI slice must include or extend a Playwright e2e spec in `e2e/` that exercises the changed UI; the evidence must come from that spec run, not from manually poking the dev server.
 - Remember e2e runs on its own port (default 14205, `E2E_PORT` to override) and never reuses a running server.
+- Save captured files under `evidence/` with a slice-scoped prefix so asset names never collide across PRs (e.g. `p05-collapsed.png`, `chunk-keybind-cursor.png`).
+
+### Host, then embed (required — a bare file path never renders)
+
+A PR description does **not** resolve repo-relative paths, and `gh pr create` cannot upload files. Listing `evidence/foo.png` as text produces nothing on GitHub. Every asset must be uploaded to a stable URL and embedded with that URL. This skill uses a single rolling GitHub **release** (`pr-evidence`) as the asset host — it never merges into any branch, so nothing pollutes a PR diff.
+
+1. Ensure the release exists (once per repo; harmless if it already does):
+   ```sh
+   gh release view pr-evidence >/dev/null 2>&1 || \
+     gh release create pr-evidence --title "PR evidence" \
+       --notes "Rolling asset host for split-pr UI evidence. Not a real release." --latest=false
+   ```
+2. Upload the slice's assets (`--clobber` lets you re-upload after re-capturing):
+   ```sh
+   gh release upload pr-evidence evidence/p05-collapsed.png evidence/p05-expanded.png --clobber
+   ```
+3. Build each asset's URL as `https://github.com/<owner>/<repo>/releases/download/pr-evidence/<asset>` (derive `<owner>/<repo>` from `gh repo view --json nameWithOwner -q .nameWithOwner`), and embed it in the PR body:
+   - **Images** embed inline with `![caption](url)`.
+   - **Video** does **not** get an inline player from a release URL — GitHub only auto-embeds a `<video>` for its own `user-attachments` uploads. Link it instead: `[▶ caption](url)`. If an inline player is genuinely needed, drag the `.webm`/`.mp4` into the PR body in the web UI as a one-off and use the resulting `user-attachments` URL.
+4. Verify after opening: `gh pr view <n> --web` and confirm each image actually renders (not a broken-image icon).
 
 ## Judgment calls
 
