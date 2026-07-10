@@ -404,6 +404,40 @@ worth it after validation.
       *Plugin + in-app prompt scaffolded; real signing key, feed & CI signing remain (see README "Auto-updates").*
 - [ ] ⏸ Crash reporting.
 
+### 11c. Monetization (sequenced — build nothing before retention data)
+
+**Model:** one-time purchase (~$30–60) + **1 year of updates**, then optional
+renewal (Sublime/JetBrains-fallback shape). No subscription — the app has no
+server costs to justify one; the token stays local and API calls come from the
+user's machine. The update entitlement implements itself via the existing
+auto-updater: the license key encodes an `updates-until` date and the updater
+refuses builds released after it. App never stops working; only updates expire.
+
+**Mechanics (≈1 week of work, when the time comes):**
+
+- [ ] ⏸ **Merchant of record** — Paddle / Lemon Squeezy / Polar. Handles
+      payment, global VAT/sales tax, and license-key issuance. Never build
+      payments directly.
+- [ ] ⏸ **Offline key verification in Rust** — Ed25519-signed payload (email +
+      purchase date + updates-until); public key embedded in the backend, no
+      license server, no phone-home, works offline. Check lives in Rust, not
+      the JS bundle — mild friction, nothing more.
+- [ ] ⏸ **Trial** — 14–30 days, full-featured, local timestamp. Don't fight
+      clock-tamperers. After trial: purchase prompt on launch, paste key, done.
+- [ ] ⏸ **Updater gating** — updater compares build release date against the
+      key's `updates-until`; expired = keep current version forever, offer
+      renewal.
+
+**Anti-piracy stance (decided):** no DRM, no obfuscation, no online activation.
+A patched clone is not a lost sale. Defenses are legal (no redistribution
+rights without a license grant), structural (value is the signed, auto-updated
+stream — clones go stale), and social. Aseprite is the precedent: compile-it-
+yourself is officially allowed and it still sells.
+
+**Sequence gate:** free beta → five friends → wider free beta ("free during
+beta" stated up front) → retention proven → only then the items above. Real
+usage decides final pricing shape.
+
 ---
 
 ## Post-MVP backlog
