@@ -59,7 +59,10 @@ export function CommentThread({
     if (!toggleRequest || toggleRequest.rootId !== rootId) {
       return;
     }
-    setExpanded((v) => !v);
+    const raf = requestAnimationFrame(() => {
+      setExpanded((v) => !v);
+    });
+    return () => cancelAnimationFrame(raf);
   }, [toggleRequest, rootId]);
 
   const submitReply = (body: string) => {
