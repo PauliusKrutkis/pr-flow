@@ -81,6 +81,7 @@ import {
   type ReviewListCallbacks,
   type ReviewListHandle,
 } from "./review-list.tsx";
+import { ReviewVerdicts } from "./review-verdicts.tsx";
 import { RightPanel } from "./right-panel.tsx";
 import { SubmitReviewModal } from "./submit-review-modal.tsx";
 
@@ -2699,6 +2700,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
           </div>
 
           <div className="flex shrink-0 items-center gap-4">
+            <ReviewVerdicts reviews={reviews} />
             <span className="qf-muted text-xs">
               {viewedNow}/{fileCount} viewed
             </span>
