@@ -138,6 +138,34 @@ pub struct ReviewSummary {
     pub submitted_at: String,
 }
 
+/// Aggregated CI/pipeline state for the PR's head commit, mapped from GitHub
+/// check-runs + commit statuses or GitLab pipelines onto one host-agnostic
+/// shape. `state: "none"` means the repo has no CI configured (the header pill
+/// renders nothing so quiet repos stay quiet).
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CiStatus {
+    /// "success" | "failure" | "pending" | "none".
+    pub state: String,
+    /// Total number of checks/statuses seen (0 for "none").
+    pub total: u64,
+    /// How many are failing (drives the red count on the pill).
+    pub failed: u64,
+    /// Where to send the user on click (checks page or first failing run).
+    pub url: String,
+}
+
+impl Default for CiStatus {
+    fn default() -> Self {
+        CiStatus {
+            state: "none".to_string(),
+            total: 0,
+            failed: 0,
+            url: String::new(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PullRequestDetail {
@@ -150,6 +178,9 @@ pub struct PullRequestDetail {
     /// Submitted review verdicts/summaries, oldest first (default: old caches).
     #[serde(default)]
     pub reviews: Vec<ReviewSummary>,
+    /// CI/pipeline state for the head commit (default keeps old caches readable).
+    #[serde(default)]
+    pub ci_status: CiStatus,
     pub fetched_at: u64,
 }
 
@@ -461,6 +492,89 @@ fn pr_from_pull(v: &Value, owner: &str, repo: &str) -> PullRequest {
     }
 }
 
+/// Aggregates GitHub check-runs (`.../check-runs`) and the legacy combined
+/// commit status (`.../status`) into the shared `CiStatus`. Pure so it can be
+/// unit-tested against fixture JSON.
+///
+/// Precedence: any failure → "failure"; else any in-flight → "pending"; else
+/// any check at all → "success"; else "none". `checks_url` is the fallback
+/// target (the PR's checks page); a failing run's own `html_url` wins when
+/// present so the click lands on the broken check.
+fn ci_from_github(check_runs: &Value, combined: &Value, checks_url: &str) -> CiStatus {
+    let runs = check_runs
+        .get("check_runs")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let statuses = combined
+        .get("statuses")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let mut total: u64 = 0;
+    let mut failed: u64 = 0;
+    let mut pending: u64 = 0;
+    let mut fail_url: Option<String> = None;
+
+    for run in &runs {
+        total += 1;
+        // check-runs carry `status` (queued|in_progress|completed) and, when
+        // completed, a `conclusion` (success|failure|neutral|cancelled|…).
+        let status = fstr(run, "status");
+        if status != "completed" {
+            pending += 1;
+            continue;
+        }
+        match fstr(run, "conclusion").as_str() {
+            "failure" | "timed_out" | "cancelled" | "action_required" | "startup_failure" => {
+                failed += 1;
+                if fail_url.is_none() {
+                    fail_url = fopt_str(run, "html_url");
+                }
+            }
+            // success | neutral | skipped | stale → not failing, not pending.
+            _ => {}
+        }
+    }
+
+    for st in &statuses {
+        total += 1;
+        // combined status contexts carry a `state` (success|failure|pending|error).
+        match fstr(st, "state").as_str() {
+            "failure" | "error" => {
+                failed += 1;
+                if fail_url.is_none() {
+                    fail_url = fopt_str(st, "target_url");
+                }
+            }
+            "pending" => pending += 1,
+            _ => {}
+        }
+    }
+
+    let state = if failed > 0 {
+        "failure"
+    } else if pending > 0 {
+        "pending"
+    } else if total > 0 {
+        "success"
+    } else {
+        "none"
+    };
+
+    if state == "none" {
+        return CiStatus::default();
+    }
+
+    CiStatus {
+        state: state.to_string(),
+        total,
+        failed,
+        url: fail_url.unwrap_or_else(|| checks_url.to_string()),
+    }
+}
+
 fn file_from(v: &Value) -> ChangedFile {
     ChangedFile {
         filename: fstr(v, "filename"),
@@ -709,12 +823,15 @@ impl GitHubPlatform {
             })
             .collect();
 
+        let ci_status = self.ci_status(owner, repo, number, &pr.head_sha, &pr.url).await;
+
         let detail = PullRequestDetail {
             pr,
             files,
             comments,
             issue_comments,
             reviews,
+            ci_status,
             fetched_at: now_millis(),
         };
         log(&format!(
@@ -723,6 +840,45 @@ impl GitHubPlatform {
             detail.comments.len()
         ));
         Ok(detail)
+    }
+
+    /// Fetches check-runs + combined status for the head commit and aggregates
+    /// them into `CiStatus`. CI is a bonus signal, so any fetch error degrades
+    /// to "none" (logged) rather than failing the whole detail load.
+    async fn ci_status(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        head_sha: &str,
+        pr_url: &str,
+    ) -> CiStatus {
+        if head_sha.is_empty() {
+            return CiStatus::default();
+        }
+        let checks_url = format!("{pr_url}/checks");
+        let check_runs = get_json(
+            &self.client,
+            &format!("{API}/repos/{owner}/{repo}/commits/{head_sha}/check-runs"),
+        )
+        .await;
+        let combined = get_json(
+            &self.client,
+            &format!("{API}/repos/{owner}/{repo}/commits/{head_sha}/status"),
+        )
+        .await;
+        match (check_runs, combined) {
+            (Ok(check_runs), Ok(combined)) => {
+                ci_from_github(&check_runs, &combined, &checks_url)
+            }
+            (check_runs, combined) => {
+                let err = check_runs.err().or(combined.err()).unwrap_or_default();
+                log(&format!(
+                    "CI status unavailable for {owner}/{repo}#{number}: {err}"
+                ));
+                CiStatus::default()
+            }
+        }
     }
 
     /// Maps review-comment database id -> (thread node id, isResolved) for
@@ -1034,6 +1190,62 @@ mod tests {
         assert_eq!(bucket.prs[0].owner, "o");
         assert!(bucket.prs[0].merged);
         assert_eq!(bucket.prs[0].state, "merged");
+    }
+
+    #[test]
+    fn ci_from_github_aggregates_checks_and_status() {
+        // A failing run wins over a passing one and pins the pill's url to the
+        // failing run's html_url; the combined status adds to the total.
+        let check_runs = serde_json::json!({
+            "check_runs": [
+                { "status": "completed", "conclusion": "success", "html_url": "ok" },
+                { "status": "completed", "conclusion": "failure", "html_url": "boom" },
+                { "status": "in_progress", "conclusion": null, "html_url": "wip" }
+            ]
+        });
+        let combined = serde_json::json!({
+            "statuses": [ { "state": "success", "target_url": "t" } ]
+        });
+        let ci = ci_from_github(&check_runs, &combined, "https://x/checks");
+        assert_eq!(ci.state, "failure");
+        assert_eq!(ci.total, 4);
+        assert_eq!(ci.failed, 1);
+        assert_eq!(ci.url, "boom");
+    }
+
+    #[test]
+    fn ci_from_github_pending_then_success_then_none() {
+        // No failures but an in-flight run → pending; url falls back to checks.
+        let pending = ci_from_github(
+            &serde_json::json!({ "check_runs": [
+                { "status": "queued", "conclusion": null }
+            ] }),
+            &serde_json::json!({ "statuses": [] }),
+            "cx",
+        );
+        assert_eq!(pending.state, "pending");
+        assert_eq!(pending.url, "cx");
+
+        // All green → success.
+        let success = ci_from_github(
+            &serde_json::json!({ "check_runs": [
+                { "status": "completed", "conclusion": "success" }
+            ] }),
+            &serde_json::json!({ "statuses": [] }),
+            "cx",
+        );
+        assert_eq!(success.state, "success");
+        assert_eq!(success.total, 1);
+
+        // Nothing configured → none, rendered as an empty pill by the UI.
+        let none = ci_from_github(
+            &serde_json::json!({ "check_runs": [] }),
+            &serde_json::json!({ "statuses": [] }),
+            "cx",
+        );
+        assert_eq!(none.state, "none");
+        assert_eq!(none.total, 0);
+        assert_eq!(none.url, "");
     }
 
     #[test]

@@ -1,4 +1,5 @@
 import { setupApp } from "./bridge.ts";
+import { DETAIL_NO_CI } from "./fixtures.ts";
 import { expect, test } from "./test.ts";
 
 const SUBMIT_REVIEW = /Submit review/;
@@ -479,4 +480,19 @@ test("the header shows an approvals verdict with the reviewer's face", async ({
   await expect(pill).toHaveAttribute("title", "Approved · dave");
   await expect(pill.locator(".q-avatar")).toHaveCount(1);
   await expect(page.locator(".qf-verdict-changes")).toHaveCount(0);
+});
+
+test("the header shows a failing CI pill with the failed count", async ({
+  page,
+}) => {
+  const pill = page.locator(".qf-ci-failure");
+  await expect(pill).toBeVisible();
+  await expect(pill).toHaveAttribute("title", "Checks failing · 4 checks");
+  await expect(pill.locator(".qf-ci-count")).toHaveText("1/4");
+});
+
+test("a repo without CI shows no pill", async ({ page }) => {
+  await setupApp(page, { detailByCall: [DETAIL_NO_CI] });
+  await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
+  await expect(page.locator(".qf-ci")).toHaveCount(0);
 });
