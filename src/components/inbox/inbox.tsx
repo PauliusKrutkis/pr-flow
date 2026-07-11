@@ -1,5 +1,6 @@
 import {
   Archive,
+  ArchiveRestore,
   ArrowDown,
   ArrowLeftRight,
   ArrowUp,
@@ -103,9 +104,11 @@ export function Inbox() {
 
   const listRef = useRef<HTMLDivElement>(null);
   const [listMode, setListMode] = useState<"keyboard" | "mouse">("mouse");
+  const [showArchived, setShowArchived] = useState(false);
 
   const dismissed = useAppStore((s) => s.dismissed);
   const dismiss = useAppStore((s) => s.dismiss);
+  const clearDismissed = useAppStore((s) => s.clearDismissed);
   const undoDismiss = useAppStore((s) => s.undoDismiss);
   const setToast = useAppStore((s) => s.setToast);
 
@@ -117,9 +120,12 @@ export function Inbox() {
     subscribed: subscribedData ?? { count: 0, prs: [] },
   };
 
-  const filtered = buckets[tab].prs.filter(
-    (pr) => !isHidden(pr, dismissed[keyFor(pr)])
+  const archivedList = buckets[tab].prs.filter((pr) =>
+    isHidden(pr, dismissed[keyFor(pr)])
   );
+  const filtered = showArchived
+    ? archivedList
+    : buckets[tab].prs.filter((pr) => !isHidden(pr, dismissed[keyFor(pr)]));
 
   const visibleCounts = (() => {
     const m = {} as Record<InboxTabKey, number>;
@@ -199,6 +205,35 @@ export function Inbox() {
     });
   };
 
+  const restoreSelected = () => {
+    const pr = filtered[selectedIndex];
+    if (!pr) {
+      return;
+    }
+    const fallback = filtered[selectedIndex + 1] ?? filtered[selectedIndex - 1];
+    setSelectedKey(fallback ? keyFor(fallback) : null);
+    clearDismissed(keyFor(pr));
+    setToast({
+      message: pr.title,
+      note: "Back in your inbox",
+      title: "Restored",
+    });
+  };
+
+  // `e` archives from the inbox and restores from the archived view
+  const archiveOrRestoreSelected = () => {
+    if (showArchived) {
+      restoreSelected();
+    } else {
+      archiveSelected();
+    }
+  };
+
+  const toggleArchived = () => {
+    setShowArchived((v) => !v);
+    setSelectedKey(null);
+  };
+
   const undoArchive = () => {
     undoDismiss();
     setToast(null);
@@ -230,7 +265,7 @@ export function Inbox() {
   };
 
   useInboxHotkeys({
-    archiveSelected,
+    archiveSelected: archiveOrRestoreSelected,
     copySelectedLink,
     cycleTab,
     next,
@@ -238,6 +273,7 @@ export function Inbox() {
     openWatchDialog,
     prev,
     selectTab,
+    toggleArchived,
     undoArchive,
   });
 
@@ -274,7 +310,14 @@ export function Inbox() {
 
   return (
     <div className="flex h-full flex-col">
-      <InboxTabBar counts={visibleCounts} onSelectTab={selectTab} tab={tab} />
+      <InboxTabBar
+        archivedActive={showArchived}
+        archivedCount={archivedList.length}
+        counts={visibleCounts}
+        onSelectTab={selectTab}
+        onToggleArchived={toggleArchived}
+        tab={tab}
+      />
 
       <InboxMainContent
         activeTab={activeTab}
@@ -289,6 +332,7 @@ export function Inbox() {
         onSetListMode={setListMode}
         selectedIndex={selectedIndex}
         selectedPR={selectedPR}
+        showArchived={showArchived}
         tab={tab}
         view={inboxMainView(
           isLoading,
@@ -310,6 +354,7 @@ function useInboxHotkeys({
   openSelected,
   archiveSelected,
   undoArchive,
+  toggleArchived,
   copySelectedLink,
   cycleTab,
   selectTab,
@@ -320,6 +365,7 @@ function useInboxHotkeys({
   openSelected: () => void;
   archiveSelected: () => void;
   undoArchive: () => void;
+  toggleArchived: () => void;
   copySelectedLink: () => void;
   cycleTab: (dir: number) => void;
   selectTab: (key: InboxTabKey) => void;
@@ -381,6 +427,13 @@ function useInboxHotkeys({
       run: undoArchive,
     },
     {
+      description: "Show archived / back",
+      group: "Navigation",
+      icon: ArchiveRestore,
+      keys: "u",
+      run: toggleArchived,
+    },
+    {
       description: "Copy PR link",
       group: "Navigation",
       icon: Link,
@@ -438,10 +491,16 @@ function InboxTabBar({
   tab,
   counts,
   onSelectTab,
+  archivedActive,
+  archivedCount,
+  onToggleArchived,
 }: {
   tab: InboxTabKey;
   counts: Record<InboxTabKey, number>;
   onSelectTab: (key: InboxTabKey) => void;
+  archivedActive: boolean;
+  archivedCount: number;
+  onToggleArchived: () => void;
 }) {
   return (
     <div className="qi-tabs shrink-0 border-line border-b px-3">
@@ -455,6 +514,23 @@ function InboxTabBar({
           tabDef={t}
         />
       ))}
+      <button
+        className="qi-archived-toggle"
+        data-state={archivedActive ? "active" : "inactive"}
+        onClick={onToggleArchived}
+        title={
+          archivedActive
+            ? "Back to the inbox (u)"
+            : "Show archived pull requests (u)"
+        }
+        type="button"
+      >
+        {archivedActive ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+        Archived
+        {archivedCount > 0 && (
+          <span className="qi-tab-count">{archivedCount}</span>
+        )}
+      </button>
     </div>
   );
 }
@@ -528,6 +604,7 @@ function InboxMainContent({
   onSelectPr,
   onOpenAt,
   isUnread,
+  showArchived,
 }: {
   view:
     | { kind: "loading" }
@@ -547,6 +624,7 @@ function InboxMainContent({
   onSelectPr: (key: string | null) => void;
   onOpenAt: (index: number) => void;
   isUnread: (key: string, updatedAt: string) => boolean;
+  showArchived: boolean;
 }) {
   if (view.kind === "loading") {
     return (
@@ -579,6 +657,14 @@ function InboxMainContent({
   }
 
   if (view.kind === "empty") {
+    if (showArchived) {
+      return (
+        <InboxZero
+          hint="Archive a PR with e and it waits here — press u to come back."
+          title={`No archived PRs in “${activeTab.label}”`}
+        />
+      );
+    }
     return (
       <InboxZero
         action={
@@ -612,6 +698,7 @@ function InboxMainContent({
       onSetListMode={onSetListMode}
       selectedIndex={selectedIndex}
       selectedPR={selectedPR}
+      showArchived={showArchived}
     />
   );
 }
@@ -627,6 +714,7 @@ function InboxListPane({
   onSelectPr,
   onOpenAt,
   isUnread,
+  showArchived,
 }: {
   activeTab: (typeof TABS)[number];
   filtered: PullRequest[];
@@ -638,6 +726,7 @@ function InboxListPane({
   onSelectPr: (key: string | null) => void;
   onOpenAt: (index: number) => void;
   isUnread: (key: string, updatedAt: string) => boolean;
+  showArchived: boolean;
 }) {
   const handleListMouseMove = () => {
     if (listMode !== "mouse") {
@@ -660,6 +749,14 @@ function InboxListPane({
         role="listbox"
         tabIndex={0}
       >
+        {showArchived && (
+          <div className="qi-archived-banner">
+            <ArchiveRestore size={13} />
+            <span>
+              Archived — <Kbd combo="e" /> restores, <Kbd combo="u" /> returns
+            </span>
+          </div>
+        )}
         {filtered.map((pr, i) => (
           <InboxPrRow
             index={i}
@@ -673,7 +770,9 @@ function InboxListPane({
         ))}
       </div>
 
-      {selectedPR === undefined ? null : <InboxDetail pr={selectedPR} />}
+      {selectedPR === undefined ? null : (
+        <InboxDetail pr={selectedPR} showArchived={showArchived} />
+      )}
     </div>
   );
 }
@@ -776,7 +875,13 @@ function InboxZero({
  * title carrying the weight, an author row, a single stat strip, and the
  * description. No boxes-in-boxes.
  */
-function InboxDetail({ pr }: { pr: PullRequest }) {
+function InboxDetail({
+  pr,
+  showArchived,
+}: {
+  pr: PullRequest;
+  showArchived: boolean;
+}) {
   const body = pr.body.trim();
   const trackerBase = useAppStore((s) =>
     s.activeAccountId ? s.issueTrackers[s.activeAccountId] : undefined
@@ -875,7 +980,7 @@ function InboxDetail({ pr }: { pr: PullRequest }) {
         </span>
         <span className="q-dot">·</span>
         <span className="qi-detail-hint">
-          <Kbd combo="e" /> archive
+          <Kbd combo="e" /> {showArchived ? "restore" : "archive"}
         </span>
       </footer>
     </aside>

@@ -5,6 +5,7 @@ const REVIEW_REQUESTS = /Review requests/;
 const ASSIGNED = /Assigned/;
 const WATCHING = /Watching/;
 const WATCH_A_REPOSITORY = /Watch a repository/;
+const ARCHIVED = /Archived/;
 
 test.beforeEach(async ({ page }) => {
   await setupApp(page);
@@ -60,6 +61,31 @@ test("e archives with an undo toast; z restores", async ({ page }) => {
     page.getByRole("button", { name: REVIEW_REQUESTS })
   ).toContainText("2");
   await page.keyboard.press("z");
+  await expect(page.getByRole("option")).toHaveCount(3);
+});
+
+test("u shows archived PRs; e there restores them to the inbox", async ({
+  page,
+}) => {
+  await expect(page.getByRole("option")).toHaveCount(3);
+  await page.keyboard.press("e"); // archive the first PR
+  await expect(page.getByRole("option")).toHaveCount(2);
+
+  const archivedToggle = page.getByRole("button", { name: ARCHIVED });
+  await expect(archivedToggle).toContainText("1");
+
+  await page.keyboard.press("u"); // into the archived view
+  await expect(page.getByRole("option")).toHaveCount(1);
+  await expect(
+    page.getByRole("option").getByText("Add fuzzy matching to search")
+  ).toBeVisible();
+
+  await page.keyboard.press("e"); // restore it
+  const toast = page.getByRole("alert");
+  await expect(toast).toContainText("Restored");
+  await expect(page.getByRole("option")).toHaveCount(0);
+
+  await page.keyboard.press("u"); // back to the inbox
   await expect(page.getByRole("option")).toHaveCount(3);
 });
 
