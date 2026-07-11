@@ -1931,7 +1931,10 @@ function useReviewFileNavigation(args: {
   };
 
   const moveCursorFast = (delta: 1 | -1) => {
-    buildCursorMover(args.cursorMoverRefs).move(delta * FAST_CURSOR_STEP, false);
+    buildCursorMover(args.cursorMoverRefs).move(
+      delta * FAST_CURSOR_STEP,
+      false
+    );
   };
 
   const extendSelection = (delta: 1 | -1) => {
