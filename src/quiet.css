@@ -1082,6 +1082,50 @@ dialog.q-dialog::backdrop {
   font-size: 12px;
 }
 
+/* review verdicts — who approves / requests changes, faces first */
+.dir-quiet .qf-verdicts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dir-quiet .qf-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 7px 0 6px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.dir-quiet .qf-verdict-approved {
+  color: var(--add);
+  background: var(--add-bg);
+}
+.dir-quiet .qf-verdict-changes {
+  color: var(--del);
+  background: var(--del-bg);
+}
+.dir-quiet .qf-verdict-faces {
+  display: inline-flex;
+  align-items: center;
+}
+.dir-quiet .qf-verdict-faces > * + * {
+  margin-left: -6px;
+}
+.dir-quiet .qf-verdict-approved .q-avatar {
+  box-shadow: 0 0 0 1.5px var(--add-bg);
+}
+.dir-quiet .qf-verdict-changes .q-avatar {
+  box-shadow: 0 0 0 1.5px var(--del-bg);
+}
+.dir-quiet .qf-verdict-more {
+  margin-left: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .dir-quiet .qf-info-btn {
   position: relative;
   width: 28px;
@@ -2236,9 +2280,6 @@ dialog.q-dialog::backdrop {
   align-items: center;
 }
 
-/* The composer's hint bar: one quiet line under the textarea where every
-   entry is both the hotkey lesson and the button. "Suggestion" leads because
-   it's the only semantic action; preview sits apart on the right. */
 .qa-tools {
   display: flex;
   flex-wrap: wrap;
@@ -2327,12 +2368,13 @@ dialog.q-dialog::backdrop {
   border-left: 1px solid var(--line-2);
   box-shadow: -24px 0 48px -24px rgba(0, 0, 0, 0.6);
   transform: translateX(100%);
-  transition: transform 150ms ease;
+}
+.dir-quiet .qf-drawer.qf-drawer-wide {
+  width: min(920px, 72vw);
 }
 .dir-quiet .qf-drawer.qf-drawer-open {
   transform: translateX(0);
 }
-/* the drawer container takes focus on open (Esc target) — no ring for that */
 .dir-quiet .qf-drawer:focus {
   outline: none;
 }
@@ -2365,6 +2407,33 @@ dialog.q-dialog::backdrop {
 }
 .dir-quiet .qf-drawer-close:hover {
   color: var(--fg);
+}
+.dir-quiet .qf-drawer-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dir-quiet .qf-drawer-wide-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  color: var(--muted);
+  cursor: pointer;
+  background: var(--surface-hi);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+.dir-quiet .qf-drawer-wide-btn:hover,
+.dir-quiet .qf-drawer-wide-btn[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
 }
 .dir-quiet .qf-drawer-body {
   min-width: 0;
@@ -2719,6 +2788,44 @@ dialog.q-dialog::backdrop {
 }
 .qi-tab[data-state="active"] .qi-tab-count {
   color: var(--accent);
+}
+.qi-archived-toggle {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  margin-left: auto;
+  padding: 5px 9px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+.qi-archived-toggle:hover {
+  color: var(--fg);
+  background: var(--surface-hi);
+}
+.qi-archived-toggle[data-state="active"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+.qi-archived-banner {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 16px 9px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
 }
 
 /* When the keyboard drives the cursor, suppress the stale pointer :hover wash so

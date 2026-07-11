@@ -179,6 +179,7 @@ interface AppState {
       startLine?: number;
     }
   ) => void;
+  clearDismissed: (prKey: string) => void;
   clearPendingComments: (prKey: string) => void;
   closePalette: () => void;
   dismiss: (prKey: string, updatedAt: string) => void;
@@ -257,6 +258,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
     set({ pendingComments: map });
     savePending(map);
+  },
+  clearDismissed: (prKey) => {
+    const map = { ...get().dismissed };
+    delete map[prKey];
+    set({ dismissed: map, lastDismissedKey: null });
+    saveDismissed(map);
   },
   clearPendingComments: (prKey) => {
     const map = { ...get().pendingComments };

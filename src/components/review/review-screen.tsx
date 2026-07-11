@@ -20,6 +20,7 @@ import {
   Link,
   MessageSquare,
   MessageSquarePlus,
+  PanelRightOpen,
   Search,
   Send,
   TextSearch,
@@ -82,6 +83,7 @@ import {
   type ReviewListCallbacks,
   type ReviewListHandle,
 } from "./review-list.tsx";
+import { ReviewVerdicts } from "./review-verdicts.tsx";
 import { RightPanel } from "./right-panel.tsx";
 import { SubmitReviewModal } from "./submit-review-modal.tsx";
 
@@ -509,7 +511,6 @@ function jumpFromOccMark(
 
 function handleOccPointerClick(
   e: MouseEvent,
-  findOpenRef: React.RefObject<boolean>,
   occSpecRef: React.RefObject<OccState | null>,
   occNav: OccNav,
   occNavRef: React.RefObject<number>,
@@ -518,9 +519,6 @@ function handleOccPointerClick(
     origin?: { anchor: string; column: number } | null
   ) => void
 ): void {
-  if (findOpenRef.current) {
-    return;
-  }
   if (e.detail > 1) {
     return;
   }
@@ -561,6 +559,7 @@ function handleOccPointerClick(
 }
 
 function useOccurrenceTracking(refs: {
+  closeFindRef: React.RefObject<() => void>;
   findOpenRef: React.RefObject<boolean>;
   occMatchListRef: React.RefObject<OccurrenceMatch[]>;
   occNavRef: React.RefObject<number>;
@@ -577,6 +576,7 @@ function useOccurrenceTracking(refs: {
   setOccSpec: (next: OccState | null) => void;
 }): void {
   const {
+    closeFindRef,
     findOpenRef,
     occMatchListRef,
     occNavRef,
@@ -618,15 +618,15 @@ function useOccurrenceTracking(refs: {
       if (prev === next) {
         return;
       }
+      if (next && findOpenRef.current) {
+        closeFindRef.current();
+      }
       occRestoreRef.current = captureCodeSelection();
       setOccSpec(next);
     }
 
     function apply() {
       timer = null;
-      if (findOpenRef.current) {
-        return;
-      }
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
         return;
@@ -646,14 +646,7 @@ function useOccurrenceTracking(refs: {
         clearTimeout(timer);
         timer = null;
       }
-      handleOccPointerClick(
-        e,
-        findOpenRef,
-        occSpecRef,
-        occNav,
-        occNavRef,
-        commit
-      );
+      handleOccPointerClick(e, occSpecRef, occNav, occNavRef, commit);
     }
 
     document.addEventListener("selectionchange", onSelectionChange);
@@ -666,6 +659,7 @@ function useOccurrenceTracking(refs: {
       }
     };
   }, [
+    closeFindRef,
     findOpenRef,
     occMatchListRef,
     occNavRef,
@@ -837,6 +831,25 @@ function syncActiveIndexRef(
   target: number
 ): void {
   activeIndexRef.current = target;
+}
+
+const DRAWER_WIDE_KEY = "pr-flow:drawerWide";
+
+// TODO: extract a useLocalStorage hook when a second persisted UI pref lands (separate PR).
+function readDrawerWide(): boolean {
+  try {
+    return localStorage.getItem(DRAWER_WIDE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function persistDrawerWide(wide: boolean): void {
+  try {
+    localStorage.setItem(DRAWER_WIDE_KEY, wide ? "1" : "0");
+  } catch {
+    // storage unavailable (private mode) — width just won't persist
+  }
 }
 
 function markKeyboardNavigation(args: {
@@ -1331,6 +1344,7 @@ function useReviewHotkeys(config: {
   setRightOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setSelection: (s: LineSelection | null) => void;
   toggleActiveThread: () => void;
+  toggleDrawerWide: () => void;
   toggleViewedFile: () => void;
 }): void {
   const bindings = [
@@ -1486,6 +1500,13 @@ function useReviewHotkeys(config: {
       icon: Info,
       keys: "i",
       run: () => config.setRightOpen((open) => !open),
+    },
+    {
+      description: "Widen info panel",
+      group: "General",
+      icon: PanelRightOpen,
+      keys: "shift+i",
+      run: config.toggleDrawerWide,
     },
     {
       description: "Find a file",
@@ -1824,6 +1845,7 @@ function useReviewFind(args: {
   const closeFind = () => {
     setFindOpen(false);
   };
+  const closeFindRef = useLatest(closeFind);
 
   const findStep = (dir: 1 | -1) => {
     const n = findMatches.length;
@@ -1845,6 +1867,7 @@ function useReviewFind(args: {
   return {
     changeFindQuery,
     closeFind,
+    closeFindRef,
     findCase,
     findCurrent,
     findFocusSeq,
@@ -2124,6 +2147,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
   const [activeIndex, setActiveIndex] = useState(initialMem?.fileIndex ?? 0);
   const [rightOpen, setRightOpen] = useState(false);
   const rightOpenRef = useLatest(rightOpen);
+  const [drawerWide, setDrawerWide] = useState(readDrawerWide);
   const [commentIndex, setCommentIndex] = useState(0);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [prSearch, setPrSearch] = useState<null | "files" | "text">(null);
@@ -2257,6 +2281,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
   const {
     changeFindQuery,
     closeFind,
+    closeFindRef,
     findCase,
     findCurrent,
     findFocusSeq,
@@ -2505,6 +2530,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
   };
 
   useOccurrenceTracking({
+    closeFindRef,
     findOpenRef,
     occMatchListRef,
     occNavRef,
@@ -2605,6 +2631,18 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     setRightOpen(false);
   };
 
+  const onToggleDrawerWide = () => {
+    if (!rightOpenRef.current) {
+      setRightOpen(true);
+      return;
+    }
+    setDrawerWide((wide) => {
+      const next = !wide;
+      persistDrawerWide(next);
+      return next;
+    });
+  };
+
   const onCloseSubmitModal = () => {
     setSubmitOpen(false);
   };
@@ -2656,6 +2694,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     setRightOpen,
     setSelection,
     toggleActiveThread,
+    toggleDrawerWide: onToggleDrawerWide,
     toggleViewedFile,
   });
 
@@ -2736,6 +2775,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
           </div>
 
           <div className="flex shrink-0 items-center gap-4">
+            <ReviewVerdicts reviews={reviews} />
             <span className="qf-muted text-xs">
               {viewedNow}/{fileCount} viewed
             </span>
@@ -2851,9 +2891,11 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
         onAddIssueComment={onAddIssueComment}
         onClose={onCloseRightPanel}
         onJumpToThread={jumpToThread}
+        onToggleWide={onToggleDrawerWide}
         open={rightOpen}
         pr={pr}
         reviews={reviews}
+        wide={drawerWide}
       />
 
       <SubmitReviewModal

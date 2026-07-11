@@ -274,6 +274,8 @@ impl GitLabPlatform {
         })
     }
 
+    /// GitLab has no "involves" filter, so the "involved" bucket is synthesized
+    /// by unioning the reviewer, assignee, and author buckets.
     pub async fn inbox(&self) -> Result<InboxData, String> {
         let me = self.current_user().await?.login;
         log(&format!("GitLab inbox for {me}"));
@@ -284,7 +286,6 @@ impl GitLabPlatform {
             .mr_bucket(&format!("assignee_username={}", enc(&me)))
             .await?;
         let created = self.mr_bucket(&format!("author_username={}", enc(&me))).await?;
-        // GitLab has no "involves" filter — union the other buckets instead.
         let mut involved_prs: Vec<PullRequest> = Vec::new();
         for pr in review_requested
             .prs
@@ -358,6 +359,14 @@ impl GitLabPlatform {
         Ok(InboxBucket { count: prs.len() as u64, prs })
     }
 
+    /// Fans GitLab discussions out onto the three shared buckets. Approval and
+    /// "unapproved" system notes are the review verdict on GitLab, so they map
+    /// to `ReviewSummary` (all other system notes stay hidden); "unapproved" is
+    /// matched before "approved" because its body contains the latter as a
+    /// substring. Discussions with no diff `position` become PR-level issue
+    /// comments; diff-anchored ones become review comments, where the
+    /// discussion id is the resolve/unresolve handle (dropped when the thread
+    /// is not resolvable, which hides the action).
     pub async fn pr_detail(
         &self,
         owner: &str,
@@ -399,10 +408,6 @@ impl GitLabPlatform {
                 .unwrap_or_default();
             let Some(root) = notes.first() else { continue };
             if fbool(root, "system") {
-                // System notes are host chatter (pushes, labels, …) and stay
-                // hidden — except approval events, which ARE the review verdict
-                // on GitLab. Map them onto the shared ReviewSummary shape.
-                // "unapproved" is checked first: it contains "approved".
                 let body = fstr(root, "body");
                 let state = if body.starts_with("unapproved this merge request") {
                     Some("DISMISSED")
@@ -438,9 +443,6 @@ impl GitLabPlatform {
                 }
                 continue;
             }
-            // Diff-anchored threads become review comments. The discussion id
-            // is the thread handle for resolve/unresolve; non-resolvable
-            // threads (rare for diff notes) get no handle, hiding the action.
             let disc_id = fstr(disc, "id");
             let thread = if fbool(root, "resolvable") && !disc_id.is_empty() {
                 Some((disc_id.as_str(), fbool(root, "resolved")))
@@ -484,6 +486,11 @@ impl GitLabPlatform {
         Ok(refs)
     }
 
+    /// Posts a diff-anchored discussion, optionally spanning `start_line..line`
+    /// via `line_range` and retried once without the range if GitLab rejects
+    /// the multi-line payload. The POST response is the new discussion itself,
+    /// so its id is carried straight onto the returned thread — the fresh
+    /// comment is resolvable without waiting for a detail refetch.
     #[allow(clippy::too_many_arguments)]
     pub async fn create_review_comment(
         &self,
@@ -542,8 +549,6 @@ impl GitLabPlatform {
             .and_then(|n| n.first())
             .cloned()
             .ok_or_else(|| "GitLab did not return the created note".to_string())?;
-        // The response IS the new discussion — carry its id so the fresh
-        // thread is resolvable without waiting for a detail refetch.
         let disc_id = fstr(&v, "id");
         let thread = if fbool(&note, "resolvable") && !disc_id.is_empty() {
             Some((disc_id.as_str(), false))
@@ -553,6 +558,9 @@ impl GitLabPlatform {
         Ok(note_to_comment(&note, None, thread))
     }
 
+    /// Replies to a thread. Our API keys replies by note id, so the parent
+    /// discussion is resolved from that note id before posting, since GitLab
+    /// addresses replies by discussion id.
     pub async fn reply_to_review_comment(
         &self,
         owner: &str,
@@ -561,7 +569,6 @@ impl GitLabPlatform {
         body: &str,
         in_reply_to: u64,
     ) -> Result<ReviewComment, String> {
-        // Our API keys replies by note id; GitLab wants the discussion id.
         let discussions = get_all_pages(
             &self.client,
             &format!("{}/discussions", self.mr_url(owner, repo, number)),
@@ -643,6 +650,10 @@ impl GitLabPlatform {
         Ok(())
     }
 
+    /// Posts each pending comment, then the review verdict. GitLab has no
+    /// REQUEST_CHANGES event, so that verdict is expressed as a summary issue
+    /// comment prefixed with "Changes requested"; APPROVE additionally hits the
+    /// `/approve` endpoint.
     #[allow(clippy::too_many_arguments)]
     pub async fn submit_review(
         &self,
@@ -668,7 +679,6 @@ impl GitLabPlatform {
             )
             .await?;
         }
-        // No REQUEST_CHANGES on GitLab — say it in the summary note instead.
         let summary = match (event, body.trim().is_empty()) {
             ("REQUEST_CHANGES", true) => "**Changes requested.**".to_string(),
             ("REQUEST_CHANGES", false) => format!("**Changes requested.**\n\n{body}"),
