@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { useRef } from "react";
 import { api } from "../lib/api.ts";
 import { queryClient, queryKeys } from "../lib/query-client.ts";
 import { useAppStore } from "../store/app-store.ts";
@@ -25,7 +26,6 @@ function nextTempId(): number {
 
 type DetailSnapshot = PullRequestDetail | undefined;
 
-/** A best-effort local comment standing in until the server echoes the real one. */
 function optimisticComment(c: {
   path: string;
   line: number | null;
@@ -199,6 +199,55 @@ export function useCommentMutations(
     },
   });
 
+  const resolveIntentRef = useRef(new Map<string, boolean>());
+  const resolveInflightRef = useRef<string | null>(null);
+
+  const patchThreadResolved = (threadId: string, resolved: boolean) => {
+    queryClient.setQueryData<PullRequestDetail>(detailKey, (cur) =>
+      cur
+        ? {
+            ...cur,
+            comments: cur.comments.map((c) =>
+              c.threadId === threadId ? { ...c, resolved } : c
+            ),
+          }
+        : cur
+    );
+  };
+
+  const flushResolveIntents = () => {
+    if (resolveInflightRef.current !== null) {
+      return;
+    }
+    const detail = queryClient.getQueryData<PullRequestDetail>(detailKey);
+    if (!detail) {
+      return;
+    }
+    for (const [threadId, intent] of resolveIntentRef.current) {
+      const current = detail.comments.find(
+        (c) => c.threadId === threadId
+      )?.resolved;
+      if (current !== undefined && current !== intent) {
+        resolveInflightRef.current = threadId;
+        resolveThread.mutate({ resolved: intent, threadId });
+        return;
+      }
+    }
+  };
+
+  const requestResolveThread = (args: {
+    threadId: string;
+    resolved: boolean;
+  }) => {
+    resolveIntentRef.current.set(args.threadId, args.resolved);
+    patchThreadResolved(args.threadId, args.resolved);
+    if (resolveInflightRef.current !== null) {
+      return;
+    }
+    resolveInflightRef.current = args.threadId;
+    resolveThread.mutate(args);
+  };
+
   const resolveThread = useMutation<
     void,
     Error,
@@ -212,22 +261,13 @@ export function useCommentMutations(
     onMutate: async (args) => {
       await queryClient.cancelQueries({ queryKey: detailKey });
       const before = queryClient.getQueryData<PullRequestDetail>(detailKey);
-      queryClient.setQueryData<PullRequestDetail>(detailKey, (cur) =>
-        cur
-          ? {
-              ...cur,
-              comments: cur.comments.map((c) =>
-                c.threadId === args.threadId
-                  ? { ...c, resolved: args.resolved }
-                  : c
-              ),
-            }
-          : cur
-      );
+      patchThreadResolved(args.threadId, args.resolved);
       return before;
     },
     onSettled: () => {
+      resolveInflightRef.current = null;
       queryClient.invalidateQueries({ queryKey: detailKey });
+      flushResolveIntents();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: detailKey });
@@ -253,6 +293,7 @@ export function useCommentMutations(
     addIssueComment,
     addReviewComment,
     reply,
+    requestResolveThread,
     resolveThread,
     submitReview,
   };

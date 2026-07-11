@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsDown,
+  ChevronsDownUp,
   ChevronsUp,
   Copy,
   ExternalLink,
@@ -731,7 +732,9 @@ interface ReviewListCallbackArgs {
   modelRef: React.RefObject<ReviewListModel>;
   removePendingStore: (key: string, id: string) => void;
   reply: ReturnType<typeof useCommentMutations>["reply"];
-  resolveThread: ReturnType<typeof useCommentMutations>["resolveThread"];
+  requestResolveThread: ReturnType<
+    typeof useCommentMutations
+  >["requestResolveThread"];
   setActiveIndex: React.Dispatch<React.SetStateAction<number>>;
   setChangedSinceViewed: React.Dispatch<React.SetStateAction<Set<string>>>;
   setCollapsed: React.Dispatch<
@@ -987,7 +990,7 @@ function useReviewListCallbacks(
       await args.reply.mutateAsync(a);
     },
     onResolveThread(a: { threadId: string; resolved: boolean }) {
-      args.resolveThread.mutate(a);
+      args.requestResolveThread(a);
     },
     onRowEnter(fileIndex: number, anchor: string, x: number, y: number) {
       if (!args.isRealPointerAt(x, y)) {
@@ -1342,6 +1345,7 @@ function useReviewHotkeys(config: {
   setPrSearch: (mode: null | "files" | "text") => void;
   setRightOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setSelection: (s: LineSelection | null) => void;
+  toggleActiveThread: () => void;
   toggleDrawerWide: () => void;
   toggleViewedFile: () => void;
 }): void {
@@ -1441,7 +1445,19 @@ function useReviewHotkeys(config: {
       group: "Comments",
       icon: CheckCircle2,
       keys: "x",
-      run: config.resolveActiveThread,
+      run: (e: KeyboardEvent) => {
+        if (e.repeat) {
+          return;
+        }
+        config.resolveActiveThread();
+      },
+    },
+    {
+      description: "Expand / collapse comment",
+      group: "Comments",
+      icon: ChevronsDownUp,
+      keys: "z",
+      run: config.toggleActiveThread,
     },
     {
       description: "Mark viewed & next",
@@ -1636,7 +1652,9 @@ function useReviewThreadActions(args: {
   modelRef: React.RefObject<ReviewListModel>;
   nextFile: () => void;
   replyNonceRef: React.RefObject<number>;
-  resolveThread: ReturnType<typeof useCommentMutations>["resolveThread"];
+  requestResolveThread: ReturnType<
+    typeof useCommentMutations
+  >["requestResolveThread"];
   setActiveIndex: React.Dispatch<React.SetStateAction<number>>;
   setCommentIndex: React.Dispatch<React.SetStateAction<number>>;
   setReplyReq: React.Dispatch<
@@ -1647,7 +1665,15 @@ function useReviewThreadActions(args: {
     } | null>
   >;
   setRightOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setToggleReq: React.Dispatch<
+    React.SetStateAction<{
+      rootId: number;
+      path: string;
+      nonce: number;
+    } | null>
+  >;
   threadFlashRef: React.RefObject<ReturnType<typeof setTimeout> | null>;
+  toggleNonceRef: React.RefObject<number>;
 }) {
   const jumpToThread = (path: string, rootId: number) => {
     const m = args.modelRef.current;
@@ -1715,10 +1741,19 @@ function useReviewThreadActions(args: {
     if (!root || root.threadId === null) {
       return;
     }
-    args.resolveThread.mutate({
+    args.requestResolveThread({
       resolved: !root.resolved,
       threadId: root.threadId,
     });
+  };
+
+  const toggleActiveThread = () => {
+    const t = args.activeThreadRef.current;
+    if (!t) {
+      return;
+    }
+    args.toggleNonceRef.current += 1;
+    args.setToggleReq({ ...t, nonce: args.toggleNonceRef.current });
   };
 
   return {
@@ -1726,6 +1761,7 @@ function useReviewThreadActions(args: {
     jumpToThread,
     replyToActiveThreadOrNextFile,
     resolveActiveThread,
+    toggleActiveThread,
   };
 }
 
@@ -2097,7 +2133,7 @@ export function ReviewScreen({ routeKey }: ReviewScreenProps) {
   return useReviewScreenCore(routeKey);
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: orchestrates many extracted sub-hooks; further splitting risks hook-order bugs
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: TODO orchestrates many extracted sub-hooks; further splitting risks hook-order bugs
 function useReviewScreenCore(routeKey: string): React.ReactElement {
   const { name: repo, number, owner } = parsePrKey(routeKey);
   const keyValue = routeKey;
@@ -2107,7 +2143,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     addReviewComment,
     reply,
     addIssueComment,
-    resolveThread,
+    requestResolveThread,
     submitReview,
   } = useCommentMutations(owner, repo, number);
 
@@ -2128,6 +2164,11 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     () => new Set()
   );
   const [replyReq, setReplyReq] = useState<{
+    rootId: number;
+    path: string;
+    nonce: number;
+  } | null>(null);
+  const [toggleReq, setToggleReq] = useState<{
     rootId: number;
     path: string;
     nonce: number;
@@ -2157,6 +2198,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveStateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replyNonceRef = useRef(0);
+  const toggleNonceRef = useRef(0);
   const threadFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeThreadRef = useRef<{ rootId: number; path: string } | null>(null);
@@ -2402,7 +2444,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     modelRef,
     removePendingStore,
     reply,
-    resolveThread,
+    requestResolveThread,
     setActiveIndex,
     setChangedSinceViewed,
     setCollapsed,
@@ -2445,7 +2487,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     setSelection,
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only cleanup for timer/raf refs
+  // biome-ignore lint/correctness/useExhaustiveDependencies: TODO mount-only cleanup for timer/raf refs
   useEffect(
     () => () => {
       const flashTimer = flashTimerRef.current;
@@ -2535,6 +2577,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     jumpToThread,
     replyToActiveThreadOrNextFile,
     resolveActiveThread,
+    toggleActiveThread,
   } = useReviewThreadActions({
     activeIndexRef,
     activeThreadRef,
@@ -2545,12 +2588,14 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     modelRef,
     nextFile,
     replyNonceRef,
-    resolveThread,
+    requestResolveThread,
     setActiveIndex,
     setCommentIndex,
     setReplyReq,
     setRightOpen,
+    setToggleReq,
     threadFlashRef,
+    toggleNonceRef,
   });
 
   const {
@@ -2657,6 +2702,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     setPrSearch,
     setRightOpen,
     setSelection,
+    toggleActiveThread,
     toggleDrawerWide: onToggleDrawerWide,
     toggleViewedFile,
   });
@@ -2833,6 +2879,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
                     }
                   : null
               }
+              toggleRequest={toggleReq}
               viewedSet={viewedSet}
             />
           )}

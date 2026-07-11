@@ -351,6 +351,25 @@ Inline → Code view. PR-level → Info tab + badge. ⏸ Conversation mode.
       real GitLab); existing comments' ranges (`start_line` from the API)
       are not yet displayed on threads — follow-up.
 
+### 5c. Mutation spam safeguards
+
+Resolve/unresolve is fixed (`requestResolveThread` coalesces in-flight toggles
+while keeping optimistic UI). Same class of bug elsewhere: composers and submit
+already accept `pending` / `busy`, but review screen hardcodes them to `false`,
+and several paths call `mutate` with no in-flight guard.
+
+- [ ] 🟡 **Submit review** — wire `submitReview.isPending` to `SubmitReviewModal`
+      `busy`; block duplicate submit while in flight (modal closes early today;
+      `openSubmit` can reset and re-fire).
+- [ ] 🟡 **Reply to thread** — wire `reply.isPending` to `ReviewList`
+      `addPending` (currently hardcoded `false`); optional intent coalescing if
+      spam remains possible before `isPending` flips.
+- [ ] 🟡 **Inline "Comment now"** — wire `addReviewComment.isPending` to
+      `addPending`; `handleSecondary` must `await onAddComment` (fire-and-forget
+      today lets ⌘↵ double-submit through instantly).
+- [ ] 🟢 **Issue comment (Info drawer)** — wire `addIssueComment.isPending` to
+      `AddCommentBox` `pending` in `right-panel.tsx` (hardcoded `false`).
+
 ---
 
 ## 7. Data freshness
@@ -455,3 +474,6 @@ link interception · Universal Links.
 
 - **Subscribed repos**: watch chosen repositories (not just PRs involving you) —
   a fifth inbox source, likely per-account repo picker + polling. Shape TBD.
+- **Watch repos spam** — `setWatchedRepos` fires per toggle with no debounce or
+  in-flight guard (unlike viewed-map persist). Debounce or coalesce rapid
+  watch/unwatch in the repos dialog.

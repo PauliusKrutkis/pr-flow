@@ -1749,10 +1749,6 @@ dialog.q-dialog::backdrop {
   box-shadow: inset 0 0 0 1px var(--accent-line);
 }
 
-/* Match marks, layered over the syntax highlighting (they wrap text nodes
-   inside hljs token spans, so colours show through). Zero padding/margin —
-   the mark must sit seamlessly in the mono text flow, like .q-hl. The current
-   match flips to solid iris so it reads at a glance among its siblings. */
 .dir-quiet mark.qf-find-mark {
   padding: 0;
   margin: 0;
@@ -1767,27 +1763,13 @@ dialog.q-dialog::backdrop {
   box-shadow: none;
 }
 
-/* Selection-occurrence marks (click/select a token → its other occurrences
-   light up). VS Code's word-highlight shape: a solid neutral fill, no ring or
-   underline — a ring reads as a box AROUND the token (as if space were added)
-   and was easy to miss. Neutral (not accent) keeps it distinct from the find
-   marks, and paint-only properties guarantee zero layout shift in the mono
-   grid. */
 .dir-quiet mark.qf-occ-mark {
   padding: 0;
   margin: 0;
   color: inherit;
-  /* 26% ≈ VS Code's dark-theme word-highlight weight — 15% disappeared into
-     the add/del row tints. Square corners on purpose: rounding makes the
-     fill read as a padded chip around the word ("something added space"). */
   background: color-mix(in srgb, var(--fg) 26%, transparent);
 }
 
-/* Intraline word-diff emphasis (GitHub's "darker span inside the tinted row"):
-   on a −/+ pair only the tokens that differ get a stronger add/del fill, so
-   the eye lands on WHAT changed instead of re-reading both lines. Paint-only
-   (no padding/border) — the mono grid must not shift as diffs render. Scoped
-   to add/del rows: a stray mark anywhere else stays invisible by design. */
 .dir-quiet mark.qf-intra-mark {
   padding: 0;
   margin: 0;
@@ -1801,18 +1783,12 @@ dialog.q-dialog::backdrop {
 .dir-quiet .qf-row-add mark.qf-intra-mark {
   background: color-mix(in srgb, var(--add) 30%, transparent);
 }
-
-/* ============ OVERVIEW RULER ============ */
-/* A slim column of ticks along the diff's right edge marking where the find /
-   occurrence matches live in the whole scroll range. It sits just LEFT of the
-   9px overlay scrollbar (which owns the very edge) and never intercepts the
-   pointer — it's a read-only instrument, the scrollbar stays the control. */
 .dir-quiet .qf-ruler {
   position: absolute;
   top: 2px;
   right: 9px;
   bottom: 2px;
-  z-index: 20; /* over the sticky headers (5), under the find bar (30) */
+  z-index: 20;
   width: 6px;
   pointer-events: none;
 }
@@ -1826,30 +1802,63 @@ dialog.q-dialog::backdrop {
 .dir-quiet .qf-ruler-find {
   background: color-mix(in srgb, var(--accent) 70%, transparent);
 }
-/* the current find match — slightly wider and full-strength */
 .dir-quiet .qf-ruler-find.qf-ruler-current {
   right: 0;
   left: 0;
   height: 3px;
   background: var(--accent);
 }
-/* occurrence ticks are neutral, like their marks — quieter than find */
 .dir-quiet .qf-ruler-occ {
   background: color-mix(in srgb, var(--fg) 40%, transparent);
 }
 
-/* ============ COMMENT THREADS ============ */
 .dir-quiet .qf-comment-wrap {
   padding: 0 16px 6px 70px;
   background: var(--bg);
 }
 .dir-quiet .qf-thread {
+  position: relative;
   margin: 6px 0 10px;
   overflow: hidden;
   font-family: var(--font-ui);
   background: var(--surface);
   border: 1px solid var(--line-2);
   border-radius: 10px;
+}
+
+.dir-quiet .qf-thread-fold {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: var(--faint);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
+}
+.dir-quiet .qf-thread-fold:hover {
+  color: var(--fg);
+  background: var(--surface-2);
+}
+.dir-quiet .qf-thread-fold-corner {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 1;
+}
+.dir-quiet .qf-thread-fold .qf-key-hint {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dir-quiet .qf-thread-fold .qf-key-hint {
+    transition: none;
+  }
 }
 .dir-quiet .qf-comment {
   padding: 11px 14px;
@@ -1900,27 +1909,23 @@ dialog.q-dialog::backdrop {
   background: var(--surface-2);
 }
 
-/* thread footer: Reply + Resolve/Unresolve share one bordered strip */
 .dir-quiet .qf-thread-actions {
   display: flex;
+  gap: 2px;
   border-top: 1px solid var(--line);
 }
 .dir-quiet .qf-thread-actions .qf-reply-btn {
-  flex: 1;
+  flex: 0 0 auto;
   width: auto;
   border-top: none;
 }
 .dir-quiet .qf-resolve-btn {
   flex: 0 0 auto;
-  justify-content: flex-end;
 }
 .dir-quiet .qf-resolve-btn:hover {
   color: var(--add);
 }
 
-/* Hotkey hints on the thread's own actions — invisible at rest, fading in
-   exactly when the keys are armed: aiming at the thread (hover) or focusing
-   into it is what makes it the r/x target. */
 .dir-quiet .qf-thread-actions .qf-key-hint {
   opacity: 0;
   transition: opacity 120ms ease;
@@ -1935,24 +1940,43 @@ dialog.q-dialog::backdrop {
   }
 }
 
-/* resolved threads — collapsed to one quiet row until clicked open */
 .dir-quiet .qf-thread-collapsed {
   display: flex;
+  gap: 4px;
+  align-items: center;
+  padding-right: 6px;
+}
+.dir-quiet .qf-thread-collapsed-lead {
+  display: flex;
+  flex: 1;
   gap: 8px;
   align-items: center;
-  width: 100%;
-  padding: 8px 14px;
+  min-width: 0;
+  padding: 8px 8px 8px 14px;
   font-size: 12px;
   color: var(--muted);
   text-align: left;
   cursor: pointer;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  transition: background-color 120ms ease;
 }
-.dir-quiet .qf-thread-collapsed:hover {
+.dir-quiet .qf-thread-collapsed-lead:hover {
   background: var(--surface-2);
 }
 .dir-quiet .qf-thread-collapsed svg {
   flex-shrink: 0;
   color: var(--add);
+}
+.dir-quiet .qf-thread-collapsed-open svg {
+  color: var(--muted);
+}
+.dir-quiet .qf-thread-collapsed-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  align-items: center;
 }
 .dir-quiet .qf-resolved-tag {
   font-family: var(--font-mono);
@@ -1969,7 +1993,6 @@ dialog.q-dialog::backdrop {
   color: var(--faint);
   white-space: nowrap;
 }
-/* the "Resolved" strip atop an expanded resolved thread */
 .dir-quiet .qf-thread-resolved-bar {
   display: flex;
   gap: 8px;
@@ -1981,21 +2004,6 @@ dialog.q-dialog::backdrop {
 .dir-quiet .qf-thread-resolved-bar svg {
   color: var(--add);
 }
-.dir-quiet .qf-resolved-collapse {
-  padding: 2px 8px;
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--muted);
-  cursor: pointer;
-  background: transparent;
-  border: 1px solid var(--line-2);
-  border-radius: 6px;
-}
-.dir-quiet .qf-resolved-collapse:hover {
-  color: var(--fg);
-  border-color: var(--line-2);
-}
-
 /* pending */
 .dir-quiet .qf-pending {
   background:
@@ -2235,9 +2243,6 @@ dialog.q-dialog::backdrop {
   align-items: center;
 }
 
-/* The composer's hint bar: one quiet line under the textarea where every
-   entry is both the hotkey lesson and the button. "Suggestion" leads because
-   it's the only semantic action; preview sits apart on the right. */
 .qa-tools {
   display: flex;
   flex-wrap: wrap;

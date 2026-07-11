@@ -43,7 +43,11 @@ import type { AccountInfo, ChangedFile, PendingComment } from "../../types.ts";
 import { Markdown } from "../markdown.tsx";
 import { Avatar } from "../ui/avatar.tsx";
 import { AddCommentBox } from "./add-comment-box.tsx";
-import { CommentThread, type ReplyRequest } from "./comment-thread.tsx";
+import {
+  CommentThread,
+  type ReplyRequest,
+  type ToggleRequest,
+} from "./comment-thread.tsx";
 import { ImageDiff } from "./image-diff.tsx";
 
 /**
@@ -143,6 +147,7 @@ interface ReviewListProps {
     toItem: number;
     endItem: number;
   } | null;
+  toggleRequest: (ToggleRequest & { path: string }) | null;
   viewedSet: ReadonlySet<string>;
 }
 
@@ -430,12 +435,14 @@ function MappedCommentThread({
   filename,
   addPending,
   replyRequest,
+  toggleRequest,
   callbacks,
 }: {
   thread: ReviewCommentsItem["threads"][number];
   filename: string;
   addPending: boolean;
   replyRequest: ReplyRequest | null;
+  toggleRequest: ToggleRequest | null;
   callbacks: ReviewListCallbacks;
 }) {
   const rootId = thread[0].id;
@@ -451,6 +458,7 @@ function MappedCommentThread({
       onResolve={callbacks.onResolveThread}
       replyPending={addPending}
       replyRequest={replyRequest}
+      toggleRequest={toggleRequest}
     />
   );
 }
@@ -565,12 +573,14 @@ function CommentsBlock({
   filename,
   addPending,
   replyRequest,
+  toggleRequest,
   callbacks,
 }: {
   item: ReviewCommentsItem;
   filename: string;
   addPending: boolean;
   replyRequest: ReplyRequest | null;
+  toggleRequest: ToggleRequest | null;
   callbacks: ReviewListCallbacks;
 }) {
   const activeAccount = useAppStore((s) =>
@@ -591,6 +601,7 @@ function CommentsBlock({
           key={thread[0].id}
           replyRequest={replyRequest}
           thread={thread}
+          toggleRequest={toggleRequest}
         />
       ))}
       {item.pending.map((pending) => (
@@ -774,6 +785,11 @@ function renderCommentsItem(
       replyRequest={
         p.replyRequest && p.replyRequest.path === file.filename
           ? p.replyRequest
+          : null
+      }
+      toggleRequest={
+        p.toggleRequest && p.toggleRequest.path === file.filename
+          ? p.toggleRequest
           : null
       }
     />
