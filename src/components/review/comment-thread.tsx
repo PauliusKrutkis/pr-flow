@@ -1,5 +1,5 @@
 import { CheckCircle2, MessageSquare } from "lucide-react";
-import { type RefObject, useRef, useState } from "react";
+import { useState } from "react";
 import { cn } from "../../lib/cn.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
 import type { ReviewComment } from "../../types.ts";
@@ -31,13 +31,14 @@ interface CommentThreadProps {
 function applyCommand(
   request: { nonce: number; rootId: number } | null | undefined,
   rootId: number | undefined,
-  lastNonce: RefObject<number>,
+  lastNonce: number,
+  setLastNonce: (nonce: number) => void,
   apply: () => void
 ): void {
-  if (!request || request.rootId !== rootId || request.nonce === lastNonce.current) {
+  if (!request || request.rootId !== rootId || request.nonce === lastNonce) {
     return;
   }
-  lastNonce.current = request.nonce;
+  setLastNonce(request.nonce);
   apply();
 }
 
@@ -58,8 +59,8 @@ export function CommentThread({
   const [replying, setReplying] = useState(false);
   const [collapsed, setCollapsed] = useState(resolved);
   const [wasResolved, setWasResolved] = useState(resolved);
-  const lastReplyNonce = useRef(0);
-  const lastToggleNonce = useRef(0);
+  const [lastReplyNonce, setLastReplyNonce] = useState(0);
+  const [lastToggleNonce, setLastToggleNonce] = useState(0);
 
   if (wasResolved !== resolved) {
     setWasResolved(resolved);
@@ -67,14 +68,20 @@ export function CommentThread({
     setReplying(false);
   }
 
-  applyCommand(replyRequest, rootId, lastReplyNonce, () => {
+  applyCommand(replyRequest, rootId, lastReplyNonce, setLastReplyNonce, () => {
     setCollapsed(false);
     setReplying(true);
   });
-  applyCommand(toggleRequest, rootId, lastToggleNonce, () => {
-    setCollapsed((v) => !v);
-    setReplying(false);
-  });
+  applyCommand(
+    toggleRequest,
+    rootId,
+    lastToggleNonce,
+    setLastToggleNonce,
+    () => {
+      setCollapsed((v) => !v);
+      setReplying(false);
+    }
+  );
 
   const submitReply = (body: string) => {
     if (rootId !== undefined) {
