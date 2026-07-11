@@ -9,10 +9,12 @@ import type { Page } from "./types.ts";
  */
 
 export interface AppOptions {
+  appVersion?: string;
   detailByCall?: unknown[];
   detailByLoad?: unknown[];
   hangIssueComment?: boolean;
   hasToken?: boolean;
+  releaseNotes?: string | null;
   inbox?: InboxFixture;
   inboxByCall?: unknown[];
   repoHits?: { fullName: string; description: string }[];
@@ -23,11 +25,13 @@ export interface AppOptions {
 export async function setupApp(page: Page, opts: AppOptions = {}) {
   const config = {
     account: ACCOUNT,
+    appVersion: opts.appVersion ?? "1.0.0",
     detail: DETAIL,
     detailByCall: opts.detailByCall ?? null,
     detailByLoad: opts.detailByLoad ?? null,
     hangIssueComment: opts.hangIssueComment ?? false,
     hasToken: opts.hasToken ?? true,
+    releaseNotes: opts.releaseNotes ?? null,
     inbox: opts.inbox ?? INBOX,
     inboxByCall: opts.inboxByCall ?? null,
     repoHits: opts.repoHits ?? [],
@@ -72,6 +76,7 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
           user: "me",
           userAvatarUrl: "",
         }),
+        get_app_version: () => cfg.appVersion,
         get_cached_inbox: () => null,
         get_cached_pull_request_detail: () => null,
         get_cached_subscribed: () => null,
@@ -80,6 +85,7 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
           detailCalls += 1;
           return result;
         },
+        get_release_notes: () => cfg.releaseNotes,
         get_viewed_map: () =>
           JSON.parse(localStorage.getItem("e2e:viewed") ?? "{}"),
         get_watched_repos: () => cfg.watchedRepos,

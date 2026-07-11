@@ -21,6 +21,7 @@ import { TokenGate } from "./components/token-gate.tsx";
 import { Kbd } from "./components/ui/kbd.tsx";
 import { Spinner } from "./components/ui/spinner.tsx";
 import { UpdatePrompt } from "./components/update-prompt.tsx";
+import { WhatsNew } from "./components/whats-new.tsx";
 import type { Binding } from "./keyboard/types.ts";
 import { useHotkeys } from "./keyboard/use-hotkeys.ts";
 import { api } from "./lib/api.ts";
@@ -225,6 +226,7 @@ export default function App() {
 
       <div aria-live="polite" className="qb-stack qb-stack-host">
         {showRouteChrome ? <UpdatePrompt /> : null}
+        {showRouteChrome ? <WhatsNew /> : null}
         {showRouteChrome ? <ReviewNotifier /> : null}
         {!!toast && (
           <div className="qb-toast" role="alert">
