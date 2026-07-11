@@ -2780,8 +2780,8 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
 
       <main className="qf-main flex min-w-0 flex-1 flex-col">
         <header className="qf-header flex shrink-0 items-center gap-4 px-6 py-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
+          <div className="qf-header-id min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2">
               <span className={cn("qf-state", stateClass)}>
                 <span className="qf-state-dot" />
                 {stateLabel}
@@ -2790,7 +2790,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
                 <TicketTitle title={pr.title} trackerBase={trackerBase} />
               </h1>
             </div>
-            <div className="qf-pr-sub mt-1 flex items-center gap-2">
+            <div className="qf-pr-sub mt-1 flex min-w-0 items-center gap-2">
               <span className="qf-pr-num">#{pr.number}</span>
               <span className="qf-dot">·</span>
               <span>{pr.repo}</span>
@@ -2816,13 +2816,13 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-4">
+          <div className="qf-header-actions flex shrink-0 items-center gap-4">
             <CiPill ci={detail.ciStatus} />
             <ReviewVerdicts reviews={reviews} />
-            <span className="qf-muted text-xs">
+            <span className="qf-header-meta qf-muted text-xs">
               {viewedNow}/{fileCount} viewed
             </span>
-            <div className="qf-stat-group">
+            <div className="qf-stat-group qf-header-meta">
               <span className="qf-add">+{pr.additions}</span>
               <span className="qf-del">−{pr.deletions}</span>
             </div>

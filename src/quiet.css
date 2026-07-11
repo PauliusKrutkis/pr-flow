@@ -948,6 +948,36 @@ dialog.q-dialog::backdrop {
 .dir-quiet .qf-header {
   background: linear-gradient(180deg, var(--surface-2), var(--bg));
   border-bottom: 1px solid var(--line);
+  /* Container so the header can respond to its own width (main - sidebar),
+     not the viewport — matters at minWidth 900 and under webview zoom, where
+     900px @ 1.5x behaves like ~600px. WebKitGTK >= 2.40 supports this. */
+  container: qf-header / inline-size;
+}
+/* The identity column (title + meta) must be free to shrink to its floor so the
+   right-hand actions never get clipped past the header edge. */
+.dir-quiet .qf-header-id {
+  min-width: 0;
+}
+.dir-quiet .qf-header-actions {
+  min-width: 0;
+}
+/* Low-value meta (viewed count, +/- churn) collapses first when the header gets
+   tight, keeping the primary actions (Open / info / Review) fully visible.
+   The selectors are kept specific enough to beat the base `.qf-stat-group`
+   display rule, which is declared later in the sheet. */
+@container qf-header (width < 520px) {
+  .dir-quiet .qf-header .qf-header-meta {
+    display: none;
+  }
+}
+/* Tighter still: drop the review-verdict pills and shrink the action gap. */
+@container qf-header (width < 440px) {
+  .dir-quiet .qf-header .qf-header-actions {
+    gap: 0.75rem;
+  }
+  .dir-quiet .qf-header .qf-header-actions .qf-verdicts {
+    display: none;
+  }
 }
 .dir-quiet .qf-pr-title {
   font-size: 15px;
@@ -958,6 +988,12 @@ dialog.q-dialog::backdrop {
 .dir-quiet .qf-pr-sub {
   font-size: 12px;
   color: var(--muted);
+  /* Clip the meta row (repo / author / branch chips) to the identity column
+     rather than letting long branch names force the header wider. */
+  overflow: hidden;
+}
+.dir-quiet .qf-pr-sub > * {
+  flex-shrink: 0;
 }
 .dir-quiet .qf-pr-num {
   font-family: var(--font-mono);

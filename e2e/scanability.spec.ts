@@ -3,6 +3,7 @@ import { expect, test } from "./test.ts";
 import type { Page } from "./types.ts";
 
 const QF_LVL_ONE = /--qf-lvl:\s*1/;
+const SUBMIT_OR_REVIEW = /Submit review|Review/;
 
 /**
  * Viewport-centre of `token`'s first occurrence within a real (non-hunk) diff
@@ -283,3 +284,36 @@ test("occurrence navigation: n/p and mark clicks jump between occurrences", asyn
 
   await expect(page.locator(".qf-ruler-tick.qf-ruler-occ")).toHaveCount(2);
 });
+
+// P14 — responsive / small-window / zoomed layout. At the app's 900px minWidth
+// (and, equivalently, at high webview zoom which shrinks the effective width),
+// the review header must not overflow horizontally or clip its primary actions.
+for (const width of [900, 720, 600]) {
+  test(`review header does not overflow at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ height: 600, width });
+    await expect(page.locator(".qf-header").first()).toBeVisible();
+
+    const overflow = await page.evaluate(() => {
+      const header = document.querySelector(".qf-header");
+      if (!header) {
+        throw new Error("review header not found");
+      }
+      return {
+        doc: document.documentElement.scrollWidth - window.innerWidth,
+        header: header.scrollWidth - header.clientWidth,
+      };
+    });
+
+    // Nothing scrolls sideways: neither the document nor the header itself.
+    expect(overflow.doc).toBeLessThanOrEqual(0);
+    expect(overflow.header).toBeLessThanOrEqual(0);
+
+    // The primary review action stays fully on-screen (never clipped away).
+    const review = page.getByRole("button", { name: SUBMIT_OR_REVIEW });
+    const box = await review.boundingBox();
+    if (!box) {
+      throw new Error("review action button not visible");
+    }
+    expect(box.x + box.width).toBeLessThanOrEqual(width);
+  });
+}
