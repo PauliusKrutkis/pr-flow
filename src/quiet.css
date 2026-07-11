@@ -1910,6 +1910,29 @@ dialog.q-dialog::backdrop {
   flex-shrink: 0;
   color: var(--add);
 }
+/* open (unresolved) threads collapse to the same quiet row, without the green */
+.dir-quiet .qf-thread-collapsed-open svg {
+  color: var(--muted);
+}
+/* z hints on the collapsed row and the Collapse buttons — hidden at rest,
+   fading in with the thread hover exactly like the r/x hints do */
+.dir-quiet .qf-thread-collapsed .qf-key-hint,
+.dir-quiet .qf-resolved-collapse .qf-key-hint {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.dir-quiet .qf-collapsed-key {
+  margin-left: auto;
+}
+.dir-quiet .qf-collapse-btn {
+  flex: 0 0 auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dir-quiet .qf-thread-collapsed .qf-key-hint,
+  .dir-quiet .qf-resolved-collapse .qf-key-hint {
+    transition: none;
+  }
+}
 .dir-quiet .qf-resolved-tag {
   font-family: var(--font-mono);
   font-size: 10px;

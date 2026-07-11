@@ -56,6 +56,34 @@ test("z expands and collapses the active resolved thread", async ({ page }) => {
   await expect(page.locator(".qf-thread-collapsed")).toBeVisible();
 });
 
+test("z collapses an open (unresolved) thread to a one-line row", async ({
+  page,
+}) => {
+  const thread = page.locator('[data-comment-root="100"]');
+  await expect(thread.getByText("Is this constant right?")).toBeVisible();
+
+  await thread.hover();
+  await page.keyboard.press("z");
+  const collapsed = page.locator(".qf-thread-collapsed");
+  await expect(collapsed).toBeVisible();
+  await expect(collapsed).not.toContainText("Resolved");
+  await expect(collapsed).toContainText("Is this constant right?");
+
+  // the collapsed row expands again on click (mouse parity)
+  await collapsed.click();
+  await expect(page.locator(".qf-thread-collapsed")).toHaveCount(0);
+  await expect(thread.getByText("Is this constant right?")).toBeVisible();
+});
+
+test("the Collapse button collapses an open thread with the mouse", async ({
+  page,
+}) => {
+  const thread = page.locator('[data-comment-root="100"]');
+  await thread.hover();
+  await thread.getByRole("button", { name: "Collapse" }).click();
+  await expect(page.locator(".qf-thread-collapsed")).toBeVisible();
+});
+
 test("r on a hovered thread opens its reply composer", async ({ page }) => {
   const thread = page.locator('[data-comment-root="100"]');
   await thread.hover();
@@ -114,7 +142,7 @@ test("]c focuses a thread, so x resolves it without hovering", async ({
   await expect(page.locator(".qf-thread-collapsed")).toBeVisible();
 });
 
-test("hovering a thread fades in the r/x hotkey hints on its actions", async ({
+test("hovering a thread fades in the r/x/z hotkey hints on its actions", async ({
   page,
 }) => {
   const thread = page.locator('[data-comment-root="100"]');
@@ -125,6 +153,7 @@ test("hovering a thread fades in the r/x hotkey hints on its actions", async ({
   await expect(thread.locator(".qf-thread-actions .q-kbd")).toHaveText([
     "R",
     "X",
+    "Z",
   ]);
 });
 

@@ -1,5 +1,6 @@
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, MessageSquare } from "lucide-react";
 import { useEffect, useState } from "react";
+import { cn } from "../../lib/cn.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
 import type { ReviewComment } from "../../types.ts";
 import { Markdown } from "../markdown.tsx";
@@ -36,34 +37,48 @@ export function CommentThread({
   replyRequest,
   toggleRequest,
 }: CommentThreadProps) {
-  const [replying, setReplying] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-
   const [root] = comments;
   const rootId = root?.id;
   const threadId = root?.threadId ?? null;
   const resolved = root?.resolved ?? false;
+
+  const [replying, setReplying] = useState(false);
+  // A resolved thread collapses by default (done — out of the way); an open one
+  // stays expanded but can be collapsed to a one-line row. Two independent flags
+  // so resolving keeps its own default without clobbering a manual collapse of an
+  // open thread; `collapsed` is the single value the render reads.
+  const [expanded, setExpanded] = useState(false);
+  const [openCollapsed, setOpenCollapsed] = useState(false);
+  const collapsed = resolved ? !expanded : openCollapsed;
 
   useEffect(() => {
     if (!replyRequest || replyRequest.rootId !== rootId) {
       return;
     }
     const raf = requestAnimationFrame(() => {
-      setExpanded(true);
+      if (resolved) {
+        setExpanded(true);
+      } else {
+        setOpenCollapsed(false);
+      }
       setReplying(true);
     });
     return () => cancelAnimationFrame(raf);
-  }, [replyRequest, rootId]);
+  }, [replyRequest, rootId, resolved]);
 
   useEffect(() => {
     if (!toggleRequest || toggleRequest.rootId !== rootId) {
       return;
     }
     const raf = requestAnimationFrame(() => {
-      setExpanded((v) => !v);
+      if (resolved) {
+        setExpanded((v) => !v);
+      } else {
+        setOpenCollapsed((v) => !v);
+      }
     });
     return () => cancelAnimationFrame(raf);
-  }, [toggleRequest, rootId]);
+  }, [toggleRequest, rootId, resolved]);
 
   const submitReply = (body: string) => {
     if (rootId !== undefined) {
@@ -73,11 +88,19 @@ export function CommentThread({
   };
 
   const handleExpand = () => {
-    setExpanded(true);
+    if (resolved) {
+      setExpanded(true);
+    } else {
+      setOpenCollapsed(false);
+    }
   };
 
   const handleCollapse = () => {
-    setExpanded(false);
+    if (resolved) {
+      setExpanded(false);
+    } else {
+      setOpenCollapsed(true);
+    }
   };
 
   const handleCancelReply = () => {
@@ -91,7 +114,12 @@ export function CommentThread({
   const handleResolve = () => {
     if (threadId !== null && onResolve) {
       onResolve({ resolved: !resolved, threadId });
-      setExpanded(resolved);
+      // Becoming resolved → collapse it; becoming open → show it expanded.
+      if (resolved) {
+        setOpenCollapsed(false);
+      } else {
+        setExpanded(false);
+      }
     }
   };
 
@@ -104,20 +132,34 @@ export function CommentThread({
     onMouseLeave: () => onHoverChange?.(false),
   };
 
-  if (resolved && !expanded) {
+  if (collapsed) {
     return (
       <button
-        className="qf-thread qf-thread-collapsed qf-focusable"
+        className={cn(
+          "qf-thread qf-thread-collapsed qf-focusable",
+          !resolved && "qf-thread-collapsed-open"
+        )}
         data-comment-root={rootId}
         onClick={handleExpand}
-        title="Resolved — click to expand"
+        title={
+          resolved
+            ? "Resolved — click or press z to expand"
+            : "Collapsed — click or press z to expand"
+        }
         type="button"
         {...hoverProps}
       >
-        <CheckCircle2 aria-hidden size={13} />
-        <span className="qf-resolved-tag">Resolved</span>
+        {resolved ? (
+          <CheckCircle2 aria-hidden size={13} />
+        ) : (
+          <MessageSquare aria-hidden size={13} />
+        )}
+        {!!resolved && <span className="qf-resolved-tag">Resolved</span>}
         <span className="qf-resolved-snip">
           {root.user} · {firstLine(root.body)}
+        </span>
+        <span aria-hidden className="qf-key-hint qf-collapsed-key">
+          <Kbd combo="z" />
         </span>
       </button>
     );
@@ -135,6 +177,9 @@ export function CommentThread({
             type="button"
           >
             Collapse
+            <span aria-hidden className="qf-key-hint">
+              <Kbd combo="z" />
+            </span>
           </button>
         </div>
       )}
@@ -190,6 +235,18 @@ export function CommentThread({
               {resolved ? "Unresolve" : "Resolve"}
               <span aria-hidden className="qf-key-hint">
                 <Kbd combo="x" />
+              </span>
+            </button>
+          )}
+          {!resolved && (
+            <button
+              className="qf-reply-btn qf-collapse-btn qf-focusable"
+              onClick={handleCollapse}
+              type="button"
+            >
+              Collapse
+              <span aria-hidden className="qf-key-hint">
+                <Kbd combo="z" />
               </span>
             </button>
           )}
