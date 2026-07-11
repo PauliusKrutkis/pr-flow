@@ -27,7 +27,9 @@ export function useInbox() {
   return useQuery({
     queryFn: () => api.listInbox(),
     queryKey: queryKeys.inbox,
-    refetchInterval: 60_000,
+    // Conditional (ETag) requests in the Rust backend answer most polls with a
+    // rate-limit-free 304, so we can poll far more often than the old 60s.
+    refetchInterval: 15_000,
     refetchOnWindowFocus: true,
     staleTime: 0,
   });

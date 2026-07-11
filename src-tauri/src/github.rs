@@ -7,6 +7,8 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const API: &str = "https://api.github.com";
@@ -307,9 +309,110 @@ pub(crate) async fn read_body(resp: reqwest::Response) -> Result<Value, String> 
     serde_json::from_str::<Value>(&text).map_err(|e| format!("could not parse response: {e}"))
 }
 
+/// One cached conditional GET: the `ETag` we last saw plus the body that came
+/// with it. Kept in-memory only — the process is long-lived, so we don't need
+/// to persist it (the on-disk cache in RUST.md already covers cold starts).
+#[derive(Clone)]
+struct CachedResponse {
+    etag: String,
+    body: Value,
+}
+
+/// Process-wide ETag cache, keyed by full request URL. Because the token is
+/// baked into each account's `reqwest::Client` and account switches change the
+/// active client, the URL alone is a safe key: a 304 is only ever returned for
+/// the same resource the caller is authorised to see.
+fn etag_cache() -> &'static Mutex<HashMap<String, CachedResponse>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, CachedResponse>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Outcome of a conditional GET, decided purely from inputs so it can be unit
+/// tested without a network. `Cached` means serve the stored body (a 304);
+/// `Fresh` means a new body arrived and, if it carried an `ETag`, we should
+/// remember it for next time.
+#[derive(Debug, PartialEq)]
+enum Conditional {
+    /// 304 Not Modified — return the body we already had.
+    Cached(Value),
+    /// 200 (or anything else non-304) — the freshly parsed body, plus the new
+    /// `ETag` to store (`None` when the response carried none).
+    Fresh { body: Value, etag: Option<String> },
+}
+
+/// Pure decision core for a conditional GET. Given what we had cached and the
+/// response we just received, decide whether to serve the cache or the fresh
+/// body. Anything that isn't a clean 304-with-a-cached-body is treated as
+/// fresh, so a stale/missing cache can never wedge the request.
+fn resolve_conditional(
+    status: u16,
+    resp_etag: Option<&str>,
+    cached: Option<&CachedResponse>,
+    fresh_body: Value,
+) -> Conditional {
+    if status == 304 {
+        if let Some(hit) = cached {
+            return Conditional::Cached(hit.body.clone());
+        }
+        // 304 without a body we can serve should never happen (we only send
+        // If-None-Match when we have one), but fall back to the fresh body
+        // rather than inventing null.
+    }
+    Conditional::Fresh {
+        body: fresh_body,
+        etag: resp_etag.filter(|e| !e.is_empty()).map(str::to_string),
+    }
+}
+
+/// Conditional GET: sends `If-None-Match` when we hold an `ETag` for the URL.
+/// GitHub (and GitLab) answer `304 Not Modified` without spending rate limit
+/// when nothing changed, letting the inbox poll far more often for free. Any
+/// failure falls through to a plain fetch — the cache is a pure optimisation
+/// and must never break a request.
 pub(crate) async fn get_json(client: &reqwest::Client, url: &str) -> Result<Value, String> {
-    let resp = client.get(url).send().await.map_err(net_err)?;
-    read_body(resp).await
+    let stored = etag_cache()
+        .lock()
+        .ok()
+        .and_then(|c| c.get(url).cloned());
+
+    let mut req = client.get(url);
+    if let Some(hit) = &stored {
+        req = req.header(reqwest::header::IF_NONE_MATCH, hit.etag.clone());
+    }
+    let resp = req.send().await.map_err(net_err)?;
+
+    let status = resp.status().as_u16();
+    let resp_etag = resp
+        .headers()
+        .get(reqwest::header::ETAG)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+
+    // 304 carries no body; for every other status we parse as normal (which
+    // also surfaces host errors via `read_body`).
+    let fresh_body = if status == 304 {
+        Value::Null
+    } else {
+        read_body(resp).await?
+    };
+
+    match resolve_conditional(status, resp_etag.as_deref(), stored.as_ref(), fresh_body) {
+        Conditional::Cached(body) => Ok(body),
+        Conditional::Fresh { body, etag } => {
+            if let Some(etag) = etag {
+                if let Ok(mut cache) = etag_cache().lock() {
+                    cache.insert(
+                        url.to_string(),
+                        CachedResponse {
+                            etag,
+                            body: body.clone(),
+                        },
+                    );
+                }
+            }
+            Ok(body)
+        }
+    }
 }
 
 /// Fetches every page of a list endpoint (100/page, capped at 20 pages).
@@ -1215,6 +1318,62 @@ mod tests {
         assert_eq!(none.state, "none");
         assert_eq!(none.total, 0);
         assert_eq!(none.url, "");
+    }
+
+    #[test]
+    fn conditional_304_serves_cached_body() {
+        let cached = CachedResponse {
+            etag: "\"abc\"".to_string(),
+            body: serde_json::json!({ "cached": true }),
+        };
+        // A 304 with a cached hit returns the stored body untouched.
+        let out = resolve_conditional(304, Some("\"abc\""), Some(&cached), Value::Null);
+        assert_eq!(out, Conditional::Cached(serde_json::json!({ "cached": true })));
+    }
+
+    #[test]
+    fn conditional_200_stores_new_etag_and_body() {
+        // A 200 returns the fresh body and hands back the ETag to store.
+        let out = resolve_conditional(
+            200,
+            Some("\"new\""),
+            None,
+            serde_json::json!({ "fresh": 1 }),
+        );
+        assert_eq!(
+            out,
+            Conditional::Fresh {
+                body: serde_json::json!({ "fresh": 1 }),
+                etag: Some("\"new\"".to_string()),
+            }
+        );
+    }
+
+    #[test]
+    fn conditional_304_without_cache_falls_back_to_fresh() {
+        // Defensive: a 304 we can't satisfy from cache degrades to the fresh
+        // (possibly null) body rather than wedging the request.
+        let out = resolve_conditional(304, None, None, Value::Null);
+        assert_eq!(
+            out,
+            Conditional::Fresh {
+                body: Value::Null,
+                etag: None,
+            }
+        );
+    }
+
+    #[test]
+    fn conditional_200_without_etag_stores_nothing() {
+        // No ETag header → nothing to remember, still returns the fresh body.
+        let out = resolve_conditional(200, None, None, serde_json::json!({ "x": 1 }));
+        assert_eq!(
+            out,
+            Conditional::Fresh {
+                body: serde_json::json!({ "x": 1 }),
+                etag: None,
+            }
+        );
     }
 
     #[test]
