@@ -90,13 +90,14 @@ import { SubmitReviewModal } from "./submit-review-modal.tsx";
 
 const RE_WORD = /\w/;
 const RE_WORD_2 = /\w/;
+const FAST_CURSOR_STEP = 5;
 
 /**
  * Full-screen PR review: a virtualized diff list, keyboard cursor, multi-line
  * selection, find-in-diff, and inline comment threads.
  *
  * Interaction model:
- * - The line cursor (j/k, hover, jumps) is the source of truth for the active
+ * - The line cursor (j/k, f/g, hover) is the source of truth for the active
  *   file — wheel scrolling alone does not move it.
  * - Collapsed hunks and open composers feed the flattened item model.
  * - Multi-line selection (shift+j/k, gutter drag) is independent of the
@@ -1331,6 +1332,7 @@ function useReviewHotkeys(config: {
   findStep: (dir: 1 | -1) => void;
   goInbox: () => void;
   goToComment: (delta: number) => void;
+  moveCursorFast: (delta: 1 | -1) => void;
   markViewedAndNext: () => void;
   occNavRefs: Parameters<typeof buildOccNav>[0];
   occSpec: OccState | null;
@@ -1405,6 +1407,26 @@ function useReviewHotkeys(config: {
       icon: ChevronLeft,
       keys: ["t"],
       run: config.prevFile,
+    },
+    {
+      description: "Fast down",
+      group: "Navigation",
+      icon: ChevronsDown,
+      keys: "f",
+      run: () => {
+        config.setSelection(null);
+        config.moveCursorFast(1);
+      },
+    },
+    {
+      description: "Fast up",
+      group: "Navigation",
+      icon: ChevronsUp,
+      keys: "g",
+      run: () => {
+        config.setSelection(null);
+        config.moveCursorFast(-1);
+      },
     },
     {
       description: "Cycle files",
@@ -1968,6 +1990,13 @@ function useReviewFileNavigation(args: {
     }
   };
 
+  const moveCursorFast = (delta: 1 | -1) => {
+    buildCursorMover(args.cursorMoverRefs).move(
+      delta * FAST_CURSOR_STEP,
+      false
+    );
+  };
+
   const extendSelection = (delta: 1 | -1) => {
     const m = args.modelRef.current;
     markKeyboardNavigation(args);
@@ -2026,6 +2055,7 @@ function useReviewFileNavigation(args: {
     cycleFile,
     extendSelection,
     fileRafRef,
+    moveCursorFast,
     nextFile,
     pageScroll,
     prevFile,
@@ -2463,6 +2493,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     cycleFile,
     extendSelection,
     fileRafRef,
+    moveCursorFast,
     nextFile,
     pageScroll,
     prevFile,
@@ -2688,6 +2719,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     findStep,
     goInbox,
     goToComment,
+    moveCursorFast,
     markViewedAndNext,
     occNavRefs,
     occSpec,
