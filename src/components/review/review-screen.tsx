@@ -72,6 +72,7 @@ import { parsePrKey, prKey } from "../../types.ts";
 import { Avatar } from "../ui/avatar.tsx";
 import { Kbd } from "../ui/kbd.tsx";
 import { TicketTitle } from "../ui/ticket-title.tsx";
+import { CiPill } from "./ci-pill.tsx";
 import { FileSidebar } from "./file-sidebar.tsx";
 import { FindBar } from "./find-bar.tsx";
 import { OverviewRuler } from "./overview-ruler.tsx";
@@ -2784,6 +2785,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
           </div>
 
           <div className="flex shrink-0 items-center gap-4">
+            <CiPill ci={detail.ciStatus} />
             <ReviewVerdicts reviews={reviews} />
             <span className="qf-muted text-xs">
               {viewedNow}/{fileCount} viewed
