@@ -3717,3 +3717,74 @@ dialog.q-dialog::backdrop {
   font-size: 11px;
   color: var(--faint);
 }
+
+/* full-file view (shift+v) — read-only, virtualized, highlighted */
+.q-dialog.qf-fileview {
+  width: min(1000px, calc(100vw - 48px));
+  height: min(86vh, 900px);
+  max-height: min(86vh, 900px);
+}
+.qf-fileview-head {
+  display: flex;
+  flex-shrink: 0;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.qf-fileview-path {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--fg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.qf-fileview-close {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  background: var(--surface-hi);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+}
+.qf-fileview-close:hover {
+  color: var(--fg);
+}
+.qf-fileview-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+}
+.qf-fileview-scroll {
+  width: 100%;
+}
+.qf-fileview-msg {
+  color: var(--muted);
+  font-size: 13px;
+}
+.qf-fileview-row {
+  display: flex;
+  gap: 16px;
+  padding: 0 18px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.qf-fileview-num {
+  flex-shrink: 0;
+  width: 40px;
+  color: var(--faint);
+  text-align: right;
+  user-select: none;
+}
+.qf-fileview-code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

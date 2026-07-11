@@ -7,6 +7,7 @@ const COPY_PR_LINK = /Copy PR link/;
 const REVIEW_REQUESTS = /Review requests/;
 const QF_ROW_FLASH = /qf-row-flash/;
 const QF_FILE_ACTIVE = /qf-file-active/;
+const FILE_DIALOG = /^File:/;
 
 test.beforeEach(async ({ page }) => {
   await setupApp(page);
@@ -428,4 +429,14 @@ test("comment posting is optimistic even when the network hangs", async ({
     page.locator(".qf-convo").getByText("Ship it when green")
   ).toBeVisible({ timeout: 1000 });
   await expect(box).toHaveText("");
+});
+
+test("shift+v opens the full file; Esc closes it", async ({ page }) => {
+  await page.keyboard.press("Shift+v");
+  const dialog = page.getByRole("dialog", { name: FILE_DIALOG });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("the whole file, not just the diff hunks");
+  await expect(dialog).toContainText("return query.trim().toLowerCase();");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
 });

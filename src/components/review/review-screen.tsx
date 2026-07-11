@@ -12,6 +12,7 @@ import {
   ChevronsUp,
   Copy,
   ExternalLink,
+  FileCode,
   FileSearch,
   GitBranch,
   Inbox,
@@ -72,6 +73,7 @@ import { Kbd } from "../ui/kbd.tsx";
 import { TicketTitle } from "../ui/ticket-title.tsx";
 import { FileSidebar } from "./file-sidebar.tsx";
 import { FindBar } from "./find-bar.tsx";
+import { FullFileModal } from "./full-file-modal.tsx";
 import { OverviewRuler } from "./overview-ruler.tsx";
 import { PrSearch } from "./pr-search.tsx";
 import {
@@ -1317,6 +1319,7 @@ function useReviewHotkeys(config: {
   markViewedAndNext: () => void;
   occNavRefs: Parameters<typeof buildOccNav>[0];
   occSpec: OccState | null;
+  openFileView: () => void;
   openFind: () => void;
   openPrFiles: () => void;
   openSubmit: () => void;
@@ -1442,6 +1445,13 @@ function useReviewHotkeys(config: {
       icon: Check,
       keys: "v",
       run: config.toggleViewedFile,
+    },
+    {
+      description: "View full file",
+      group: "Files",
+      icon: FileCode,
+      keys: "shift+v",
+      run: config.openFileView,
     },
     {
       description: "Submit review",
@@ -2097,6 +2107,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
   const [activeIndex, setActiveIndex] = useState(initialMem?.fileIndex ?? 0);
   const [rightOpen, setRightOpen] = useState(false);
   const rightOpenRef = useLatest(rightOpen);
+  const [fileViewOpen, setFileViewOpen] = useState(false);
   const [commentIndex, setCommentIndex] = useState(0);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [prSearch, setPrSearch] = useState<null | "files" | "text">(null);
@@ -2569,6 +2580,14 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     setRightOpen(false);
   };
 
+  const onOpenFileView = () => {
+    setFileViewOpen(true);
+  };
+
+  const onCloseFileView = () => {
+    setFileViewOpen(false);
+  };
+
   const onCloseSubmitModal = () => {
     setSubmitOpen(false);
   };
@@ -2607,6 +2626,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     markViewedAndNext,
     occNavRefs,
     occSpec,
+    openFileView: onOpenFileView,
     openFind,
     openPrFiles: onOpenPrFiles,
     openSubmit,
@@ -2836,6 +2856,16 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
         onSelectLine={selectLine}
         open={prSearch !== null}
       />
+
+      {fileViewOpen && activeFile && (
+        <FullFileModal
+          onClose={onCloseFileView}
+          owner={owner}
+          path={activeFile.filename}
+          repo={repo}
+          sha={pr.headSha}
+        />
+      )}
     </div>
   );
 }
