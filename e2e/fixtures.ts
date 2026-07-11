@@ -1,5 +1,3 @@
-/** Deterministic backend fixtures for the mocked Tauri bridge. */
-
 export const makePr = (
   n: number,
   title: string,

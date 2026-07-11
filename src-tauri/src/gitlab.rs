@@ -23,7 +23,6 @@ use crate::github::{
 
 pub struct GitLabPlatform {
     client: reqwest::Client,
-    /// REST base, e.g. "https://gitlab.com/api/v4".
     api: String,
 }
 
@@ -83,7 +82,6 @@ fn ci_from_pipelines(pipelines: &Value) -> CiStatus {
         "success" => "success",
         "failed" => "failure",
         "running" | "pending" | "created" | "waiting_for_resource" | "preparing" => "pending",
-        // canceled | skipped | manual | scheduled → treat as no verdict.
         _ => return CiStatus::default(),
     };
     let failed = if state == "failure" { 1 } else { 0 };
@@ -486,7 +484,6 @@ impl GitLabPlatform {
         issue_comments.sort_by(|a, b| a.created_at.cmp(&b.created_at));
         reviews.sort_by(|a, b| a.submitted_at.cmp(&b.submitted_at));
 
-        // CI is a bonus signal — a failed fetch degrades to "none", not an error.
         let ci_status = match get_json(
             &self.client,
             &format!("{}/pipelines", self.mr_url(owner, repo, number)),
@@ -822,7 +819,6 @@ mod tests {
 
     #[test]
     fn ci_from_pipelines_maps_latest() {
-        // Newest-first: the running pipeline is the head; failed maps to failure.
         let failed = ci_from_pipelines(&serde_json::json!([
             { "status": "failed", "web_url": "https://g/p/1" },
             { "status": "success", "web_url": "https://g/p/0" }
@@ -838,7 +834,6 @@ mod tests {
         assert_eq!(running.state, "pending");
         assert_eq!(running.failed, 0);
 
-        // No pipeline, or a non-verdict status, degrades to "none".
         assert_eq!(ci_from_pipelines(&serde_json::json!([])).state, "none");
         assert_eq!(
             ci_from_pipelines(&serde_json::json!([{ "status": "canceled" }])).state,
@@ -914,9 +909,9 @@ mod tests {
         assert!(rc.resolved);
         let rr = note_to_comment(&reply, Some(&root), Some(("disc-1", true)));
         assert_eq!(rr.in_reply_to_id, Some(10));
-        assert_eq!(rr.path, "f.ts"); // anchor path comes from the root
+        assert_eq!(rr.path, "f.ts");
         assert_eq!(rr.line, None);
-        assert_eq!(rr.thread_id.as_deref(), Some("disc-1")); // stamped on replies too
+        assert_eq!(rr.thread_id.as_deref(), Some("disc-1"));
     }
 
     #[test]
@@ -929,7 +924,7 @@ mod tests {
         let rc = note_to_comment(&root, None, None);
         assert_eq!(rc.side, "LEFT");
         assert_eq!(rc.line, Some(3));
-        assert_eq!(rc.thread_id, None); // no thread handle -> resolve hidden
+        assert_eq!(rc.thread_id, None);
         assert!(!rc.resolved);
     }
 

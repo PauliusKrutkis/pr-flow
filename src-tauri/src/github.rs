@@ -42,10 +42,8 @@ pub struct PullRequest {
     pub created_at: String,
     pub comments_count: u64,
     pub head_sha: String,
-    /// Base branch tip sha (populated on detail fetch; used for image diffs).
     #[serde(default)]
     pub base_sha: String,
-    /// Branch names (populated on detail fetch; empty in the list view).
     #[serde(default)]
     pub head_ref: String,
     #[serde(default)]
@@ -54,8 +52,6 @@ pub struct PullRequest {
     pub deletions: u64,
     pub changed_files: u64,
     pub body: String,
-    /// Newest comment, for the inbox reading pane (list fetch only; `None`
-    /// on detail fetches and providers that can't supply it cheaply).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_comment: Option<LastComment>,
 }
@@ -65,7 +61,6 @@ pub struct PullRequest {
 pub struct LastComment {
     pub author: String,
     pub author_avatar_url: String,
-    /// Plain text (GraphQL `bodyText`) — a teaser, not rendered as Markdown.
     pub body: String,
     pub created_at: String,
 }
@@ -99,12 +94,6 @@ pub struct ReviewComment {
     pub user_avatar_url: String,
     pub created_at: String,
     pub in_reply_to_id: Option<u64>,
-    /// Resolvable-thread identity: GitHub's GraphQL review-thread node id, or
-    /// GitLab's discussion id. Stamped on EVERY comment of the thread (not
-    /// just the root) so the frontend can group/flip without walking reply
-    /// chains. `None` means "can't resolve from here" (e.g. the GraphQL probe
-    /// failed) and the UI hides the affordance. Serde defaults keep cached
-    /// details from before this field readable.
     #[serde(default)]
     pub thread_id: Option<String>,
     #[serde(default)]
@@ -145,13 +134,9 @@ pub struct ReviewSummary {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CiStatus {
-    /// "success" | "failure" | "pending" | "none".
     pub state: String,
-    /// Total number of checks/statuses seen (0 for "none").
     pub total: u64,
-    /// How many are failing (drives the red count on the pill).
     pub failed: u64,
-    /// Where to send the user on click (checks page or first failing run).
     pub url: String,
 }
 
@@ -172,13 +157,10 @@ pub struct PullRequestDetail {
     pub pr: PullRequest,
     pub files: Vec<ChangedFile>,
     pub comments: Vec<ReviewComment>,
-    /// PR-level conversation, oldest first (default keeps old caches readable).
     #[serde(default)]
     pub issue_comments: Vec<IssueComment>,
-    /// Submitted review verdicts/summaries, oldest first (default: old caches).
     #[serde(default)]
     pub reviews: Vec<ReviewSummary>,
-    /// CI/pipeline state for the head commit (default keeps old caches readable).
     #[serde(default)]
     pub ci_status: CiStatus,
     pub fetched_at: u64,
@@ -187,7 +169,6 @@ pub struct PullRequestDetail {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct InboxBucket {
-    /// Total matches reported by the host (may exceed `prs.len()` due to paging).
     pub count: u64,
     pub prs: Vec<PullRequest>,
 }
@@ -209,7 +190,6 @@ pub const MAX_BLOB_BYTES: usize = 20 * 1024 * 1024;
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct FileBlob {
-    /// Raw file bytes, base64-encoded (the frontend builds a data: URL).
     pub base64: String,
     pub size: u64,
 }
@@ -226,11 +206,9 @@ pub struct RepoHit {
 #[serde(rename_all = "camelCase")]
 pub struct ReviewCommentInput {
     pub path: String,
-    /// The anchor line — for a multi-line comment, the range's END line.
     pub line: u64,
     pub side: String,
     pub body: String,
-    /// Multi-line range start (same side as `line`); None = single line.
     #[serde(default)]
     pub start_line: Option<u64>,
 }
@@ -417,7 +395,7 @@ fn pr_from_graphql(v: &Value) -> PullRequest {
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string();
-    let state_raw = fstr(v, "state"); // OPEN | CLOSED | MERGED
+    let state_raw = fstr(v, "state");
     let comments_count = v
         .get("comments")
         .and_then(|c| c.get("totalCount"))
@@ -519,8 +497,6 @@ fn ci_from_github(check_runs: &Value, combined: &Value, checks_url: &str) -> CiS
 
     for run in &runs {
         total += 1;
-        // check-runs carry `status` (queued|in_progress|completed) and, when
-        // completed, a `conclusion` (success|failure|neutral|cancelled|…).
         let status = fstr(run, "status");
         if status != "completed" {
             pending += 1;
@@ -533,14 +509,12 @@ fn ci_from_github(check_runs: &Value, combined: &Value, checks_url: &str) -> CiS
                     fail_url = fopt_str(run, "html_url");
                 }
             }
-            // success | neutral | skipped | stale → not failing, not pending.
             _ => {}
         }
     }
 
     for st in &statuses {
         total += 1;
-        // combined status contexts carry a `state` (success|failure|pending|error).
         match fstr(st, "state").as_str() {
             "failure" | "error" => {
                 failed += 1;
@@ -1161,7 +1135,7 @@ mod tests {
         assert_eq!(pr.title, "");
         assert!(!pr.merged);
         let c = comment_from(&serde_json::json!({}));
-        assert_eq!(c.side, "RIGHT"); // side defaults to RIGHT when absent
+        assert_eq!(c.side, "RIGHT");
         assert_eq!(c.line, None);
     }
 
@@ -1186,7 +1160,7 @@ mod tests {
         });
         let bucket = bucket_from(&data, "alias");
         assert_eq!(bucket.count, 12);
-        assert_eq!(bucket.prs.len(), 1); // null nodes are skipped
+        assert_eq!(bucket.prs.len(), 1);
         assert_eq!(bucket.prs[0].owner, "o");
         assert!(bucket.prs[0].merged);
         assert_eq!(bucket.prs[0].state, "merged");
@@ -1194,8 +1168,6 @@ mod tests {
 
     #[test]
     fn ci_from_github_aggregates_checks_and_status() {
-        // A failing run wins over a passing one and pins the pill's url to the
-        // failing run's html_url; the combined status adds to the total.
         let check_runs = serde_json::json!({
             "check_runs": [
                 { "status": "completed", "conclusion": "success", "html_url": "ok" },
@@ -1215,7 +1187,6 @@ mod tests {
 
     #[test]
     fn ci_from_github_pending_then_success_then_none() {
-        // No failures but an in-flight run → pending; url falls back to checks.
         let pending = ci_from_github(
             &serde_json::json!({ "check_runs": [
                 { "status": "queued", "conclusion": null }
@@ -1226,7 +1197,6 @@ mod tests {
         assert_eq!(pending.state, "pending");
         assert_eq!(pending.url, "cx");
 
-        // All green → success.
         let success = ci_from_github(
             &serde_json::json!({ "check_runs": [
                 { "status": "completed", "conclusion": "success" }
@@ -1237,7 +1207,6 @@ mod tests {
         assert_eq!(success.state, "success");
         assert_eq!(success.total, 1);
 
-        // Nothing configured → none, rendered as an empty pill by the UI.
         let none = ci_from_github(
             &serde_json::json!({ "check_runs": [] }),
             &serde_json::json!({ "statuses": [] }),

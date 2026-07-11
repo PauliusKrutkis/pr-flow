@@ -104,13 +104,9 @@ export interface ReviewSummary {
 }
 
 export interface CiStatus {
-  /** How many checks are failing (drives the red count on the pill). */
   failed: number;
-  /** "none" renders nothing so repos without CI stay quiet. */
   state: "success" | "failure" | "pending" | "none";
-  /** Total number of checks/statuses seen. */
   total: number;
-  /** Where a click sends the user (checks page or first failing run). */
   url: string;
 }
 
