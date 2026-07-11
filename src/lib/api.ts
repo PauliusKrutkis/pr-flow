@@ -53,6 +53,7 @@ export const api = {
       owner,
       repo,
     }),
+  getAppVersion: () => invoke<string>("get_app_version"),
   getCachedSubscribed: () =>
     invoke<InboxBucket | null>("get_cached_subscribed"),
   getCurrentUser: () => invoke<GitHubUser>("get_current_user"),
@@ -66,6 +67,9 @@ export const api = {
       owner,
       repo,
     }),
+
+  getReleaseNotes: (tag: string) =>
+    invoke<string | null>("get_release_notes", { tag }),
 
   getViewedMap: () => invoke<unknown>("get_viewed_map"),
   getWatchedRepos: () => invoke<string[]>("get_watched_repos"),
