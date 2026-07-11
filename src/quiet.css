@@ -1800,12 +1800,54 @@ dialog.q-dialog::backdrop {
   background: var(--bg);
 }
 .dir-quiet .qf-thread {
+  position: relative;
   margin: 6px 0 10px;
   overflow: hidden;
   font-family: var(--font-ui);
   background: var(--surface);
   border: 1px solid var(--line-2);
   border-radius: 10px;
+}
+
+/* one consistent fold control, top-right corner in every thread state —
+   speaks the same "word + hotkey" language as Reply and Resolve */
+.dir-quiet .qf-thread-fold {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 1;
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: var(--faint);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
+}
+.dir-quiet .qf-thread-fold:hover {
+  color: var(--fg);
+  background: var(--surface-2);
+}
+/* inside the collapsed row it rides inline at the right, not floating */
+.dir-quiet .qf-thread-fold-hint {
+  position: static;
+  padding: 0;
+  margin-left: auto;
+}
+.dir-quiet .qf-thread-fold .qf-key-hint {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dir-quiet .qf-thread-fold .qf-key-hint {
+    transition: none;
+  }
 }
 .dir-quiet .qf-comment {
   padding: 11px 14px;
@@ -1859,24 +1901,23 @@ dialog.q-dialog::backdrop {
 /* thread footer: Reply + Resolve/Unresolve share one bordered strip */
 .dir-quiet .qf-thread-actions {
   display: flex;
+  gap: 2px;
   border-top: 1px solid var(--line);
 }
 .dir-quiet .qf-thread-actions .qf-reply-btn {
-  flex: 1;
+  flex: 0 0 auto;
   width: auto;
   border-top: none;
 }
 .dir-quiet .qf-resolve-btn {
   flex: 0 0 auto;
-  justify-content: flex-end;
 }
 .dir-quiet .qf-resolve-btn:hover {
   color: var(--add);
 }
 
-/* Hotkey hints on the thread's own actions — invisible at rest, fading in
-   exactly when the keys are armed: aiming at the thread (hover) or focusing
-   into it is what makes it the r/x target. */
+/* Hotkey hints on the thread's actions and fold — invisible at rest, fading in
+   when the keys are armed: aiming at the thread (hover) or focusing into it. */
 .dir-quiet .qf-thread-actions .qf-key-hint {
   opacity: 0;
   transition: opacity 120ms ease;
@@ -1891,13 +1932,13 @@ dialog.q-dialog::backdrop {
   }
 }
 
-/* resolved threads — collapsed to one quiet row until clicked open */
+/* threads collapse to one quiet row until expanded */
 .dir-quiet .qf-thread-collapsed {
   display: flex;
   gap: 8px;
   align-items: center;
   width: 100%;
-  padding: 8px 14px;
+  padding: 8px 8px 8px 14px;
   font-size: 12px;
   color: var(--muted);
   text-align: left;
@@ -1910,28 +1951,9 @@ dialog.q-dialog::backdrop {
   flex-shrink: 0;
   color: var(--add);
 }
-/* open (unresolved) threads collapse to the same quiet row, without the green */
+/* open (unresolved) threads collapse to the same row, without the green tick */
 .dir-quiet .qf-thread-collapsed-open svg {
   color: var(--muted);
-}
-/* z hints on the collapsed row and the Collapse buttons — hidden at rest,
-   fading in with the thread hover exactly like the r/x hints do */
-.dir-quiet .qf-thread-collapsed .qf-key-hint,
-.dir-quiet .qf-resolved-collapse .qf-key-hint {
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-.dir-quiet .qf-collapsed-key {
-  margin-left: auto;
-}
-.dir-quiet .qf-collapse-btn {
-  flex: 0 0 auto;
-}
-@media (prefers-reduced-motion: reduce) {
-  .dir-quiet .qf-thread-collapsed .qf-key-hint,
-  .dir-quiet .qf-resolved-collapse .qf-key-hint {
-    transition: none;
-  }
 }
 .dir-quiet .qf-resolved-tag {
   font-family: var(--font-mono);
@@ -1960,21 +1982,6 @@ dialog.q-dialog::backdrop {
 .dir-quiet .qf-thread-resolved-bar svg {
   color: var(--add);
 }
-.dir-quiet .qf-resolved-collapse {
-  padding: 2px 8px;
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--muted);
-  cursor: pointer;
-  background: transparent;
-  border: 1px solid var(--line-2);
-  border-radius: 6px;
-}
-.dir-quiet .qf-resolved-collapse:hover {
-  color: var(--fg);
-  border-color: var(--line-2);
-}
-
 /* pending */
 .dir-quiet .qf-pending {
   background:

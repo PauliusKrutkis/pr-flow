@@ -43,42 +43,41 @@ export function CommentThread({
   const resolved = root?.resolved ?? false;
 
   const [replying, setReplying] = useState(false);
-  // A resolved thread collapses by default (done — out of the way); an open one
-  // stays expanded but can be collapsed to a one-line row. Two independent flags
-  // so resolving keeps its own default without clobbering a manual collapse of an
-  // open thread; `collapsed` is the single value the render reads.
-  const [expanded, setExpanded] = useState(false);
-  const [openCollapsed, setOpenCollapsed] = useState(false);
-  const collapsed = resolved ? !expanded : openCollapsed;
+  // Resolved threads fold away by default; open ones start expanded. `collapsed`
+  // resets to match whenever the resolved state flips — so resolving always
+  // tidies a thread away and unresolving always brings it back open — while `z`
+  // toggles it freely in between. Tracking the resolved we last saw lets us
+  // react to flips made from outside this component (the keyboard `x`).
+  const [collapsed, setCollapsed] = useState(resolved);
+  const [wasResolved, setWasResolved] = useState(resolved);
+  if (wasResolved !== resolved) {
+    setWasResolved(resolved);
+    setCollapsed(resolved);
+    setReplying(false);
+  }
 
   useEffect(() => {
     if (!replyRequest || replyRequest.rootId !== rootId) {
       return;
     }
+    // An explicit reply request (r) is the one case that opens the composer.
     const raf = requestAnimationFrame(() => {
-      if (resolved) {
-        setExpanded(true);
-      } else {
-        setOpenCollapsed(false);
-      }
+      setCollapsed(false);
       setReplying(true);
     });
     return () => cancelAnimationFrame(raf);
-  }, [replyRequest, rootId, resolved]);
+  }, [replyRequest, rootId]);
 
   useEffect(() => {
     if (!toggleRequest || toggleRequest.rootId !== rootId) {
       return;
     }
     const raf = requestAnimationFrame(() => {
-      if (resolved) {
-        setExpanded((v) => !v);
-      } else {
-        setOpenCollapsed((v) => !v);
-      }
+      setCollapsed((v) => !v);
+      setReplying(false);
     });
     return () => cancelAnimationFrame(raf);
-  }, [toggleRequest, rootId, resolved]);
+  }, [toggleRequest, rootId]);
 
   const submitReply = (body: string) => {
     if (rootId !== undefined) {
@@ -87,20 +86,13 @@ export function CommentThread({
     setReplying(false);
   };
 
-  const handleExpand = () => {
-    if (resolved) {
-      setExpanded(true);
-    } else {
-      setOpenCollapsed(false);
-    }
+  const expand = () => {
+    setCollapsed(false);
   };
 
-  const handleCollapse = () => {
-    if (resolved) {
-      setExpanded(false);
-    } else {
-      setOpenCollapsed(true);
-    }
+  const collapse = () => {
+    setCollapsed(true);
+    setReplying(false);
   };
 
   const handleCancelReply = () => {
@@ -113,13 +105,9 @@ export function CommentThread({
 
   const handleResolve = () => {
     if (threadId !== null && onResolve) {
+      // The fold follows the resolved state via the sync above — resolving
+      // collapses, unresolving expands — so this only flips the verdict.
       onResolve({ resolved: !resolved, threadId });
-      // Becoming resolved → collapse it; becoming open → show it expanded.
-      if (resolved) {
-        setOpenCollapsed(false);
-      } else {
-        setExpanded(false);
-      }
     }
   };
 
@@ -135,17 +123,14 @@ export function CommentThread({
   if (collapsed) {
     return (
       <button
+        aria-label="Expand thread"
         className={cn(
           "qf-thread qf-thread-collapsed qf-focusable",
           !resolved && "qf-thread-collapsed-open"
         )}
         data-comment-root={rootId}
-        onClick={handleExpand}
-        title={
-          resolved
-            ? "Resolved — click or press z to expand"
-            : "Collapsed — click or press z to expand"
-        }
+        onClick={expand}
+        title="Expand (z)"
         type="button"
         {...hoverProps}
       >
@@ -158,8 +143,11 @@ export function CommentThread({
         <span className="qf-resolved-snip">
           {root.user} · {firstLine(root.body)}
         </span>
-        <span aria-hidden className="qf-key-hint qf-collapsed-key">
-          <Kbd combo="z" />
+        <span className="qf-thread-fold qf-thread-fold-hint">
+          Expand
+          <span className="qf-key-hint">
+            <Kbd combo="z" />
+          </span>
         </span>
       </button>
     );
@@ -167,20 +155,22 @@ export function CommentThread({
 
   return (
     <div className="qf-thread" data-comment-root={rootId} {...hoverProps}>
+      <button
+        aria-label="Collapse thread"
+        className="qf-thread-fold qf-focusable"
+        onClick={collapse}
+        title="Collapse (z)"
+        type="button"
+      >
+        Collapse
+        <span aria-hidden className="qf-key-hint">
+          <Kbd combo="z" />
+        </span>
+      </button>
       {!!resolved && (
         <div className="qf-thread-resolved-bar">
           <CheckCircle2 aria-hidden size={13} />
           <span className="qf-resolved-tag">Resolved</span>
-          <button
-            className="qf-resolved-collapse qf-focusable"
-            onClick={handleCollapse}
-            type="button"
-          >
-            Collapse
-            <span aria-hidden className="qf-key-hint">
-              <Kbd combo="z" />
-            </span>
-          </button>
         </div>
       )}
       {comments.map((c, i) => (
@@ -235,18 +225,6 @@ export function CommentThread({
               {resolved ? "Unresolve" : "Resolve"}
               <span aria-hidden className="qf-key-hint">
                 <Kbd combo="x" />
-              </span>
-            </button>
-          )}
-          {!resolved && (
-            <button
-              className="qf-reply-btn qf-collapse-btn qf-focusable"
-              onClick={handleCollapse}
-              type="button"
-            >
-              Collapse
-              <span aria-hidden className="qf-key-hint">
-                <Kbd combo="z" />
               </span>
             </button>
           )}
