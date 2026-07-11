@@ -7,7 +7,6 @@
  * resolve `anchorItem`, ]c/[c walks `commentItems`, and the overview ruler
  * turns item indexes into fractions.
  */
-
 import type { ChangedFile, PendingComment, ReviewComment } from "../types.ts";
 import { type DiffHunk, type DiffRow, parsePatch } from "./diff.ts";
 import {
@@ -165,7 +164,6 @@ export interface ReviewCommentsItem {
   threads: ReviewComment[][];
 }
 
-/** Whole-file bodies without rows: image comparisons and binary notes. */
 export interface ReviewImageItem {
   fileIndex: number;
   kind: "image";
@@ -188,10 +186,6 @@ export interface ReviewListModel {
   commentItems: number[];
   groupCounts: number[];
   groupFirstItem: number[];
-  /** Nav-array index of the first navigable row of each expanded hunk, in
-   * document order. Drives `}`/`{` chunk navigation. Collapsed or empty hunks
-   * contribute nothing (they have no rows to land on). */
-  hunkStarts: number[];
   items: ReviewItem[];
   nav: Array<{ fileIndex: number; anchor: string; itemIndex: number }>;
   navIndexOf: Map<string, number>;
@@ -331,7 +325,6 @@ export function buildReviewItems(
   const nav: ReviewListModel["nav"] = [];
   const navIndexOf = new Map<string, number>();
   const commentItems: number[] = [];
-  const hunkStarts: number[] = [];
 
   files.forEach((file, fileIndex) => {
     groupFirstItem.push(items.length);
@@ -379,7 +372,6 @@ export function buildReviewItems(
         return;
       }
 
-      const navStart = nav.length;
       appendHunkRows(
         {
           anchorItem,
@@ -396,9 +388,6 @@ export function buildReviewItems(
         },
         hunk
       );
-      if (nav.length > navStart) {
-        hunkStarts.push(navStart);
-      }
     });
 
     groupCounts.push(items.length - startCount);
@@ -409,7 +398,6 @@ export function buildReviewItems(
     commentItems,
     groupCounts,
     groupFirstItem,
-    hunkStarts,
     items,
     nav,
     navIndexOf,
@@ -422,7 +410,6 @@ export function buildReviewItems(
  * is stable — a WeakMap keyed by it gives every rendered row O(1) access
  * without recomputing per render or per item.
  */
-
 export interface FileRenderMeta {
   guideByRow: ReadonlyMap<DiffRow, number>;
   indentUnit: IndentUnit;

@@ -86,13 +86,14 @@ import { SubmitReviewModal } from "./submit-review-modal.tsx";
 
 const RE_WORD = /\w/;
 const RE_WORD_2 = /\w/;
+const FAST_CURSOR_STEP = 5;
 
 /**
  * Full-screen PR review: a virtualized diff list, keyboard cursor, multi-line
  * selection, find-in-diff, and inline comment threads.
  *
  * Interaction model:
- * - The line cursor (j/k, hover, jumps) is the source of truth for the active
+ * - The line cursor (j/k, f/g, hover) is the source of truth for the active
  *   file — wheel scrolling alone does not move it.
  * - Collapsed hunks and open composers feed the flattened item model.
  * - Multi-line selection (shift+j/k, gutter drag) is independent of the
@@ -1314,7 +1315,7 @@ function useReviewHotkeys(config: {
   findStep: (dir: 1 | -1) => void;
   goInbox: () => void;
   goToComment: (delta: number) => void;
-  goToHunk: (delta: 1 | -1) => void;
+  moveCursorFast: (delta: 1 | -1) => void;
   markViewedAndNext: () => void;
   occNavRefs: Parameters<typeof buildOccNav>[0];
   occSpec: OccState | null;
@@ -1389,18 +1390,24 @@ function useReviewHotkeys(config: {
       run: config.prevFile,
     },
     {
-      description: "Next chunk",
+      description: "Fast down",
       group: "Navigation",
       icon: ChevronsDown,
-      keys: "}",
-      run: () => config.goToHunk(1),
+      keys: "f",
+      run: () => {
+        config.setSelection(null);
+        config.moveCursorFast(1);
+      },
     },
     {
-      description: "Previous chunk",
+      description: "Fast up",
       group: "Navigation",
       icon: ChevronsUp,
-      keys: "{",
-      run: () => config.goToHunk(-1),
+      keys: "g",
+      run: () => {
+        config.setSelection(null);
+        config.moveCursorFast(-1);
+      },
     },
     {
       description: "Cycle files",
@@ -1923,35 +1930,37 @@ function useReviewFileNavigation(args: {
     }
   };
 
-  const goToHunk = (delta: 1 | -1) => {
+  const moveCursorFast = (delta: 1 | -1) => {
     const m = args.modelRef.current;
-    const starts = m.hunkStarts;
-    if (starts.length === 0) {
+    if (m.nav.length === 0) {
       return;
     }
     markKeyboardNavigation(args);
+    args.cursorMoverRefs.userMovedCursorRef.current = true;
     const cur = args.cursorRef.current;
-    const curNav = cur
+    const curIdx = cur
       ? m.navIndexOf.get(fileAnchorKey(cur.fileIndex, cur.anchor))
       : undefined;
-    const last = starts.at(-1) ?? starts[0];
-    let targetNav: number;
-    if (curNav === undefined) {
-      targetNav = delta > 0 ? starts[0] : last;
-    } else if (delta > 0) {
-      targetNav = starts.find((s) => s > curNav) ?? starts[0];
+    let nextIdx: number;
+    if (curIdx === undefined) {
+      const start = args.listRef.current?.firstVisibleRowItem() ?? 0;
+      const seed = m.nav.find((n) => n.itemIndex >= start) ?? m.nav[0];
+      nextIdx =
+        m.navIndexOf.get(fileAnchorKey(seed.fileIndex, seed.anchor)) ?? 0;
     } else {
-      const before = starts.filter((s) => s < curNav);
-      targetNav = before.at(-1) ?? last;
+      nextIdx = Math.min(
+        Math.max(curIdx + delta * FAST_CURSOR_STEP, 0),
+        m.nav.length - 1
+      );
     }
-    const entry = m.nav[targetNav];
-    if (!entry) {
+    if (curIdx !== undefined && nextIdx === curIdx) {
       return;
     }
+    const entry = m.nav[nextIdx];
     args.setCursor({ anchor: entry.anchor, fileIndex: entry.fileIndex });
     args.setActiveIndex(entry.fileIndex);
     syncActiveIndexRef(args.activeIndexRef, entry.fileIndex);
-    args.listRef.current?.centerItem(entry.itemIndex);
+    args.listRef.current?.nudgeItemIntoView(entry.itemIndex);
   };
 
   const extendSelection = (delta: 1 | -1) => {
@@ -2012,7 +2021,7 @@ function useReviewFileNavigation(args: {
     cycleFile,
     extendSelection,
     fileRafRef,
-    goToHunk,
+    moveCursorFast,
     nextFile,
     pageScroll,
     prevFile,
@@ -2442,7 +2451,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     cycleFile,
     extendSelection,
     fileRafRef,
-    goToHunk,
+    moveCursorFast,
     nextFile,
     pageScroll,
     prevFile,
@@ -2652,7 +2661,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     findStep,
     goInbox,
     goToComment,
-    goToHunk,
+    moveCursorFast,
     markViewedAndNext,
     occNavRefs,
     occSpec,

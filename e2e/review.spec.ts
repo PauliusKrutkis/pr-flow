@@ -38,29 +38,22 @@ test("j moves the line cursor; sidebar follows the cursor's file", async ({
   ).toBeVisible();
 });
 
-test("} and { move the cursor between diff chunks", async ({ page }) => {
+test("f and g fast-move the cursor without scrolling when still in view", async ({
+  page,
+}) => {
   const active = page.locator(".qf-row-active");
+  const scrollHost = page.locator(".qf-scrollhost");
 
-  await page.keyboard.press("}");
-  await expect(active).toHaveAttribute("data-file-index", "0");
+  await page.keyboard.press("j");
+  const anchor0 = await active.getAttribute("data-anchor");
+  const scroll0 = await scrollHost.evaluate((el) => el.scrollTop);
 
-  await page.keyboard.press("}");
-  await expect(active).toHaveAttribute("data-file-index", "1");
+  await page.keyboard.press("f");
+  expect(await active.getAttribute("data-anchor")).not.toBe(anchor0);
+  expect(await scrollHost.evaluate((el) => el.scrollTop)).toBe(scroll0);
 
-  await page.keyboard.press("}");
-  await expect(active).toHaveAttribute("data-file-index", "2");
-  const hunk0Anchor = await active.getAttribute("data-anchor");
-
-  await page.keyboard.press("}");
-  await expect(active).toHaveAttribute("data-file-index", "2");
-  expect(await active.getAttribute("data-anchor")).not.toBe(hunk0Anchor);
-
-  await page.keyboard.press("{");
-  await expect(active).toHaveAttribute("data-file-index", "2");
-  expect(await active.getAttribute("data-anchor")).toBe(hunk0Anchor);
-
-  await page.keyboard.press("{");
-  await expect(active).toHaveAttribute("data-file-index", "1");
+  await page.keyboard.press("g");
+  expect(await active.getAttribute("data-anchor")).toBe(anchor0);
 });
 
 test("c opens the composer; adding batches a pending card", async ({
