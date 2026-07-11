@@ -49,11 +49,11 @@ test("f and g fast-move the cursor without scrolling when still in view", async 
   const scroll0 = await scrollHost.evaluate((el) => el.scrollTop);
 
   await page.keyboard.press("f");
-  expect(await active.getAttribute("data-anchor")).not.toBe(anchor0);
+  await expect(active).not.toHaveAttribute("data-anchor", anchor0 ?? "");
   expect(await scrollHost.evaluate((el) => el.scrollTop)).toBe(scroll0);
 
   await page.keyboard.press("g");
-  expect(await active.getAttribute("data-anchor")).toBe(anchor0);
+  await expect(active).toHaveAttribute("data-anchor", anchor0 ?? "");
 });
 
 test("c opens the composer; adding batches a pending card", async ({

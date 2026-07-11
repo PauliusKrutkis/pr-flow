@@ -1931,36 +1931,7 @@ function useReviewFileNavigation(args: {
   };
 
   const moveCursorFast = (delta: 1 | -1) => {
-    const m = args.modelRef.current;
-    if (m.nav.length === 0) {
-      return;
-    }
-    markKeyboardNavigation(args);
-    args.cursorMoverRefs.userMovedCursorRef.current = true;
-    const cur = args.cursorRef.current;
-    const curIdx = cur
-      ? m.navIndexOf.get(fileAnchorKey(cur.fileIndex, cur.anchor))
-      : undefined;
-    let nextIdx: number;
-    if (curIdx === undefined) {
-      const start = args.listRef.current?.firstVisibleRowItem() ?? 0;
-      const seed = m.nav.find((n) => n.itemIndex >= start) ?? m.nav[0];
-      nextIdx =
-        m.navIndexOf.get(fileAnchorKey(seed.fileIndex, seed.anchor)) ?? 0;
-    } else {
-      nextIdx = Math.min(
-        Math.max(curIdx + delta * FAST_CURSOR_STEP, 0),
-        m.nav.length - 1
-      );
-    }
-    if (curIdx !== undefined && nextIdx === curIdx) {
-      return;
-    }
-    const entry = m.nav[nextIdx];
-    args.setCursor({ anchor: entry.anchor, fileIndex: entry.fileIndex });
-    args.setActiveIndex(entry.fileIndex);
-    syncActiveIndexRef(args.activeIndexRef, entry.fileIndex);
-    args.listRef.current?.nudgeItemIntoView(entry.itemIndex);
+    buildCursorMover(args.cursorMoverRefs).move(delta * FAST_CURSOR_STEP, false);
   };
 
   const extendSelection = (delta: 1 | -1) => {
