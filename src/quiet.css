@@ -2282,7 +2282,12 @@ dialog.q-dialog::backdrop {
   border-left: 1px solid var(--line-2);
   box-shadow: -24px 0 48px -24px rgba(0, 0, 0, 0.6);
   transform: translateX(100%);
-  transition: transform 150ms ease;
+  transition:
+    transform 150ms ease,
+    width 180ms ease;
+}
+.dir-quiet .qf-drawer.qf-drawer-wide {
+  width: min(920px, 72vw);
 }
 .dir-quiet .qf-drawer.qf-drawer-open {
   transform: translateX(0);
@@ -2320,6 +2325,33 @@ dialog.q-dialog::backdrop {
 }
 .dir-quiet .qf-drawer-close:hover {
   color: var(--fg);
+}
+.dir-quiet .qf-drawer-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dir-quiet .qf-drawer-wide-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  color: var(--muted);
+  cursor: pointer;
+  background: var(--surface-hi);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+.dir-quiet .qf-drawer-wide-btn:hover,
+.dir-quiet .qf-drawer-wide-btn[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
 }
 .dir-quiet .qf-drawer-body {
   min-width: 0;

@@ -19,6 +19,7 @@ import {
   Link,
   MessageSquare,
   MessageSquarePlus,
+  PanelRightOpen,
   Search,
   Send,
   TextSearch,
@@ -838,6 +839,16 @@ function syncActiveIndexRef(
   activeIndexRef.current = target;
 }
 
+const DRAWER_WIDE_KEY = "pr-flow:drawerWide";
+
+function readDrawerWide(): boolean {
+  try {
+    return localStorage.getItem(DRAWER_WIDE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 function markKeyboardNavigation(args: {
   keyboardHoldRef: React.RefObject<boolean>;
   setInputMode: React.Dispatch<React.SetStateAction<"keyboard" | "mouse">>;
@@ -1329,6 +1340,7 @@ function useReviewHotkeys(config: {
   setPrSearch: (mode: null | "files" | "text") => void;
   setRightOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setSelection: (s: LineSelection | null) => void;
+  toggleDrawerWide: () => void;
   toggleViewedFile: () => void;
 }): void {
   const bindings = [
@@ -1477,6 +1489,13 @@ function useReviewHotkeys(config: {
       icon: Info,
       keys: "i",
       run: () => config.setRightOpen((open) => !open),
+    },
+    {
+      description: "Widen info panel",
+      group: "General",
+      icon: PanelRightOpen,
+      keys: "shift+i",
+      run: config.toggleDrawerWide,
     },
     {
       description: "Find a file",
@@ -2097,6 +2116,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
   const [activeIndex, setActiveIndex] = useState(initialMem?.fileIndex ?? 0);
   const [rightOpen, setRightOpen] = useState(false);
   const rightOpenRef = useLatest(rightOpen);
+  const [drawerWide, setDrawerWide] = useState(readDrawerWide);
   const [commentIndex, setCommentIndex] = useState(0);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [prSearch, setPrSearch] = useState<null | "files" | "text">(null);
@@ -2569,6 +2589,20 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     setRightOpen(false);
   };
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAWER_WIDE_KEY, drawerWide ? "1" : "0");
+    } catch {
+      // storage unavailable (private mode) — width just won't persist
+    }
+  }, [drawerWide]);
+
+  // shift+i widens/narrows the drawer, opening it first if it was closed
+  const onToggleDrawerWide = () => {
+    setRightOpen(true);
+    setDrawerWide((wide) => !wide);
+  };
+
   const onCloseSubmitModal = () => {
     setSubmitOpen(false);
   };
@@ -2619,6 +2653,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     setPrSearch,
     setRightOpen,
     setSelection,
+    toggleDrawerWide: onToggleDrawerWide,
     toggleViewedFile,
   });
 
@@ -2813,9 +2848,11 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
         onAddIssueComment={onAddIssueComment}
         onClose={onCloseRightPanel}
         onJumpToThread={jumpToThread}
+        onToggleWide={onToggleDrawerWide}
         open={rightOpen}
         pr={pr}
         reviews={reviews}
+        wide={drawerWide}
       />
 
       <SubmitReviewModal
