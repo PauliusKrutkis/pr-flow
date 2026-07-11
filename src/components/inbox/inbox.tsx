@@ -220,7 +220,6 @@ export function Inbox() {
     });
   };
 
-  // `e` archives from the inbox and restores from the archived view
   const archiveOrRestoreSelected = () => {
     if (showArchived) {
       restoreSelected();
