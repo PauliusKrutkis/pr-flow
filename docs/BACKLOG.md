@@ -77,7 +77,8 @@ Or resume where you left off. **No Slack link handling required.**
 | --- | --- | --- |
 | **Auto-updates** | §11b | Before external users |
 | CI releases + signing | §11b | With auto-update |
-| **`prflow://` scheme** | §11a | Stage 2 (simple extension) |
+| **Commercial launch** | §11c | After §11c release gate |
+| **`prflow://` scheme** | §11a | Stage 2 (simple extension); also §11c purchase activation |
 
 ### ✨ Category 3 — Delighters (prove the pain first)
 
@@ -422,6 +423,37 @@ worth it after validation.
 - [~] 🔴 Before external users — `tauri-plugin-updater` + CI releases.
       *Plugin + in-app prompt scaffolded; real signing key, feed & CI signing remain (see README "Auto-updates").*
 - [ ] ⏸ Crash reporting.
+
+### 11c. Commercial launch
+
+Full plan in [`docs/RELEASING.md` — Commercial launch](./RELEASING.md#commercial-launch).
+
+**Philosophy:** no license keys. GitHub identity is the license. Browser-brokered
+activation (`prflow://purchase?token=…`) — Raycast-style **Open Nod** after
+checkout. One Cloudflare Worker; MoR (Polar / Paddle / Lemon Squeezy) for
+payments and tax.
+
+**Release gate (Phase 0 — free beta):** same as [Release gate](#release-gate)
+above. Do not build MoR / Worker / license code until five external developers
+have used the app for one week and retention is plausible.
+
+| Phase | What | When |
+| --- | --- | --- |
+| **0** | Domain + static landing page (video, GitHub release downloads). No payments. | After release gate |
+| **1** | MoR + Worker + in-app trial/gating + notarization | Retention proven (~1 week eng.) |
+
+- [ ] 🟡 **Phase 0** — landing page on custom domain (~$15/yr).
+- [ ] 🔴 **Phase 1** — Apple notarization (hard prerequisite; drop `xattr` docs).
+- [ ] 🔴 **Phase 1** — MoR product + checkout linked to GitHub identity.
+- [ ] 🟡 **Phase 1** — Cloudflare Worker (`/purchase-webhook`, `/activate`,
+      `/license/:github_id`, `/restore`).
+- [ ] 🟡 **Phase 1** — `prflow://purchase` deep link + Ed25519 token verify in Rust.
+- [ ] 🟡 **Phase 1** — Trial (first-launch timestamp) + purchase prompt UI.
+- [ ] 🟡 **Phase 1** — Updater gating on local `updates_until` (static `latest.json`).
+- [ ] ⏸ `nod-keygen` CLI for manual/support grants.
+
+**Rejected:** deterministic license keys (stateless, simple engineering, ugly UX —
+conflicts with zero-friction product goal).
 
 ---
 
