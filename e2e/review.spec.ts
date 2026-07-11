@@ -205,7 +205,7 @@ test("resume: reopening paints the spot you left — no visible jump after", asy
   const after = await measure();
   expect(after).not.toBeNull();
   expect(before).not.toBeNull();
-  expect(Math.abs(after - before)).toBeLessThan(40);
+  expect(Math.abs((after as number) - (before as number))).toBeLessThan(40);
   await page.waitForTimeout(700);
   const settled = await measure();
   expect(Math.abs((settled as number) - (after as number))).toBeLessThan(24);
@@ -304,11 +304,9 @@ test("shift+i widens the drawer; the head button and Esc still work", async ({
   await page.keyboard.press("Shift+i");
   await expect(drawer).toHaveClass(QF_DRAWER_WIDE);
 
-  // the head toggle narrows it again
   await page.getByRole("button", { name: "Narrow panel" }).click();
   await expect(drawer).not.toHaveClass(QF_DRAWER_WIDE);
 
-  // Esc still closes the drawer, wide or not
   await page.keyboard.press("Shift+i");
   await expect(drawer).toHaveClass(QF_DRAWER_WIDE);
   await page.keyboard.press("Escape");

@@ -2597,7 +2597,6 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     }
   }, [drawerWide]);
 
-  // shift+i widens/narrows the drawer, opening it first if it was closed
   const onToggleDrawerWide = () => {
     setRightOpen(true);
     setDrawerWide((wide) => !wide);

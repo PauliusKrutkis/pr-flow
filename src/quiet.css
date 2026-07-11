@@ -2282,9 +2282,6 @@ dialog.q-dialog::backdrop {
   border-left: 1px solid var(--line-2);
   box-shadow: -24px 0 48px -24px rgba(0, 0, 0, 0.6);
   transform: translateX(100%);
-  transition:
-    transform 150ms ease,
-    width 180ms ease;
 }
 .dir-quiet .qf-drawer.qf-drawer-wide {
   width: min(920px, 72vw);
@@ -2292,7 +2289,6 @@ dialog.q-dialog::backdrop {
 .dir-quiet .qf-drawer.qf-drawer-open {
   transform: translateX(0);
 }
-/* the drawer container takes focus on open (Esc target) — no ring for that */
 .dir-quiet .qf-drawer:focus {
   outline: none;
 }
