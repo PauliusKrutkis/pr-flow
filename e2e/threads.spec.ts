@@ -69,7 +69,6 @@ test("z collapses an open (unresolved) thread to a one-line row", async ({
   await expect(collapsed).not.toContainText("Resolved");
   await expect(collapsed).toContainText("Is this constant right?");
 
-  // the collapsed row expands again on click (mouse parity)
   await collapsed.click();
   await expect(page.locator(".qf-thread-collapsed")).toHaveCount(0);
   await expect(thread.getByText("Is this constant right?")).toBeVisible();
@@ -84,21 +83,38 @@ test("the corner fold control collapses an open thread with the mouse", async ({
   await expect(page.locator(".qf-thread-collapsed")).toBeVisible();
 });
 
+test("the collapsed resolved row unresolves from its own Unresolve button", async ({
+  page,
+}) => {
+  const thread = page.locator('[data-comment-root="100"]');
+  await thread.hover();
+  await thread.getByRole("button", { exact: true, name: "Resolve" }).click();
+  const collapsed = page.locator(".qf-thread-collapsed");
+  await expect(collapsed).toBeVisible();
+  await expect(collapsed).toContainText("Resolved");
+
+  await collapsed.getByRole("button", { name: "Unresolve" }).click();
+  await expect(page.locator(".qf-thread-collapsed")).toHaveCount(0);
+  await expect(
+    thread.getByRole("button", { exact: true, name: "Resolve" })
+  ).toBeVisible();
+});
+
 test("unresolving always re-expands, even after a manual collapse", async ({
   page,
 }) => {
   const thread = page.locator('[data-comment-root="100"]');
   await thread.hover();
-  await page.keyboard.press("z"); // collapse the open thread
+  await page.keyboard.press("z");
   const collapsed = page.locator(".qf-thread-collapsed");
   await expect(collapsed).toBeVisible();
 
   await collapsed.hover();
-  await page.keyboard.press("x"); // resolve — stays collapsed
+  await page.keyboard.press("x");
   await expect(collapsed).toContainText("Resolved");
 
   await collapsed.hover();
-  await page.keyboard.press("x"); // unresolve — must re-expand, not stay folded
+  await page.keyboard.press("x");
   await expect(page.locator(".qf-thread-collapsed")).toHaveCount(0);
   await expect(thread.getByText("Is this constant right?")).toBeVisible();
 });
@@ -106,11 +122,11 @@ test("unresolving always re-expands, even after a manual collapse", async ({
 test("expanding a thread never opens the reply composer", async ({ page }) => {
   const thread = page.locator('[data-comment-root="100"]');
   await thread.hover();
-  await page.keyboard.press("z"); // collapse
+  await page.keyboard.press("z");
   const collapsed = page.locator(".qf-thread-collapsed");
   await expect(collapsed).toBeVisible();
   await collapsed.hover();
-  await page.keyboard.press("z"); // expand
+  await page.keyboard.press("z");
   await expect(thread.getByText("Is this constant right?")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Reply…" })).toHaveCount(0);
 });
@@ -185,7 +201,6 @@ test("hovering a thread fades in the r/x action hints and the z fold hint", asyn
     "R",
     "X",
   ]);
-  // the collapse hotkey lives on the corner fold control, revealed on hover
   await expect(thread.locator(".qf-thread-fold")).toContainText("Collapse");
   await expect(thread.locator(".qf-thread-fold .q-kbd")).toHaveText("Z");
   await expect(thread.locator(".qf-thread-fold .qf-key-hint")).toHaveCSS(

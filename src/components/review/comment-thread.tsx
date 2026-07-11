@@ -43,11 +43,6 @@ export function CommentThread({
   const resolved = root?.resolved ?? false;
 
   const [replying, setReplying] = useState(false);
-  // Resolved threads fold away by default; open ones start expanded. `collapsed`
-  // resets to match whenever the resolved state flips — so resolving always
-  // tidies a thread away and unresolving always brings it back open — while `z`
-  // toggles it freely in between. Tracking the resolved we last saw lets us
-  // react to flips made from outside this component (the keyboard `x`).
   const [collapsed, setCollapsed] = useState(resolved);
   const [wasResolved, setWasResolved] = useState(resolved);
   if (wasResolved !== resolved) {
@@ -60,7 +55,6 @@ export function CommentThread({
     if (!replyRequest || replyRequest.rootId !== rootId) {
       return;
     }
-    // An explicit reply request (r) is the one case that opens the composer.
     const raf = requestAnimationFrame(() => {
       setCollapsed(false);
       setReplying(true);
@@ -105,8 +99,6 @@ export function CommentThread({
 
   const handleResolve = () => {
     if (threadId !== null && onResolve) {
-      // The fold follows the resolved state via the sync above — resolving
-      // collapses, unresolving expands — so this only flips the verdict.
       onResolve({ resolved: !resolved, threadId });
     }
   };
@@ -121,35 +113,59 @@ export function CommentThread({
   };
 
   if (collapsed) {
+    const canResolve = threadId !== null && !!onResolve;
     return (
-      <button
-        aria-label="Expand thread"
+      <div
         className={cn(
-          "qf-thread qf-thread-collapsed qf-focusable",
+          "qf-thread qf-thread-collapsed",
           !resolved && "qf-thread-collapsed-open"
         )}
         data-comment-root={rootId}
-        onClick={expand}
-        title="Expand (z)"
-        type="button"
         {...hoverProps}
       >
-        {resolved ? (
-          <CheckCircle2 aria-hidden size={13} />
-        ) : (
-          <MessageSquare aria-hidden size={13} />
-        )}
-        {!!resolved && <span className="qf-resolved-tag">Resolved</span>}
-        <span className="qf-resolved-snip">
-          {root.user} · {firstLine(root.body)}
-        </span>
-        <span className="qf-thread-fold qf-thread-fold-hint">
-          Expand
-          <span className="qf-key-hint">
-            <Kbd combo="z" />
+        <button
+          className="qf-thread-collapsed-lead qf-focusable"
+          onClick={expand}
+          title="Expand (z)"
+          type="button"
+        >
+          {resolved ? (
+            <CheckCircle2 aria-hidden size={13} />
+          ) : (
+            <MessageSquare aria-hidden size={13} />
+          )}
+          {!!resolved && <span className="qf-resolved-tag">Resolved</span>}
+          <span className="qf-resolved-snip">
+            {root.user} · {firstLine(root.body)}
           </span>
-        </span>
-      </button>
+        </button>
+        <div className="qf-thread-collapsed-actions">
+          {resolved && canResolve && (
+            <button
+              className="qf-thread-fold qf-focusable"
+              onClick={handleResolve}
+              type="button"
+            >
+              Unresolve
+              <span aria-hidden className="qf-key-hint">
+                <Kbd combo="x" />
+              </span>
+            </button>
+          )}
+          <button
+            aria-label="Expand thread"
+            className="qf-thread-fold qf-focusable"
+            onClick={expand}
+            title="Expand (z)"
+            type="button"
+          >
+            Expand
+            <span aria-hidden className="qf-key-hint">
+              <Kbd combo="z" />
+            </span>
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -157,7 +173,7 @@ export function CommentThread({
     <div className="qf-thread" data-comment-root={rootId} {...hoverProps}>
       <button
         aria-label="Collapse thread"
-        className="qf-thread-fold qf-focusable"
+        className="qf-thread-fold qf-thread-fold-corner qf-focusable"
         onClick={collapse}
         title="Collapse (z)"
         type="button"
