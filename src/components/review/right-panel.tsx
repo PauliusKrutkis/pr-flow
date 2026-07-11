@@ -1,4 +1,4 @@
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { cn } from "../../lib/cn.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
@@ -21,9 +21,11 @@ interface RightPanelProps {
   onAddIssueComment: (body: string) => Promise<void>;
   onClose: () => void;
   onJumpToThread: (path: string, rootId: number) => void;
+  onToggleWide: () => void;
   open: boolean;
   pr: PullRequest;
   reviews: ReviewSummary[];
+  wide: boolean;
 }
 
 /** One row of the merged conversation: a comment or a review verdict. */
@@ -51,7 +53,9 @@ export function RightPanel({
   reviews,
   inlineComments,
   open,
+  wide,
   onClose,
+  onToggleWide,
   onAddIssueComment,
   onJumpToThread,
 }: RightPanelProps) {
@@ -122,22 +126,42 @@ export function RightPanel({
       />
       <aside
         aria-hidden={!open}
-        className={cn("qf-drawer", open && "qf-drawer-open")}
+        className={cn(
+          "qf-drawer",
+          open && "qf-drawer-open",
+          wide && "qf-drawer-wide"
+        )}
         inert={!open}
         ref={panelRef}
         tabIndex={-1}
       >
         <div className="qf-drawer-head">
           <span className="qf-drawer-title">Pull request</span>
-          <button
-            aria-label="Close"
-            className="qf-drawer-close qf-focusable"
-            onClick={onClose}
-            title="Close (Esc)"
-            type="button"
-          >
-            Esc
-          </button>
+          <div className="qf-drawer-head-actions">
+            <button
+              aria-label={wide ? "Narrow panel" : "Widen panel"}
+              aria-pressed={wide}
+              className="qf-drawer-wide-btn qf-focusable"
+              onClick={onToggleWide}
+              title={`${wide ? "Narrow" : "Widen"} panel (⇧I)`}
+              type="button"
+            >
+              {wide ? (
+                <PanelRightClose aria-hidden size={15} />
+              ) : (
+                <PanelRightOpen aria-hidden size={15} />
+              )}
+            </button>
+            <button
+              aria-label="Close"
+              className="qf-drawer-close qf-focusable"
+              onClick={onClose}
+              title="Close (Esc)"
+              type="button"
+            >
+              Esc
+            </button>
+          </div>
         </div>
 
         <div className="qf-drawer-body">
