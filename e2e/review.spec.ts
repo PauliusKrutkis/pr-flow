@@ -429,3 +429,13 @@ test("comment posting is optimistic even when the network hangs", async ({
   ).toBeVisible({ timeout: 1000 });
   await expect(box).toHaveText("");
 });
+
+test("the header shows an approvals verdict with the reviewer's face", async ({
+  page,
+}) => {
+  const pill = page.locator(".qf-verdict-approved");
+  await expect(pill).toBeVisible();
+  await expect(pill).toHaveAttribute("title", "Approved · dave");
+  await expect(pill.locator(".q-avatar")).toHaveCount(1);
+  await expect(page.locator(".qf-verdict-changes")).toHaveCount(0);
+});
