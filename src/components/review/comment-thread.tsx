@@ -1,5 +1,5 @@
 import { CheckCircle2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
 import type { ReviewComment } from "../../types.ts";
 import { Markdown } from "../markdown.tsx";
@@ -31,22 +31,22 @@ export function CommentThread({
 }: CommentThreadProps) {
   const [replying, setReplying] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [seenReplyNonce, setSeenReplyNonce] = useState(0);
 
   const [root] = comments;
   const rootId = root?.id;
   const threadId = root?.threadId ?? null;
   const resolved = root?.resolved ?? false;
 
-  useEffect(() => {
-    if (!replyRequest || replyRequest.rootId !== rootId) {
-      return;
-    }
-    const raf = requestAnimationFrame(() => {
-      setExpanded(true);
-      setReplying(true);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [replyRequest, rootId]);
+  if (
+    replyRequest &&
+    replyRequest.rootId === rootId &&
+    replyRequest.nonce !== seenReplyNonce
+  ) {
+    setSeenReplyNonce(replyRequest.nonce);
+    setExpanded(true);
+    setReplying(true);
+  }
 
   const submitReply = (body: string) => {
     if (rootId !== undefined) {
