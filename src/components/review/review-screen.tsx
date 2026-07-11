@@ -841,11 +841,20 @@ function syncActiveIndexRef(
 
 const DRAWER_WIDE_KEY = "pr-flow:drawerWide";
 
+// TODO: extract a useLocalStorage hook when a second persisted UI pref lands (separate PR).
 function readDrawerWide(): boolean {
   try {
     return localStorage.getItem(DRAWER_WIDE_KEY) === "1";
   } catch {
     return false;
+  }
+}
+
+function persistDrawerWide(wide: boolean): void {
+  try {
+    localStorage.setItem(DRAWER_WIDE_KEY, wide ? "1" : "0");
+  } catch {
+    // storage unavailable (private mode) — width just won't persist
   }
 }
 
@@ -2589,17 +2598,16 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     setRightOpen(false);
   };
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(DRAWER_WIDE_KEY, drawerWide ? "1" : "0");
-    } catch {
-      // storage unavailable (private mode) — width just won't persist
-    }
-  }, [drawerWide]);
-
   const onToggleDrawerWide = () => {
-    setRightOpen(true);
-    setDrawerWide((wide) => !wide);
+    if (!rightOpenRef.current) {
+      setRightOpen(true);
+      return;
+    }
+    setDrawerWide((wide) => {
+      const next = !wide;
+      persistDrawerWide(next);
+      return next;
+    });
   };
 
   const onCloseSubmitModal = () => {

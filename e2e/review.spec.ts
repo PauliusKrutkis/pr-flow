@@ -313,9 +313,21 @@ test("shift+i widens the drawer; the head button and Esc still work", async ({
   await expect(drawer).toHaveAttribute("aria-hidden", "true");
 });
 
-test("shift+i opens the drawer if it was closed", async ({ page }) => {
+test("shift+i from closed opens without toggling width", async ({ page }) => {
   const drawer = page.locator(".qf-drawer");
-  await expect(drawer).toHaveAttribute("aria-hidden", "true");
+  await page.keyboard.press("Shift+i");
+  await expect(drawer).toHaveAttribute("aria-hidden", "false");
+  await expect(drawer).not.toHaveClass(QF_DRAWER_WIDE);
+
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Shift+i");
+  await expect(drawer).toHaveAttribute("aria-hidden", "false");
+  await expect(drawer).not.toHaveClass(QF_DRAWER_WIDE);
+
+  await page.keyboard.press("Shift+i");
+  await expect(drawer).toHaveClass(QF_DRAWER_WIDE);
+
+  await page.keyboard.press("Escape");
   await page.keyboard.press("Shift+i");
   await expect(drawer).toHaveAttribute("aria-hidden", "false");
   await expect(drawer).toHaveClass(QF_DRAWER_WIDE);
