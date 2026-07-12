@@ -7,6 +7,7 @@ import type {
   InboxBucket,
   InboxData,
   PullRequestDetail,
+  ReleaseInfo,
   RepoHit,
   ReviewComment,
   ReviewEvent,
@@ -68,8 +69,7 @@ export const api = {
       repo,
     }),
 
-  getReleaseNotes: (tag: string) =>
-    invoke<string | null>("get_release_notes", { tag }),
+  listReleases: () => invoke<ReleaseInfo[] | null>("list_releases"),
 
   getViewedMap: () => invoke<unknown>("get_viewed_map"),
   getWatchedRepos: () => invoke<string[]>("get_watched_repos"),

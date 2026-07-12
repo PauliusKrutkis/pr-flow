@@ -3580,6 +3580,124 @@ dialog.q-dialog::backdrop {
 .qb-whatsnew-notes :first-child {
   margin-top: 0;
 }
+.qb-whatsnew-tag {
+  margin-top: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.qb-whatsnew-notes section:first-child .qb-whatsnew-tag {
+  margin-top: 0;
+}
+
+/* release history: a version spine — one dot per release on a hairline
+   timeline, the running version's dot filled green ("you are here") */
+.qrh-panel {
+  width: min(600px, calc(100vw - 32px));
+}
+.qrh-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.qrh-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.qrh-title svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.qrh-list {
+  padding: 4px 20px 18px;
+  overflow-y: auto;
+}
+.qrh-note {
+  padding: 22px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.qrh-item {
+  position: relative;
+  padding: 13px 0 3px 24px;
+}
+.qrh-item::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  width: 1px;
+  content: "";
+  background: var(--line-2);
+}
+.qrh-item:first-child::before {
+  top: 19px;
+}
+.qrh-item:last-child::before {
+  bottom: auto;
+  height: 19px;
+}
+.qrh-item:only-child::before {
+  display: none;
+}
+.qrh-dot {
+  position: absolute;
+  top: 14px;
+  left: 0;
+  width: 11px;
+  height: 11px;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+}
+.qrh-item-on .qrh-dot {
+  background: var(--add);
+  border-color: transparent;
+  box-shadow: 0 0 0 3px var(--add-bg);
+}
+.qrh-item-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.qrh-tag {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.qrh-now {
+  padding: 1px 6px;
+  font-size: 10px;
+  color: var(--add);
+  background: var(--add-bg);
+  border-radius: 999px;
+}
+.qrh-date {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--faint);
+}
+.qrh-notes {
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.qrh-notes :first-child {
+  margin-top: 0;
+}
+.qrh-notes-none {
+  margin-top: 5px;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--faint);
+}
 
 @keyframes qb-rise {
   from {
