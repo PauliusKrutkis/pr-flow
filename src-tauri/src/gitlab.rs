@@ -737,6 +737,32 @@ impl GitLabPlatform {
         Ok(())
     }
 
+    /// GitLab MR notes are one namespace — PR-level comments go through the
+    /// same notes endpoints as diff notes, so these mirror the
+    /// review-comment pair.
+    pub async fn update_issue_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        comment_id: u64,
+        body: &str,
+    ) -> Result<(), String> {
+        self.update_review_comment(owner, repo, number, comment_id, body)
+            .await
+    }
+
+    pub async fn delete_issue_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        comment_id: u64,
+    ) -> Result<(), String> {
+        self.delete_review_comment(owner, repo, number, comment_id)
+            .await
+    }
+
     /// Posts each pending comment, then the review verdict. GitLab has no
     /// REQUEST_CHANGES event, so that verdict is expressed as a summary issue
     /// comment prefixed with "Changes requested"; APPROVE additionally hits the

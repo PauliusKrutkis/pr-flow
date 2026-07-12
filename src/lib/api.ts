@@ -46,6 +46,12 @@ export const api = {
     side: string;
     startLine?: number;
   }) => invoke<ReviewComment>("create_review_comment", args),
+  deleteIssueComment: (args: {
+    owner: string;
+    repo: string;
+    number: number;
+    commentId: number;
+  }) => invoke<void>("delete_issue_comment", args),
   deleteReviewComment: (args: {
     owner: string;
     repo: string;
@@ -131,6 +137,13 @@ export const api = {
       startLine?: number;
     }[];
   }) => invoke<void>("submit_review", args),
+  updateIssueComment: (args: {
+    owner: string;
+    repo: string;
+    number: number;
+    commentId: number;
+    body: string;
+  }) => invoke<void>("update_issue_comment", args),
   updateReviewComment: (args: {
     owner: string;
     repo: string;

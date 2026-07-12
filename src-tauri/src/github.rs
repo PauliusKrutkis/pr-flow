@@ -1148,6 +1148,46 @@ impl GitHubPlatform {
         Ok(())
     }
 
+    pub async fn update_issue_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        _number: u64,
+        comment_id: u64,
+        body: &str,
+    ) -> Result<(), String> {
+        let resp = self
+            .client
+            .patch(format!(
+                "{API}/repos/{owner}/{repo}/issues/comments/{comment_id}"
+            ))
+            .json(&json!({ "body": body }))
+            .send()
+            .await
+            .map_err(net_err)?;
+        read_body(resp).await?;
+        Ok(())
+    }
+
+    pub async fn delete_issue_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        _number: u64,
+        comment_id: u64,
+    ) -> Result<(), String> {
+        let resp = self
+            .client
+            .delete(format!(
+                "{API}/repos/{owner}/{repo}/issues/comments/{comment_id}"
+            ))
+            .send()
+            .await
+            .map_err(net_err)?;
+        read_body(resp).await?;
+        Ok(())
+    }
+
     /// Submit a review (APPROVE | REQUEST_CHANGES | COMMENT) with an optional
     /// body and a batch of inline comments, in one request.
     #[allow(clippy::too_many_arguments)]

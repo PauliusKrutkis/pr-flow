@@ -2215,9 +2215,11 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     addReviewComment,
     reply,
     addIssueComment,
+    deleteIssueComment,
     deleteReviewComment,
     requestResolveThread,
     submitReview,
+    updateIssueComment,
     updateReviewComment,
   } = useCommentMutations(owner, repo, number);
 
@@ -2750,6 +2752,14 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     await addIssueComment.mutateAsync({ body });
   };
 
+  const onEditIssueComment = async (a: { commentId: number; body: string }) => {
+    await updateIssueComment.mutateAsync(a);
+  };
+
+  const onDeleteIssueComment = async (a: { commentId: number }) => {
+    await deleteIssueComment.mutateAsync(a);
+  };
+
   const onOpenPrFiles = () => {
     if (!pr?.url) {
       return;
@@ -2989,6 +2999,8 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
         inlineComments={detail.comments}
         onAddIssueComment={onAddIssueComment}
         onClose={onCloseRightPanel}
+        onDeleteIssueComment={onDeleteIssueComment}
+        onEditIssueComment={onEditIssueComment}
         onJumpToThread={jumpToThread}
         onToggleWide={onToggleDrawerWide}
         open={rightOpen}

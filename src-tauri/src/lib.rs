@@ -100,6 +100,8 @@ pub fn run() {
             commands::delete_review_comment,
             commands::resolve_thread,
             commands::create_issue_comment,
+            commands::update_issue_comment,
+            commands::delete_issue_comment,
             commands::submit_review,
             commands::get_viewed_map,
             commands::set_viewed_map,

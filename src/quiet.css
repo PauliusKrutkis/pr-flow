@@ -1942,7 +1942,9 @@ dialog.q-dialog::backdrop {
   transition: opacity 120ms ease;
 }
 .dir-quiet .qf-thread:hover .qf-comment-tools,
-.dir-quiet .qf-thread:focus-within .qf-comment-tools {
+.dir-quiet .qf-thread:focus-within .qf-comment-tools,
+.dir-quiet .qf-convo-item:hover .qf-comment-tools,
+.dir-quiet .qf-convo-item:focus-within .qf-comment-tools {
   opacity: 1;
 }
 @media (prefers-reduced-motion: reduce) {

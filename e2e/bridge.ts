@@ -73,6 +73,15 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
           user: "me",
           userAvatarUrl: "",
         }),
+        delete_issue_comment: (args) => {
+          cfg.detail.issueComments = (
+            cfg.detail.issueComments as Array<{ id: number }>
+          ).filter(
+            (c) => c.id !== args.commentId
+          ) as typeof cfg.detail.issueComments;
+          localStorage.setItem("e2e:lastConvoDelete", JSON.stringify(args));
+          return null;
+        },
         delete_review_comment: (args) => {
           cfg.detail.comments = (
             cfg.detail.comments as Array<{ id: number }>
@@ -130,6 +139,18 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
         set_watched_repos: () => null,
         submit_review: (args) => {
           localStorage.setItem("e2e:lastReview", JSON.stringify(args));
+          return null;
+        },
+        update_issue_comment: (args) => {
+          for (const c of cfg.detail.issueComments as Array<{
+            id: number;
+            body: string;
+          }>) {
+            if (c.id === args.commentId) {
+              c.body = args.body as string;
+            }
+          }
+          localStorage.setItem("e2e:lastConvoEdit", JSON.stringify(args));
           return null;
         },
         update_review_comment: (args) => {
