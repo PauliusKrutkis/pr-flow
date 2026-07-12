@@ -50,19 +50,32 @@ pub fn get_app_version(app: AppHandle) -> String {
     app.package_info().version.to_string()
 }
 
-/// Public release notes for a tag on this app's GitHub repo. Best-effort like
-/// the updater: any failure (offline, missing tag, rate limit) returns `None`
-/// so the "what's new" card just stays quiet rather than surfacing an error.
-/// No token — release notes are public.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseInfo {
+    /// The git tag, e.g. `v0.2.0`.
+    pub tag: String,
+    /// ISO-8601 publish timestamp.
+    pub published_at: Option<String>,
+    /// The release body (markdown), if any.
+    pub notes: Option<String>,
+}
+
+/// Version releases on this app's public GitHub repo, newest first — one call
+/// serves both the what's-new card and the release-history view. Drafts,
+/// prereleases and non-version tags (the `pr-evidence` asset host) are
+/// filtered out. Best-effort like the updater: any failure (offline, rate
+/// limit) returns `None` so callers can stay quiet rather than surface errors.
+/// No token — releases are public.
 #[tauri::command]
-pub async fn get_release_notes(tag: String) -> Result<Option<String>, String> {
-    let url = format!("https://api.github.com/repos/PauliusKrutkis/pr-flow/releases/tags/{tag}");
+pub async fn list_releases() -> Result<Option<Vec<ReleaseInfo>>, String> {
+    let url = "https://api.github.com/repos/PauliusKrutkis/pr-flow/releases?per_page=30";
     let client = match reqwest::Client::builder().user_agent("pr-flow").build() {
         Ok(client) => client,
         Err(_) => return Ok(None),
     };
     let resp = match client
-        .get(&url)
+        .get(url)
         .header("Accept", "application/vnd.github+json")
         .send()
         .await
@@ -70,17 +83,37 @@ pub async fn get_release_notes(tag: String) -> Result<Option<String>, String> {
         Ok(resp) if resp.status().is_success() => resp,
         _ => return Ok(None),
     };
-    let value: serde_json::Value = match resp.json().await {
-        Ok(value) => value,
+    let values: Vec<serde_json::Value> = match resp.json().await {
+        Ok(values) => values,
         Err(_) => return Ok(None),
     };
-    let body = value
-        .get("body")
-        .and_then(serde_json::Value::as_str)
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(String::from);
-    Ok(body)
+    let releases = values
+        .iter()
+        .filter(|v| {
+            let flagged = |key| v.get(key).and_then(serde_json::Value::as_bool) == Some(true);
+            !flagged("draft") && !flagged("prerelease")
+        })
+        .filter_map(|v| {
+            let tag = v.get("tag_name").and_then(serde_json::Value::as_str)?;
+            let rest = tag.strip_prefix('v')?;
+            if !rest.starts_with(|c: char| c.is_ascii_digit()) {
+                return None;
+            }
+            let text = |key| {
+                v.get(key)
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(String::from)
+            };
+            Some(ReleaseInfo {
+                tag: tag.to_string(),
+                published_at: text("published_at"),
+                notes: text("body"),
+            })
+        })
+        .collect();
+    Ok(Some(releases))
 }
 
 /// Download + install the available update (verifying its signature against the

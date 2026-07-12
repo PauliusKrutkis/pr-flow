@@ -14,7 +14,9 @@ export interface AppOptions {
   detailByLoad?: unknown[];
   hangIssueComment?: boolean;
   hasToken?: boolean;
-  releaseNotes?: string | null;
+  releases?:
+    | { tag: string; publishedAt: string | null; notes: string | null }[]
+    | null;
   inbox?: InboxFixture;
   inboxByCall?: unknown[];
   repoHits?: { fullName: string; description: string }[];
@@ -31,7 +33,7 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
     detailByLoad: opts.detailByLoad ?? null,
     hangIssueComment: opts.hangIssueComment ?? false,
     hasToken: opts.hasToken ?? true,
-    releaseNotes: opts.releaseNotes ?? null,
+    releases: opts.releases ?? [],
     inbox: opts.inbox ?? INBOX,
     inboxByCall: opts.inboxByCall ?? null,
     repoHits: opts.repoHits ?? [],
@@ -85,7 +87,6 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
           detailCalls += 1;
           return result;
         },
-        get_release_notes: () => cfg.releaseNotes,
         get_viewed_map: () =>
           JSON.parse(localStorage.getItem("e2e:viewed") ?? "{}"),
         get_watched_repos: () => cfg.watchedRepos,
@@ -101,6 +102,7 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
           inboxCalls += 1;
           return result;
         },
+        list_releases: () => cfg.releases,
         list_subscribed: () => cfg.subscribed,
         "plugin:opener|open": () => null,
         "plugin:opener|open_url": () => null,
