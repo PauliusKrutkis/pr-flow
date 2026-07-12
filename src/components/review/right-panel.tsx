@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { cn } from "../../lib/cn.ts";
+import { openOnProviderLabel } from "../../lib/provider.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
 import { useAppStore } from "../../store/app-store.ts";
 import type {
@@ -29,7 +30,7 @@ interface RightPanelProps {
   onAddIssueComment: (body: string) => Promise<void>;
   onClose: () => void;
   onJumpToThread: (path: string, rootId: number) => void;
-  onOpenGitHub: () => void;
+  onOpenPr: () => void;
   onToggleWide: () => void;
   open: boolean;
   pr: PullRequest;
@@ -68,7 +69,7 @@ export function RightPanel({
   onToggleWide,
   onAddIssueComment,
   onJumpToThread,
-  onOpenGitHub,
+  onOpenPr,
 }: RightPanelProps) {
   const body = pr.body.trim();
   const trackerBase = useAppStore((s) =>
@@ -202,10 +203,10 @@ export function RightPanel({
               <CiPill ci={ci} />
               <button
                 className="qf-drawer-link qf-focusable"
-                onClick={onOpenGitHub}
+                onClick={onOpenPr}
                 type="button"
               >
-                Open on GitHub
+                {openOnProviderLabel(pr.url)}
                 <ExternalLink aria-hidden size={13} />
               </button>
             </div>

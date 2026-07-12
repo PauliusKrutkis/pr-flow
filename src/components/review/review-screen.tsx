@@ -52,6 +52,7 @@ import {
   occurrenceSpecFromSelection,
 } from "../../lib/occurrences.ts";
 import { usePerfStore } from "../../lib/perf.ts";
+import { isGitlabPrUrl } from "../../lib/provider.ts";
 import { queryClient, queryKeys } from "../../lib/query-client.ts";
 import {
   adjacentSelectableAnchor,
@@ -2790,9 +2791,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     if (!pr?.url) {
       return;
     }
-    const urlFilesPath = pr.url.includes("/-/merge_requests/")
-      ? "/diffs"
-      : "/files";
+    const urlFilesPath = isGitlabPrUrl(pr.url) ? "/diffs" : "/files";
     openUrl(pr.url + urlFilesPath);
   };
 
@@ -3050,7 +3049,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
         onAddIssueComment={onAddIssueComment}
         onClose={onCloseRightPanel}
         onJumpToThread={jumpToThread}
-        onOpenGitHub={onOpenPrUrl}
+        onOpenPr={onOpenPrUrl}
         onToggleWide={onToggleDrawerWide}
         open={rightOpen}
         pr={pr}
