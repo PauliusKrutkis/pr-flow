@@ -24,6 +24,8 @@ export interface ComposerEditorHandle {
 
 interface ComposerEditorProps {
   autoFocus?: boolean;
+  /** Prefill for editing — the comment's raw wire-format markdown. */
+  initialMarkdown?: string;
   onCancel: () => void;
   onEmptyChange: (empty: boolean) => void;
   onModeFlip?: () => void;
@@ -128,6 +130,7 @@ export function ComposerEditor({
   ref,
   placeholder,
   autoFocus,
+  initialMarkdown,
   suggestionText,
   onSubmitRequest,
   onCancel,
@@ -148,7 +151,8 @@ export function ComposerEditor({
 
   const editor = useEditor({
     autofocus: autoFocus ? "end" : false,
-    content: "",
+    content: initialMarkdown ?? "",
+    contentType: "markdown",
     editorProps: {
       attributes: {
         "aria-label": placeholder,

@@ -672,6 +672,32 @@ impl GitLabPlatform {
         Ok(())
     }
 
+    /// Edits a note's body through the MR-notes API, which addresses any note
+    /// — diff-anchored or not — by note id alone, so no discussion lookup is
+    /// needed (unlike replies).
+    pub async fn update_review_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        comment_id: u64,
+        body: &str,
+    ) -> Result<(), String> {
+        let resp = self
+            .client
+            .put(format!(
+                "{}/notes/{}",
+                self.mr_url(owner, repo, number),
+                comment_id
+            ))
+            .json(&json!({ "body": body }))
+            .send()
+            .await
+            .map_err(net_err)?;
+        read_body(resp).await?;
+        Ok(())
+    }
+
     pub async fn create_issue_comment(
         &self,
         owner: &str,

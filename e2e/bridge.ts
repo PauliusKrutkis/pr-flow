@@ -9,6 +9,7 @@ import type { Page } from "./types.ts";
  */
 
 export interface AppOptions {
+  detail?: unknown;
   detailByCall?: unknown[];
   detailByLoad?: unknown[];
   hangIssueComment?: boolean;
@@ -23,7 +24,7 @@ export interface AppOptions {
 export async function setupApp(page: Page, opts: AppOptions = {}) {
   const config = {
     account: ACCOUNT,
-    detail: DETAIL,
+    detail: (opts.detail ?? DETAIL) as typeof DETAIL,
     detailByCall: opts.detailByCall ?? null,
     detailByLoad: opts.detailByLoad ?? null,
     hangIssueComment: opts.hangIssueComment ?? false,
@@ -120,6 +121,18 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
         set_watched_repos: () => null,
         submit_review: (args) => {
           localStorage.setItem("e2e:lastReview", JSON.stringify(args));
+          return null;
+        },
+        update_review_comment: (args) => {
+          for (const c of cfg.detail.comments as Array<{
+            id: number;
+            body: string;
+          }>) {
+            if (c.id === args.commentId) {
+              c.body = args.body as string;
+            }
+          }
+          localStorage.setItem("e2e:lastCommentEdit", JSON.stringify(args));
           return null;
         },
       };

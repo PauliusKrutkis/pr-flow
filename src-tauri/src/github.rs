@@ -1086,6 +1086,30 @@ impl GitHubPlatform {
         Ok(comment_from(&v))
     }
 
+    /// GitHub addresses review comments by id alone; `number` is unused here
+    /// but stays in the signature so the seam dispatch is uniform (GitLab
+    /// needs the MR iid).
+    pub async fn update_review_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        _number: u64,
+        comment_id: u64,
+        body: &str,
+    ) -> Result<(), String> {
+        let resp = self
+            .client
+            .patch(format!(
+                "{API}/repos/{owner}/{repo}/pulls/comments/{comment_id}"
+            ))
+            .json(&json!({ "body": body }))
+            .send()
+            .await
+            .map_err(net_err)?;
+        read_body(resp).await?;
+        Ok(())
+    }
+
     pub async fn create_issue_comment(
         &self,
         owner: &str,

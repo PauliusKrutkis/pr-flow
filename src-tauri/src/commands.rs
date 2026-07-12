@@ -197,6 +197,23 @@ pub async fn reply_to_review_comment(
         .await
 }
 
+/// Edit an inline review comment's body. Gated in the UI to the signed-in
+/// user's own comments; the hosts reject foreign ids anyway.
+#[tauri::command]
+pub async fn update_review_comment(
+    app: AppHandle,
+    owner: String,
+    repo: String,
+    number: u64,
+    comment_id: u64,
+    body: String,
+) -> Result<(), String> {
+    let (_, platform) = accounts::active_platform(&app).await?;
+    platform
+        .update_review_comment(&owner, &repo, number, comment_id, &body)
+        .await
+}
+
 /// Resolve / unresolve an inline review thread. `thread_id` is the provider's
 /// thread handle carried on ReviewComment (GraphQL node id / discussion id).
 #[tauri::command]

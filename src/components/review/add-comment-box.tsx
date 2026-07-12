@@ -9,6 +9,8 @@ import {
 
 interface AddCommentBoxProps {
   autoFocus?: boolean;
+  /** Prefill for editing an existing comment (raw wire-format markdown). */
+  initialMarkdown?: string;
   onCancel: () => void;
   onSecondary?: (body: string) => Promise<void> | void;
   onSubmit: (body: string) => Promise<void> | void;
@@ -32,13 +34,14 @@ export function AddCommentBox({
   pending,
   placeholder,
   autoFocus,
+  initialMarkdown,
   submitLabel = "Comment",
   onSecondary,
   secondaryLabel = "Comment now",
   suggestionText,
 }: AddCommentBoxProps) {
   const [mode, setMode] = useState<"batch" | "now">("batch");
-  const [empty, setEmpty] = useState(true);
+  const [empty, setEmpty] = useState(() => !initialMarkdown?.trim());
   const editorRef = useRef<ComposerEditorHandle>(null);
   const canSubmit = !(pending || empty);
 
@@ -82,6 +85,7 @@ export function AddCommentBox({
     <div className="qa-inline">
       <ComposerEditor
         autoFocus={autoFocus}
+        initialMarkdown={initialMarkdown}
         onCancel={onCancel}
         onEmptyChange={setEmpty}
         onModeFlip={onSecondary ? handleModeFlip : undefined}

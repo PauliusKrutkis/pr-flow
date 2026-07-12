@@ -45,6 +45,7 @@ import { Avatar } from "../ui/avatar.tsx";
 import { AddCommentBox } from "./add-comment-box.tsx";
 import {
   CommentThread,
+  type EditRequest,
   type ReplyRequest,
   type ToggleRequest,
 } from "./comment-thread.tsx";
@@ -105,6 +106,7 @@ export interface ReviewListCallbacks {
   }) => void;
   onCloseBox: (fileIndex: number, anchor: string) => void;
   onCopyPath: (fileIndex: number) => void;
+  onEditComment: (a: { commentId: number; body: string }) => Promise<void>;
   onMouseMove: (x: number, y: number) => void;
   onOpenBox: (fileIndex: number, anchor: string, startLine?: number) => void;
   onPlusDragEnd: () => void;
@@ -129,6 +131,7 @@ interface ReviewListProps {
   copiedPathIndex: number | null;
   cursorKey: string | null;
   dragging: boolean;
+  editRequest: (EditRequest & { path: string }) | null;
   files: readonly ChangedFile[];
   findCurrent: FindCurrent | null;
   flashKey: string | null;
@@ -436,6 +439,7 @@ function MappedCommentThread({
   addPending,
   replyRequest,
   toggleRequest,
+  editRequest,
   callbacks,
 }: {
   thread: ReviewCommentsItem["threads"][number];
@@ -443,6 +447,7 @@ function MappedCommentThread({
   addPending: boolean;
   replyRequest: ReplyRequest | null;
   toggleRequest: ToggleRequest | null;
+  editRequest: EditRequest | null;
   callbacks: ReviewListCallbacks;
 }) {
   const rootId = thread[0].id;
@@ -453,6 +458,8 @@ function MappedCommentThread({
   return (
     <CommentThread
       comments={thread}
+      editRequest={editRequest}
+      onEdit={callbacks.onEditComment}
       onHoverChange={handleHoverChange}
       onReply={callbacks.onReply}
       onResolve={callbacks.onResolveThread}
@@ -574,6 +581,7 @@ function CommentsBlock({
   addPending,
   replyRequest,
   toggleRequest,
+  editRequest,
   callbacks,
 }: {
   item: ReviewCommentsItem;
@@ -581,6 +589,7 @@ function CommentsBlock({
   addPending: boolean;
   replyRequest: ReplyRequest | null;
   toggleRequest: ToggleRequest | null;
+  editRequest: EditRequest | null;
   callbacks: ReviewListCallbacks;
 }) {
   const activeAccount = useAppStore((s) =>
@@ -597,6 +606,7 @@ function CommentsBlock({
         <MappedCommentThread
           addPending={addPending}
           callbacks={callbacks}
+          editRequest={editRequest}
           filename={filename}
           key={thread[0].id}
           replyRequest={replyRequest}
@@ -780,6 +790,11 @@ function renderCommentsItem(
     <CommentsBlock
       addPending={p.addPending}
       callbacks={p.callbacks}
+      editRequest={
+        p.editRequest && p.editRequest.path === file.filename
+          ? p.editRequest
+          : null
+      }
       filename={file.filename}
       item={item}
       replyRequest={

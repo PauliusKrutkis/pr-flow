@@ -125,4 +125,11 @@ export const api = {
       startLine?: number;
     }[];
   }) => invoke<void>("submit_review", args),
+  updateReviewComment: (args: {
+    owner: string;
+    repo: string;
+    number: number;
+    commentId: number;
+    body: string;
+  }) => invoke<void>("update_review_comment", args),
 };
