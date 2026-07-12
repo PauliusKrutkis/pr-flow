@@ -148,7 +148,7 @@ test("indent guides paint on deep lines' code element, and nothing else", async 
     const n = w.currentNode as Text;
     const r = document.createRange();
     r.setStart(n, 0);
-    r.setEnd(n, 8); // 4 levels × 2-space unit
+    r.setEnd(n, 8);
     const spaces = r.getBoundingClientRect().width;
     const before = Number.parseFloat(getComputedStyle(el, "::before").width);
     return Math.abs(before - (spaces - 1));
@@ -283,7 +283,7 @@ test("occurrence navigation: n/p and mark clicks jump between occurrences", asyn
     markBox.x + markBox.width / 2,
     markBox.y + markBox.height / 2
   );
-  await page.waitForTimeout(100); // settle the hover-driven row re-render
+  await page.waitForTimeout(100);
   await page.mouse.click(
     markBox.x + markBox.width / 2,
     markBox.y + markBox.height / 2
@@ -313,11 +313,9 @@ for (const width of [900, 720, 600]) {
       };
     });
 
-    // Nothing scrolls sideways: neither the document nor the header itself.
     expect(overflow.doc).toBeLessThanOrEqual(0);
     expect(overflow.header).toBeLessThanOrEqual(0);
 
-    // The primary review action stays fully on-screen (never clipped away).
     const review = page.getByRole("button", { name: SUBMIT_OR_REVIEW });
     const box = await review.boundingBox();
     if (!box) {
