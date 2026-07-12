@@ -87,6 +87,7 @@ Or resume where you left off. **No Slack link handling required.**
 | Simple **"Open in PR Flow"** extension | §11a Stage 2 | After daily-use users |
 | Link **interception** + native messaging | §11a Stage 3 | Only if users ask |
 | Universal Links / wrapper domain | §11a | Unlikely needed if extension suffices |
+| **Repo snapshot (sync layers 1–3)** | §9 | Layer 1 after PR #47; during beta |
 | New icon · streaks · celebration · Conversation mode | various | Post-MVP |
 
 ---
@@ -379,6 +380,19 @@ and several paths call `mutate` with no in-flight guard.
 
 - [x] 🟢 Remove manual refresh.
 - [x] 🟡 Banner when open PR changes externally.
+- [ ] 🟡 **GitHub cheap-polling via the Notifications API (P16 PR2)** — the
+      ETag/304 conditional-request cache (PR #49) lets GitLab + every REST GET
+      re-poll for free and drops the inbox interval to 15s, but GitHub's inbox
+      is a GraphQL POST that can't do conditional requests, so each GitHub poll
+      still spends rate-limit budget. It's comfortably within the 5000 pts/hr
+      budget at 15s (focus-only), so this is an optimisation, not a fix. Keep
+      GraphQL for the rich inbox, but gate it behind GitHub's Notifications REST
+      API (`GET /notifications` — supports ETag, returns `X-Poll-Interval`):
+      poll notifications cheaply as a change-detector and run the full GraphQL
+      inbox only when they signal activity, with a slow (~60s) GraphQL baseline
+      as a floor (notifications don't cover every review-requested PR). Do NOT
+      move the GitHub inbox to REST search — its separate 30 req/min limit +
+      loss of the single-query rich fields makes it worse.
 - [ ] ⏸ Webhooks — post-MVP.
 
 ---
@@ -386,6 +400,45 @@ and several paths call `mutate` with no in-flight guard.
 ## 8. shadcn/ui — Phase 1
 
 - [ ] 🟡 `command`, `dialog`, `tooltip` — incremental with MVP modals.
+
+---
+
+## 9. Repo snapshot — sync layers (decided 2026-07-12)
+
+Extend cache-first from "PR metadata + diffs" to **the file tree at head SHA**.
+Not a new direction — the existing thesis applied deeper. Tarball download
+(one API call, `GET /repos/{owner}/{repo}/tarball/{sha}`), extracted into the
+cache keyed by commit SHA like everything else. **No git operations** — the
+README promise holds. Converts every future context feature from a project
+(fetch + cache + loading state) into a local file read.
+
+Three layers, three separate decision points — only layer 3 is a real bet:
+
+- [ ] 🔴 **Layer 1 — snapshot service** (after PR #47 merges; buildable during
+      beta, changes no user-visible surface). Rust background threads: check
+      repo size via API first (over ~100 MB → skip, stay on-demand — degrade,
+      never block), download tarball on PR open, extract to cache, evict old
+      SHAs (keep last N per repo) from day one. Wire the full-file modal
+      (`shift+v`, PR #47) to read local-first with fallback to the existing
+      `get_file_blob` when the snapshot isn't ready. Ships dark; if the
+      snapshot fails the app behaves exactly as today.
+      **Perf guard:** snapshot ready < 10 s after PR open; zero impact on
+      open / scroll / file-switch budgets (e2e-enforced).
+- [ ] 🟡 **Layer 2 — consumption**: whole-repo search (ripgrep-style in Rust,
+      ms over the extracted tree) · hunk-context expansion (P11 PR 2) reading
+      local files. Each small, each shippable independently. New pushes
+      re-download the full tarball (no deltas) — fine at PR cadence.
+- [ ] ⏸ **Layer 3 — symbol index** (tree-sitter): go-to-definition from the
+      diff (peek popover → full-file modal at line), find references for a
+      changed symbol. ~50–100k lines/sec/core to parse, index cached per SHA,
+      incremental via file-hash diff against the previous snapshot. **Only
+      build if beta users live in `shift+v` / repo search** — the sync
+      decision does not commit to this. Explicitly navigation, not AI: no
+      embeddings, no LLM anywhere.
+
+Ruled out: real git clone (shallow/partial) — efficient deltas + blame, but
+breaks "no git operations", needs gitoxide/libgit2 + token-in-transport +
+repo-dir management. Revisit only if a feature genuinely needs history.
 
 ---
 
@@ -480,8 +533,10 @@ link interception · Universal Links.
 ### After five friends use it for a week
 
 8. shadcn Phase 1 · code-first layout · Info tab
-9. **Listen** — if *"GitHub links"* comes up → Stage 2 extension
-10. If still painful → Stage 3 interception
+9. **Repo snapshot layer 1** (§9) — invisible infra, safe to build while
+   friends test; layers 2–3 gated on their `shift+v` / search usage
+10. **Listen** — if *"GitHub links"* comes up → Stage 2 extension
+11. If still painful → Stage 3 interception
 
 ### Explicitly do not build before user feedback
 
