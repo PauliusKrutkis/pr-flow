@@ -698,6 +698,27 @@ impl GitLabPlatform {
         Ok(())
     }
 
+    pub async fn delete_review_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        comment_id: u64,
+    ) -> Result<(), String> {
+        let resp = self
+            .client
+            .delete(format!(
+                "{}/notes/{}",
+                self.mr_url(owner, repo, number),
+                comment_id
+            ))
+            .send()
+            .await
+            .map_err(net_err)?;
+        read_body(resp).await?;
+        Ok(())
+    }
+
     pub async fn create_issue_comment(
         &self,
         owner: &str,

@@ -711,6 +711,9 @@ interface ReviewListCallbackArgs {
   ) => void;
   addReviewComment: ReturnType<typeof useCommentMutations>["addReviewComment"];
   copyTimerRef: React.RefObject<ReturnType<typeof setTimeout> | null>;
+  deleteReviewComment: ReturnType<
+    typeof useCommentMutations
+  >["deleteReviewComment"];
   dragRef: React.RefObject<{
     fileIndex: number;
     side: string;
@@ -969,6 +972,9 @@ function useReviewListCallbacks(
     onCopyPath(fileIndex: number) {
       reviewListOnCopyPath(args, fileIndex);
     },
+    async onDeleteComment(a: { commentId: number }) {
+      await args.deleteReviewComment.mutateAsync(a);
+    },
     async onEditComment(a: { commentId: number; body: string }) {
       await args.updateReviewComment.mutateAsync(a);
     },
@@ -1062,6 +1068,7 @@ function useReviewListCallbacks(
       onAddPending: (...a) => r.current.onAddPending(...a),
       onCloseBox: (...a) => r.current.onCloseBox(...a),
       onCopyPath: (...a) => r.current.onCopyPath(...a),
+      onDeleteComment: (...a) => r.current.onDeleteComment(...a),
       onEditComment: (...a) => r.current.onEditComment(...a),
       onMouseMove: (...a) => r.current.onMouseMove(...a),
       onOpenBox: (...a) => r.current.onOpenBox(...a),
@@ -2208,6 +2215,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     addReviewComment,
     reply,
     addIssueComment,
+    deleteReviewComment,
     requestResolveThread,
     submitReview,
     updateReviewComment,
@@ -2504,6 +2512,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     addPendingStore,
     addReviewComment,
     copyTimerRef,
+    deleteReviewComment,
     dragRef,
     filesRef,
     handleListScroll,

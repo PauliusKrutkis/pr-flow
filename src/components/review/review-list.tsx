@@ -106,6 +106,7 @@ export interface ReviewListCallbacks {
   }) => void;
   onCloseBox: (fileIndex: number, anchor: string) => void;
   onCopyPath: (fileIndex: number) => void;
+  onDeleteComment: (a: { commentId: number }) => Promise<void>;
   onEditComment: (a: { commentId: number; body: string }) => Promise<void>;
   onMouseMove: (x: number, y: number) => void;
   onOpenBox: (fileIndex: number, anchor: string, startLine?: number) => void;
@@ -459,6 +460,7 @@ function MappedCommentThread({
     <CommentThread
       comments={thread}
       editRequest={editRequest}
+      onDelete={callbacks.onDeleteComment}
       onEdit={callbacks.onEditComment}
       onHoverChange={handleHoverChange}
       onReply={callbacks.onReply}

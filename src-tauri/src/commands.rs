@@ -214,6 +214,22 @@ pub async fn update_review_comment(
         .await
 }
 
+/// Delete an inline review comment. Gated in the UI to the signed-in user's
+/// own comments behind a two-step confirm.
+#[tauri::command]
+pub async fn delete_review_comment(
+    app: AppHandle,
+    owner: String,
+    repo: String,
+    number: u64,
+    comment_id: u64,
+) -> Result<(), String> {
+    let (_, platform) = accounts::active_platform(&app).await?;
+    platform
+        .delete_review_comment(&owner, &repo, number, comment_id)
+        .await
+}
+
 /// Resolve / unresolve an inline review thread. `thread_id` is the provider's
 /// thread handle carried on ReviewComment (GraphQL node id / discussion id).
 #[tauri::command]

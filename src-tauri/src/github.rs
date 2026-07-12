@@ -1110,6 +1110,25 @@ impl GitHubPlatform {
         Ok(())
     }
 
+    pub async fn delete_review_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        _number: u64,
+        comment_id: u64,
+    ) -> Result<(), String> {
+        let resp = self
+            .client
+            .delete(format!(
+                "{API}/repos/{owner}/{repo}/pulls/comments/{comment_id}"
+            ))
+            .send()
+            .await
+            .map_err(net_err)?;
+        read_body(resp).await?;
+        Ok(())
+    }
+
     pub async fn create_issue_comment(
         &self,
         owner: &str,

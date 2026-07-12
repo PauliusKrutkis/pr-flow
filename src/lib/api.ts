@@ -46,6 +46,12 @@ export const api = {
     side: string;
     startLine?: number;
   }) => invoke<ReviewComment>("create_review_comment", args),
+  deleteReviewComment: (args: {
+    owner: string;
+    repo: string;
+    number: number;
+    commentId: number;
+  }) => invoke<void>("delete_review_comment", args),
   getCachedInbox: () => invoke<InboxData | null>("get_cached_inbox"),
   getCachedPullRequestDetail: (owner: string, repo: string, number: number) =>
     invoke<PullRequestDetail | null>("get_cached_pull_request_detail", {

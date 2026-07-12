@@ -97,6 +97,7 @@ pub fn run() {
             commands::create_review_comment,
             commands::reply_to_review_comment,
             commands::update_review_comment,
+            commands::delete_review_comment,
             commands::resolve_thread,
             commands::create_issue_comment,
             commands::submit_review,

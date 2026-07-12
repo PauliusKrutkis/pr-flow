@@ -73,6 +73,15 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
           user: "me",
           userAvatarUrl: "",
         }),
+        delete_review_comment: (args) => {
+          cfg.detail.comments = (
+            cfg.detail.comments as Array<{ id: number }>
+          ).filter(
+            (c) => c.id !== args.commentId
+          ) as typeof cfg.detail.comments;
+          localStorage.setItem("e2e:lastCommentDelete", JSON.stringify(args));
+          return null;
+        },
         get_cached_inbox: () => null,
         get_cached_pull_request_detail: () => null,
         get_cached_subscribed: () => null,
