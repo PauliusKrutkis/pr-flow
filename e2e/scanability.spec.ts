@@ -3,6 +3,8 @@ import { expect, test } from "./test.ts";
 import type { Page } from "./types.ts";
 
 const QF_LVL_ONE = /--qf-lvl:\s*1/;
+const SUBMIT_OR_REVIEW = /Submit review|Review/;
+const SIDEBAR_OPEN = /qf-sidebar-open/;
 
 /**
  * Viewport-centre of `token`'s first occurrence within a real (non-hunk) diff
@@ -84,7 +86,7 @@ test("clicking inside an intraline-emphasized token still selects the whole word
     hasText: "retryLimit",
   });
   await target.scrollIntoViewIfNeeded();
-  await page.waitForTimeout(200); // settle scroll + hover re-render
+  await page.waitForTimeout(200);
   const pos = await target.locator(".qf-code").evaluate((code) => {
     const w = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
     while (w.nextNode()) {
@@ -101,6 +103,9 @@ test("clicking inside an intraline-emphasized token still selects the whole word
     }
     return null;
   });
+  if (!pos) {
+    throw new Error("pos not found");
+  }
   await page.mouse.move(pos?.x, pos?.y);
   await page.waitForTimeout(100);
   await page.mouse.click(pos?.x, pos?.y);
@@ -143,7 +148,7 @@ test("indent guides paint on deep lines' code element, and nothing else", async 
     const n = w.currentNode as Text;
     const r = document.createRange();
     r.setStart(n, 0);
-    r.setEnd(n, 8); // 4 levels × 2-space unit
+    r.setEnd(n, 8);
     const spaces = r.getBoundingClientRect().width;
     const before = Number.parseFloat(getComputedStyle(el, "::before").width);
     return Math.abs(before - (spaces - 1));
@@ -220,6 +225,9 @@ test("overview ruler: find ticks map matches across the whole PR", async ({
   expect([...ys]).toEqual([...ys].sort((a, b) => a - b));
   const [firstY] = ys;
   const lastY = ys.at(-1);
+  if (!(firstY && lastY)) {
+    throw new Error("firstY or lastY not found");
+  }
   expect(firstY).toBeDefined();
   expect(lastY).toBeDefined();
   expect(lastY - firstY).toBeGreaterThan(50);
@@ -240,7 +248,9 @@ test("overview ruler: occurrence ticks on click, cleared by a blank click", asyn
     .locator('.qf-row[data-file-index="1"]:not(.qf-row-hunk) .qf-code')
     .first()
     .boundingBox();
-  expect(row).not.toBeNull();
+  if (!row) {
+    throw new Error("row not found");
+  }
   await page.mouse.click(row.x + row.width - 8, row.y + row.height / 2);
   await expect(page.locator("mark.qf-occ-mark")).toHaveCount(0);
   await expect(page.locator(".qf-ruler")).toHaveCount(0);
@@ -273,7 +283,7 @@ test("occurrence navigation: n/p and mark clicks jump between occurrences", asyn
     markBox.x + markBox.width / 2,
     markBox.y + markBox.height / 2
   );
-  await page.waitForTimeout(100); // settle the hover-driven row re-render
+  await page.waitForTimeout(100);
   await page.mouse.click(
     markBox.x + markBox.width / 2,
     markBox.y + markBox.height / 2
@@ -282,4 +292,56 @@ test("occurrence navigation: n/p and mark clicks jump between occurrences", asyn
   await expect(marks).toHaveCount(2);
 
   await expect(page.locator(".qf-ruler-tick.qf-ruler-occ")).toHaveCount(2);
+});
+
+// P14 — responsive / small-window / zoomed layout. At the app's 900px minWidth
+// (and, equivalently, at high webview zoom which shrinks the effective width),
+// the review header must not overflow horizontally or clip its primary actions.
+for (const width of [900, 720, 600]) {
+  test(`review header does not overflow at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ height: 600, width });
+    await expect(page.locator(".qf-header").first()).toBeVisible();
+
+    const overflow = await page.evaluate(() => {
+      const header = document.querySelector(".qf-header");
+      if (!header) {
+        throw new Error("review header not found");
+      }
+      return {
+        doc: document.documentElement.scrollWidth - window.innerWidth,
+        header: header.scrollWidth - header.clientWidth,
+      };
+    });
+
+    expect(overflow.doc).toBeLessThanOrEqual(0);
+    expect(overflow.header).toBeLessThanOrEqual(0);
+
+    const review = page.getByRole("button", { name: SUBMIT_OR_REVIEW });
+    const box = await review.boundingBox();
+    if (!box) {
+      throw new Error("review action button not visible");
+    }
+    expect(box.x + box.width).toBeLessThanOrEqual(width);
+  });
+}
+
+// The 300px file tree is a push column on wide windows, but below the compact
+// breakpoint it collapses to an overlay so the diff keeps full width — reachable
+// via a header button (and the `b` hotkey). Selecting a file closes it again.
+test("file tree collapses to an overlay on small screens", async ({ page }) => {
+  await page.setViewportSize({ height: 800, width: 1280 });
+  await expect(page.locator(".qf-sidebar-inline")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show files" })).toHaveCount(0);
+
+  await page.setViewportSize({ height: 800, width: 900 });
+  const toggle = page.getByRole("button", { name: "Show files" });
+  await expect(toggle).toBeVisible();
+  const overlay = page.locator(".qf-sidebar-overlay");
+  await expect(overlay).not.toHaveClass(SIDEBAR_OPEN);
+
+  await toggle.click();
+  await expect(overlay).toHaveClass(SIDEBAR_OPEN);
+
+  await page.locator('.qf-sidebar [data-file-index="1"]').click();
+  await expect(overlay).not.toHaveClass(SIDEBAR_OPEN);
 });

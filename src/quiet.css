@@ -787,6 +787,73 @@ dialog.q-dialog::backdrop {
 }
 
 /* ============ SIDEBAR ============ */
+/* The file-tree column. Two modes, switched from JS at the compact breakpoint:
+   `inline` is a static push column (wide windows); `overlay` slides in over the
+   diff (narrow windows) so the diff never loses width to the tree. */
+.dir-quiet .qf-sidebar-col {
+  flex-shrink: 0;
+  width: 300px;
+  overflow: hidden;
+  border-right: 1px solid var(--line);
+}
+.dir-quiet .qf-sidebar-inline {
+  transition:
+    width 160ms ease,
+    border-color 160ms ease;
+}
+.dir-quiet .qf-sidebar-inline:not(.qf-sidebar-open) {
+  width: 0;
+  border-right-color: transparent;
+}
+.dir-quiet .qf-sidebar-overlay {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 21;
+  background: var(--bg);
+  box-shadow: 24px 0 48px -24px rgba(0, 0, 0, 0.6);
+  transform: translateX(-100%);
+  transition: transform 180ms ease;
+}
+.dir-quiet .qf-sidebar-overlay.qf-sidebar-open {
+  transform: translateX(0);
+}
+.dir-quiet .qf-sidebar-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  background: rgba(8, 8, 14, 0.5);
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.dir-quiet .qf-sidebar-scrim-open {
+  pointer-events: auto;
+  opacity: 1;
+}
+/* Header affordance that reveals the tree when it isn't a visible column. */
+.dir-quiet .qf-files-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  color: var(--muted);
+  cursor: pointer;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+.dir-quiet .qf-files-toggle:hover {
+  color: var(--fg);
+  background: var(--surface-2);
+  border-color: var(--line-2);
+}
 .dir-quiet .qf-sidebar {
   background: var(--surface);
 }
@@ -948,6 +1015,36 @@ dialog.q-dialog::backdrop {
 .dir-quiet .qf-header {
   background: linear-gradient(180deg, var(--surface-2), var(--bg));
   border-bottom: 1px solid var(--line);
+  /* Container so the header can respond to its own width (main - sidebar),
+     not the viewport — matters at minWidth 900 and under webview zoom, where
+     900px @ 1.5x behaves like ~600px. WebKitGTK >= 2.40 supports this. */
+  container: qf-header / inline-size;
+}
+/* The identity column (title + meta) must be free to shrink to its floor so the
+   right-hand actions never get clipped past the header edge. */
+.dir-quiet .qf-header-id {
+  min-width: 0;
+}
+.dir-quiet .qf-header-actions {
+  min-width: 0;
+}
+/* Safety net for very tight headers (small windows, high webview zoom): the
+   viewed-count meta collapses first, keeping identity + info + Review visible.
+   With CI / churn / the Open button now living in the info drawer, this rarely
+   triggers — it's a floor, not the everyday layout. */
+@container qf-header (width < 520px) {
+  .dir-quiet .qf-header .qf-header-meta {
+    display: none;
+  }
+}
+/* Tighter still: drop the review-verdict pills and shrink the action gap. */
+@container qf-header (width < 440px) {
+  .dir-quiet .qf-header .qf-header-actions {
+    gap: 0.75rem;
+  }
+  .dir-quiet .qf-header .qf-header-actions .qf-verdicts {
+    display: none;
+  }
 }
 .dir-quiet .qf-pr-title {
   font-size: 15px;
@@ -958,6 +1055,12 @@ dialog.q-dialog::backdrop {
 .dir-quiet .qf-pr-sub {
   font-size: 12px;
   color: var(--muted);
+  /* Clip the meta row (repo / author / branch chips) to the identity column
+     rather than letting long branch names force the header wider. */
+  overflow: hidden;
+}
+.dir-quiet .qf-pr-sub > * {
+  flex-shrink: 0;
 }
 .dir-quiet .qf-pr-num {
   font-family: var(--font-mono);
@@ -1208,6 +1311,26 @@ dialog.q-dialog::backdrop {
   background: var(--surface);
   border: 1px solid var(--accent-line);
   border-radius: 999px;
+}
+/* CI health, distilled to a corner dot — the full pill lives in the info drawer.
+   Ringed in the button's own background so it reads on rest and pressed states. */
+.dir-quiet .qf-ci-dot {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.dir-quiet .qf-ci-dot-success {
+  background: var(--add);
+}
+.dir-quiet .qf-ci-dot-failure {
+  background: var(--del);
+}
+.dir-quiet .qf-ci-dot-pending {
+  background: var(--warn);
 }
 
 .dir-quiet .qf-submit {
@@ -2484,6 +2607,41 @@ dialog.q-dialog::backdrop {
   color: var(--accent);
   background: var(--accent-soft);
   border-radius: 999px;
+}
+/* Checks pill + host link — the header handoffs that used to crowd the top bar. */
+.dir-quiet .qf-drawer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+}
+.dir-quiet .qf-drawer-link {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+.dir-quiet .qf-drawer-link svg {
+  color: var(--faint);
+}
+.dir-quiet .qf-drawer-link:hover {
+  color: var(--fg);
+  background: var(--surface-2);
+  border-color: var(--line-2);
+}
+.dir-quiet .qf-drawer-link:hover svg {
+  color: var(--muted);
 }
 
 /* Inline-thread index inside the drawer — each row jumps to the diff. Rows

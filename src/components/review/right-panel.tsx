@@ -1,9 +1,16 @@
-import { CheckCircle2, PanelRightClose, PanelRightOpen } from "lucide-react";
+import {
+  CheckCircle2,
+  ExternalLink,
+  PanelRightClose,
+  PanelRightOpen,
+} from "lucide-react";
 import { useEffect, useRef } from "react";
 import { cn } from "../../lib/cn.ts";
+import { openOnProviderLabel } from "../../lib/provider.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
 import { useAppStore } from "../../store/app-store.ts";
 import type {
+  CiStatus,
   IssueComment,
   PullRequest,
   ReviewComment,
@@ -13,14 +20,17 @@ import { Markdown } from "../markdown.tsx";
 import { Avatar } from "../ui/avatar.tsx";
 import { TicketTitle } from "../ui/ticket-title.tsx";
 import { AddCommentBox } from "./add-comment-box.tsx";
+import { CiPill } from "./ci-pill.tsx";
 
 interface RightPanelProps {
+  ci: CiStatus | undefined;
   conversation: IssueComment[];
   fileCount: number;
   inlineComments: ReviewComment[];
   onAddIssueComment: (body: string) => Promise<void>;
   onClose: () => void;
   onJumpToThread: (path: string, rootId: number) => void;
+  onOpenPr: () => void;
   onToggleWide: () => void;
   open: boolean;
   pr: PullRequest;
@@ -47,6 +57,7 @@ const REVIEW_STATES: Record<string, { label: string; cls: string }> = {
  * the composer never blocks.
  */
 export function RightPanel({
+  ci,
   pr,
   fileCount,
   conversation,
@@ -58,6 +69,7 @@ export function RightPanel({
   onToggleWide,
   onAddIssueComment,
   onJumpToThread,
+  onOpenPr,
 }: RightPanelProps) {
   const body = pr.body.trim();
   const trackerBase = useAppStore((s) =>
@@ -186,6 +198,17 @@ export function RightPanel({
               <span className="qf-muted" title={formatAbsolute(pr.updatedAt)}>
                 {formatRelativeTime(pr.updatedAt)}
               </span>
+            </div>
+            <div className="qf-drawer-links">
+              <CiPill ci={ci} />
+              <button
+                className="qf-drawer-link qf-focusable"
+                onClick={onOpenPr}
+                type="button"
+              >
+                {openOnProviderLabel(pr.url)}
+                <ExternalLink aria-hidden size={13} />
+              </button>
             </div>
           </section>
 
