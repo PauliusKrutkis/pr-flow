@@ -27,7 +27,7 @@ export function useInbox() {
   return useQuery({
     queryFn: () => api.listInbox(),
     queryKey: queryKeys.inbox,
-    refetchInterval: 60_000,
+    refetchInterval: 15_000,
     refetchOnWindowFocus: true,
     staleTime: 0,
   });
