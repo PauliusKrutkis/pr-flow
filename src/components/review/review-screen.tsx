@@ -2255,6 +2255,11 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
   const [sidebarOpen, setSidebarOpen] = useState(
     () => !getSidebarCompactSnapshot()
   );
+  const [prevSidebarCompact, setPrevSidebarCompact] = useState(sidebarCompact);
+  if (prevSidebarCompact !== sidebarCompact) {
+    setPrevSidebarCompact(sidebarCompact);
+    setSidebarOpen(!sidebarCompact);
+  }
   const sidebarOverlayOpen = sidebarCompact && sidebarOpen;
   const sidebarOverlayOpenRef = useLatest(sidebarOverlayOpen);
   const [drawerWide, setDrawerWide] = useState(readDrawerWide);
@@ -2741,10 +2746,6 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
   const onCloseRightPanel = () => {
     setRightOpen(false);
   };
-
-  useEffect(() => {
-    setSidebarOpen(!sidebarCompact);
-  }, [sidebarCompact]);
 
   const onToggleSidebar = () => {
     setSidebarOpen((open) => !open);
