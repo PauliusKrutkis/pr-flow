@@ -20,12 +20,19 @@ import {
   Link,
   MessageSquare,
   MessageSquarePlus,
+  PanelLeft,
   PanelRightOpen,
   Search,
   Send,
   TextSearch,
 } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useCommentMutations } from "../../hooks/use-comments.ts";
 import { useInboxDetailNudge } from "../../hooks/use-inbox-detail-nudge.ts";
 import { useLatest } from "../../hooks/use-latest.ts";
@@ -61,6 +68,7 @@ import { fingerprintFile } from "../../lib/viewed-fingerprint.ts";
 import { useAppStore } from "../../store/app-store.ts";
 import type {
   ChangedFile,
+  CiStatus,
   InboxBucket,
   InboxData,
   PendingComment,
@@ -72,7 +80,6 @@ import { parsePrKey, prKey } from "../../types.ts";
 import { Avatar } from "../ui/avatar.tsx";
 import { Kbd } from "../ui/kbd.tsx";
 import { TicketTitle } from "../ui/ticket-title.tsx";
-import { CiPill } from "./ci-pill.tsx";
 import { FileSidebar } from "./file-sidebar.tsx";
 import { FindBar } from "./find-bar.tsx";
 import { OverviewRuler } from "./overview-ruler.tsx";
@@ -191,6 +198,47 @@ function resolveRulerFractions(
     });
   }
   return EMPTY_FRACTIONS;
+}
+
+/** Below this viewport width the 300px file tree stops being a push column and
+ *  becomes an overlay drawer, so the diff keeps its full width on small windows
+ *  and under high webview zoom (which shrinks the effective CSS width). */
+const SIDEBAR_COMPACT_QUERY = "(max-width: 1024px)";
+
+function getSidebarCompactSnapshot(): boolean {
+  return window.matchMedia(SIDEBAR_COMPACT_QUERY).matches;
+}
+
+function getSidebarCompactServerSnapshot(): boolean {
+  return false;
+}
+
+function subscribeSidebarCompact(onStoreChange: () => void): () => void {
+  const mq = window.matchMedia(SIDEBAR_COMPACT_QUERY);
+  mq.addEventListener("change", onStoreChange);
+  return () => mq.removeEventListener("change", onStoreChange);
+}
+
+/** Class for the small CI status dot on the info button, or null when a repo
+ *  has no checks (state "none") — the dot should stay quiet then. */
+function ciDotClass(ci: CiStatus | undefined): string | null {
+  if (!ci || ci.state === "none") {
+    return null;
+  }
+  return `qf-ci-dot-${ci.state}`;
+}
+
+function ciDotLabel(ci: CiStatus | undefined): string {
+  switch (ci?.state) {
+    case "success":
+      return "checks passing";
+    case "failure":
+      return "checks failing";
+    case "pending":
+      return "checks running";
+    default:
+      return "checks";
+  }
 }
 
 function resolvePrStateClass(pr: PullRequest): string {
@@ -1343,13 +1391,16 @@ function useReviewHotkeys(config: {
   prevFile: () => void;
   replyToActiveThreadOrNextFile: () => void;
   resolveActiveThread: () => void;
+  closeSidebar: () => void;
   rightOpenRef: React.RefObject<boolean>;
   selectionRef: React.RefObject<LineSelection | null>;
   setPrSearch: (mode: null | "files" | "text") => void;
   setRightOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setSelection: (s: LineSelection | null) => void;
+  sidebarOverlayOpenRef: React.RefObject<boolean>;
   toggleActiveThread: () => void;
   toggleDrawerWide: () => void;
+  toggleSidebar: () => void;
   toggleViewedFile: () => void;
 }): void {
   const bindings = [
@@ -1497,6 +1548,13 @@ function useReviewHotkeys(config: {
       run: config.toggleViewedFile,
     },
     {
+      description: "Toggle file tree",
+      group: "Files",
+      icon: PanelLeft,
+      keys: "b",
+      run: config.toggleSidebar,
+    },
+    {
       description: "Submit review",
       group: "Review",
       icon: Send,
@@ -1601,6 +1659,8 @@ function useReviewHotkeys(config: {
           config.setSelection(null);
         } else if (config.findOpenRef.current) {
           config.closeFind();
+        } else if (config.sidebarOverlayOpenRef.current) {
+          config.closeSidebar();
         } else if (config.rightOpenRef.current) {
           config.setRightOpen(false);
         } else {
@@ -2187,6 +2247,16 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
   const [activeIndex, setActiveIndex] = useState(initialMem?.fileIndex ?? 0);
   const [rightOpen, setRightOpen] = useState(false);
   const rightOpenRef = useLatest(rightOpen);
+  const sidebarCompact = useSyncExternalStore(
+    subscribeSidebarCompact,
+    getSidebarCompactSnapshot,
+    getSidebarCompactServerSnapshot
+  );
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => !getSidebarCompactSnapshot()
+  );
+  const sidebarOverlayOpen = sidebarCompact && sidebarOpen;
+  const sidebarOverlayOpenRef = useLatest(sidebarOverlayOpen);
   const [drawerWide, setDrawerWide] = useState(readDrawerWide);
   const [commentIndex, setCommentIndex] = useState(0);
   const [submitOpen, setSubmitOpen] = useState(false);
@@ -2672,6 +2742,25 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     setRightOpen(false);
   };
 
+  useEffect(() => {
+    setSidebarOpen(!sidebarCompact);
+  }, [sidebarCompact]);
+
+  const onToggleSidebar = () => {
+    setSidebarOpen((open) => !open);
+  };
+
+  const onCloseSidebar = () => {
+    setSidebarOpen(false);
+  };
+
+  const onSelectFile = (i: number) => {
+    scrollToFile(i);
+    if (sidebarOverlayOpenRef.current) {
+      setSidebarOpen(false);
+    }
+  };
+
   const onToggleDrawerWide = () => {
     if (!rightOpenRef.current) {
       setRightOpen(true);
@@ -2735,8 +2824,11 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     setPrSearch,
     setRightOpen,
     setSelection,
+    sidebarOverlayOpenRef,
     toggleActiveThread,
     toggleDrawerWide: onToggleDrawerWide,
+    toggleSidebar: onToggleSidebar,
+    closeSidebar: onCloseSidebar,
     toggleViewedFile,
   });
 
@@ -2764,22 +2856,56 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     (detail.issueComments?.length ?? 0) +
     reviews.filter((r) => r.body.trim().length > 0).length +
     detail.comments.filter((c) => c.inReplyToId === null).length;
+
+  const ciDot = ciDotClass(detail.ciStatus);
+  const infoTitle = ciDot
+    ? `PR info & checks — ${ciDotLabel(detail.ciStatus)} (i)`
+    : "PR description & conversation (i)";
   return (
     <div className="dir-quiet relative flex h-full min-h-0 overflow-hidden">
-      <aside className="w-[300px] shrink-0 border-line border-r">
+      <aside
+        className={cn(
+          "qf-sidebar-col",
+          sidebarCompact ? "qf-sidebar-overlay" : "qf-sidebar-inline",
+          sidebarOpen && "qf-sidebar-open"
+        )}
+      >
         <FileSidebar
           changed={changedSinceViewed}
           comments={detail.comments}
           files={files}
-          onSelect={scrollToFile}
+          onSelect={onSelectFile}
           pending={pending}
           prKeyValue={keyValue}
           selectedIndex={clampedIndex}
         />
       </aside>
+      <button
+        aria-hidden={!sidebarOverlayOpen}
+        aria-label="Close file tree"
+        className={cn(
+          "qf-sidebar-scrim",
+          sidebarOverlayOpen && "qf-sidebar-scrim-open"
+        )}
+        onClick={onCloseSidebar}
+        tabIndex={-1}
+        type="button"
+      />
 
       <main className="qf-main flex min-w-0 flex-1 flex-col">
         <header className="qf-header flex shrink-0 items-center gap-4 px-6 py-3">
+          {(sidebarCompact || !sidebarOpen) && (
+            <button
+              aria-label="Show files"
+              aria-pressed={sidebarOpen}
+              className="qf-files-toggle qf-focusable"
+              onClick={onToggleSidebar}
+              title="Show files (b)"
+              type="button"
+            >
+              <PanelLeft aria-hidden size={16} />
+            </button>
+          )}
           <div className="qf-header-id min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-2">
               <span className={cn("qf-state", stateClass)}>
@@ -2817,31 +2943,19 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
           </div>
 
           <div className="qf-header-actions flex shrink-0 items-center gap-4">
-            <CiPill ci={detail.ciStatus} />
             <ReviewVerdicts reviews={reviews} />
             <span className="qf-header-meta qf-muted text-xs">
               {viewedNow}/{fileCount} viewed
             </span>
-            <div className="qf-stat-group qf-header-meta">
-              <span className="qf-add">+{pr.additions}</span>
-              <span className="qf-del">−{pr.deletions}</span>
-            </div>
-            <button
-              className="qf-back qf-focusable"
-              onClick={onOpenPrUrl}
-              title="Open on GitHub (o)"
-              type="button"
-            >
-              Open ↗
-            </button>
             <button
               aria-pressed={rightOpen}
               className="qf-info-btn qf-focusable"
               onClick={onToggleRightPanel}
-              title="PR description & conversation (i)"
+              title={infoTitle}
               type="button"
             >
               i
+              {ciDot && <span aria-hidden className={cn("qf-ci-dot", ciDot)} />}
               {convoCount > 0 && (
                 <span className="qf-info-count">{convoCount}</span>
               )}
@@ -2928,12 +3042,14 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
       </main>
 
       <RightPanel
+        ci={detail.ciStatus}
         conversation={detail.issueComments ?? []}
         fileCount={fileCount}
         inlineComments={detail.comments}
         onAddIssueComment={onAddIssueComment}
         onClose={onCloseRightPanel}
         onJumpToThread={jumpToThread}
+        onOpenGitHub={onOpenPrUrl}
         onToggleWide={onToggleDrawerWide}
         open={rightOpen}
         pr={pr}
@@ -3029,14 +3145,14 @@ function buildCursorMover(refs: {
   };
 }
 
-/** Occurrence navigation over the current match list — see occNavRefs. */
+/* Occurrence navigation over the current match list — see occNavRefs.
+ Index in the match list of the occurrence covering (anchor, column).
+ Jump to match `index` (wrapping), keeping the marks alive.
+ n/p: step relative to the last-jumped position (or the origin
+ occurrence — the clicked/selected one — before any jump). */
 interface OccNav {
-  /** Index in the match list of the occurrence covering (anchor, column). */
   indexAt: (anchor: string, column: number) => number;
-  /** Jump to match `index` (wrapping), keeping the marks alive. */
   jumpTo: (index: number) => void;
-  /** n/p: step relative to the last-jumped position (or the origin
-   *  occurrence — the clicked/selected one — before any jump). */
   step: (dir: 1 | -1) => void;
 }
 

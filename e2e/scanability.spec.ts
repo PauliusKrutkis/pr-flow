@@ -4,6 +4,7 @@ import type { Page } from "./types.ts";
 
 const QF_LVL_ONE = /--qf-lvl:\s*1/;
 const SUBMIT_OR_REVIEW = /Submit review|Review/;
+const SIDEBAR_OPEN = /qf-sidebar-open/;
 
 /**
  * Viewport-centre of `token`'s first occurrence within a real (non-hunk) diff
@@ -85,7 +86,7 @@ test("clicking inside an intraline-emphasized token still selects the whole word
     hasText: "retryLimit",
   });
   await target.scrollIntoViewIfNeeded();
-  await page.waitForTimeout(200); // settle scroll + hover re-render
+  await page.waitForTimeout(200);
   const pos = await target.locator(".qf-code").evaluate((code) => {
     const w = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
     while (w.nextNode()) {
@@ -102,6 +103,9 @@ test("clicking inside an intraline-emphasized token still selects the whole word
     }
     return null;
   });
+  if (!pos) {
+    throw new Error("pos not found");
+  }
   await page.mouse.move(pos?.x, pos?.y);
   await page.waitForTimeout(100);
   await page.mouse.click(pos?.x, pos?.y);
@@ -221,6 +225,9 @@ test("overview ruler: find ticks map matches across the whole PR", async ({
   expect([...ys]).toEqual([...ys].sort((a, b) => a - b));
   const [firstY] = ys;
   const lastY = ys.at(-1);
+  if (!(firstY && lastY)) {
+    throw new Error("firstY or lastY not found");
+  }
   expect(firstY).toBeDefined();
   expect(lastY).toBeDefined();
   expect(lastY - firstY).toBeGreaterThan(50);
@@ -241,7 +248,9 @@ test("overview ruler: occurrence ticks on click, cleared by a blank click", asyn
     .locator('.qf-row[data-file-index="1"]:not(.qf-row-hunk) .qf-code')
     .first()
     .boundingBox();
-  expect(row).not.toBeNull();
+  if (!row) {
+    throw new Error("row not found");
+  }
   await page.mouse.click(row.x + row.width - 8, row.y + row.height / 2);
   await expect(page.locator("mark.qf-occ-mark")).toHaveCount(0);
   await expect(page.locator(".qf-ruler")).toHaveCount(0);
@@ -317,3 +326,24 @@ for (const width of [900, 720, 600]) {
     expect(box.x + box.width).toBeLessThanOrEqual(width);
   });
 }
+
+// The 300px file tree is a push column on wide windows, but below the compact
+// breakpoint it collapses to an overlay so the diff keeps full width — reachable
+// via a header button (and the `b` hotkey). Selecting a file closes it again.
+test("file tree collapses to an overlay on small screens", async ({ page }) => {
+  await page.setViewportSize({ height: 800, width: 1280 });
+  await expect(page.locator(".qf-sidebar-inline")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Show files" })).toHaveCount(0);
+
+  await page.setViewportSize({ height: 800, width: 900 });
+  const toggle = page.getByRole("button", { name: "Show files" });
+  await expect(toggle).toBeVisible();
+  const overlay = page.locator(".qf-sidebar-overlay");
+  await expect(overlay).not.toHaveClass(SIDEBAR_OPEN);
+
+  await toggle.click();
+  await expect(overlay).toHaveClass(SIDEBAR_OPEN);
+
+  await page.locator('.qf-sidebar [data-file-index="1"]').click();
+  await expect(overlay).not.toHaveClass(SIDEBAR_OPEN);
+});
