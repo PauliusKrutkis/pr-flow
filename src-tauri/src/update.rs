@@ -15,11 +15,8 @@ use tauri_plugin_updater::UpdaterExt;
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateInfo {
-    /// The version available on the release feed.
     pub version: String,
-    /// The version currently running.
     pub current_version: String,
-    /// Release notes, if the feed provides them.
     pub notes: Option<String>,
 }
 
@@ -30,7 +27,7 @@ pub struct UpdateInfo {
 pub async fn check_for_update(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
     let updater = match app.updater() {
         Ok(updater) => updater,
-        Err(_) => return Ok(None), // not configured yet
+        Err(_) => return Ok(None),
     };
     match updater.check().await {
         Ok(Some(update)) => Ok(Some(UpdateInfo {
@@ -39,7 +36,7 @@ pub async fn check_for_update(app: AppHandle) -> Result<Option<UpdateInfo>, Stri
             notes: update.body.clone(),
         })),
         Ok(None) => Ok(None),
-        Err(_) => Ok(None), // unreachable feed / placeholder config → stay quiet
+        Err(_) => Ok(None),
     }
 }
 
@@ -53,11 +50,8 @@ pub fn get_app_version(app: AppHandle) -> String {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReleaseInfo {
-    /// The git tag, e.g. `v0.2.0`.
     pub tag: String,
-    /// ISO-8601 publish timestamp.
     pub published_at: Option<String>,
-    /// The release body (markdown), if any.
     pub notes: Option<String>,
 }
 

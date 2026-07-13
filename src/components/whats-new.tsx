@@ -48,7 +48,7 @@ export function WhatsNew({ onShowHistory }: { onShowHistory: () => void }) {
       const version = await api.getAppVersion();
       const lastRun = readLastRun();
       if (!lastRun || compareVersions(lastRun, version) >= 0) {
-        rememberVersion(version); // fresh install or downgrade: just sync up
+        rememberVersion(version);
         return { lastRun: null, version };
       }
       return { lastRun, version };
