@@ -1,2 +1,8 @@
-allowBuilds:
-  esbuild: set this to true or false
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# esbuild ships a native binary via a postinstall build step; allow it so the
+# web app's Astro/Vite toolchain installs cleanly under pnpm's strict defaults.
+onlyBuiltDependencies:
+  - esbuild

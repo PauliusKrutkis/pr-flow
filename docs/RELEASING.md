@@ -151,6 +151,35 @@ Gotchas learned the hard way:
 
 ---
 
+## Web (landing page)
+
+The marketing site lives in `apps/web` — an Astro + Tailwind v4 static build
+(package `@nod/web`). It ships ~zero JS and reuses the app's "Quiet" design
+tokens so the site reads as an extension of the product.
+
+```bash
+pnpm --filter @nod/web dev      # local dev server
+pnpm --filter @nod/web build    # static output → apps/web/dist
+pnpm --filter @nod/web check    # astro check (types + templates)
+```
+
+### Deploy — Cloudflare Pages (git integration)
+
+Hosting is **Cloudflare Pages**, connected to this repo through Cloudflare's
+GitHub App (works with the private repo). It's a one-time dashboard step; after
+that every push builds and every PR gets a preview URL. No CI workflow to
+maintain.
+
+| Setting          | Value        |
+| ---------------- | ------------ |
+| Root directory   | `apps/web`   |
+| Build command    | `pnpm build` |
+| Output directory | `dist`       |
+
+Until a domain is bought the site ships on `*.pages.dev`. Future
+`/activated` / `/restore` pages and the license webhook will live alongside it
+as Pages Functions (see [Commercial launch](#commercial-launch)).
+
 ## Commercial launch
 
 Paid distribution layered on top of the existing updater feed, signing chain,

@@ -1,4 +1,9 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.3/schema.json",
-  "extends": ["ultracite/core", "ultracite/react"]
+  "extends": ["ultracite/core", "ultracite/react"],
+  // apps/web is a separate Astro workspace linted by `astro check`; Biome can't
+  // resolve .astro template usage and false-flags frontmatter as dead code.
+  "files": {
+    "includes": ["!apps/web"]
+  }
 }
