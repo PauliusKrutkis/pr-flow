@@ -32,7 +32,6 @@ test("after an update, the first launch shows every skipped release", async ({
   await expect(card).toContainText("Faster startup.");
   await expect(card).not.toContainText("Old news.");
 
-  // the version is acknowledged by "Got it", not by merely rendering
   const before = await page.evaluate(() =>
     localStorage.getItem("pr-flow:lastRunVersion")
   );
