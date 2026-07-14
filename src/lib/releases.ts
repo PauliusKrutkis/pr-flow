@@ -1,7 +1,7 @@
 import type { ReleaseInfo } from "../types.ts";
 import { api } from "./api.ts";
 
-const CACHE_KEY = "pr-flow:releases";
+const CACHE_KEY = "pr-flow:releases:v1";
 
 function readCache(): ReleaseInfo[] | undefined {
   try {
