@@ -3308,13 +3308,13 @@ dialog.q-dialog::backdrop {
 }
 .qrh-item {
   position: relative;
-  padding: 13px 0 3px 24px;
+  padding: 12px 0 4px 22px;
 }
 .qrh-item::before {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 5px;
+  left: 4px;
   width: 1px;
   content: "";
   background: var(--line-2);
@@ -3331,18 +3331,20 @@ dialog.q-dialog::backdrop {
 }
 .qrh-dot {
   position: absolute;
-  top: 14px;
+  top: 15px;
   left: 0;
-  width: 11px;
-  height: 11px;
+  width: 9px;
+  height: 9px;
   background: var(--surface);
   border: 1px solid var(--line-2);
   border-radius: 50%;
 }
 .qrh-item-on .qrh-dot {
   background: var(--add);
-  border-color: transparent;
-  box-shadow: 0 0 0 3px var(--add-bg);
+  border-color: var(--add);
+  box-shadow:
+    0 0 0 3px var(--add-bg),
+    0 0 6px var(--add-bg);
 }
 .qrh-item-head {
   display: flex;
@@ -3640,6 +3642,10 @@ dialog.q-dialog::backdrop {
 }
 .qh-close:hover {
   color: var(--fg);
+}
+.qh-close[data-armed="true"] {
+  color: var(--accent);
+  border-color: var(--accent-line);
 }
 
 .qh-grid {

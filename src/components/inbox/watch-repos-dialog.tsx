@@ -1,5 +1,6 @@
 import { Check, Eye, Search, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
+import { useArmedRing } from "../../hooks/use-armed-ring.ts";
 import { useModalDialog } from "../../hooks/use-modal-dialog.ts";
 import { useWatchedRepos } from "../../hooks/use-subscribed.ts";
 import { useHotkeys } from "../../keyboard/use-hotkeys.ts";
@@ -123,7 +124,12 @@ function WatchReposDialogContent({ onClose }: { onClose: () => void }) {
     searching: boolean;
   } | null>(null);
   const [sel, setSel] = useState(0);
-  const [armed, setArmed] = useState<number | "done" | null>(null);
+  const armOrder: (number | "done" | null)[] = [
+    null,
+    ...repos.map((_, repoIndex) => repoIndex),
+    "done",
+  ];
+  const { armed, cycle, setArmed } = useArmedRing(armOrder, null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<number | null>(null);
@@ -175,16 +181,6 @@ function WatchReposDialogContent({ onClose }: { onClose: () => void }) {
     inputRef.current?.focus();
   };
 
-  const cycleArmed = (dir: 1 | -1) => {
-    const order: (number | "done" | null)[] = [
-      null,
-      ...repos.map((_, repoIndex) => repoIndex),
-      "done",
-    ];
-    const armedIndex = order.indexOf(armed);
-    setArmed(order[(armedIndex + dir + order.length) % order.length]);
-  };
-
   const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
     setArmed(null);
@@ -193,7 +189,7 @@ function WatchReposDialogContent({ onClose }: { onClose: () => void }) {
   const onKeyDown = (e: React.KeyboardEvent) => {
     handleWatchDialogKey(e, {
       armed,
-      cycleArmed,
+      cycleArmed: cycle,
       hits,
       input,
       onClose,
