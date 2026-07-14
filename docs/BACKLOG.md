@@ -321,6 +321,23 @@ Primary navigation. Inbox optional.
 
 Subtle **`8 / 12`** · auto-open verdict when all viewed · no animation · no streaks.
 
+### 4c. Viewed sync with host (cross-device)
+
+Viewed marks today are local-only: `toggleViewed` → debounced `set_viewed_map`
+→ `viewed_{accountId}.json` on disk. Fingerprints power auto-unview on push,
+but ticks do not follow you to github.com or another machine.
+
+- [ ] 🟡 **GitHub host sync** — hybrid, cache-first:
+  - On PR open, hydrate from GraphQL `viewerViewedState` on changed files
+    (needs PR node ID on `PullRequest`; detail fetch may need a GraphQL path
+    alongside the REST files list).
+  - On toggle, keep optimistic local update + fingerprint; background
+    `markFileAsViewed` / `unmarkFileAsViewed` mutations.
+  - Merge rule: host wins on load when online; local `viewed_*.json` stays as
+    offline cache and reconcile fallback.
+  - GitLab: no public API today (gitlab.com is localStorage too) — keep local
+    fingerprints only until upstream ships reviewed-files endpoints.
+
 ---
 
 ## 5. Comments UX
@@ -830,3 +847,9 @@ link interception · Universal Links.
 - **Watch repos spam** — `setWatchedRepos` fires per toggle with no debounce or
   in-flight guard (unlike viewed-map persist). Debounce or coalesce rapid
   watch/unwatch in the repos dialog.
+
+## Tech debt
+
+- [ ] **Split `ReviewScreenInner`** in `review-screen.tsx` into smaller
+  components so React Doctor's `no-giant-component` passes without the
+  `test-noise` tag ignore in `doctor.config.json` — remove that ignore once done.

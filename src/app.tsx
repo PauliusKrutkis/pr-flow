@@ -1,6 +1,7 @@
 import {
   Command as CommandIcon,
   HelpCircle,
+  History,
   Search,
   Ticket,
   User,
@@ -15,12 +16,14 @@ import { GlobalSearch } from "./components/global-search.tsx";
 import { HelpOverlay } from "./components/help-overlay.tsx";
 import { Inbox } from "./components/inbox/inbox.tsx";
 import { IssueTrackerDialog } from "./components/issue-tracker-dialog.tsx";
+import { ReleaseHistory } from "./components/release-history.tsx";
 import { ReviewScreen } from "./components/review/review-screen.tsx";
 import { ReviewNotifier } from "./components/review-notifier.tsx";
 import { TokenGate } from "./components/token-gate.tsx";
 import { Kbd } from "./components/ui/kbd.tsx";
 import { Spinner } from "./components/ui/spinner.tsx";
 import { UpdatePrompt } from "./components/update-prompt.tsx";
+import { WhatsNew } from "./components/whats-new.tsx";
 import type { Binding } from "./keyboard/types.ts";
 import { useHotkeys } from "./keyboard/use-hotkeys.ts";
 import { api } from "./lib/api.ts";
@@ -38,12 +41,19 @@ export default function App() {
   const setToast = useAppStore((s) => s.setToast);
   const inboxPaneVisible = useAppStore((s) => s.inboxPaneVisible);
   const [trackerOpen, setTrackerOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const dismissToast = () => {
     setToast(null);
   };
   const closeTracker = () => {
     setTrackerOpen(false);
+  };
+  const openHistory = () => {
+    setHistoryOpen(true);
+  };
+  const closeHistory = () => {
+    setHistoryOpen(false);
   };
   const runToastAction = () => {
     toast?.action?.();
@@ -190,6 +200,14 @@ export default function App() {
         keys: [],
         run: () => setTrackerOpen(true),
       },
+      {
+        description: "Release history — what's new",
+        global: true,
+        group: "General",
+        icon: History,
+        keys: [],
+        run: () => setHistoryOpen(true),
+      },
       ...accountBindings,
     ],
     { activate: false }
@@ -225,6 +243,7 @@ export default function App() {
 
       <div aria-live="polite" className="qb-stack qb-stack-host">
         {showRouteChrome ? <UpdatePrompt /> : null}
+        {showRouteChrome ? <WhatsNew onShowHistory={openHistory} /> : null}
         {showRouteChrome ? <ReviewNotifier /> : null}
         {!!toast && (
           <div className="qb-toast" role="alert">
@@ -264,6 +283,7 @@ export default function App() {
       </div>
 
       <IssueTrackerDialog onClose={closeTracker} open={trackerOpen} />
+      <ReleaseHistory onClose={closeHistory} open={historyOpen} />
       <CommandPalette baseScope={baseScope} />
       <HelpOverlay baseScope={baseScope} />
       {showRouteChrome ? <GlobalSearch /> : null}
