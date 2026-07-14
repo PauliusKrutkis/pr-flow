@@ -138,6 +138,12 @@ function CommandPaletteContent({ baseScope }: { baseScope: string }) {
       setIndex((i) =>
         entries.length ? (i - 1 + entries.length) % entries.length : 0
       );
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      const dir = e.shiftKey ? -1 : 1;
+      setIndex((i) =>
+        entries.length ? (i + dir + entries.length) % entries.length : 0
+      );
     } else if (e.key === "Enter") {
       e.preventDefault();
       runAt(activeIndex);
