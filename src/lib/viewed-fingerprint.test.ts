@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildChangedSinceViewed,
   fingerprintFile,
   normalizeViewedMap,
+  reconcileHighlightKey,
   reconcileViewedEntry,
   UNKNOWN_FINGERPRINT,
 } from "./viewed-fingerprint.ts";
@@ -151,5 +153,59 @@ describe("reconcileViewedEntry", () => {
       HEAD
     );
     expect(res.unviewed).toEqual(["img.png"]);
+  });
+});
+
+describe("buildChangedSinceViewed", () => {
+  const prA = "acme/one#1";
+  const prB = "acme/two#2";
+  const file = { filename: "src/a.ts", patch: "v1", sha: "s1" };
+  const headV1 = "head-v1";
+  const headV2 = "head-v2";
+  const fpV1 = fingerprintFile(file, headV1);
+
+  it("scopes dismissals per PR so the same filename in another PR still highlights", () => {
+    const dismissed = new Set([
+      reconcileHighlightKey(prA, headV1, file.filename),
+    ]);
+    const stale = fingerprintFile({ ...file, patch: "old" }, headV1);
+    const onB = buildChangedSinceViewed(
+      prB,
+      headV1,
+      [file],
+      { [file.filename]: stale },
+      dismissed
+    );
+    expect(onB).toEqual(new Set([file.filename]));
+  });
+
+  it("scopes dismissals per head sha so a new push re-highlights the file", () => {
+    const dismissed = new Set([
+      reconcileHighlightKey(prA, headV1, file.filename),
+    ]);
+    const changed = { ...file, patch: "v2" };
+    const onNewHead = buildChangedSinceViewed(
+      prA,
+      headV2,
+      [changed],
+      { [file.filename]: fpV1 },
+      dismissed
+    );
+    expect(onNewHead).toEqual(new Set([file.filename]));
+  });
+
+  it("keeps a dismissal for the same PR and head", () => {
+    const dismissed = new Set([
+      reconcileHighlightKey(prA, headV1, file.filename),
+    ]);
+    const changed = { ...file, patch: "v2" };
+    const onSameHead = buildChangedSinceViewed(
+      prA,
+      headV1,
+      [changed],
+      { [file.filename]: fpV1 },
+      dismissed
+    );
+    expect(onSameHead).toEqual(new Set());
   });
 });

@@ -29,7 +29,6 @@ import {
 import {
   useEffect,
   useLayoutEffect,
-  useMemo,
   useReducer,
   useRef,
   useState,
@@ -68,8 +67,9 @@ import {
   updateReviewMemory,
 } from "../../lib/review-memory.ts";
 import {
+  buildChangedSinceViewed,
   fingerprintFile,
-  reconcileViewedEntry,
+  reconcileHighlightKey,
 } from "../../lib/viewed-fingerprint.ts";
 import { useAppStore } from "../../store/app-store.ts";
 import type {
@@ -153,6 +153,33 @@ const MAIN_SKELETON_WIDTHS = Array.from(
 
 function copyTextToClipboard(text: string): void {
   navigator.clipboard?.writeText(text).catch(() => undefined);
+}
+
+function applyLineSelection(args: {
+  anchor: string;
+  clearOccurrences: boolean;
+  fileIndex: number;
+  flashKey: string;
+  setActiveIndex: React.Dispatch<React.SetStateAction<number>>;
+  setCommentIndex: React.Dispatch<React.SetStateAction<number>>;
+  setCursor: React.Dispatch<React.SetStateAction<CursorPos | null>>;
+  setFlashKey: React.Dispatch<React.SetStateAction<string | null>>;
+  setInputMode: React.Dispatch<React.SetStateAction<"keyboard" | "mouse">>;
+  setOccSpec: React.Dispatch<React.SetStateAction<OccState | null>>;
+}) {
+  const { anchor, clearOccurrences, fileIndex, flashKey } = args;
+  args.setActiveIndex((cur) => (cur === fileIndex ? cur : fileIndex));
+  args.setCommentIndex((cur) => (cur === 0 ? cur : 0));
+  if (clearOccurrences) {
+    args.setOccSpec((cur) => (cur === null ? cur : null));
+  }
+  args.setInputMode((mode) => (mode === "keyboard" ? mode : "keyboard"));
+  args.setCursor((cur) =>
+    cur?.fileIndex === fileIndex && cur.anchor === anchor
+      ? cur
+      : { anchor, fileIndex }
+  );
+  args.setFlashKey((cur) => (cur === flashKey ? cur : flashKey));
 }
 
 function resolveMarks(
@@ -2284,7 +2311,7 @@ export function ReviewScreen({ routeKey }: ReviewScreenProps) {
   return <ReviewScreenInner routeKey={routeKey} />;
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: TODO orchestrates many extracted sub-hooks; further splitting risks hook-order bugs
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: TODO split into smaller components (see BACKLOG.md § Tech debt) and drop test-noise ignore in doctor.config.json
 function ReviewScreenInner({ routeKey }: { routeKey: string }) {
   const { name: repo, number, owner } = parsePrKey(routeKey);
   const keyValue = routeKey;
@@ -2397,30 +2424,26 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
   const clampedIndex = Math.min(activeIndex, Math.max(fileCount - 1, 0));
   const activeFile = files[clampedIndex];
 
-  const changedSinceViewed = useMemo(() => {
-    if (!pr || files.length === 0) {
-      return new Set<string>();
-    }
-    const preview = reconcileViewedEntry(viewedFiles, files, pr.headSha);
-    if (preview.unviewed.length === 0) {
-      return new Set<string>();
-    }
-    const next = new Set<string>();
-    for (const filename of preview.unviewed) {
-      if (!reconcileDismissed.has(filename)) {
-        next.add(filename);
-      }
-    }
-    return next;
-  }, [files, pr, reconcileDismissed, viewedFiles]);
+  const changedSinceViewed = buildChangedSinceViewed(
+    keyValue,
+    pr?.headSha,
+    files,
+    viewedFiles,
+    reconcileDismissed
+  );
 
   const dismissReconcileHighlight = (filename: string) => {
+    const headSha = pr?.headSha;
+    if (!headSha) {
+      return;
+    }
+    const dismissKey = reconcileHighlightKey(keyValue, headSha, filename);
     setReconcileDismissed((prev) => {
-      if (prev.has(filename)) {
+      if (prev.has(dismissKey)) {
         return prev;
       }
       const next = new Set(prev);
-      next.add(filename);
+      next.add(dismissKey);
       return next;
     });
   };
@@ -2514,18 +2537,18 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
     }
     flashTimerRef.current = setTimeout(() => setFlashKey(null), 1600);
     const itemIndex = m.anchorItem.get(key);
-    setActiveIndex((cur) => (cur === fileIndex ? cur : fileIndex));
-    setCommentIndex((cur) => (cur === 0 ? cur : 0));
-    if (!(findOpenRef.current || opts.keepOccurrences)) {
-      setOccSpec((cur) => (cur === null ? cur : null));
-    }
-    setInputMode((mode) => (mode === "keyboard" ? mode : "keyboard"));
-    setCursor((cur) =>
-      cur?.fileIndex === fileIndex && cur.anchor === anchor
-        ? cur
-        : { anchor, fileIndex }
-    );
-    setFlashKey((cur) => (cur === key ? cur : key));
+    applyLineSelection({
+      anchor,
+      clearOccurrences: !(findOpenRef.current || opts.keepOccurrences),
+      fileIndex,
+      flashKey: key,
+      setActiveIndex,
+      setCommentIndex,
+      setCursor,
+      setFlashKey,
+      setInputMode,
+      setOccSpec,
+    });
     if (itemIndex !== undefined) {
       listRef.current?.centerItem(itemIndex);
     }
@@ -2547,7 +2570,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
 
   useReviewHeadShaSync(keyValue, pr);
   useInboxDetailNudge(keyValue, pr);
-  useViewedFileReconcile(keyValue, pr, files, reconcileViewed, setToast);
+  useViewedFileReconcile(keyValue, pr, files, reconcileViewed);
 
   const resumeCorrectedRef = useRef(false);
   useReviewResumeScroll({

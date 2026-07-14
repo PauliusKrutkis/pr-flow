@@ -564,3 +564,9 @@ link interception · Universal Links.
 - **Watch repos spam** — `setWatchedRepos` fires per toggle with no debounce or
   in-flight guard (unlike viewed-map persist). Debounce or coalesce rapid
   watch/unwatch in the repos dialog.
+
+## Tech debt
+
+- [ ] **Split `ReviewScreenInner`** in `review-screen.tsx` into smaller
+  components so React Doctor's `no-giant-component` passes without the
+  `test-noise` tag ignore in `doctor.config.json` — remove that ignore once done.

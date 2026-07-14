@@ -4,6 +4,7 @@ import { usePerfStore } from "../lib/perf.ts";
 import {
   reconcileViewedEntry,
   UNKNOWN_FINGERPRINT,
+  unviewedReconcileToast,
 } from "../lib/viewed-fingerprint.ts";
 import type {
   AccountInfo,
@@ -24,7 +25,6 @@ export type Route =
  * We remember the inbox/review screen you were last on (never the token/loading
  * screens) so the next launch reopens it instead of always landing on the inbox.
  */
-
 const LAST_ROUTE_KEY = "pr-flow:lastRoute";
 type ResumableRoute = Extract<Route, { name: "inbox" } | { name: "review" }>;
 
@@ -331,7 +331,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       return [];
     }
     const map = { ...get().viewed, [prKey]: res.entry };
-    set({ viewed: map });
+    if (res.unviewed.length > 0) {
+      set({ toast: unviewedReconcileToast(res.unviewed), viewed: map });
+    } else {
+      set({ viewed: map });
+    }
     schedulePersistViewed(map);
     return res.unviewed;
   },
