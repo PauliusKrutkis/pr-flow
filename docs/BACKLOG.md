@@ -77,7 +77,8 @@ Or resume where you left off. **No Slack link handling required.**
 | --- | --- | --- |
 | **Auto-updates** | §11b | Before external users |
 | CI releases + signing | §11b | With auto-update |
-| **`prflow://` scheme** | §11a | Stage 2 (simple extension) |
+| **Commercial launch** | §11c | After §11c release gate |
+| **`prflow://` scheme** | §11a | Stage 2 (simple extension); also §11c purchase activation |
 
 ### ✨ Category 3 — Delighters (prove the pain first)
 
@@ -86,6 +87,7 @@ Or resume where you left off. **No Slack link handling required.**
 | Simple **"Open in PR Flow"** extension | §11a Stage 2 | After daily-use users |
 | Link **interception** + native messaging | §11a Stage 3 | Only if users ask |
 | Universal Links / wrapper domain | §11a | Unlikely needed if extension suffices |
+| **Repo snapshot (sync layers 1–3)** | §9 | Layer 1 after PR #47; during beta |
 | New icon · streaks · celebration · Conversation mode | various | Post-MVP |
 
 ---
@@ -351,6 +353,25 @@ Inline → Code view. PR-level → Info tab + badge. ⏸ Conversation mode.
       real GitLab); existing comments' ranges (`start_line` from the API)
       are not yet displayed on threads — follow-up.
 
+### 5c. Mutation spam safeguards
+
+Resolve/unresolve is fixed (`requestResolveThread` coalesces in-flight toggles
+while keeping optimistic UI). Same class of bug elsewhere: composers and submit
+already accept `pending` / `busy`, but review screen hardcodes them to `false`,
+and several paths call `mutate` with no in-flight guard.
+
+- [ ] 🟡 **Submit review** — wire `submitReview.isPending` to `SubmitReviewModal`
+      `busy`; block duplicate submit while in flight (modal closes early today;
+      `openSubmit` can reset and re-fire).
+- [ ] 🟡 **Reply to thread** — wire `reply.isPending` to `ReviewList`
+      `addPending` (currently hardcoded `false`); optional intent coalescing if
+      spam remains possible before `isPending` flips.
+- [ ] 🟡 **Inline "Comment now"** — wire `addReviewComment.isPending` to
+      `addPending`; `handleSecondary` must `await onAddComment` (fire-and-forget
+      today lets ⌘↵ double-submit through instantly).
+- [ ] 🟢 **Issue comment (Info drawer)** — wire `addIssueComment.isPending` to
+      `AddCommentBox` `pending` in `right-panel.tsx` (hardcoded `false`).
+
 ---
 
 ## 7. Data freshness
@@ -359,6 +380,19 @@ Inline → Code view. PR-level → Info tab + badge. ⏸ Conversation mode.
 
 - [x] 🟢 Remove manual refresh.
 - [x] 🟡 Banner when open PR changes externally.
+- [ ] 🟡 **GitHub cheap-polling via the Notifications API (P16 PR2)** — the
+      ETag/304 conditional-request cache (PR #49) lets GitLab + every REST GET
+      re-poll for free and drops the inbox interval to 15s, but GitHub's inbox
+      is a GraphQL POST that can't do conditional requests, so each GitHub poll
+      still spends rate-limit budget. It's comfortably within the 5000 pts/hr
+      budget at 15s (focus-only), so this is an optimisation, not a fix. Keep
+      GraphQL for the rich inbox, but gate it behind GitHub's Notifications REST
+      API (`GET /notifications` — supports ETag, returns `X-Poll-Interval`):
+      poll notifications cheaply as a change-detector and run the full GraphQL
+      inbox only when they signal activity, with a slow (~60s) GraphQL baseline
+      as a floor (notifications don't cover every review-requested PR). Do NOT
+      move the GitHub inbox to REST search — its separate 30 req/min limit +
+      loss of the single-query rich fields makes it worse.
 - [ ] ⏸ Webhooks — post-MVP.
 
 ---
@@ -366,6 +400,45 @@ Inline → Code view. PR-level → Info tab + badge. ⏸ Conversation mode.
 ## 8. shadcn/ui — Phase 1
 
 - [ ] 🟡 `command`, `dialog`, `tooltip` — incremental with MVP modals.
+
+---
+
+## 9. Repo snapshot — sync layers (decided 2026-07-12)
+
+Extend cache-first from "PR metadata + diffs" to **the file tree at head SHA**.
+Not a new direction — the existing thesis applied deeper. Tarball download
+(one API call, `GET /repos/{owner}/{repo}/tarball/{sha}`), extracted into the
+cache keyed by commit SHA like everything else. **No git operations** — the
+README promise holds. Converts every future context feature from a project
+(fetch + cache + loading state) into a local file read.
+
+Three layers, three separate decision points — only layer 3 is a real bet:
+
+- [ ] 🔴 **Layer 1 — snapshot service** (after PR #47 merges; buildable during
+      beta, changes no user-visible surface). Rust background threads: check
+      repo size via API first (over ~100 MB → skip, stay on-demand — degrade,
+      never block), download tarball on PR open, extract to cache, evict old
+      SHAs (keep last N per repo) from day one. Wire the full-file modal
+      (`shift+v`, PR #47) to read local-first with fallback to the existing
+      `get_file_blob` when the snapshot isn't ready. Ships dark; if the
+      snapshot fails the app behaves exactly as today.
+      **Perf guard:** snapshot ready < 10 s after PR open; zero impact on
+      open / scroll / file-switch budgets (e2e-enforced).
+- [ ] 🟡 **Layer 2 — consumption**: whole-repo search (ripgrep-style in Rust,
+      ms over the extracted tree) · hunk-context expansion (P11 PR 2) reading
+      local files. Each small, each shippable independently. New pushes
+      re-download the full tarball (no deltas) — fine at PR cadence.
+- [ ] ⏸ **Layer 3 — symbol index** (tree-sitter): go-to-definition from the
+      diff (peek popover → full-file modal at line), find references for a
+      changed symbol. ~50–100k lines/sec/core to parse, index cached per SHA,
+      incremental via file-hash diff against the previous snapshot. **Only
+      build if beta users live in `shift+v` / repo search** — the sync
+      decision does not commit to this. Explicitly navigation, not AI: no
+      embeddings, no LLM anywhere.
+
+Ruled out: real git clone (shallow/partial) — efficient deltas + blame, but
+breaks "no git operations", needs gitoxide/libgit2 + token-in-transport +
+repo-dir management. Revisit only if a feature genuinely needs history.
 
 ---
 
@@ -404,39 +477,36 @@ worth it after validation.
       *Plugin + in-app prompt scaffolded; real signing key, feed & CI signing remain (see README "Auto-updates").*
 - [ ] ⏸ Crash reporting.
 
-### 11c. Monetization (sequenced — build nothing before retention data)
+### 11c. Commercial launch
 
-**Model:** one-time purchase (~$30–60) + **1 year of updates**, then optional
-renewal (Sublime/JetBrains-fallback shape). No subscription — the app has no
-server costs to justify one; the token stays local and API calls come from the
-user's machine. The update entitlement implements itself via the existing
-auto-updater: the license key encodes an `updates-until` date and the updater
-refuses builds released after it. App never stops working; only updates expire.
+Full plan in [`docs/RELEASING.md` — Commercial launch](./RELEASING.md#commercial-launch).
 
-**Mechanics (≈1 week of work, when the time comes):**
+**Philosophy:** no license keys. GitHub identity is the license. Browser-brokered
+activation (`prflow://purchase?token=…`) — Raycast-style **Open Nod** after
+checkout. One Cloudflare Worker; MoR (Polar / Paddle / Lemon Squeezy) for
+payments and tax.
 
-- [ ] ⏸ **Merchant of record** — Paddle / Lemon Squeezy / Polar. Handles
-      payment, global VAT/sales tax, and license-key issuance. Never build
-      payments directly.
-- [ ] ⏸ **Offline key verification in Rust** — Ed25519-signed payload (email +
-      purchase date + updates-until); public key embedded in the backend, no
-      license server, no phone-home, works offline. Check lives in Rust, not
-      the JS bundle — mild friction, nothing more.
-- [ ] ⏸ **Trial** — 14–30 days, full-featured, local timestamp. Don't fight
-      clock-tamperers. After trial: purchase prompt on launch, paste key, done.
-- [ ] ⏸ **Updater gating** — updater compares build release date against the
-      key's `updates-until`; expired = keep current version forever, offer
-      renewal.
+**Release gate (Phase 0 — free beta):** same as [Release gate](#release-gate)
+above. Do not build MoR / Worker / license code until five external developers
+have used the app for one week and retention is plausible.
 
-**Anti-piracy stance (decided):** no DRM, no obfuscation, no online activation.
-A patched clone is not a lost sale. Defenses are legal (no redistribution
-rights without a license grant), structural (value is the signed, auto-updated
-stream — clones go stale), and social. Aseprite is the precedent: compile-it-
-yourself is officially allowed and it still sells.
+| Phase | What | When |
+| --- | --- | --- |
+| **0** | Domain + static landing page (video, GitHub release downloads). No payments. | After release gate |
+| **1** | MoR + Worker + in-app trial/gating + notarization | Retention proven (~1 week eng.) |
 
-**Sequence gate:** free beta → five friends → wider free beta ("free during
-beta" stated up front) → retention proven → only then the items above. Real
-usage decides final pricing shape.
+- [ ] 🟡 **Phase 0** — landing page on custom domain (~$15/yr).
+- [ ] 🔴 **Phase 1** — Apple notarization (hard prerequisite; drop `xattr` docs).
+- [ ] 🔴 **Phase 1** — MoR product + checkout linked to GitHub identity.
+- [ ] 🟡 **Phase 1** — Cloudflare Worker (`/purchase-webhook`, `/activate`,
+      `/license/:github_id`, `/restore`).
+- [ ] 🟡 **Phase 1** — `prflow://purchase` deep link + Ed25519 token verify in Rust.
+- [ ] 🟡 **Phase 1** — Trial (first-launch timestamp) + purchase prompt UI.
+- [ ] 🟡 **Phase 1** — Updater gating on local `updates_until` (static `latest.json`).
+- [ ] ⏸ `nod-keygen` CLI for manual/support grants.
+
+**Rejected:** deterministic license keys (stateless, simple engineering, ugly UX —
+conflicts with zero-friction product goal).
 
 ---
 
@@ -463,8 +533,10 @@ link interception · Universal Links.
 ### After five friends use it for a week
 
 8. shadcn Phase 1 · code-first layout · Info tab
-9. **Listen** — if *"GitHub links"* comes up → Stage 2 extension
-10. If still painful → Stage 3 interception
+9. **Repo snapshot layer 1** (§9) — invisible infra, safe to build while
+   friends test; layers 2–3 gated on their `shift+v` / search usage
+10. **Listen** — if *"GitHub links"* comes up → Stage 2 extension
+11. If still painful → Stage 3 interception
 
 ### Explicitly do not build before user feedback
 
@@ -489,3 +561,6 @@ link interception · Universal Links.
 
 - **Subscribed repos**: watch chosen repositories (not just PRs involving you) —
   a fifth inbox source, likely per-account repo picker + polling. Shape TBD.
+- **Watch repos spam** — `setWatchedRepos` fires per toggle with no debounce or
+  in-flight guard (unlike viewed-map persist). Debounce or coalesce rapid
+  watch/unwatch in the repos dialog.

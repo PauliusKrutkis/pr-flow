@@ -103,7 +103,15 @@ export interface ReviewSummary {
   userAvatarUrl: string;
 }
 
+export interface CiStatus {
+  failed: number;
+  state: "success" | "failure" | "pending" | "none";
+  total: number;
+  url: string;
+}
+
 export interface PullRequestDetail {
+  ciStatus: CiStatus;
   comments: ReviewComment[];
   fetchedAt: number;
   files: ChangedFile[];

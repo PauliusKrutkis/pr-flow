@@ -99,6 +99,11 @@ function SearchPaneContent({
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setSel((s) => Math.max(s - 1, 0));
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      setSel((s) =>
+        e.shiftKey ? Math.max(s - 1, 0) : Math.min(s + 1, results.length - 1)
+      );
     } else if (e.key === "Enter") {
       e.preventDefault();
       const r = results[sel];

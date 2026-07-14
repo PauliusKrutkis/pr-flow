@@ -16,14 +16,13 @@ use serde_json::{json, Value};
 
 use crate::github::{
     fbool, fopt_u64, fstr, fu64, get_all_pages, get_json, log, net_err, now_millis, nstr,
-    read_body, ChangedFile, FileBlob, GitHubUser, InboxBucket, InboxData, IssueComment,
+    read_body, ChangedFile, CiStatus, FileBlob, GitHubUser, InboxBucket, InboxData, IssueComment,
     PullRequest, PullRequestDetail, RepoHit, ReviewComment, ReviewCommentInput, ReviewSummary,
     MAX_BLOB_BYTES,
 };
 
 pub struct GitLabPlatform {
     client: reqwest::Client,
-    /// REST base, e.g. "https://gitlab.com/api/v4".
     api: String,
 }
 
@@ -66,6 +65,31 @@ fn map_state(state: &str) -> (String, bool) {
         "opened" => ("open".to_string(), false),
         "merged" => ("closed".to_string(), true),
         other => (other.to_string(), false),
+    }
+}
+
+/// Maps the newest pipeline from `/merge_requests/:iid/pipelines` (the list is
+/// newest-first) onto the shared `CiStatus`. Pure so it can be unit-tested.
+/// Pipeline status success/failed/running/pending/canceled → success/failure/
+/// pending; no pipeline → "none". `total`/`failed` are coarse (one pipeline is
+/// one row) since the list endpoint doesn't break down per-job.
+fn ci_from_pipelines(pipelines: &Value) -> CiStatus {
+    let Some(latest) = pipelines.as_array().and_then(|a| a.first()) else {
+        return CiStatus::default();
+    };
+    let status = fstr(latest, "status");
+    let state = match status.as_str() {
+        "success" => "success",
+        "failed" => "failure",
+        "running" | "pending" | "created" | "waiting_for_resource" | "preparing" => "pending",
+        _ => return CiStatus::default(),
+    };
+    let failed = if state == "failure" { 1 } else { 0 };
+    CiStatus {
+        state: state.to_string(),
+        total: 1,
+        failed,
+        url: fstr(latest, "web_url"),
     }
 }
 
@@ -460,12 +484,28 @@ impl GitLabPlatform {
         issue_comments.sort_by(|a, b| a.created_at.cmp(&b.created_at));
         reviews.sort_by(|a, b| a.submitted_at.cmp(&b.submitted_at));
 
+        let ci_status = match get_json(
+            &self.client,
+            &format!("{}/pipelines", self.mr_url(owner, repo, number)),
+        )
+        .await
+        {
+            Ok(pipelines) => ci_from_pipelines(&pipelines),
+            Err(e) => {
+                log(&format!(
+                    "CI status unavailable for {owner}/{repo}!{number}: {e}"
+                ));
+                CiStatus::default()
+            }
+        };
+
         let detail = PullRequestDetail {
             pr,
             files,
             comments,
             issue_comments,
             reviews,
+            ci_status,
             fetched_at: now_millis(),
         };
         log(&format!(
@@ -778,6 +818,30 @@ mod tests {
     }
 
     #[test]
+    fn ci_from_pipelines_maps_latest() {
+        let failed = ci_from_pipelines(&serde_json::json!([
+            { "status": "failed", "web_url": "https://g/p/1" },
+            { "status": "success", "web_url": "https://g/p/0" }
+        ]));
+        assert_eq!(failed.state, "failure");
+        assert_eq!(failed.total, 1);
+        assert_eq!(failed.failed, 1);
+        assert_eq!(failed.url, "https://g/p/1");
+
+        let running = ci_from_pipelines(&serde_json::json!([
+            { "status": "running", "web_url": "r" }
+        ]));
+        assert_eq!(running.state, "pending");
+        assert_eq!(running.failed, 0);
+
+        assert_eq!(ci_from_pipelines(&serde_json::json!([])).state, "none");
+        assert_eq!(
+            ci_from_pipelines(&serde_json::json!([{ "status": "canceled" }])).state,
+            "none"
+        );
+    }
+
+    #[test]
     fn merged_state_maps_to_closed_plus_merged_flag() {
         let mut v = mr_fixture();
         v["state"] = serde_json::json!("merged");
@@ -845,9 +909,9 @@ mod tests {
         assert!(rc.resolved);
         let rr = note_to_comment(&reply, Some(&root), Some(("disc-1", true)));
         assert_eq!(rr.in_reply_to_id, Some(10));
-        assert_eq!(rr.path, "f.ts"); // anchor path comes from the root
+        assert_eq!(rr.path, "f.ts");
         assert_eq!(rr.line, None);
-        assert_eq!(rr.thread_id.as_deref(), Some("disc-1")); // stamped on replies too
+        assert_eq!(rr.thread_id.as_deref(), Some("disc-1"));
     }
 
     #[test]
@@ -860,7 +924,7 @@ mod tests {
         let rc = note_to_comment(&root, None, None);
         assert_eq!(rc.side, "LEFT");
         assert_eq!(rc.line, Some(3));
-        assert_eq!(rc.thread_id, None); // no thread handle -> resolve hidden
+        assert_eq!(rc.thread_id, None);
         assert!(!rc.resolved);
     }
 

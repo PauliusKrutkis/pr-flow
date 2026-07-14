@@ -1,5 +1,3 @@
-/** Deterministic backend fixtures for the mocked Tauri bridge. */
-
 export const makePr = (
   n: number,
   title: string,
@@ -108,6 +106,12 @@ const PATCH = `@@ -1,5 +1,6 @@
  export const beta = true;`;
 
 export const DETAIL = {
+  ciStatus: {
+    failed: 1,
+    state: "failure",
+    total: 4,
+    url: "https://github.com/o/r/pull/1/checks",
+  },
   comments: [
     {
       body: "Is this constant right?",
@@ -247,6 +251,15 @@ export const DETAIL = {
       userAvatarUrl: "",
     },
   ],
+};
+
+/**
+ * A repo with no CI configured: the pill must render nothing so quiet repos
+ * stay quiet. Serve via `detailByCall: [DETAIL_NO_CI]`.
+ */
+export const DETAIL_NO_CI = {
+  ...DETAIL,
+  ciStatus: { failed: 0, state: "none", total: 0, url: "" },
 };
 
 /**

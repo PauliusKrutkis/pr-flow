@@ -7,7 +7,6 @@
  * resolve `anchorItem`, ]c/[c walks `commentItems`, and the overview ruler
  * turns item indexes into fractions.
  */
-
 import type { ChangedFile, PendingComment, ReviewComment } from "../types.ts";
 import { type DiffHunk, type DiffRow, parsePatch } from "./diff.ts";
 import {
@@ -165,7 +164,6 @@ export interface ReviewCommentsItem {
   threads: ReviewComment[][];
 }
 
-/** Whole-file bodies without rows: image comparisons and binary notes. */
 export interface ReviewImageItem {
   fileIndex: number;
   kind: "image";
@@ -412,7 +410,6 @@ export function buildReviewItems(
  * is stable — a WeakMap keyed by it gives every rendered row O(1) access
  * without recomputing per render or per item.
  */
-
 export interface FileRenderMeta {
   guideByRow: ReadonlyMap<DiffRow, number>;
   indentUnit: IndentUnit;
