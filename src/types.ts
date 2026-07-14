@@ -178,6 +178,13 @@ export interface UpdateInfo {
   version: string;
 }
 
+/** One published version release on the app's GitHub repo. */
+export interface ReleaseInfo {
+  notes: string | null;
+  publishedAt: string | null;
+  tag: string;
+}
+
 export interface PRRef {
   name: string;
   number: number;
