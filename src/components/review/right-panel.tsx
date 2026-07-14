@@ -1,9 +1,16 @@
-import { CheckCircle2 } from "lucide-react";
+import {
+  CheckCircle2,
+  ExternalLink,
+  PanelRightClose,
+  PanelRightOpen,
+} from "lucide-react";
 import { useEffect, useRef } from "react";
 import { cn } from "../../lib/cn.ts";
+import { openOnProviderLabel } from "../../lib/provider.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
 import { useAppStore } from "../../store/app-store.ts";
 import type {
+  CiStatus,
   IssueComment,
   PullRequest,
   ReviewComment,
@@ -13,17 +20,22 @@ import { Markdown } from "../markdown.tsx";
 import { Avatar } from "../ui/avatar.tsx";
 import { TicketTitle } from "../ui/ticket-title.tsx";
 import { AddCommentBox } from "./add-comment-box.tsx";
+import { CiPill } from "./ci-pill.tsx";
 
 interface RightPanelProps {
+  ci: CiStatus | undefined;
   conversation: IssueComment[];
   fileCount: number;
   inlineComments: ReviewComment[];
   onAddIssueComment: (body: string) => Promise<void>;
   onClose: () => void;
   onJumpToThread: (path: string, rootId: number) => void;
+  onOpenPr: () => void;
+  onToggleWide: () => void;
   open: boolean;
   pr: PullRequest;
   reviews: ReviewSummary[];
+  wide: boolean;
 }
 
 /** One row of the merged conversation: a comment or a review verdict. */
@@ -45,15 +57,19 @@ const REVIEW_STATES: Record<string, { label: string; cls: string }> = {
  * the composer never blocks.
  */
 export function RightPanel({
+  ci,
   pr,
   fileCount,
   conversation,
   reviews,
   inlineComments,
   open,
+  wide,
   onClose,
+  onToggleWide,
   onAddIssueComment,
   onJumpToThread,
+  onOpenPr,
 }: RightPanelProps) {
   const body = pr.body.trim();
   const trackerBase = useAppStore((s) =>
@@ -122,22 +138,42 @@ export function RightPanel({
       />
       <aside
         aria-hidden={!open}
-        className={cn("qf-drawer", open && "qf-drawer-open")}
+        className={cn(
+          "qf-drawer",
+          open && "qf-drawer-open",
+          wide && "qf-drawer-wide"
+        )}
         inert={!open}
         ref={panelRef}
         tabIndex={-1}
       >
         <div className="qf-drawer-head">
           <span className="qf-drawer-title">Pull request</span>
-          <button
-            aria-label="Close"
-            className="qf-drawer-close qf-focusable"
-            onClick={onClose}
-            title="Close (Esc)"
-            type="button"
-          >
-            Esc
-          </button>
+          <div className="qf-drawer-head-actions">
+            <button
+              aria-label={wide ? "Narrow panel" : "Widen panel"}
+              aria-pressed={wide}
+              className="qf-drawer-wide-btn qf-focusable"
+              onClick={onToggleWide}
+              title={`${wide ? "Narrow" : "Widen"} panel (⇧I)`}
+              type="button"
+            >
+              {wide ? (
+                <PanelRightClose aria-hidden size={15} />
+              ) : (
+                <PanelRightOpen aria-hidden size={15} />
+              )}
+            </button>
+            <button
+              aria-label="Close"
+              className="qf-drawer-close qf-focusable"
+              onClick={onClose}
+              title="Close (Esc)"
+              type="button"
+            >
+              Esc
+            </button>
+          </div>
         </div>
 
         <div className="qf-drawer-body">
@@ -162,6 +198,17 @@ export function RightPanel({
               <span className="qf-muted" title={formatAbsolute(pr.updatedAt)}>
                 {formatRelativeTime(pr.updatedAt)}
               </span>
+            </div>
+            <div className="qf-drawer-links">
+              <CiPill ci={ci} />
+              <button
+                className="qf-drawer-link qf-focusable"
+                onClick={onOpenPr}
+                type="button"
+              >
+                {openOnProviderLabel(pr.url)}
+                <ExternalLink aria-hidden size={13} />
+              </button>
             </div>
           </section>
 

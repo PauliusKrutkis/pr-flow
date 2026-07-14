@@ -7,6 +7,8 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const API: &str = "https://api.github.com";
@@ -42,10 +44,8 @@ pub struct PullRequest {
     pub created_at: String,
     pub comments_count: u64,
     pub head_sha: String,
-    /// Base branch tip sha (populated on detail fetch; used for image diffs).
     #[serde(default)]
     pub base_sha: String,
-    /// Branch names (populated on detail fetch; empty in the list view).
     #[serde(default)]
     pub head_ref: String,
     #[serde(default)]
@@ -54,8 +54,6 @@ pub struct PullRequest {
     pub deletions: u64,
     pub changed_files: u64,
     pub body: String,
-    /// Newest comment, for the inbox reading pane (list fetch only; `None`
-    /// on detail fetches and providers that can't supply it cheaply).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_comment: Option<LastComment>,
 }
@@ -65,7 +63,6 @@ pub struct PullRequest {
 pub struct LastComment {
     pub author: String,
     pub author_avatar_url: String,
-    /// Plain text (GraphQL `bodyText`) — a teaser, not rendered as Markdown.
     pub body: String,
     pub created_at: String,
 }
@@ -99,12 +96,6 @@ pub struct ReviewComment {
     pub user_avatar_url: String,
     pub created_at: String,
     pub in_reply_to_id: Option<u64>,
-    /// Resolvable-thread identity: GitHub's GraphQL review-thread node id, or
-    /// GitLab's discussion id. Stamped on EVERY comment of the thread (not
-    /// just the root) so the frontend can group/flip without walking reply
-    /// chains. `None` means "can't resolve from here" (e.g. the GraphQL probe
-    /// failed) and the UI hides the affordance. Serde defaults keep cached
-    /// details from before this field readable.
     #[serde(default)]
     pub thread_id: Option<String>,
     #[serde(default)]
@@ -132,10 +123,33 @@ pub struct ReviewSummary {
     pub id: u64,
     pub user: String,
     pub user_avatar_url: String,
-    /// "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED" | "DISMISSED"
     pub state: String,
     pub body: String,
     pub submitted_at: String,
+}
+
+/// Aggregated CI/pipeline state for the PR's head commit, mapped from GitHub
+/// check-runs + commit statuses or GitLab pipelines onto one host-agnostic
+/// shape. `state: "none"` means the repo has no CI configured (the header pill
+/// renders nothing so quiet repos stay quiet).
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CiStatus {
+    pub state: String,
+    pub total: u64,
+    pub failed: u64,
+    pub url: String,
+}
+
+impl Default for CiStatus {
+    fn default() -> Self {
+        CiStatus {
+            state: "none".to_string(),
+            total: 0,
+            failed: 0,
+            url: String::new(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -144,19 +158,18 @@ pub struct PullRequestDetail {
     pub pr: PullRequest,
     pub files: Vec<ChangedFile>,
     pub comments: Vec<ReviewComment>,
-    /// PR-level conversation, oldest first (default keeps old caches readable).
     #[serde(default)]
     pub issue_comments: Vec<IssueComment>,
-    /// Submitted review verdicts/summaries, oldest first (default: old caches).
     #[serde(default)]
     pub reviews: Vec<ReviewSummary>,
+    #[serde(default)]
+    pub ci_status: CiStatus,
     pub fetched_at: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct InboxBucket {
-    /// Total matches reported by the host (may exceed `prs.len()` due to paging).
     pub count: u64,
     pub prs: Vec<PullRequest>,
 }
@@ -178,7 +191,6 @@ pub const MAX_BLOB_BYTES: usize = 20 * 1024 * 1024;
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct FileBlob {
-    /// Raw file bytes, base64-encoded (the frontend builds a data: URL).
     pub base64: String,
     pub size: u64,
 }
@@ -195,11 +207,9 @@ pub struct RepoHit {
 #[serde(rename_all = "camelCase")]
 pub struct ReviewCommentInput {
     pub path: String,
-    /// The anchor line — for a multi-line comment, the range's END line.
     pub line: u64,
     pub side: String,
     pub body: String,
-    /// Multi-line range start (same side as `line`); None = single line.
     #[serde(default)]
     pub start_line: Option<u64>,
 }
@@ -298,9 +308,102 @@ pub(crate) async fn read_body(resp: reqwest::Response) -> Result<Value, String> 
     serde_json::from_str::<Value>(&text).map_err(|e| format!("could not parse response: {e}"))
 }
 
+/// One cached conditional GET: the `ETag` we last saw plus the body that came
+/// with it. Kept in-memory only — the process is long-lived, so we don't need
+/// to persist it (the on-disk cache in RUST.md already covers cold starts).
+#[derive(Clone)]
+struct CachedResponse {
+    etag: String,
+    body: Value,
+}
+
+/// Process-wide ETag cache, keyed by full request URL. Because the token is
+/// baked into each account's `reqwest::Client` and account switches change the
+/// active client, the URL alone is a safe key: a 304 is only ever returned for
+/// the same resource the caller is authorised to see.
+fn etag_cache() -> &'static Mutex<HashMap<String, CachedResponse>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, CachedResponse>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Outcome of a conditional GET, decided purely from inputs so it can be unit
+/// tested without a network. `Cached` means serve the stored body (a 304);
+/// `Fresh` means a new body arrived and, if it carried an `ETag`, we should
+/// remember it for next time.
+#[derive(Debug, PartialEq)]
+enum Conditional {
+    Cached(Value),
+    Fresh { body: Value, etag: Option<String> },
+}
+
+/// Pure decision core for a conditional GET. Given what we had cached and the
+/// response we just received, decide whether to serve the cache or the fresh
+/// body. Anything that isn't a clean 304-with-a-cached-body is treated as
+/// fresh, so a stale/missing cache can never wedge the request.
+fn resolve_conditional(
+    status: u16,
+    resp_etag: Option<&str>,
+    cached: Option<&CachedResponse>,
+    fresh_body: Value,
+) -> Conditional {
+    if status == 304 {
+        if let Some(hit) = cached {
+            return Conditional::Cached(hit.body.clone());
+        }
+    }
+    Conditional::Fresh {
+        body: fresh_body,
+        etag: resp_etag.filter(|e| !e.is_empty()).map(str::to_string),
+    }
+}
+
+/// Conditional GET: sends `If-None-Match` when we hold an `ETag` for the URL.
+/// GitHub (and GitLab) answer `304 Not Modified` without spending rate limit
+/// when nothing changed, letting the inbox poll far more often for free. Any
+/// failure falls through to a plain fetch — the cache is a pure optimisation
+/// and must never break a request.
 pub(crate) async fn get_json(client: &reqwest::Client, url: &str) -> Result<Value, String> {
-    let resp = client.get(url).send().await.map_err(net_err)?;
-    read_body(resp).await
+    let stored = etag_cache()
+        .lock()
+        .ok()
+        .and_then(|c| c.get(url).cloned());
+
+    let mut req = client.get(url);
+    if let Some(hit) = &stored {
+        req = req.header(reqwest::header::IF_NONE_MATCH, hit.etag.clone());
+    }
+    let resp = req.send().await.map_err(net_err)?;
+
+    let status = resp.status().as_u16();
+    let resp_etag = resp
+        .headers()
+        .get(reqwest::header::ETAG)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+
+    let fresh_body = if status == 304 {
+        Value::Null
+    } else {
+        read_body(resp).await?
+    };
+
+    match resolve_conditional(status, resp_etag.as_deref(), stored.as_ref(), fresh_body) {
+        Conditional::Cached(body) => Ok(body),
+        Conditional::Fresh { body, etag } => {
+            if let Some(etag) = etag {
+                if let Ok(mut cache) = etag_cache().lock() {
+                    cache.insert(
+                        url.to_string(),
+                        CachedResponse {
+                            etag,
+                            body: body.clone(),
+                        },
+                    );
+                }
+            }
+            Ok(body)
+        }
+    }
 }
 
 /// Fetches every page of a list endpoint (100/page, capped at 20 pages).
@@ -386,7 +489,7 @@ fn pr_from_graphql(v: &Value) -> PullRequest {
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string();
-    let state_raw = fstr(v, "state"); // OPEN | CLOSED | MERGED
+    let state_raw = fstr(v, "state");
     let comments_count = v
         .get("comments")
         .and_then(|c| c.get("totalCount"))
@@ -458,6 +561,85 @@ fn pr_from_pull(v: &Value, owner: &str, repo: &str) -> PullRequest {
         changed_files: fu64(v, "changed_files"),
         body: fstr(v, "body"),
         last_comment: None,
+    }
+}
+
+/// Aggregates GitHub check-runs (`.../check-runs`) and the legacy combined
+/// commit status (`.../status`) into the shared `CiStatus`. Pure so it can be
+/// unit-tested against fixture JSON.
+///
+/// Precedence: any failure → "failure"; else any in-flight → "pending"; else
+/// any check at all → "success"; else "none". `checks_url` is the fallback
+/// target (the PR's checks page); a failing run's own `html_url` wins when
+/// present so the click lands on the broken check.
+fn ci_from_github(check_runs: &Value, combined: &Value, checks_url: &str) -> CiStatus {
+    let runs = check_runs
+        .get("check_runs")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let statuses = combined
+        .get("statuses")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let mut total: u64 = 0;
+    let mut failed: u64 = 0;
+    let mut pending: u64 = 0;
+    let mut fail_url: Option<String> = None;
+
+    for run in &runs {
+        total += 1;
+        let status = fstr(run, "status");
+        if status != "completed" {
+            pending += 1;
+            continue;
+        }
+        match fstr(run, "conclusion").as_str() {
+            "failure" | "timed_out" | "cancelled" | "action_required" | "startup_failure" => {
+                failed += 1;
+                if fail_url.is_none() {
+                    fail_url = fopt_str(run, "html_url");
+                }
+            }
+            _ => {}
+        }
+    }
+
+    for st in &statuses {
+        total += 1;
+        match fstr(st, "state").as_str() {
+            "failure" | "error" => {
+                failed += 1;
+                if fail_url.is_none() {
+                    fail_url = fopt_str(st, "target_url");
+                }
+            }
+            "pending" => pending += 1,
+            _ => {}
+        }
+    }
+
+    let state = if failed > 0 {
+        "failure"
+    } else if pending > 0 {
+        "pending"
+    } else if total > 0 {
+        "success"
+    } else {
+        "none"
+    };
+
+    if state == "none" {
+        return CiStatus::default();
+    }
+
+    CiStatus {
+        state: state.to_string(),
+        total,
+        failed,
+        url: fail_url.unwrap_or_else(|| checks_url.to_string()),
     }
 }
 
@@ -709,12 +891,15 @@ impl GitHubPlatform {
             })
             .collect();
 
+        let ci_status = self.ci_status(owner, repo, number, &pr.head_sha, &pr.url).await;
+
         let detail = PullRequestDetail {
             pr,
             files,
             comments,
             issue_comments,
             reviews,
+            ci_status,
             fetched_at: now_millis(),
         };
         log(&format!(
@@ -723,6 +908,45 @@ impl GitHubPlatform {
             detail.comments.len()
         ));
         Ok(detail)
+    }
+
+    /// Fetches check-runs + combined status for the head commit and aggregates
+    /// them into `CiStatus`. CI is a bonus signal, so any fetch error degrades
+    /// to "none" (logged) rather than failing the whole detail load.
+    async fn ci_status(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        head_sha: &str,
+        pr_url: &str,
+    ) -> CiStatus {
+        if head_sha.is_empty() {
+            return CiStatus::default();
+        }
+        let checks_url = format!("{pr_url}/checks");
+        let check_runs = get_json(
+            &self.client,
+            &format!("{API}/repos/{owner}/{repo}/commits/{head_sha}/check-runs"),
+        )
+        .await;
+        let combined = get_json(
+            &self.client,
+            &format!("{API}/repos/{owner}/{repo}/commits/{head_sha}/status"),
+        )
+        .await;
+        match (check_runs, combined) {
+            (Ok(check_runs), Ok(combined)) => {
+                ci_from_github(&check_runs, &combined, &checks_url)
+            }
+            (check_runs, combined) => {
+                let err = check_runs.err().or(combined.err()).unwrap_or_default();
+                log(&format!(
+                    "CI status unavailable for {owner}/{repo}#{number}: {err}"
+                ));
+                CiStatus::default()
+            }
+        }
     }
 
     /// Maps review-comment database id -> (thread node id, isResolved) for
@@ -745,7 +969,6 @@ impl GitHubPlatform {
 }"#;
         let mut map = std::collections::HashMap::new();
         let mut cursor: Option<String> = None;
-        // Same page cap as get_all_pages — a runaway cursor never loops forever.
         let mut pages = 0u32;
         loop {
             pages += 1;
@@ -928,6 +1151,8 @@ impl GitHubPlatform {
 
     /// Fetches a file's raw contents at a given ref (sha or branch). Used by
     /// the image diff view to load the before/after versions of a binary file.
+    /// The request URL is built through `url::Url` so exotic characters in the
+    /// path are percent-encoded safely.
     pub async fn file_blob(
         &self,
         owner: &str,
@@ -937,7 +1162,6 @@ impl GitHubPlatform {
     ) -> Result<FileBlob, String> {
         use base64::{engine::general_purpose::STANDARD, Engine as _};
 
-        // Build via Url so exotic path characters are percent-encoded safely.
         let mut u = url::Url::parse(API).map_err(|e| e.to_string())?;
         u.set_path(&format!("repos/{owner}/{repo}/contents/{path}"));
         u.query_pairs_mut().append_pair("ref", r#ref);
@@ -1005,7 +1229,7 @@ mod tests {
         assert_eq!(pr.title, "");
         assert!(!pr.merged);
         let c = comment_from(&serde_json::json!({}));
-        assert_eq!(c.side, "RIGHT"); // side defaults to RIGHT when absent
+        assert_eq!(c.side, "RIGHT");
         assert_eq!(c.line, None);
     }
 
@@ -1030,10 +1254,112 @@ mod tests {
         });
         let bucket = bucket_from(&data, "alias");
         assert_eq!(bucket.count, 12);
-        assert_eq!(bucket.prs.len(), 1); // null nodes are skipped
+        assert_eq!(bucket.prs.len(), 1);
         assert_eq!(bucket.prs[0].owner, "o");
         assert!(bucket.prs[0].merged);
         assert_eq!(bucket.prs[0].state, "merged");
+    }
+
+    #[test]
+    fn ci_from_github_aggregates_checks_and_status() {
+        let check_runs = serde_json::json!({
+            "check_runs": [
+                { "status": "completed", "conclusion": "success", "html_url": "ok" },
+                { "status": "completed", "conclusion": "failure", "html_url": "boom" },
+                { "status": "in_progress", "conclusion": null, "html_url": "wip" }
+            ]
+        });
+        let combined = serde_json::json!({
+            "statuses": [ { "state": "success", "target_url": "t" } ]
+        });
+        let ci = ci_from_github(&check_runs, &combined, "https://x/checks");
+        assert_eq!(ci.state, "failure");
+        assert_eq!(ci.total, 4);
+        assert_eq!(ci.failed, 1);
+        assert_eq!(ci.url, "boom");
+    }
+
+    #[test]
+    fn ci_from_github_pending_then_success_then_none() {
+        let pending = ci_from_github(
+            &serde_json::json!({ "check_runs": [
+                { "status": "queued", "conclusion": null }
+            ] }),
+            &serde_json::json!({ "statuses": [] }),
+            "cx",
+        );
+        assert_eq!(pending.state, "pending");
+        assert_eq!(pending.url, "cx");
+
+        let success = ci_from_github(
+            &serde_json::json!({ "check_runs": [
+                { "status": "completed", "conclusion": "success" }
+            ] }),
+            &serde_json::json!({ "statuses": [] }),
+            "cx",
+        );
+        assert_eq!(success.state, "success");
+        assert_eq!(success.total, 1);
+
+        let none = ci_from_github(
+            &serde_json::json!({ "check_runs": [] }),
+            &serde_json::json!({ "statuses": [] }),
+            "cx",
+        );
+        assert_eq!(none.state, "none");
+        assert_eq!(none.total, 0);
+        assert_eq!(none.url, "");
+    }
+
+    #[test]
+    fn conditional_304_serves_cached_body() {
+        let cached = CachedResponse {
+            etag: "\"abc\"".to_string(),
+            body: serde_json::json!({ "cached": true }),
+        };
+        let out = resolve_conditional(304, Some("\"abc\""), Some(&cached), Value::Null);
+        assert_eq!(out, Conditional::Cached(serde_json::json!({ "cached": true })));
+    }
+
+    #[test]
+    fn conditional_200_stores_new_etag_and_body() {
+        let out = resolve_conditional(
+            200,
+            Some("\"new\""),
+            None,
+            serde_json::json!({ "fresh": 1 }),
+        );
+        assert_eq!(
+            out,
+            Conditional::Fresh {
+                body: serde_json::json!({ "fresh": 1 }),
+                etag: Some("\"new\"".to_string()),
+            }
+        );
+    }
+
+    #[test]
+    fn conditional_304_without_cache_falls_back_to_fresh() {
+        let out = resolve_conditional(304, None, None, Value::Null);
+        assert_eq!(
+            out,
+            Conditional::Fresh {
+                body: Value::Null,
+                etag: None,
+            }
+        );
+    }
+
+    #[test]
+    fn conditional_200_without_etag_stores_nothing() {
+        let out = resolve_conditional(200, None, None, serde_json::json!({ "x": 1 }));
+        assert_eq!(
+            out,
+            Conditional::Fresh {
+                body: serde_json::json!({ "x": 1 }),
+                etag: None,
+            }
+        );
     }
 
     #[test]

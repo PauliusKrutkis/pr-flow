@@ -77,7 +77,8 @@ Or resume where you left off. **No Slack link handling required.**
 | --- | --- | --- |
 | **Auto-updates** | §11b | Before external users |
 | CI releases + signing | §11b | With auto-update |
-| **`prflow://` scheme** | §11a | Stage 2 (simple extension) |
+| **Commercial launch** | §11c | After §11c release gate |
+| **`prflow://` scheme** | §11a | Stage 2 (simple extension); also §11c purchase activation |
 
 ### ✨ Category 3 — Delighters (prove the pain first)
 
@@ -86,6 +87,7 @@ Or resume where you left off. **No Slack link handling required.**
 | Simple **"Open in PR Flow"** extension | §11a Stage 2 | After daily-use users |
 | Link **interception** + native messaging | §11a Stage 3 | Only if users ask |
 | Universal Links / wrapper domain | §11a | Unlikely needed if extension suffices |
+| **Repo snapshot (sync layers 1–3)** | §9 | Layer 1 after PR #47; during beta |
 | New icon · streaks · celebration · Conversation mode | various | Post-MVP |
 
 ---
@@ -351,6 +353,25 @@ Inline → Code view. PR-level → Info tab + badge. ⏸ Conversation mode.
       real GitLab); existing comments' ranges (`start_line` from the API)
       are not yet displayed on threads — follow-up.
 
+### 5c. Mutation spam safeguards
+
+Resolve/unresolve is fixed (`requestResolveThread` coalesces in-flight toggles
+while keeping optimistic UI). Same class of bug elsewhere: composers and submit
+already accept `pending` / `busy`, but review screen hardcodes them to `false`,
+and several paths call `mutate` with no in-flight guard.
+
+- [ ] 🟡 **Submit review** — wire `submitReview.isPending` to `SubmitReviewModal`
+      `busy`; block duplicate submit while in flight (modal closes early today;
+      `openSubmit` can reset and re-fire).
+- [ ] 🟡 **Reply to thread** — wire `reply.isPending` to `ReviewList`
+      `addPending` (currently hardcoded `false`); optional intent coalescing if
+      spam remains possible before `isPending` flips.
+- [ ] 🟡 **Inline "Comment now"** — wire `addReviewComment.isPending` to
+      `addPending`; `handleSecondary` must `await onAddComment` (fire-and-forget
+      today lets ⌘↵ double-submit through instantly).
+- [ ] 🟢 **Issue comment (Info drawer)** — wire `addIssueComment.isPending` to
+      `AddCommentBox` `pending` in `right-panel.tsx` (hardcoded `false`).
+
 ---
 
 ## 7. Data freshness
@@ -359,6 +380,19 @@ Inline → Code view. PR-level → Info tab + badge. ⏸ Conversation mode.
 
 - [x] 🟢 Remove manual refresh.
 - [x] 🟡 Banner when open PR changes externally.
+- [ ] 🟡 **GitHub cheap-polling via the Notifications API (P16 PR2)** — the
+      ETag/304 conditional-request cache (PR #49) lets GitLab + every REST GET
+      re-poll for free and drops the inbox interval to 15s, but GitHub's inbox
+      is a GraphQL POST that can't do conditional requests, so each GitHub poll
+      still spends rate-limit budget. It's comfortably within the 5000 pts/hr
+      budget at 15s (focus-only), so this is an optimisation, not a fix. Keep
+      GraphQL for the rich inbox, but gate it behind GitHub's Notifications REST
+      API (`GET /notifications` — supports ETag, returns `X-Poll-Interval`):
+      poll notifications cheaply as a change-detector and run the full GraphQL
+      inbox only when they signal activity, with a slow (~60s) GraphQL baseline
+      as a floor (notifications don't cover every review-requested PR). Do NOT
+      move the GitHub inbox to REST search — its separate 30 req/min limit +
+      loss of the single-query rich fields makes it worse.
 - [ ] ⏸ Webhooks — post-MVP.
 
 ---
@@ -366,6 +400,45 @@ Inline → Code view. PR-level → Info tab + badge. ⏸ Conversation mode.
 ## 8. shadcn/ui — Phase 1
 
 - [ ] 🟡 `command`, `dialog`, `tooltip` — incremental with MVP modals.
+
+---
+
+## 9. Repo snapshot — sync layers (decided 2026-07-12)
+
+Extend cache-first from "PR metadata + diffs" to **the file tree at head SHA**.
+Not a new direction — the existing thesis applied deeper. Tarball download
+(one API call, `GET /repos/{owner}/{repo}/tarball/{sha}`), extracted into the
+cache keyed by commit SHA like everything else. **No git operations** — the
+README promise holds. Converts every future context feature from a project
+(fetch + cache + loading state) into a local file read.
+
+Three layers, three separate decision points — only layer 3 is a real bet:
+
+- [ ] 🔴 **Layer 1 — snapshot service** (after PR #47 merges; buildable during
+      beta, changes no user-visible surface). Rust background threads: check
+      repo size via API first (over ~100 MB → skip, stay on-demand — degrade,
+      never block), download tarball on PR open, extract to cache, evict old
+      SHAs (keep last N per repo) from day one. Wire the full-file modal
+      (`shift+v`, PR #47) to read local-first with fallback to the existing
+      `get_file_blob` when the snapshot isn't ready. Ships dark; if the
+      snapshot fails the app behaves exactly as today.
+      **Perf guard:** snapshot ready < 10 s after PR open; zero impact on
+      open / scroll / file-switch budgets (e2e-enforced).
+- [ ] 🟡 **Layer 2 — consumption**: whole-repo search (ripgrep-style in Rust,
+      ms over the extracted tree) · hunk-context expansion (P11 PR 2) reading
+      local files. Each small, each shippable independently. New pushes
+      re-download the full tarball (no deltas) — fine at PR cadence.
+- [ ] ⏸ **Layer 3 — symbol index** (tree-sitter): go-to-definition from the
+      diff (peek popover → full-file modal at line), find references for a
+      changed symbol. ~50–100k lines/sec/core to parse, index cached per SHA,
+      incremental via file-hash diff against the previous snapshot. **Only
+      build if beta users live in `shift+v` / repo search** — the sync
+      decision does not commit to this. Explicitly navigation, not AI: no
+      embeddings, no LLM anywhere.
+
+Ruled out: real git clone (shallow/partial) — efficient deltas + blame, but
+breaks "no git operations", needs gitoxide/libgit2 + token-in-transport +
+repo-dir management. Revisit only if a feature genuinely needs history.
 
 ---
 
@@ -402,7 +475,175 @@ worth it after validation.
 
 - [~] 🔴 Before external users — `tauri-plugin-updater` + CI releases.
       *Plugin + in-app prompt scaffolded; real signing key, feed & CI signing remain (see README "Auto-updates").*
-- [ ] ⏸ Crash reporting.
+- [ ] ⏸ Crash reporting — see [July 2026 batch · Sentry](#july-2026-batch).
+
+### 11c. Commercial launch
+
+Full plan in [`docs/RELEASING.md` — Commercial launch](./RELEASING.md#commercial-launch).
+
+**Philosophy:** no license keys. GitHub identity is the license. Browser-brokered
+activation (`prflow://purchase?token=…`) — Raycast-style **Open Nod** after
+checkout. One Cloudflare Worker; MoR (Polar / Paddle / Lemon Squeezy) for
+payments and tax.
+
+**Release gate (Phase 0 — free beta):** same as [Release gate](#release-gate)
+above. Do not build MoR / Worker / license code until five external developers
+have used the app for one week and retention is plausible.
+
+| Phase | What | When |
+| --- | --- | --- |
+| **0** | Domain + static landing page (video, GitHub release downloads). No payments. | After release gate |
+| **1** | MoR + Worker + in-app trial/gating + notarization | Retention proven (~1 week eng.) |
+
+- [ ] 🟡 **Phase 0** — landing page on custom domain (~$15/yr).
+- [ ] 🔴 **Phase 1** — Apple notarization (hard prerequisite; drop `xattr` docs).
+- [ ] 🔴 **Phase 1** — MoR product + checkout linked to GitHub identity.
+- [ ] 🟡 **Phase 1** — Cloudflare Worker (`/purchase-webhook`, `/activate`,
+      `/license/:github_id`, `/restore`).
+- [ ] 🟡 **Phase 1** — `prflow://purchase` deep link + Ed25519 token verify in Rust.
+- [ ] 🟡 **Phase 1** — Trial (first-launch timestamp) + purchase prompt UI.
+- [ ] 🟡 **Phase 1** — Updater gating on local `updates_until` (static `latest.json`).
+- [ ] ⏸ `nod-keygen` CLI for manual/support grants.
+
+**Rejected:** deterministic license keys (stateless, simple engineering, ugly UX —
+conflicts with zero-friction product goal).
+
+---
+
+## July 2026 batch
+
+> Ship via the [split-pr skill](../.claude/skills/split-pr/SKILL.md) — one intent
+> per PR, ~300-line soft budget, `pnpm check` / tests / knip green (+ e2e and UI
+> evidence for UI changes; `cargo test` when `src-tauri/` changes).
+
+### Wave 1 — bug fixes
+
+- [ ] 🟢 **P01** — GitHub OAuth on Windows opens Documents
+      folder instead of the browser (`tauri_plugin_opener::open_url`).
+- [ ] 🟢 **P02** — File-tree active/focus ring persists
+      after `r`/`t` when a file was mouse-clicked (blur on click; audit inbox rows).
+      *Also covers:* remove `qf-focusable` focus ring on file sidebar buttons.
+- [ ] 🟢 **P03** — Occurrence navigation blocked while find
+      (`mod+f`) is open — explicit handoff (select token → close find → start
+      occurrences).
+- [ ] 🟢 **Next occurrence scroll** — stepping `n`/`p` in occurrence mode should
+      not scroll when the match is already fully visible.
+- [ ] 🟢 **Search pane height** — inbox search panel lost height; match the
+      `mod+k` command palette sizing.
+- [ ] 🟢 **GitHub org OAuth restrictions** — `[pr-flow] API error 403` when an org
+      (e.g. Decodo) enables OAuth App access restrictions; surface a clear
+      in-app message with the GitHub docs link and what the admin must allow.
+
+### Wave 2 — quick wins
+
+- [ ] 🟢 **P04** — Hotkey for insert suggestion
+      (`mod+shift+s` in composer).
+- [ ] 🟢 **P05** — Comment thread expand/collapse hotkey
+      (`z` on active thread).
+- [ ] 🟢 **P06** — Next/previous diff hunk keybind (`}` /
+      `{`).
+- [ ] 🟢 **P07** — Restore archived (`e`-archived) inbox
+      PRs (toggle view + `clearSeen`).
+- [ ] 🟢 **`e` skips viewed files** — when marking viewed + next, jump to the
+      next *unviewed* file instead of blindly advancing (next may already be
+      viewed).
+- [ ] 🟢 **Pending comment discard hotkey** — keyboard shortcut for discard;
+      improve discard button visibility (border/contrast is too subtle today).
+- [ ] 🟢 **Go to next/previous comment** — verify `]c` / `[c` coverage or add a
+      simpler binding if the sequence feels undiscoverable.
+
+### Wave 3 — review surfaces
+
+- [ ] 🟡 **P08** — Show approvals / changes-requested in
+      the review header (data already on detail payload).
+- [ ] 🟡 **P09** — Pipelines / CI status pill in review
+      header (+ per-check list in drawer later).
+- [ ] 🔴 **P10** — Edit own comments (inline review
+      comments first, PR-level in info drawer second).
+- [ ] 🟡 **P11** — View full file at head SHA (`shift+v`
+      modal first; hunk context expansion later — ties to §9 snapshot layer 1).
+- [ ] 🟡 **P12** — "What's new" card on first launch after
+      an update (release notes via Rust command).
+- [ ] 🟢 **Distinct file header** — hard to tell when starting a new file; make
+      the file header row more visually distinct in the diff list.
+- [ ] 🟢 **Info drawer author avatars** — PR discussion (`i`) threads should show
+      comment author avatars.
+- [ ] 🟢 **Copy comment text** — copy action for comment bodies in Code threads
+      and Info drawer; fix text selection where comment markdown blocks
+      selection unintentionally.
+
+### Wave 4 — desktop shell
+
+- [ ] 🔴 **P13** — Custom title bar for Linux & Windows
+      (frameless + Quiet drag region + window controls).
+- [ ] 🟡 **P14** — Responsive / small-window / zoomed
+      layout (900 px min, PR header first).
+
+### Wave 5 — bigger bets
+
+- [ ] 🔴 **P15** — File tree: folders, indentation,
+      collapse (needs decision: replace flat list vs toggle).
+- [ ] 🟡 **P16** — Faster inbox via conditional polling
+      (ETag/304 → ~15 s interval); optional activity-aware detail refresh (see
+      also §7 GitHub notifications gate).
+- [ ] 🔴 **P17** — Apply suggestion as commit (GitLab
+      native first; GitHub contents-API path second — needs product decision).
+- [ ] 🟢 **P18** — Info drawer wide mode (`shift+i` while
+      open).
+
+### Anytime — hygiene & design
+
+- [ ] 🟢 **P19** — Rust line-comment sweep (~25 `//` in
+      `src-tauri/src/`).
+- [ ] 🟡 **P20** — Rich text editor design polish
+      (composer + info-drawer form; visual-only).
+- [ ] ⏸ **P21** — Multi-line selection box via drag
+      (defer; improve gutter-drag discoverability instead).
+- [ ] 🟢 **Rust tests — split into files** — break up large inline `#[cfg(test)]`
+      modules into separate test files where it aids navigation.
+- [x] **Split-pr skill — PR evidence in description** — skill should attach
+      Playwright screenshots / UI evidence to the PR body, not just local
+      artifacts.
+
+### Keyboard, focus & composer UX
+
+- [ ] 🟡 **`Tab` cycles files** — `Tab` should move to the next/previous changed
+      file unless a focused control captures it; today it opens comment reply in
+      some contexts. Reconcile with § layout Code ↔ Info (`Tab`) — may need
+      `shift+Tab` or a different Info toggle once file cycling ships.
+- [ ] 🟡 **Focus comment threads from keyboard** — arrow keys and `f`/`g` should
+      be able to focus a comment thread; focused thread activates the reply box
+      and shows reply/resolve hints (same as hover). `f`/`g` must not skip the
+      inline comment composer when it is open.
+- [ ] 🟡 **Composer: suggestions** — tab completion inside suggestion blocks,
+      syntax highlighting for suggestion fences; pairs with P04 hotkey and P20
+      polish.
+- [ ] 🟡 **Comment-now vs add-to-review UX** — remember last choice between
+      "comment now" and "add to review", or replace tabs with two explicit
+      buttons if that reads clearer.
+- [ ] 🟡 **Hover cursors** — cursor should change over interactive regions
+      (gutter, threads, links); audit against editor-like affordances elsewhere
+      in the app.
+- [ ] 🟡 **Reply in Info tab** — thread reply from the info drawer, not just
+      read-only PR-level comments there today.
+
+### Inbox & activity semantics
+
+- [ ] 🟡 **Own mutations shouldn't re-activate inbox** — commenting or submitting
+      a review bumps the PR in the inbox as if new external activity arrived;
+      suppress or de-prioritize self-authored updates.
+
+### Tooling, observability & investigation
+
+- [ ] 🟡 **Sentry** — error reporting for production builds (§11b crash reporting).
+- [ ] 🟡 **PR validity skill** — agent skill to check PR quality: commenting
+      patterns, `useEffect` usage, shadcn usage, split-pr gate compliance.
+- [ ] ⏸ **Whole-repo context index** — investigate local code index for search /
+      navigation / future AI features; aligns with §9 repo snapshot layers 2–3
+      (ripgrep search now, tree-sitter symbols later — no embeddings/LLM unless
+      users ask).
+- [ ] ⏸ **File/code autocomplete in comments** — `@file` / path completion in
+      the composer; depends on §9 snapshot or live blob access.
 
 ---
 
@@ -429,8 +670,10 @@ link interception · Universal Links.
 ### After five friends use it for a week
 
 8. shadcn Phase 1 · code-first layout · Info tab
-9. **Listen** — if *"GitHub links"* comes up → Stage 2 extension
-10. If still painful → Stage 3 interception
+9. **Repo snapshot layer 1** (§9) — invisible infra, safe to build while
+   friends test; layers 2–3 gated on their `shift+v` / search usage
+10. **Listen** — if *"GitHub links"* comes up → Stage 2 extension
+11. If still painful → Stage 3 interception
 
 ### Explicitly do not build before user feedback
 
@@ -455,3 +698,6 @@ link interception · Universal Links.
 
 - **Subscribed repos**: watch chosen repositories (not just PRs involving you) —
   a fifth inbox source, likely per-account repo picker + polling. Shape TBD.
+- **Watch repos spam** — `setWatchedRepos` fires per toggle with no debounce or
+  in-flight guard (unlike viewed-map persist). Debounce or coalesce rapid
+  watch/unwatch in the repos dialog.

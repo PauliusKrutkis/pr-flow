@@ -208,9 +208,9 @@ function PrSearchContent({
 
   useEffect(() => {
     listRef.current
-      ?.querySelector('[data-active="true"]')
+      ?.querySelector(`[data-index="${sel}"]`)
       ?.scrollIntoView({ block: "nearest" });
-  }, []);
+  }, [sel]);
 
   const choose = (it: Item) => {
     if (it.kind === "line" && it.anchor !== null) {
@@ -228,6 +228,11 @@ function PrSearchContent({
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setSel((s) => Math.max(s - 1, 0));
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      setSel((s) =>
+        e.shiftKey ? Math.max(s - 1, 0) : Math.min(s + 1, items.length - 1)
+      );
     } else if (e.key === "Enter") {
       e.preventDefault();
       const it = items[sel];

@@ -39,6 +39,98 @@ test("resolve collapses the thread; expanding offers unresolve", async ({
   ).toBeVisible();
 });
 
+test("z expands and collapses the active resolved thread", async ({ page }) => {
+  const thread = page.locator('[data-comment-root="100"]');
+  await thread.hover();
+  await page.keyboard.press("x");
+  const collapsed = page.locator(".qf-thread-collapsed");
+  await expect(collapsed).toBeVisible();
+
+  await collapsed.hover();
+  await page.keyboard.press("z");
+  await expect(page.locator(".qf-thread-collapsed")).toHaveCount(0);
+  await expect(thread.getByText("Is this constant right?")).toBeVisible();
+
+  await thread.hover();
+  await page.keyboard.press("z");
+  await expect(page.locator(".qf-thread-collapsed")).toBeVisible();
+});
+
+test("z collapses an open (unresolved) thread to a one-line row", async ({
+  page,
+}) => {
+  const thread = page.locator('[data-comment-root="100"]');
+  await expect(thread.getByText("Is this constant right?")).toBeVisible();
+
+  await thread.hover();
+  await page.keyboard.press("z");
+  const collapsed = page.locator(".qf-thread-collapsed");
+  await expect(collapsed).toBeVisible();
+  await expect(collapsed).not.toContainText("Resolved");
+  await expect(collapsed).toContainText("Is this constant right?");
+
+  await collapsed.click();
+  await expect(page.locator(".qf-thread-collapsed")).toHaveCount(0);
+  await expect(thread.getByText("Is this constant right?")).toBeVisible();
+});
+
+test("the corner fold control collapses an open thread with the mouse", async ({
+  page,
+}) => {
+  const thread = page.locator('[data-comment-root="100"]');
+  await thread.hover();
+  await thread.getByRole("button", { name: "Collapse thread" }).click();
+  await expect(page.locator(".qf-thread-collapsed")).toBeVisible();
+});
+
+test("the collapsed resolved row unresolves from its own Unresolve button", async ({
+  page,
+}) => {
+  const thread = page.locator('[data-comment-root="100"]');
+  await thread.hover();
+  await thread.getByRole("button", { exact: true, name: "Resolve" }).click();
+  const collapsed = page.locator(".qf-thread-collapsed");
+  await expect(collapsed).toBeVisible();
+  await expect(collapsed).toContainText("Resolved");
+
+  await collapsed.getByRole("button", { name: "Unresolve" }).click();
+  await expect(page.locator(".qf-thread-collapsed")).toHaveCount(0);
+  await expect(
+    thread.getByRole("button", { exact: true, name: "Resolve" })
+  ).toBeVisible();
+});
+
+test("unresolving always re-expands, even after a manual collapse", async ({
+  page,
+}) => {
+  const thread = page.locator('[data-comment-root="100"]');
+  await thread.hover();
+  await page.keyboard.press("z");
+  const collapsed = page.locator(".qf-thread-collapsed");
+  await expect(collapsed).toBeVisible();
+
+  await collapsed.hover();
+  await page.keyboard.press("x");
+  await expect(collapsed).toContainText("Resolved");
+
+  await collapsed.hover();
+  await page.keyboard.press("x");
+  await expect(page.locator(".qf-thread-collapsed")).toHaveCount(0);
+  await expect(thread.getByText("Is this constant right?")).toBeVisible();
+});
+
+test("expanding a thread never opens the reply composer", async ({ page }) => {
+  const thread = page.locator('[data-comment-root="100"]');
+  await thread.hover();
+  await page.keyboard.press("z");
+  const collapsed = page.locator(".qf-thread-collapsed");
+  await expect(collapsed).toBeVisible();
+  await collapsed.hover();
+  await page.keyboard.press("z");
+  await expect(thread.getByText("Is this constant right?")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Reply…" })).toHaveCount(0);
+});
+
 test("r on a hovered thread opens its reply composer", async ({ page }) => {
   const thread = page.locator('[data-comment-root="100"]');
   await thread.hover();
@@ -97,7 +189,7 @@ test("]c focuses a thread, so x resolves it without hovering", async ({
   await expect(page.locator(".qf-thread-collapsed")).toBeVisible();
 });
 
-test("hovering a thread fades in the r/x hotkey hints on its actions", async ({
+test("hovering a thread fades in the r/x action hints and the z fold hint", async ({
   page,
 }) => {
   const thread = page.locator('[data-comment-root="100"]');
@@ -109,6 +201,12 @@ test("hovering a thread fades in the r/x hotkey hints on its actions", async ({
     "R",
     "X",
   ]);
+  await expect(thread.locator(".qf-thread-fold")).toContainText("Collapse");
+  await expect(thread.locator(".qf-thread-fold .q-kbd")).toHaveText("Z");
+  await expect(thread.locator(".qf-thread-fold .qf-key-hint")).toHaveCSS(
+    "opacity",
+    "1"
+  );
 });
 
 test("suggestion fences render as a card; copy puts the lines on the clipboard", async ({

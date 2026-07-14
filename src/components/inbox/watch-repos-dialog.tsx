@@ -211,10 +211,13 @@ function WatchReposDialogContent({ onClose }: { onClose: () => void }) {
   }, []);
 
   useEffect(() => {
+    if (armed === null) {
+      return;
+    }
     listRef.current
       ?.querySelector('[data-armed="true"]')
       ?.scrollIntoView({ block: "nearest" });
-  }, []);
+  }, [armed]);
 
   useEffect(() => {
     if (!searchActive) {

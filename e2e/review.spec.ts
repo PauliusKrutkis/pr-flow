@@ -1,4 +1,5 @@
 import { setupApp } from "./bridge.ts";
+import { DETAIL_NO_CI } from "./fixtures.ts";
 import { expect, test } from "./test.ts";
 
 const SUBMIT_REVIEW = /Submit review/;
@@ -6,6 +7,8 @@ const COPY_FILE_PATH = /Copy file path/;
 const COPY_PR_LINK = /Copy PR link/;
 const REVIEW_REQUESTS = /Review requests/;
 const QF_ROW_FLASH = /qf-row-flash/;
+const QF_FILE_ACTIVE = /qf-file-active/;
+const QF_DRAWER_WIDE = /qf-drawer-wide/;
 
 test.beforeEach(async ({ page }) => {
   await setupApp(page);
@@ -36,6 +39,24 @@ test("j moves the line cursor; sidebar follows the cursor's file", async ({
   await expect(
     page.locator(".js-comment").getByText("Is this constant right?")
   ).toBeVisible();
+});
+
+test("f and g fast-move the cursor without scrolling when still in view", async ({
+  page,
+}) => {
+  const active = page.locator(".qf-row-active");
+  const scrollHost = page.locator(".qf-scrollhost");
+
+  await page.keyboard.press("j");
+  const anchor0 = await active.getAttribute("data-anchor");
+  const scroll0 = await scrollHost.evaluate((el) => el.scrollTop);
+
+  await page.keyboard.press("f");
+  await expect(active).not.toHaveAttribute("data-anchor", anchor0 ?? "");
+  expect(await scrollHost.evaluate((el) => el.scrollTop)).toBe(scroll0);
+
+  await page.keyboard.press("g");
+  await expect(active).toHaveAttribute("data-anchor", anchor0 ?? "");
 });
 
 test("c opens the composer; adding batches a pending card", async ({
@@ -203,7 +224,7 @@ test("resume: reopening paints the spot you left — no visible jump after", asy
   const after = await measure();
   expect(after).not.toBeNull();
   expect(before).not.toBeNull();
-  expect(Math.abs(after - before)).toBeLessThan(40);
+  expect(Math.abs((after as number) - (before as number))).toBeLessThan(40);
   await page.waitForTimeout(700);
   const settled = await measure();
   expect(Math.abs((settled as number) - (after as number))).toBeLessThan(24);
@@ -289,6 +310,46 @@ test("info drawer: i opens with the conversation, esc closes drawer first", asyn
   await expect(
     page.getByRole("heading", { name: "Add fuzzy matching to search" })
   ).toBeVisible();
+});
+
+test("shift+i widens the drawer; the head button and Esc still work", async ({
+  page,
+}) => {
+  const drawer = page.locator(".qf-drawer");
+  await page.keyboard.press("i");
+  await expect(drawer).toHaveAttribute("aria-hidden", "false");
+  await expect(drawer).not.toHaveClass(QF_DRAWER_WIDE);
+
+  await page.keyboard.press("Shift+i");
+  await expect(drawer).toHaveClass(QF_DRAWER_WIDE);
+
+  await page.getByRole("button", { name: "Narrow panel" }).click();
+  await expect(drawer).not.toHaveClass(QF_DRAWER_WIDE);
+
+  await page.keyboard.press("Shift+i");
+  await expect(drawer).toHaveClass(QF_DRAWER_WIDE);
+  await page.keyboard.press("Escape");
+  await expect(drawer).toHaveAttribute("aria-hidden", "true");
+});
+
+test("shift+i from closed opens without toggling width", async ({ page }) => {
+  const drawer = page.locator(".qf-drawer");
+  await page.keyboard.press("Shift+i");
+  await expect(drawer).toHaveAttribute("aria-hidden", "false");
+  await expect(drawer).not.toHaveClass(QF_DRAWER_WIDE);
+
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Shift+i");
+  await expect(drawer).toHaveAttribute("aria-hidden", "false");
+  await expect(drawer).not.toHaveClass(QF_DRAWER_WIDE);
+
+  await page.keyboard.press("Shift+i");
+  await expect(drawer).toHaveClass(QF_DRAWER_WIDE);
+
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Shift+i");
+  await expect(drawer).toHaveAttribute("aria-hidden", "false");
+  await expect(drawer).toHaveClass(QF_DRAWER_WIDE);
 });
 
 test("y and mod+shift+c copy with toast confirmations", async ({ page }) => {
@@ -395,6 +456,22 @@ test("after esc-closing from the composer, i reopens the drawer", async ({
   );
 });
 
+test("clicking a sidebar file blurs it so no focus ring lingers after r/t", async ({
+  page,
+}) => {
+  const file2 = page.locator('.qf-file[data-file-index="2"]');
+  await file2.click();
+  await expect(file2).toHaveClass(QF_FILE_ACTIVE);
+  await expect(page.locator(".qf-file:focus")).toHaveCount(0);
+
+  await page.keyboard.press("t");
+  await expect(page.locator('.qf-file[data-file-index="1"]')).toHaveClass(
+    QF_FILE_ACTIVE
+  );
+  await expect(file2).not.toHaveClass(QF_FILE_ACTIVE);
+  await expect(page.locator(".qf-file:focus")).toHaveCount(0);
+});
+
 test("comment posting is optimistic even when the network hangs", async ({
   page,
 }) => {
@@ -411,4 +488,29 @@ test("comment posting is optimistic even when the network hangs", async ({
     page.locator(".qf-convo").getByText("Ship it when green")
   ).toBeVisible({ timeout: 1000 });
   await expect(box).toHaveText("");
+});
+
+test("the header shows an approvals verdict with the reviewer's face", async ({
+  page,
+}) => {
+  const pill = page.locator(".qf-verdict-approved");
+  await expect(pill).toBeVisible();
+  await expect(pill).toHaveAttribute("title", "Approved · dave");
+  await expect(pill.locator(".q-avatar")).toHaveCount(1);
+  await expect(page.locator(".qf-verdict-changes")).toHaveCount(0);
+});
+
+test("the header shows a failing CI pill with the failed count", async ({
+  page,
+}) => {
+  const pill = page.locator(".qf-ci-failure");
+  await expect(pill).toBeVisible();
+  await expect(pill).toHaveAttribute("title", "Checks failing · 4 checks");
+  await expect(pill.locator(".qf-ci-count")).toHaveText("1/4");
+});
+
+test("a repo without CI shows no pill", async ({ page }) => {
+  await setupApp(page, { detailByCall: [DETAIL_NO_CI] });
+  await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
+  await expect(page.locator(".qf-ci")).toHaveCount(0);
 });
