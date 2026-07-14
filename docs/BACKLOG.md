@@ -475,7 +475,7 @@ worth it after validation.
 
 - [~] 🔴 Before external users — `tauri-plugin-updater` + CI releases.
       *Plugin + in-app prompt scaffolded; real signing key, feed & CI signing remain (see README "Auto-updates").*
-- [ ] ⏸ Crash reporting.
+- [ ] ⏸ Crash reporting — see [July 2026 batch · Sentry](#july-2026-batch).
 
 ### 11c. Commercial launch
 
@@ -507,6 +507,143 @@ have used the app for one week and retention is plausible.
 
 **Rejected:** deterministic license keys (stateless, simple engineering, ugly UX —
 conflicts with zero-friction product goal).
+
+---
+
+## July 2026 batch
+
+> Ship via the [split-pr skill](../.claude/skills/split-pr/SKILL.md) — one intent
+> per PR, ~300-line soft budget, `pnpm check` / tests / knip green (+ e2e and UI
+> evidence for UI changes; `cargo test` when `src-tauri/` changes).
+
+### Wave 1 — bug fixes
+
+- [ ] 🟢 **P01** — GitHub OAuth on Windows opens Documents
+      folder instead of the browser (`tauri_plugin_opener::open_url`).
+- [ ] 🟢 **P02** — File-tree active/focus ring persists
+      after `r`/`t` when a file was mouse-clicked (blur on click; audit inbox rows).
+      *Also covers:* remove `qf-focusable` focus ring on file sidebar buttons.
+- [ ] 🟢 **P03** — Occurrence navigation blocked while find
+      (`mod+f`) is open — explicit handoff (select token → close find → start
+      occurrences).
+- [ ] 🟢 **Next occurrence scroll** — stepping `n`/`p` in occurrence mode should
+      not scroll when the match is already fully visible.
+- [ ] 🟢 **Search pane height** — inbox search panel lost height; match the
+      `mod+k` command palette sizing.
+- [ ] 🟢 **GitHub org OAuth restrictions** — `[pr-flow] API error 403` when an org
+      (e.g. Decodo) enables OAuth App access restrictions; surface a clear
+      in-app message with the GitHub docs link and what the admin must allow.
+
+### Wave 2 — quick wins
+
+- [ ] 🟢 **P04** — Hotkey for insert suggestion
+      (`mod+shift+s` in composer).
+- [ ] 🟢 **P05** — Comment thread expand/collapse hotkey
+      (`z` on active thread).
+- [ ] 🟢 **P06** — Next/previous diff hunk keybind (`}` /
+      `{`).
+- [ ] 🟢 **P07** — Restore archived (`e`-archived) inbox
+      PRs (toggle view + `clearSeen`).
+- [ ] 🟢 **`e` skips viewed files** — when marking viewed + next, jump to the
+      next *unviewed* file instead of blindly advancing (next may already be
+      viewed).
+- [ ] 🟢 **Pending comment discard hotkey** — keyboard shortcut for discard;
+      improve discard button visibility (border/contrast is too subtle today).
+- [ ] 🟢 **Go to next/previous comment** — verify `]c` / `[c` coverage or add a
+      simpler binding if the sequence feels undiscoverable.
+
+### Wave 3 — review surfaces
+
+- [ ] 🟡 **P08** — Show approvals / changes-requested in
+      the review header (data already on detail payload).
+- [ ] 🟡 **P09** — Pipelines / CI status pill in review
+      header (+ per-check list in drawer later).
+- [ ] 🔴 **P10** — Edit own comments (inline review
+      comments first, PR-level in info drawer second).
+- [ ] 🟡 **P11** — View full file at head SHA (`shift+v`
+      modal first; hunk context expansion later — ties to §9 snapshot layer 1).
+- [ ] 🟡 **P12** — "What's new" card on first launch after
+      an update (release notes via Rust command).
+- [ ] 🟢 **Distinct file header** — hard to tell when starting a new file; make
+      the file header row more visually distinct in the diff list.
+- [ ] 🟢 **Info drawer author avatars** — PR discussion (`i`) threads should show
+      comment author avatars.
+- [ ] 🟢 **Copy comment text** — copy action for comment bodies in Code threads
+      and Info drawer; fix text selection where comment markdown blocks
+      selection unintentionally.
+
+### Wave 4 — desktop shell
+
+- [ ] 🔴 **P13** — Custom title bar for Linux & Windows
+      (frameless + Quiet drag region + window controls).
+- [ ] 🟡 **P14** — Responsive / small-window / zoomed
+      layout (900 px min, PR header first).
+
+### Wave 5 — bigger bets
+
+- [ ] 🔴 **P15** — File tree: folders, indentation,
+      collapse (needs decision: replace flat list vs toggle).
+- [ ] 🟡 **P16** — Faster inbox via conditional polling
+      (ETag/304 → ~15 s interval); optional activity-aware detail refresh (see
+      also §7 GitHub notifications gate).
+- [ ] 🔴 **P17** — Apply suggestion as commit (GitLab
+      native first; GitHub contents-API path second — needs product decision).
+- [ ] 🟢 **P18** — Info drawer wide mode (`shift+i` while
+      open).
+
+### Anytime — hygiene & design
+
+- [ ] 🟢 **P19** — Rust line-comment sweep (~25 `//` in
+      `src-tauri/src/`).
+- [ ] 🟡 **P20** — Rich text editor design polish
+      (composer + info-drawer form; visual-only).
+- [ ] ⏸ **P21** — Multi-line selection box via drag
+      (defer; improve gutter-drag discoverability instead).
+- [ ] 🟢 **Rust tests — split into files** — break up large inline `#[cfg(test)]`
+      modules into separate test files where it aids navigation.
+- [x] **Split-pr skill — PR evidence in description** — skill should attach
+      Playwright screenshots / UI evidence to the PR body, not just local
+      artifacts.
+
+### Keyboard, focus & composer UX
+
+- [ ] 🟡 **`Tab` cycles files** — `Tab` should move to the next/previous changed
+      file unless a focused control captures it; today it opens comment reply in
+      some contexts. Reconcile with § layout Code ↔ Info (`Tab`) — may need
+      `shift+Tab` or a different Info toggle once file cycling ships.
+- [ ] 🟡 **Focus comment threads from keyboard** — arrow keys and `f`/`g` should
+      be able to focus a comment thread; focused thread activates the reply box
+      and shows reply/resolve hints (same as hover). `f`/`g` must not skip the
+      inline comment composer when it is open.
+- [ ] 🟡 **Composer: suggestions** — tab completion inside suggestion blocks,
+      syntax highlighting for suggestion fences; pairs with P04 hotkey and P20
+      polish.
+- [ ] 🟡 **Comment-now vs add-to-review UX** — remember last choice between
+      "comment now" and "add to review", or replace tabs with two explicit
+      buttons if that reads clearer.
+- [ ] 🟡 **Hover cursors** — cursor should change over interactive regions
+      (gutter, threads, links); audit against editor-like affordances elsewhere
+      in the app.
+- [ ] 🟡 **Reply in Info tab** — thread reply from the info drawer, not just
+      read-only PR-level comments there today.
+
+### Inbox & activity semantics
+
+- [ ] 🟡 **Own mutations shouldn't re-activate inbox** — commenting or submitting
+      a review bumps the PR in the inbox as if new external activity arrived;
+      suppress or de-prioritize self-authored updates.
+
+### Tooling, observability & investigation
+
+- [ ] 🟡 **Sentry** — error reporting for production builds (§11b crash reporting).
+- [ ] 🟡 **PR validity skill** — agent skill to check PR quality: commenting
+      patterns, `useEffect` usage, shadcn usage, split-pr gate compliance.
+- [ ] ⏸ **Whole-repo context index** — investigate local code index for search /
+      navigation / future AI features; aligns with §9 repo snapshot layers 2–3
+      (ripgrep search now, tree-sitter symbols later — no embeddings/LLM unless
+      users ask).
+- [ ] ⏸ **File/code autocomplete in comments** — `@file` / path completion in
+      the composer; depends on §9 snapshot or live blob access.
 
 ---
 
