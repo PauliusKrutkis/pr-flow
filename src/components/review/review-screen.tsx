@@ -29,6 +29,8 @@ import {
 import {
   useEffect,
   useLayoutEffect,
+  useMemo,
+  useReducer,
   useRef,
   useState,
   useSyncExternalStore,
@@ -65,7 +67,10 @@ import {
   getReviewMemory,
   updateReviewMemory,
 } from "../../lib/review-memory.ts";
-import { fingerprintFile } from "../../lib/viewed-fingerprint.ts";
+import {
+  fingerprintFile,
+  reconcileViewedEntry,
+} from "../../lib/viewed-fingerprint.ts";
 import { useAppStore } from "../../store/app-store.ts";
 import type {
   ChangedFile,
@@ -787,7 +792,7 @@ interface ReviewListCallbackArgs {
     typeof useCommentMutations
   >["requestResolveThread"];
   setActiveIndex: React.Dispatch<React.SetStateAction<number>>;
-  setChangedSinceViewed: React.Dispatch<React.SetStateAction<Set<string>>>;
+  dismissReconcileHighlight: (filename: string) => void;
   setCollapsed: React.Dispatch<
     React.SetStateAction<ReadonlyMap<number, ReadonlySet<number>>>
   >;
@@ -1004,12 +1009,12 @@ function useReviewListCallbacks(
       args.addPendingStore(args.keyValue, c);
     },
     onCloseBox(fileIndex: number, anchor: string) {
+      args.setSelection(null);
       args.setOpenBoxes((prev) => {
         const next = new Map(prev);
         next.delete(fileAnchorKey(fileIndex, anchor));
         return next;
       });
-      args.setSelection(null);
     },
     onCopyPath(fileIndex: number) {
       reviewListOnCopyPath(args, fileIndex);
@@ -1086,14 +1091,7 @@ function useReviewListCallbacks(
         f.filename,
         fingerprintFile(f, args.headShaRef.current)
       );
-      args.setChangedSinceViewed((prev) => {
-        if (!prev.has(f.filename)) {
-          return prev;
-        }
-        const next = new Set(prev);
-        next.delete(f.filename);
-        return next;
-      });
+      args.dismissReconcileHighlight(f.filename);
     },
   });
 
@@ -1875,6 +1873,62 @@ function advanceToNextReview(
   }
 }
 
+interface FindUi {
+  caseSensitive: boolean;
+  focusSeq: number;
+  index: number | null;
+  open: boolean;
+  query: string;
+  seed: number | null;
+}
+
+type FindUiAction =
+  | { type: "close" }
+  | { focusSeq: number; type: "focus" }
+  | { index: number; type: "step" }
+  | { q: string; seed: number | null; type: "query" }
+  | { seed: number | null; selected?: string; type: "open" }
+  | { seed: number | null; type: "toggleCase" };
+
+const INITIAL_FIND_UI: FindUi = {
+  caseSensitive: false,
+  focusSeq: 0,
+  index: null,
+  open: false,
+  query: "",
+  seed: null,
+};
+
+function findUiReducer(state: FindUi, action: FindUiAction): FindUi {
+  switch (action.type) {
+    case "close":
+      return { ...state, open: false };
+    case "focus":
+      return { ...state, focusSeq: action.focusSeq };
+    case "open":
+      return {
+        ...state,
+        index: null,
+        open: true,
+        query: action.selected ?? state.query,
+        seed: action.seed,
+      };
+    case "query":
+      return { ...state, index: null, query: action.q, seed: action.seed };
+    case "step":
+      return { ...state, index: action.index };
+    case "toggleCase":
+      return {
+        ...state,
+        caseSensitive: !state.caseSensitive,
+        index: null,
+        seed: action.seed,
+      };
+    default:
+      return state;
+  }
+}
+
 function useReviewFind(args: {
   files: ChangedFile[];
   listRef: React.RefObject<ReviewListHandle | null>;
@@ -1886,12 +1940,15 @@ function useReviewFind(args: {
   ) => void;
 }) {
   const { files, listRef, model, selectLine } = args;
-  const [findOpen, setFindOpen] = useState(false);
-  const [findQuery, setFindQuery] = useState("");
-  const [findCase, setFindCase] = useState(false);
-  const [findIndex, setFindIndex] = useState<number | null>(null);
-  const [findSeed, setFindSeed] = useState<number | null>(null);
-  const [findFocusSeq, setFindFocusSeq] = useState(0);
+  const [findUi, dispatchFindUi] = useReducer(findUiReducer, INITIAL_FIND_UI);
+  const {
+    caseSensitive: findCase,
+    focusSeq: findFocusSeq,
+    index: findIndex,
+    open: findOpen,
+    query: findQuery,
+    seed: findSeed,
+  } = findUi;
   const findJumpedRef = useRef(false);
   const findOpenRef = useLatest(findOpen);
 
@@ -1907,36 +1964,38 @@ function useReviewFind(args: {
   const findCurrent = currentMatchAt(findMatches, findSafeIndex);
 
   const changeFindQuery = (q: string) => {
-    setFindSeed(listRef.current?.firstVisibleRowItem() ?? null);
-    setFindQuery(q);
-    setFindIndex(null);
+    dispatchFindUi({
+      q,
+      seed: listRef.current?.firstVisibleRowItem() ?? null,
+      type: "query",
+    });
     findJumpedRef.current = false;
   };
 
   const toggleFindCase = () => {
-    setFindSeed(listRef.current?.firstVisibleRowItem() ?? null);
-    setFindCase((c) => !c);
-    setFindIndex(null);
+    dispatchFindUi({
+      seed: listRef.current?.firstVisibleRowItem() ?? null,
+      type: "toggleCase",
+    });
     findJumpedRef.current = false;
   };
 
   const openFind = () => {
     if (!findOpenRef.current) {
-      setFindSeed(listRef.current?.firstVisibleRowItem() ?? null);
-      setFindIndex(null);
-      findJumpedRef.current = false;
-      setFindOpen(true);
       const selected =
         window.getSelection()?.toString().split("\n")[0].trim() ?? "";
-      if (selected) {
-        changeFindQuery(selected);
-      }
+      dispatchFindUi({
+        seed: listRef.current?.firstVisibleRowItem() ?? null,
+        selected: selected || undefined,
+        type: "open",
+      });
+      findJumpedRef.current = false;
     }
-    setFindFocusSeq((s) => s + 1);
+    dispatchFindUi({ focusSeq: findFocusSeq + 1, type: "focus" });
   };
 
   const closeFind = () => {
-    setFindOpen(false);
+    dispatchFindUi({ type: "close" });
   };
   const closeFindRef = useLatest(closeFind);
 
@@ -1949,7 +2008,7 @@ function useReviewFind(args: {
       ? (findSafeIndex + dir + n) % n
       : findSafeIndex;
     findJumpedRef.current = true;
-    setFindIndex(next);
+    dispatchFindUi({ index: next, type: "step" });
     const m = findMatches[next];
     selectLine(m.fileIndex, m.anchor);
   };
@@ -2222,11 +2281,11 @@ function useReviewSubmitActions(args: {
 }
 
 export function ReviewScreen({ routeKey }: ReviewScreenProps) {
-  return useReviewScreenCore(routeKey);
+  return <ReviewScreenInner routeKey={routeKey} />;
 }
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: TODO orchestrates many extracted sub-hooks; further splitting risks hook-order bugs
-function useReviewScreenCore(routeKey: string): React.ReactElement {
+function ReviewScreenInner({ routeKey }: { routeKey: string }) {
   const { name: repo, number, owner } = parsePrKey(routeKey);
   const keyValue = routeKey;
 
@@ -2267,7 +2326,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
   const [commentIndex, setCommentIndex] = useState(0);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [prSearch, setPrSearch] = useState<null | "files" | "text">(null);
-  const [changedSinceViewed, setChangedSinceViewed] = useState<Set<string>>(
+  const [reconcileDismissed, setReconcileDismissed] = useState<Set<string>>(
     () => new Set()
   );
   const [replyReq, setReplyReq] = useState<{
@@ -2338,16 +2397,37 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
   const clampedIndex = Math.min(activeIndex, Math.max(fileCount - 1, 0));
   const activeFile = files[clampedIndex];
 
-  const toggleViewedWithFp = (f: ChangedFile) => {
-    toggleViewed(keyValue, f.filename, fingerprintFile(f, headShaRef.current));
-    setChangedSinceViewed((prev) => {
-      if (!prev.has(f.filename)) {
+  const changedSinceViewed = useMemo(() => {
+    if (!pr || files.length === 0) {
+      return new Set<string>();
+    }
+    const preview = reconcileViewedEntry(viewedFiles, files, pr.headSha);
+    if (preview.unviewed.length === 0) {
+      return new Set<string>();
+    }
+    const next = new Set<string>();
+    for (const filename of preview.unviewed) {
+      if (!reconcileDismissed.has(filename)) {
+        next.add(filename);
+      }
+    }
+    return next;
+  }, [files, pr, reconcileDismissed, viewedFiles]);
+
+  const dismissReconcileHighlight = (filename: string) => {
+    setReconcileDismissed((prev) => {
+      if (prev.has(filename)) {
         return prev;
       }
       const next = new Set(prev);
-      next.delete(f.filename);
+      next.add(filename);
       return next;
     });
+  };
+
+  const toggleViewedWithFp = (f: ChangedFile) => {
+    toggleViewed(keyValue, f.filename, fingerprintFile(f, headShaRef.current));
+    dismissReconcileHighlight(f.filename);
   };
 
   const persistFileIndex = (index: number) => {
@@ -2426,22 +2506,26 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     const m = modelRef.current;
     const key = fileAnchorKey(fileIndex, anchor);
     usePerfStore.getState().markFileStart();
-    setActiveIndex(fileIndex);
     activeIndexRef.current = fileIndex;
     persistFileIndex(fileIndex);
-    setCommentIndex(0);
-    if (!(findOpenRef.current || opts.keepOccurrences)) {
-      setOccSpec(null);
-    }
     keyboardHoldRef.current = true;
-    setInputMode("keyboard");
-    setCursor({ anchor, fileIndex });
-    setFlashKey(key);
     if (flashTimerRef.current) {
       clearTimeout(flashTimerRef.current);
     }
     flashTimerRef.current = setTimeout(() => setFlashKey(null), 1600);
     const itemIndex = m.anchorItem.get(key);
+    setActiveIndex((cur) => (cur === fileIndex ? cur : fileIndex));
+    setCommentIndex((cur) => (cur === 0 ? cur : 0));
+    if (!(findOpenRef.current || opts.keepOccurrences)) {
+      setOccSpec((cur) => (cur === null ? cur : null));
+    }
+    setInputMode((mode) => (mode === "keyboard" ? mode : "keyboard"));
+    setCursor((cur) =>
+      cur?.fileIndex === fileIndex && cur.anchor === anchor
+        ? cur
+        : { anchor, fileIndex }
+    );
+    setFlashKey((cur) => (cur === key ? cur : key));
     if (itemIndex !== undefined) {
       listRef.current?.centerItem(itemIndex);
     }
@@ -2463,14 +2547,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
 
   useReviewHeadShaSync(keyValue, pr);
   useInboxDetailNudge(keyValue, pr);
-  useViewedFileReconcile(
-    keyValue,
-    pr,
-    files,
-    reconcileViewed,
-    setChangedSinceViewed,
-    setToast
-  );
+  useViewedFileReconcile(keyValue, pr, files, reconcileViewed, setToast);
 
   const resumeCorrectedRef = useRef(false);
   useReviewResumeScroll({
@@ -2553,7 +2630,7 @@ function useReviewScreenCore(routeKey: string): React.ReactElement {
     reply,
     requestResolveThread,
     setActiveIndex,
-    setChangedSinceViewed,
+    dismissReconcileHighlight,
     setCollapsed,
     setCopiedPathIndex,
     setCursor,

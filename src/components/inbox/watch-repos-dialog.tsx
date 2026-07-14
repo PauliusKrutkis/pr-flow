@@ -146,22 +146,24 @@ function WatchReposDialogContent({ onClose }: { onClose: () => void }) {
     (searchResult?.forQuery !== trimmedInput || searchResult.searching);
   const repoSet = new Set(repos);
 
-  const persist = (next: string[]) => {
-    setOptimisticRepos(next);
+  const syncWatchedRepos = (updatedRepos: string[]) => {
     api
-      .setWatchedRepos(next)
+      .setWatchedRepos(updatedRepos)
       .then(() => {
-        queryClient.setQueryData(queryKeys.watchedRepos, next);
+        queryClient.setQueryData(queryKeys.watchedRepos, updatedRepos);
         queryClient.invalidateQueries({ queryKey: queryKeys.subscribed });
         setOptimisticRepos(null);
       })
-      .catch(() => setOptimisticRepos(null));
+      .catch(() => {
+        setOptimisticRepos(null);
+      });
   };
 
   const stopWatching = (repo: string) => {
     const next = repos.filter((x) => x !== repo);
-    persist(next);
     setArmed((a) => nextArmedAfterRemove(a, next.length));
+    setOptimisticRepos(next);
+    syncWatchedRepos(next);
     inputRef.current?.focus();
   };
 
@@ -174,7 +176,9 @@ function WatchReposDialogContent({ onClose }: { onClose: () => void }) {
       return;
     }
     if (!repoSet.has(cleaned)) {
-      persist([...repos, cleaned]);
+      const next = [...repos, cleaned];
+      setOptimisticRepos(next);
+      syncWatchedRepos(next);
     }
     setInput("");
     setSearchResult(null);
