@@ -67,6 +67,7 @@ import {
   updateReviewMemory,
 } from "../../lib/review-memory.ts";
 import {
+  autoUnviewedKey,
   buildChangedSinceViewed,
   fingerprintFile,
   reconcileHighlightKey,
@@ -2402,6 +2403,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
   const reconcileViewed = useAppStore((s) => s.reconcileViewed);
 
   const viewed = useAppStore((s) => s.viewed);
+  const autoUnviewedByHead = useAppStore((s) => s.autoUnviewed);
 
   const pendingMap = useAppStore((s) => s.pendingComments);
   const pending = pendingMap[keyValue] ?? EMPTY_PENDING;
@@ -2424,12 +2426,17 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
   const clampedIndex = Math.min(activeIndex, Math.max(fileCount - 1, 0));
   const activeFile = files[clampedIndex];
 
+  const autoUnviewedForHead =
+    pr?.headSha === undefined
+      ? undefined
+      : autoUnviewedByHead[autoUnviewedKey(keyValue, pr.headSha)];
   const changedSinceViewed = buildChangedSinceViewed(
     keyValue,
     pr?.headSha,
     files,
     viewedFiles,
-    reconcileDismissed
+    reconcileDismissed,
+    autoUnviewedForHead
   );
 
   const dismissReconcileHighlight = (filename: string) => {

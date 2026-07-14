@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { api } from "../lib/api.ts";
 import { usePerfStore } from "../lib/perf.ts";
 import {
+  autoUnviewedKey,
   reconcileViewedEntry,
   UNKNOWN_FINGERPRINT,
   unviewedReconcileToast,
@@ -169,6 +170,7 @@ function saveTrackers(map: Record<string, string>) {
 interface AppState {
   accounts: AccountInfo[];
   activeAccountId: string | null;
+  autoUnviewed: Record<string, string[]>;
   addPendingComment: (
     prKey: string,
     c: {
@@ -249,6 +251,7 @@ interface AppToast {
 export const useAppStore = create<AppState>((set, get) => ({
   accounts: [],
   activeAccountId: null,
+  autoUnviewed: {},
   addPendingComment: (prKey, c) => {
     const id = `p${Date.now()}-${pendingIdCounter}`;
     pendingIdCounter += 1;
@@ -332,7 +335,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     const map = { ...get().viewed, [prKey]: res.entry };
     if (res.unviewed.length > 0) {
-      set({ toast: unviewedReconcileToast(res.unviewed), viewed: map });
+      const key = autoUnviewedKey(prKey, headSha);
+      const prev = get().autoUnviewed[key] ?? [];
+      const merged = Array.from(new Set([...prev, ...res.unviewed]));
+      set({
+        autoUnviewed: { ...get().autoUnviewed, [key]: merged },
+        toast: unviewedReconcileToast(res.unviewed),
+        viewed: map,
+      });
     } else {
       set({ viewed: map });
     }

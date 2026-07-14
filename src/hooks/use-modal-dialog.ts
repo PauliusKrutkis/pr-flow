@@ -1,11 +1,24 @@
 import { useEffect, useRef } from "react";
 import { useLatest } from "./use-latest.ts";
 
+function isBackdropPointer(
+  dialog: HTMLDialogElement,
+  event: { clientX: number; clientY: number }
+): boolean {
+  const rect = dialog.getBoundingClientRect();
+  return (
+    event.clientX < rect.left ||
+    event.clientX > rect.right ||
+    event.clientY < rect.top ||
+    event.clientY > rect.bottom
+  );
+}
+
 /**
  * Open a native `<dialog>` modally on mount and close it when the backdrop is
- * clicked. Backdrop clicks are drag-safe: the pointer must go down *and* up on
- * the dialog element itself (its ::backdrop), so a text selection that drags
- * out of the panel never dismisses it. There is no explicit close on unmount:
+ * clicked. Backdrop clicks are drag-safe: the pointer must go down *and* up
+ * outside the panel's border box, so a text selection that drags out of the
+ * panel never dismisses it. There is no explicit close on unmount:
  * React removes the element from the DOM, which the browser treats as closing
  * it (and releases the top layer). Calling `dialog.close()` ourselves would be
  * worse than useless — its `close` event is dispatched on a queued task, so
@@ -27,10 +40,10 @@ export function useModalDialog(onClose: () => void) {
 
     let downOnBackdrop = false;
     const onPointerDown = (e: PointerEvent) => {
-      downOnBackdrop = e.target === dialog;
+      downOnBackdrop = isBackdropPointer(dialog, e);
     };
     const onClick = (e: MouseEvent) => {
-      if (downOnBackdrop && e.target === dialog) {
+      if (downOnBackdrop && isBackdropPointer(dialog, e)) {
         onCloseRef.current();
       }
       downOnBackdrop = false;
