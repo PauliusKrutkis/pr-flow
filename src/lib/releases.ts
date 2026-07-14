@@ -1,16 +1,51 @@
 import type { ReleaseInfo } from "../types.ts";
 import { api } from "./api.ts";
 
+const CACHE_KEY = "pr-flow:releases";
+
+function readCache(): ReleaseInfo[] | undefined {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) {
+      return undefined;
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as ReleaseInfo[]) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeCache(releases: ReleaseInfo[]) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(releases));
+  } catch {
+    /* ignore quota / private-mode errors */
+  }
+}
+
 /**
  * One releases fetch serves both the what's-new card and the release-history
  * view: sharing the query options means React Query dedupes the network call.
- * `null` data = the fetch failed (offline, rate limit); callers stay quiet.
+ * The last good response is mirrored to localStorage and replayed as
+ * `initialData`, so a cold launch renders the timeline instantly (no spinner)
+ * while a silent background refetch pulls anything new. `null` data = the fetch
+ * failed with no cache to fall back on (first run, offline); callers stay quiet.
  */
 export const releasesQuery = {
-  queryFn: () => api.listReleases(),
+  initialData: readCache,
+  initialDataUpdatedAt: 0,
+  queryFn: async (): Promise<ReleaseInfo[] | null> => {
+    const fresh = await api.listReleases();
+    if (fresh) {
+      writeCache(fresh);
+      return fresh;
+    }
+    return readCache() ?? null;
+  },
   queryKey: ["releases"],
   refetchOnWindowFocus: false,
-  staleTime: Number.POSITIVE_INFINITY,
+  staleTime: 30 * 60 * 1000,
 };
 
 const LEADING_V = /^v/;

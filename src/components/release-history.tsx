@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { History, X } from "lucide-react";
+import { useEffect } from "react";
+import { useArmedRing } from "../hooks/use-armed-ring.ts";
 import { useModalDialog } from "../hooks/use-modal-dialog.ts";
 import { useHotkeys } from "../keyboard/use-hotkeys.ts";
 import { api } from "../lib/api.ts";
@@ -19,6 +21,8 @@ function formatDate(iso: string): string {
     year: "numeric",
   });
 }
+
+const ARM_ORDER: (null | "close")[] = [null, "close"];
 
 /**
  * Release history — every shipped version with its notes, newest first, on a
@@ -40,12 +44,41 @@ export function ReleaseHistory({
 
 function ReleaseHistoryContent({ onClose }: { onClose: () => void }) {
   const { dialogRef, onDialogCancel, onDialogClose } = useModalDialog(onClose);
+  const { armed, cycle } = useArmedRing(ARM_ORDER, null);
 
   useHotkeys(
     "release-history",
-    [{ description: "Close", hidden: true, keys: "esc", run: () => onClose() }],
+    [
+      {
+        description: "Previous action",
+        hidden: true,
+        keys: "shift+tab",
+        run: () => cycle(-1),
+      },
+      {
+        description: "Next action",
+        hidden: true,
+        keys: "tab",
+        run: () => cycle(1),
+      },
+      {
+        description: "Activate",
+        hidden: true,
+        keys: "enter",
+        run: () => {
+          if (armed === "close") {
+            onClose();
+          }
+        },
+      },
+      { description: "Close", hidden: true, keys: "esc", run: () => onClose() },
+    ],
     { enabled: true }
   );
+
+  useEffect(() => {
+    dialogRef.current?.focus();
+  }, [dialogRef]);
 
   const { data: releases } = useQuery(releasesQuery);
   const { data: version } = useQuery({
@@ -70,8 +103,10 @@ function ReleaseHistoryContent({ onClose }: { onClose: () => void }) {
         </h2>
         <button
           aria-label="Close"
-          className="qh-close q-focus"
+          className="qh-close"
+          data-armed={armed === "close"}
           onClick={onClose}
+          tabIndex={-1}
           type="button"
         >
           <X aria-hidden size={16} />
