@@ -577,8 +577,8 @@ conflicts with zero-friction product goal).
       (`composer-editor.tsx`), not `mod+shift+s`.
 - [x] 🟢 **P05** — Comment thread expand/collapse hotkey — **done**; `z` toggles
       the active thread (`review-screen.tsx`).
-- [ ] 🟢 **P06** — Next/previous diff hunk keybind (`}` /
-      `{`).
+- [x] 🟢 **P06** — Next/previous diff hunk keybind — **done** a different way:
+      `f` / `g` (Fast down/up) cover jumping through the diff.
 - [x] 🟢 **P07** — Restore archived (`e`-archived) inbox
       PRs — **done** (archived view toggle + restore).
 - [ ] 🟢 **`e` skips viewed files** — when marking viewed + next, jump to the
