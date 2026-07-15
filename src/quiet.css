@@ -1391,13 +1391,16 @@ dialog.q-dialog::backdrop {
 /* One sticky header per file group — react-virtuoso owns the stickiness (its
    grouped list pins the current group's header), so the class carries only
    the visuals. */
+/* The header is a raised bar so a new file reads as a clear break in the diff
+   plane below it — same surface as the sidebar/panels, lifted off the code
+   background it used to share, with a stronger top rule to mark the seam. */
 .dir-quiet .qf-fsec-head {
   display: flex;
   gap: 10px;
   align-items: center;
-  padding: 7px 16px;
-  background: var(--bg);
-  border-top: 1px solid var(--line);
+  padding: 8px 16px;
+  background: var(--surface-2);
+  border-top: 1px solid var(--line-2);
   border-bottom: 1px solid var(--line);
   /* the iris edge marks the file the keyboard is talking to */
   box-shadow: inset 2px 0 0 transparent;
@@ -1422,7 +1425,7 @@ dialog.q-dialog::backdrop {
   white-space: nowrap;
 }
 .dir-quiet .qf-fsec-base {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--fg);
 }
 /* The path doubles as a copy target: plain text at rest, underline on hover
