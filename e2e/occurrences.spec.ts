@@ -214,6 +214,26 @@ test("with find open, selecting a token hands off: find closes, occurrences take
   await expect(page.locator(".qf-row-active mark.qf-occ-mark")).toHaveCount(1);
 });
 
+test("stepping to an already-visible occurrence does not scroll", async ({
+  page,
+}) => {
+  // Both "return" matches in file 0 sit near the top, fully in view at once.
+  const { x, y } = await tokenCenter(page, 0, "return");
+  await page.mouse.move(x, y);
+  await page.waitForTimeout(100);
+  await page.mouse.click(x, y);
+  await expect(occMarks(page)).toHaveCount(2);
+
+  const scroller = page.getByTestId("review-scroller");
+  const before = await scroller.evaluate((el) => el.scrollTop);
+
+  await page.keyboard.press("n");
+  await expect(page.locator(".qf-row-active mark.qf-occ-mark")).toHaveCount(1);
+
+  const after = await scroller.evaluate((el) => el.scrollTop);
+  expect(after).toBe(before);
+});
+
 test("Esc goes straight to the inbox — occurrence marks don't consume it", async ({
   page,
 }) => {
