@@ -9,7 +9,6 @@ import {
 
 interface AddCommentBoxProps {
   autoFocus?: boolean;
-  /** Prefill for editing an existing comment (raw wire-format markdown). */
   initialMarkdown?: string;
   onCancel: () => void;
   onSecondary?: (body: string) => Promise<void> | void;

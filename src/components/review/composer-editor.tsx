@@ -18,13 +18,11 @@ import { Kbd } from "../ui/kbd.tsx";
 export interface ComposerEditorHandle {
   clear: () => void;
   focus: () => void;
-  /** The composed comment, serialized to the hosts' wire format. */
   getMarkdown: () => string;
 }
 
 interface ComposerEditorProps {
   autoFocus?: boolean;
-  /** Prefill for editing — the comment's raw wire-format markdown. */
   initialMarkdown?: string;
   onCancel: () => void;
   onEmptyChange: (empty: boolean) => void;
