@@ -3,6 +3,8 @@ import { expect, test } from "./test.ts";
 
 const REVIEW_REQUESTS = /Review requests/;
 const ASSIGNED = /Assigned/;
+const CREATED = /Created/;
+const INVOLVED = /Involved/;
 const WATCHING = /Watching/;
 const WATCH_A_REPOSITORY = /Watch a repository/;
 const ARCHIVED = /Archived/;
@@ -34,12 +36,39 @@ test("j/k move the selection; the reading pane follows", async ({ page }) => {
   await expect(options.nth(0)).toHaveAttribute("aria-selected", "true");
 });
 
-test("tab cycles tabs; digits jump directly", async ({ page }) => {
-  await page.keyboard.press("Tab");
+test("empty tabs are hidden; digits still reach them", async ({ page }) => {
+  // Default fixture: only Review requests (3) and Created (1) hold PRs;
+  // Assigned, Involved and Watching are empty and stay out of the bar.
+  await expect(
+    page.getByRole("button", { name: REVIEW_REQUESTS })
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: CREATED })).toBeVisible();
+  await expect(page.getByRole("button", { name: ASSIGNED })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: INVOLVED })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: WATCHING })).toHaveCount(0);
+
+  if (process.env.CAPTURE_EVIDENCE) {
+    await page.screenshot({ path: "evidence/inbox-hide-empty-tabs.png" });
+  }
+
+  // A digit selects an empty tab, which then appears as the active tab so you
+  // land on its zero-state rather than nowhere.
+  await page.keyboard.press("2");
   await expect(page.getByRole("button", { name: ASSIGNED })).toHaveAttribute(
     "data-state",
     "active"
   );
+});
+
+test("tab cycles only visible tabs; digits jump directly", async ({ page }) => {
+  // Tab skips the hidden Assigned/Involved tabs: Review requests → Created.
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: CREATED })).toHaveAttribute(
+    "data-state",
+    "active"
+  );
+  // Watching is hidden until a digit reveals it (then its zero-state offers the
+  // watch-a-repository onboarding).
   await page.keyboard.press("5");
   await expect(page.getByRole("button", { name: WATCHING })).toHaveAttribute(
     "data-state",

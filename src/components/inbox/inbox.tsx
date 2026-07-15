@@ -139,6 +139,15 @@ export function Inbox() {
     return m;
   })();
 
+  // Show a tab if it holds something, if it is the active tab (so an empty
+  // active tab still shows its zero-state and you're never stranded), or until
+  // the first load resolves (avoids tabs popping in). Digit hotkeys still reach
+  // every tab, so a hidden one is one keypress away.
+  const tabsLoaded = data !== null;
+  const visibleTabs = TABS.filter(
+    (t) => !tabsLoaded || visibleCounts[t.key] > 0 || t.key === tab
+  );
+
   const selectedIndex = (() => {
     if (!selectedKey) {
       return 0;
@@ -166,9 +175,15 @@ export function Inbox() {
   };
 
   const cycleTab = (dir: number) => {
-    const order = TABS.map((t) => t.key);
+    const order = visibleTabs.map((t) => t.key);
+    if (order.length === 0) {
+      return;
+    }
     const i = order.indexOf(tab);
-    selectTab(order[(i + dir + order.length) % order.length]);
+    // If the active tab is hidden (only reachable via digit), start the walk
+    // from its position in the full list so direction still feels natural.
+    const from = i < 0 ? 0 : i;
+    selectTab(order[(from + dir + order.length) % order.length]);
   };
 
   const moveTo = (index: number) => {
@@ -316,6 +331,7 @@ export function Inbox() {
         onSelectTab={selectTab}
         onToggleArchived={toggleArchived}
         tab={tab}
+        tabs={visibleTabs}
       />
 
       <InboxMainContent
@@ -488,6 +504,7 @@ function useInboxHotkeys({
 
 function InboxTabBar({
   tab,
+  tabs,
   counts,
   onSelectTab,
   archivedActive,
@@ -495,6 +512,7 @@ function InboxTabBar({
   onToggleArchived,
 }: {
   tab: InboxTabKey;
+  tabs: (typeof TABS)[number][];
   counts: Record<InboxTabKey, number>;
   onSelectTab: (key: InboxTabKey) => void;
   archivedActive: boolean;
@@ -503,11 +521,13 @@ function InboxTabBar({
 }) {
   return (
     <div className="qi-tabs shrink-0 border-line border-b px-3">
-      {TABS.map((t, i) => (
+      {tabs.map((t) => (
         <InboxTabButton
           active={t.key === tab}
           count={counts[t.key]}
-          index={i}
+          // Keep the digit hint tied to the tab's real position in TABS, not
+          // its slot among the visible tabs.
+          index={TABS.findIndex((d) => d.key === t.key)}
           key={t.key}
           onSelectTab={onSelectTab}
           tabDef={t}
