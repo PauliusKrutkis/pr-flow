@@ -1,3 +1,8 @@
+/**
+ * The PR detail drawer: CI, verdict summary, and the conversation timeline.
+ * Your own conversation comments (never verdicts) carry the same quiet
+ * Edit/Delete tools as inline threads, with the in-place "Delete?" confirm.
+ */
 import {
   CheckCircle2,
   ExternalLink,
@@ -348,9 +353,7 @@ export function RightPanel({
   );
 }
 
-/** A single conversation row — a comment, or a review verdict with its chip.
-    Your own comments (never verdicts) carry the same quiet Edit/Delete tools
-    as inline threads, with the in-place "Delete?" confirm. */
+/** A single conversation row — a comment, or a review verdict with its chip. */
 function ConversationItem({
   user,
   avatarUrl,

@@ -2055,9 +2055,6 @@ dialog.q-dialog::backdrop {
   color: #d6d6e6;
 }
 
-/* Your-comment tools (Edit) trail the timestamp as quiet metadata — inline,
-   not corner-pinned, so they never sit under the thread's fold control —
-   and follow the key-hint choreography: silent until hover or focus. */
 .dir-quiet .qf-comment-tools {
   display: inline-flex;
   gap: 2px;
@@ -2094,8 +2091,6 @@ dialog.q-dialog::backdrop {
   color: var(--fg);
   background: var(--surface-2);
 }
-/* The armed delete confirm is typography, not chrome: the word turns to
-   "Delete?" in the deletion red; leaving the button disarms it. */
 .dir-quiet .qf-comment-tool-danger,
 .dir-quiet .qf-comment-tool-danger:hover {
   color: var(--del);
