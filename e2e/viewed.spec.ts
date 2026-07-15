@@ -84,6 +84,37 @@ test("an inbox heartbeat that sees the PR move refreshes the open diff", async (
   await expect(page.locator(".qf-file-dot")).toHaveCount(1);
 });
 
+test("e skips files already viewed when advancing", async ({ page }) => {
+  await setupApp(page);
+  await expect(page.getByRole("option").first()).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
+
+  // Mark the middle file (index 1) viewed first, then start from the top.
+  await page.keyboard.press("r"); // to file 1
+  await expect(page.locator(".qf-file-active")).toHaveAttribute(
+    "data-file-index",
+    "1"
+  );
+  await page.keyboard.press("v");
+  await expect(page.locator(".qf-side-count")).toHaveText("1/3 viewed");
+
+  await page.keyboard.press("t"); // previous file, back to file 0
+  await expect(page.locator(".qf-file-active")).toHaveAttribute(
+    "data-file-index",
+    "0"
+  );
+
+  // e on file 0 marks it viewed and jumps past the already-viewed file 1
+  // straight to file 2.
+  await page.keyboard.press("e");
+  await expect(page.locator(".qf-file-active")).toHaveAttribute(
+    "data-file-index",
+    "2"
+  );
+  await expect(page.locator(".qf-side-count")).toHaveText("2/3 viewed");
+});
+
 test.describe("path copy", () => {
   test.use({ permissions: ["clipboard-read", "clipboard-write"] });
 

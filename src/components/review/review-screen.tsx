@@ -2258,6 +2258,7 @@ function useReviewSubmitActions(args: {
   activeIndexRef: React.RefObject<number>;
   advanceAfterSubmit: () => void;
   clearPendingComments: (key: string) => void;
+  files: ChangedFile[];
   keyValue: string;
   number: number;
   owner: string;
@@ -2285,9 +2286,21 @@ function useReviewSubmitActions(args: {
     }
     const wasViewed = args.viewedSet.has(args.activeFile.filename);
     args.toggleViewedWithFp(args.activeFile);
-    if (!wasViewed) {
-      args.scrollToFile(args.activeIndexRef.current + 1);
+    if (wasViewed) {
+      return;
     }
+    // Advance to the next file the reviewer hasn't seen yet — the one right
+    // after this may already be viewed, and stopping on it wastes a keystroke.
+    // Fall back to the immediate next file if everything ahead is viewed.
+    const from = args.activeIndexRef.current;
+    let target = from + 1;
+    for (let i = from + 1; i < args.files.length; i += 1) {
+      if (!args.viewedSet.has(args.files[i].filename)) {
+        target = i;
+        break;
+      }
+    }
+    args.scrollToFile(target);
   };
 
   const copyLink = () => {
@@ -2881,6 +2894,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
     activeIndexRef,
     advanceAfterSubmit,
     clearPendingComments,
+    files,
     keyValue,
     number,
     owner,
