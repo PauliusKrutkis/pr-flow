@@ -8,7 +8,6 @@ const COPY_PR_LINK = /Copy PR link/;
 const REVIEW_REQUESTS = /Review requests/;
 const QF_ROW_FLASH = /qf-row-flash/;
 const QF_FILE_ACTIVE = /qf-file-active/;
-const FILE_DIALOG = /^File:/;
 const QF_DRAWER_WIDE = /qf-drawer-wide/;
 
 test.beforeEach(async ({ page }) => {
@@ -491,14 +490,54 @@ test("comment posting is optimistic even when the network hangs", async ({
   await expect(box).toHaveText("");
 });
 
-test("shift+v opens the full file; Esc closes it", async ({ page }) => {
+test("shift+v expands the active file in place and collapses back", async ({
+  page,
+}) => {
+  await expect(page.getByText("export function omega() {")).toHaveCount(0);
   await page.keyboard.press("Shift+v");
-  const dialog = page.getByRole("dialog", { name: FILE_DIALOG });
-  await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText("the whole file, not just the diff hunks");
-  await expect(dialog).toContainText("return query.trim().toLowerCase();");
-  await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0);
+  const tail = page.locator(".qf-row-xctx", {
+    hasText: "export function omega() {",
+  });
+  await expect(tail.first()).toBeVisible();
+  await expect(page.locator(".qf-row-xctx .qf-add-btn")).toHaveCount(0);
+  await page.keyboard.press("Shift+v");
+  await expect(page.locator(".qf-row-xctx")).toHaveCount(0);
+});
+
+test("expanding keeps the row you were reading where it was", async ({
+  page,
+}) => {
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  for (let i = 0; i < 8; i += 1) {
+    await page.keyboard.press("j");
+  }
+  const cursorRow = page.locator(".qf-row-active");
+  await expect(cursorRow).toBeVisible();
+  const before = await cursorRow.boundingBox();
+  const cursorDrift = async () =>
+    Math.abs(
+      ((await cursorRow.boundingBox())?.y ?? Number.NaN) -
+        (before?.y ?? Number.NaN)
+    );
+  await page.keyboard.press("Shift+v");
+  await expect(page.locator(".qf-row-xctx").first()).toBeVisible();
+  await expect.poll(cursorDrift).toBeLessThan(3);
+  await page.keyboard.press("Shift+v");
+  await expect(page.locator(".qf-row-xctx")).toHaveCount(0);
+  await expect.poll(cursorDrift).toBeLessThan(3);
+});
+
+test("the header button toggles the full file and reads Diff only while expanded", async ({
+  page,
+}) => {
+  const header = page.locator(".qf-fsec-head").first();
+  await header.getByRole("button", { name: "Full file" }).click();
+  await expect(page.locator(".qf-row-xctx").first()).toBeVisible();
+  const collapse = header.getByRole("button", { name: "Diff only" });
+  await expect(collapse).toHaveAttribute("aria-pressed", "true");
+  await collapse.click();
+  await expect(page.locator(".qf-row-xctx")).toHaveCount(0);
 });
 
 test("the header shows an approvals verdict with the reviewer's face", async ({

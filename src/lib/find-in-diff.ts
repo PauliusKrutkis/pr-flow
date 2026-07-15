@@ -20,9 +20,16 @@ export interface FindMatch {
   start: number;
 }
 
+/**
+ * `rowsByFile` overrides the patch-text scan for files whose row stream isn't
+ * the patch — full-file expansion (expand-file.ts). Matches in synthesized
+ * context lines would otherwise be invisible to the counter and n/p
+ * navigation, since those lines don't exist in the patch string.
+ */
 export interface FindOptions {
   caseSensitive?: boolean;
   maxMatches?: number;
+  rowsByFile?: ReadonlyMap<number, readonly DiffRow[]>;
 }
 
 /**
@@ -167,6 +174,33 @@ export function patchMayMatch(
     : lowered(patch).includes(query.toLowerCase());
 }
 
+function scanRowsForMatches(
+  rows: readonly DiffRow[],
+  fileIndex: number,
+  query: string,
+  caseSensitive: boolean,
+  max: number,
+  out: FindMatch[]
+): boolean {
+  for (const row of rows) {
+    const anchor = rowAnchor(row);
+    if (anchor === null) {
+      continue;
+    }
+    for (const [start, end] of findMatchRangesInLine(
+      row.content,
+      query,
+      caseSensitive
+    )) {
+      out.push({ anchor, end, fileIndex, start });
+      if (out.length >= max) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function scanFileForMatches(
   patch: string,
   fileIndex: number,
@@ -221,6 +255,13 @@ export function findInDiff(
   const out: FindMatch[] = [];
 
   for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
+    const rows = opts.rowsByFile?.get(fileIndex);
+    if (rows) {
+      if (scanRowsForMatches(rows, fileIndex, query, caseSensitive, max, out)) {
+        return out;
+      }
+      continue;
+    }
     const { patch } = files[fileIndex];
     if (!patch) {
       continue;

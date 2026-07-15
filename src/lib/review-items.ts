@@ -8,7 +8,7 @@
  * turns item indexes into fractions.
  */
 import type { ChangedFile, PendingComment, ReviewComment } from "../types.ts";
-import { type DiffHunk, type DiffRow, parsePatch } from "./diff.ts";
+import { type DiffHunk, type DiffRow, parsePatch, rowAnchor } from "./diff.ts";
 import {
   detectIndentUnit,
   guideLevelsForHunk,
@@ -26,8 +26,16 @@ export function fileAnchorKey(fileIndex: number, anchor: string): string {
   return `${fileIndex}:${anchor}`;
 }
 
-/** Resolve the comment target for a diff row. */
+/**
+ * Resolve the comment target for a diff row. Synthetic rows (full-file
+ * expansion) have real line numbers but are not part of the patch, and the
+ * forges reject comments outside it — no target, so every comment affordance
+ * (plus button, `c`, drag selection) skips them by the existing target checks.
+ */
 function rowTarget(row: DiffRow): { line: number; side: string } | null {
+  if (row.synthetic) {
+    return null;
+  }
   if (row.type === "del") {
     return row.oldLine === null ? null : { line: row.oldLine, side: "LEFT" };
   }
@@ -194,6 +202,7 @@ export interface ReviewListModel {
 export interface BuildReviewItemsInput {
   collapsed: ReadonlyMap<number, ReadonlySet<number>>;
   commentsByFile: ReadonlyMap<string, ReviewComment[]>;
+  expandedRows: ReadonlyMap<number, readonly DiffRow[]>;
   files: readonly ChangedFile[];
   isImage: (file: ChangedFile) => boolean;
   openBoxes: ReadonlyMap<string, number | null>;
@@ -252,7 +261,7 @@ function appendCommentBlock(
 
 function appendHunkRow(ctx: HunkBuildContext, row: DiffRow): void {
   const target = rowTarget(row);
-  const anchor = target ? anchorKey(target.side, target.line) : null;
+  const anchor = target ? anchorKey(target.side, target.line) : rowAnchor(row);
   if (anchor !== null) {
     ctx.contentByAnchor.set(anchor, row.content);
   }
@@ -307,6 +316,23 @@ function appendHunkRows(ctx: HunkBuildContext, hunk: DiffHunk): void {
   }
 }
 
+/**
+ * One expanded file's rows (expand-file.ts) as a single headerless run —
+ * context is continuous, so hunk separators would be noise. hunkIndex 0 for
+ * every row; selection adjacency still can't cross a change boundary because
+ * the synthesized rows between hunks have no target.
+ */
+function appendExpandedRows(
+  ctx: HunkBuildContext,
+  rows: readonly DiffRow[]
+): void {
+  for (const row of rows) {
+    if (row.type !== "hunk") {
+      appendHunkRow(ctx, row);
+    }
+  }
+}
+
 export function buildReviewItems(
   input: BuildReviewItemsInput
 ): ReviewListModel {
@@ -314,6 +340,7 @@ export function buildReviewItems(
     files,
     isImage,
     collapsed,
+    expandedRows,
     openBoxes,
     commentsByFile,
     pendingByFile,
@@ -355,6 +382,28 @@ export function buildReviewItems(
       const arr = pendingByAnchor.get(k) ?? [];
       arr.push(p);
       pendingByAnchor.set(k, arr);
+    }
+
+    const expanded = expandedRows.get(fileIndex);
+    if (expanded) {
+      appendExpandedRows(
+        {
+          anchorItem,
+          commentItems,
+          contentByAnchor: new Map<string, string>(),
+          fileIndex,
+          hunkIndex: 0,
+          items,
+          nav,
+          navIndexOf,
+          openBoxes,
+          pendingByAnchor,
+          threads,
+        },
+        expanded
+      );
+      groupCounts.push(items.length - startCount);
+      return;
     }
 
     const fileCollapsed = collapsed.get(fileIndex);

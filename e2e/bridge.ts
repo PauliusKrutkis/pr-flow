@@ -1,5 +1,5 @@
 import type { BucketFixture, InboxFixture } from "./fixtures.ts";
-import { ACCOUNT, DETAIL, INBOX } from "./fixtures.ts";
+import { ACCOUNT, DETAIL, FULL_FILES, INBOX } from "./fixtures.ts";
 import type { Page } from "./types.ts";
 
 /**
@@ -13,6 +13,7 @@ export interface AppOptions {
   appVersion?: string;
   detailByCall?: unknown[];
   detailByLoad?: unknown[];
+  fileBlobs?: Record<string, string>;
   hangIssueComment?: boolean;
   hasToken?: boolean;
   releases?:
@@ -32,6 +33,7 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
     detail: (opts.detail ?? DETAIL) as typeof DETAIL,
     detailByCall: opts.detailByCall ?? null,
     detailByLoad: opts.detailByLoad ?? null,
+    fileBlobs: opts.fileBlobs ?? FULL_FILES,
     hangIssueComment: opts.hangIssueComment ?? false,
     hasToken: opts.hasToken ?? true,
     releases: opts.releases ?? [],
@@ -101,12 +103,11 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
         get_cached_inbox: () => null,
         get_cached_pull_request_detail: () => null,
         get_cached_subscribed: () => null,
-        get_file_blob: () => {
-          const text =
-            "export function fuzzy(query) {\n" +
-            "  // the whole file, not just the diff hunks\n" +
-            "  return query.trim().toLowerCase();\n" +
-            "}\n";
+        get_file_blob: (args) => {
+          const text = cfg.fileBlobs[args.path as string];
+          if (text === undefined) {
+            throw new Error(`no blob fixture for ${String(args.path)}`);
+          }
           return { base64: btoa(text), size: text.length };
         },
         get_pull_request_detail: () => {

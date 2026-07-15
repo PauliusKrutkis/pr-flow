@@ -275,6 +275,42 @@ One line when relevant: *"2 files changed."* / *"3 new commits."* — skip when 
 
 ---
 
+## Full-file context expansion (in place, not a dialog)
+
+Diffs are tunnel vision: one added `if` in a file that already has five reads
+very differently from the hunk alone. The fix is a per-file *context dial* on
+the existing `FileSection`, not a separate full-file surface (a dialog was
+tried on `feat/full-file-modal` and dropped 2026-07-15 — reintroduce only as a
+cross-file "peek" for go-to-definition, if ever).
+
+**UX:** a hotkey (`shift+v` is free again) expands the active file in place —
+context rows synthesized from the head blob fill in between hunks, **scroll
+anchored so the line you were reading does not move**. You can then scroll
+above/below the hunks within the file; diff marks stay lit inside the full
+file, expanded context renders at reduced ink so changes still pop. Same
+hotkey collapses.
+
+- [x] Row synthesis: patch rows + head-blob context rows reusing `DiffRow` +
+      `SIDE:line` anchors (GitHub "expand context" taken to its limit).
+      Find/occurrences/cursor/ruler ride the row stream unchanged — see
+      "Code view" in ARCHITECTURE.md. (`src/lib/expand-file.ts`,
+      `useFileExpansion`, shipped 2026-07-15.)
+- [x] Comment affordance hidden on synthesized rows (GitHub API only accepts
+      patch lines; GitLab 400s on far context lines) — synthetic rows carry an
+      anchor but no target.
+- [x] `shift+v` toggles; header button ("Full file" ↔ "Diff only") always
+      visible, its ⇧V chip revealed on header hover / active file (like the
+      inline-comment affordance). Scroll anchored through the swap on the
+      **cursor row** (fallback: first visible row) via pre-paint scrollTop
+      deltas — never the virtualizer's estimated scrollToIndex — then held a
+      few frames against re-measure; the anchored row flashes as the "you are
+      here" cue.
+- [ ] ❓ Open: does expanding lock j/k / scroll into the file, or stay part of
+      the continuous scroll? Shipped continuous (fewer modes; matches "review
+      pane is one scroll"); revisit after using it.
+
+---
+
 ## Shortcut scheme
 
 | Key | Action |

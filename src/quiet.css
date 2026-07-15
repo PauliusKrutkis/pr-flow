@@ -1504,6 +1504,60 @@ dialog.q-dialog::backdrop {
   background: var(--add-bg);
   border-color: rgba(95, 208, 138, 0.35);
 }
+/* Full-file expansion toggle: always present; only its hotkey hint waits for
+   attention — revealed on header hover and on the active file, like the
+   inline-comment affordance. The chip keeps its width at opacity 0 so the
+   header never shifts. */
+.dir-quiet .qf-expand-btn {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--faint);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+.dir-quiet .qf-expand-btn:hover {
+  color: var(--fg);
+  border-color: var(--line-2);
+}
+.dir-quiet .qf-expand-btn.qf-expand-on {
+  color: var(--accent);
+  border-color: var(--line-2);
+}
+.dir-quiet .qf-expand-kbd {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.dir-quiet .qf-fsec-head:hover .qf-expand-kbd,
+.dir-quiet .qf-fsec-active .qf-expand-kbd,
+.dir-quiet .qf-expand-btn:focus-visible .qf-expand-kbd {
+  opacity: 1;
+}
+/* Blob still in flight (rare — the active file prefetches): the icon breathes
+   so the press reads as registered. Not a loading state — nothing blocks. */
+.dir-quiet .qf-expand-btn[aria-busy="true"] svg {
+  animation: qf-expand-wait 900ms ease-in-out infinite;
+}
+@keyframes qf-expand-wait {
+  50% {
+    opacity: 0.25;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dir-quiet .qf-expand-btn[aria-busy="true"] svg {
+    animation: none;
+    opacity: 0.5;
+  }
+}
 /* ============ IMAGE DIFF ============ */
 .dir-quiet .qf-imgdiff {
   display: flex;
@@ -1674,6 +1728,32 @@ dialog.q-dialog::backdrop {
 }
 .dir-quiet .qf-row-del .qf-gutter-old {
   color: var(--del-num);
+}
+/* Synthesized full-file context (expand-file.ts): present for orientation,
+   at reduced ink so the diff still carries the contrast. Opacity, not color —
+   the hljs token spans keep their hues, just quieter. */
+.dir-quiet .qf-row-xctx .qf-code {
+  opacity: 0.66;
+}
+.dir-quiet .qf-row-xctx .qf-gutter {
+  opacity: 0.55;
+}
+/* During the expand swap (transient .qf-swapin, use-file-expansion.ts) the
+   synthesized rows materialize instead of popping in — it reads as the file
+   inflating around the diff. Scoped to the swap window: rows the virtualizer
+   mounts later while scrolling must not re-fade. */
+.dir-quiet .qf-swapin .qf-row-xctx {
+  animation: qf-xctx-in 220ms ease-out backwards;
+}
+@keyframes qf-xctx-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dir-quiet .qf-swapin .qf-row-xctx {
+    animation: none;
+  }
 }
 
 .dir-quiet .qf-row:not(.qf-row-hunk) {
@@ -4218,75 +4298,4 @@ dialog.q-dialog::backdrop {
   align-items: center;
   font-size: 11px;
   color: var(--faint);
-}
-
-/* full-file view (shift+v) — read-only, virtualized, highlighted */
-.q-dialog.qf-fileview {
-  width: min(1000px, calc(100vw - 48px));
-  height: min(86vh, 900px);
-  max-height: min(86vh, 900px);
-}
-.qf-fileview-head {
-  display: flex;
-  flex-shrink: 0;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--line);
-}
-.qf-fileview-path {
-  overflow: hidden;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--fg);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.qf-fileview-close {
-  flex-shrink: 0;
-  padding: 3px 8px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--muted);
-  cursor: pointer;
-  background: var(--surface-hi);
-  border: 1px solid var(--line-2);
-  border-radius: 6px;
-}
-.qf-fileview-close:hover {
-  color: var(--fg);
-}
-.qf-fileview-body {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  align-items: center;
-  justify-content: center;
-}
-.qf-fileview-scroll {
-  width: 100%;
-}
-.qf-fileview-msg {
-  color: var(--muted);
-  font-size: 13px;
-}
-.qf-fileview-row {
-  display: flex;
-  gap: 16px;
-  padding: 0 18px;
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  line-height: 1.55;
-}
-.qf-fileview-num {
-  flex-shrink: 0;
-  width: 40px;
-  color: var(--faint);
-  text-align: right;
-  user-select: none;
-}
-.qf-fileview-code {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
