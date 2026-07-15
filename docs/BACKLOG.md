@@ -873,3 +873,16 @@ link interception · Universal Links.
 - [ ] **Split `ReviewScreenInner`** in `review-screen.tsx` into smaller
   components so React Doctor's `no-giant-component` passes without the
   `test-noise` tag ignore in `doctor.config.json` — remove that ignore once done.
+
+## Inbox (2026-07-15)
+
+- [ ] **`ctrl+c` copy on click-highlighted word** — copy doesn't fire when a word
+      is highlighted via click; investigate editor-level selection handling for a
+      better approach (unsure whether to follow a standard here).
+- [ ] **Check for updates action** — explicit user-triggered update check.
+- [ ] **Info comment section design rework**.
+- [ ] **Theming: CSS file vs Tailwind variables** — is theming really a CSS file
+      rather than Tailwind variables? Consider using TW everywhere for better
+      optimization.
+- [ ] **`ctrl+k` → add comment shortcut**.
+- [ ] **Hide empty tabs**.
