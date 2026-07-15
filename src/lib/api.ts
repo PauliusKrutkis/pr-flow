@@ -7,6 +7,7 @@ import type {
   InboxBucket,
   InboxData,
   PullRequestDetail,
+  ReleaseInfo,
   RepoHit,
   ReviewComment,
   ReviewEvent,
@@ -46,6 +47,12 @@ export const api = {
     side: string;
     startLine?: number;
   }) => invoke<ReviewComment>("create_review_comment", args),
+  deleteIssueComment: (args: {
+    owner: string;
+    repo: string;
+    number: number;
+    commentId: number;
+  }) => invoke<void>("delete_issue_comment", args),
   deleteReviewComment: (args: {
     owner: string;
     repo: string;
@@ -59,6 +66,7 @@ export const api = {
       owner,
       repo,
     }),
+  getAppVersion: () => invoke<string>("get_app_version"),
   getCachedSubscribed: () =>
     invoke<InboxBucket | null>("get_cached_subscribed"),
   getCurrentUser: () => invoke<GitHubUser>("get_current_user"),
@@ -72,6 +80,8 @@ export const api = {
       owner,
       repo,
     }),
+
+  listReleases: () => invoke<ReleaseInfo[] | null>("list_releases"),
 
   getViewedMap: () => invoke<unknown>("get_viewed_map"),
   getWatchedRepos: () => invoke<string[]>("get_watched_repos"),
@@ -131,6 +141,13 @@ export const api = {
       startLine?: number;
     }[];
   }) => invoke<void>("submit_review", args),
+  updateIssueComment: (args: {
+    owner: string;
+    repo: string;
+    number: number;
+    commentId: number;
+    body: string;
+  }) => invoke<void>("update_issue_comment", args),
   updateReviewComment: (args: {
     owner: string;
     repo: string;

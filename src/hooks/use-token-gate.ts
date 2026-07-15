@@ -1,6 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { type ChangeEvent, type KeyboardEvent, useState } from "react";
+import {
+  type ChangeEvent,
+  type KeyboardEvent,
+  useReducer,
+  useState,
+} from "react";
 import { useHotkeys } from "../keyboard/use-hotkeys.ts";
 import { api } from "../lib/api.ts";
 import { queryKeys } from "../lib/query-client.ts";
@@ -9,6 +14,49 @@ import { useAppStore } from "../store/app-store.ts";
 type View = "identity" | "selfhosted" | "token";
 export type Busy = "idle" | "oauth" | "probe" | "pat";
 export type TokenProvider = "github" | "gitlab";
+
+interface GateFlow {
+  busy: Busy;
+  busyLabel: string;
+  error: string | null;
+  tokenProvider: TokenProvider;
+  view: View;
+}
+
+type GateFlowAction =
+  | { error: string; type: "fail" }
+  | { provider: TokenProvider; type: "provider" }
+  | { type: "reset"; view: View }
+  | { kind: Busy; label: string; type: "start" }
+  | { type: "stop" };
+
+function gateFlowReducer(state: GateFlow, action: GateFlowAction): GateFlow {
+  switch (action.type) {
+    case "fail":
+      return { ...state, busy: "idle", error: action.error };
+    case "provider":
+      return { ...state, tokenProvider: action.provider };
+    case "reset":
+      return {
+        busy: "idle",
+        busyLabel: "",
+        error: null,
+        tokenProvider: state.tokenProvider,
+        view: action.view,
+      };
+    case "start":
+      return {
+        ...state,
+        busy: action.kind,
+        busyLabel: action.label,
+        error: null,
+      };
+    case "stop":
+      return { ...state, busy: "idle" };
+    default:
+      return state;
+  }
+}
 
 /** Remembered self-hosted instances (host + optional OAuth application id). */
 export interface GitlabInstance {
@@ -59,15 +107,18 @@ export function useTokenGate() {
   const hasAccounts = useAppStore((s) => s.accounts.length > 0);
   const accounts = useAppStore((s) => s.accounts);
 
-  const [view, setView] = useState<View>("identity");
-  const [busy, setBusy] = useState<Busy>("idle");
-  const [busyLabel, setBusyLabel] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [flow, dispatchFlow] = useReducer(gateFlowReducer, {
+    busy: "idle",
+    busyLabel: "",
+    error: null,
+    tokenProvider: "github",
+    view: "identity",
+  });
+  const { busy, busyLabel, error, tokenProvider, view } = flow;
 
   const [hostInput, setHostInput] = useState("");
   const [probedHost, setProbedHost] = useState<string | null>(null);
   const [appId, setAppId] = useState("");
-  const [tokenProvider, setTokenProvider] = useState<TokenProvider>("github");
   const [tokenHost, setTokenHost] = useState("");
   const [token, setToken] = useState("");
 
@@ -97,9 +148,7 @@ export function useTokenGate() {
   })();
 
   const reset = (next: View) => {
-    setError(null);
-    setBusy("idle");
-    setView(next);
+    dispatchFlow({ type: "reset", view: next });
   };
 
   useHotkeys("token", [
@@ -131,15 +180,12 @@ export function useTokenGate() {
     if (busy !== "idle") {
       return;
     }
-    setBusy(kind);
-    setBusyLabel(label);
-    setError(null);
+    dispatchFlow({ kind, label, type: "start" });
     try {
       await action();
-      setBusy("idle");
+      dispatchFlow({ type: "stop" });
     } catch (e) {
-      setError(String(e));
-      setBusy("idle");
+      dispatchFlow({ error: String(e), type: "fail" });
     }
   };
 
@@ -262,7 +308,7 @@ export function useTokenGate() {
       runPromise(probe());
     },
     onProviderChange: (provider: TokenProvider) => {
-      setTokenProvider(provider);
+      dispatchFlow({ provider, type: "provider" });
     },
     onSelfHosted: () => {
       setHostInput("");

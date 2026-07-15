@@ -261,6 +261,39 @@ pub async fn create_issue_comment(
         .await
 }
 
+/// Edit a PR-level (conversation) comment's body. Gated in the UI to the
+/// signed-in user's own comments.
+#[tauri::command]
+pub async fn update_issue_comment(
+    app: AppHandle,
+    owner: String,
+    repo: String,
+    number: u64,
+    comment_id: u64,
+    body: String,
+) -> Result<(), String> {
+    let (_, platform) = accounts::active_platform(&app).await?;
+    platform
+        .update_issue_comment(&owner, &repo, number, comment_id, &body)
+        .await
+}
+
+/// Delete a PR-level (conversation) comment. Gated in the UI to the
+/// signed-in user's own comments behind a two-step confirm.
+#[tauri::command]
+pub async fn delete_issue_comment(
+    app: AppHandle,
+    owner: String,
+    repo: String,
+    number: u64,
+    comment_id: u64,
+) -> Result<(), String> {
+    let (_, platform) = accounts::active_platform(&app).await?;
+    platform
+        .delete_issue_comment(&owner, &repo, number, comment_id)
+        .await
+}
+
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub async fn submit_review(

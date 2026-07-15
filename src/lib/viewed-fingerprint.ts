@@ -151,3 +151,65 @@ export function reconcileViewedEntry(
   }
   return { changed, entry: next, unviewed };
 }
+
+export function unviewedReconcileToast(unviewed: readonly string[]): {
+  message: string;
+  title: string;
+} {
+  return {
+    message:
+      unviewed.length === 1
+        ? `${unviewed[0]} changed since you viewed it — marked unviewed.`
+        : `${unviewed.length} files changed since you viewed them — marked unviewed.`,
+    title: "Pull request updated",
+  };
+}
+
+export function reconcileHighlightKey(
+  prKey: string,
+  headSha: string,
+  filename: string
+): string {
+  return `${prKey}\0${headSha}\0${filename}`;
+}
+
+export function autoUnviewedKey(prKey: string, headSha: string): string {
+  return `${prKey}\0${headSha}`;
+}
+
+export function buildChangedSinceViewed(
+  prKey: string,
+  headSha: string | undefined,
+  files: readonly Pick<ChangedFile, "filename" | "patch" | "sha">[],
+  viewedFiles: ViewedFileMap | undefined,
+  reconcileDismissed: ReadonlySet<string>,
+  autoUnviewed?: readonly string[]
+): Set<string> {
+  if (!headSha || files.length === 0) {
+    return new Set();
+  }
+
+  const preview = reconcileViewedEntry(viewedFiles, files, headSha);
+  const candidates = new Set<string>(preview.unviewed);
+  if (autoUnviewed) {
+    for (const filename of autoUnviewed) {
+      candidates.add(filename);
+    }
+  }
+  if (candidates.size === 0) {
+    return new Set();
+  }
+  const inDiff = new Set(files.map((f) => f.filename));
+  const next = new Set<string>();
+  for (const filename of candidates) {
+    if (!inDiff.has(filename)) {
+      continue;
+    }
+    if (
+      !reconcileDismissed.has(reconcileHighlightKey(prKey, headSha, filename))
+    ) {
+      next.add(filename);
+    }
+  }
+  return next;
+}
