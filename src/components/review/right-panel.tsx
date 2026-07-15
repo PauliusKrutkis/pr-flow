@@ -1,10 +1,15 @@
+/**
+ * The PR detail drawer: CI, verdict summary, and the conversation timeline.
+ * Your own conversation comments (never verdicts) carry the same quiet
+ * Edit/Delete tools as inline threads, with the in-place "Delete?" confirm.
+ */
 import {
   CheckCircle2,
   ExternalLink,
   PanelRightClose,
   PanelRightOpen,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "../../lib/cn.ts";
 import { openOnProviderLabel } from "../../lib/provider.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
@@ -29,6 +34,8 @@ interface RightPanelProps {
   inlineComments: ReviewComment[];
   onAddIssueComment: (body: string) => Promise<void>;
   onClose: () => void;
+  onDeleteIssueComment: (a: { commentId: number }) => Promise<void>;
+  onEditIssueComment: (a: { commentId: number; body: string }) => Promise<void>;
   onJumpToThread: (path: string, rootId: number) => void;
   onOpenPr: () => void;
   onToggleWide: () => void;
@@ -68,6 +75,8 @@ export function RightPanel({
   onClose,
   onToggleWide,
   onAddIssueComment,
+  onDeleteIssueComment,
+  onEditIssueComment,
   onJumpToThread,
   onOpenPr,
 }: RightPanelProps) {
@@ -75,6 +84,23 @@ export function RightPanel({
   const trackerBase = useAppStore((s) =>
     s.activeAccountId ? s.issueTrackers[s.activeAccountId] : undefined
   );
+  const ownLogin = useAppStore(
+    (s) => s.accounts.find((a) => a.id === s.activeAccountId)?.login
+  );
+  const [editingId, setEditingId] = useState<number | null>(null);
+
+  const startEdit = (commentId: number) => {
+    setEditingId(commentId);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const submitEdit = (commentId: number, text: string) => {
+    onEditIssueComment({ body: text, commentId });
+    setEditingId(null);
+  };
 
   const panelRef = useRef<HTMLElement>(null);
 
@@ -240,7 +266,16 @@ export function RightPanel({
                       at={entry.comment.createdAt}
                       avatarUrl={entry.comment.userAvatarUrl}
                       body={entry.comment.body}
+                      commentId={entry.comment.id}
+                      editing={editingId === entry.comment.id}
                       key={`c-${entry.comment.id}`}
+                      onCancelEdit={cancelEdit}
+                      onDelete={onDeleteIssueComment}
+                      onStartEdit={startEdit}
+                      onSubmitEdit={submitEdit}
+                      own={
+                        entry.comment.id > 0 && entry.comment.user === ownLogin
+                      }
                       user={entry.comment.user}
                     />
                   ) : (
@@ -325,15 +360,60 @@ function ConversationItem({
   at,
   body,
   state,
+  commentId,
+  own = false,
+  editing = false,
+  onStartEdit,
+  onCancelEdit,
+  onSubmitEdit,
+  onDelete,
 }: {
   user: string;
   avatarUrl: string;
   at: string;
   body: string;
   state?: string;
+  commentId?: number;
+  own?: boolean;
+  editing?: boolean;
+  onStartEdit?: (commentId: number) => void;
+  onCancelEdit?: () => void;
+  onSubmitEdit?: (commentId: number, body: string) => void;
+  onDelete?: (a: { commentId: number }) => Promise<void>;
 }) {
   const chip = state ? (REVIEW_STATES[state] ?? REVIEW_STATES.COMMENTED) : null;
   const trimmed = body.trim();
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  const handleStartEdit = () => {
+    if (commentId !== undefined) {
+      setConfirmingDelete(false);
+      onStartEdit?.(commentId);
+    }
+  };
+
+  const handleSubmitEdit = (text: string) => {
+    if (commentId !== undefined) {
+      onSubmitEdit?.(commentId, text);
+    }
+  };
+
+  const handleDelete = () => {
+    if (commentId === undefined) {
+      return;
+    }
+    if (confirmingDelete) {
+      setConfirmingDelete(false);
+      onDelete?.({ commentId });
+    } else {
+      setConfirmingDelete(true);
+    }
+  };
+
+  const disarmDelete = () => {
+    setConfirmingDelete(false);
+  };
+
   return (
     <div className="qf-convo-item">
       <Avatar name={user} size={20} url={avatarUrl} />
@@ -346,11 +426,48 @@ function ConversationItem({
           <span className="qf-comment-time" title={formatAbsolute(at)}>
             {formatRelativeTime(at)}
           </span>
+          {own && !editing && (
+            <span className="qf-comment-tools">
+              <button
+                aria-label="Edit comment"
+                className="qf-comment-tool qf-focusable"
+                onClick={handleStartEdit}
+                type="button"
+              >
+                Edit
+              </button>
+              <button
+                aria-label="Delete comment"
+                className={cn(
+                  "qf-comment-tool qf-focusable",
+                  confirmingDelete && "qf-comment-tool-danger"
+                )}
+                onBlur={disarmDelete}
+                onClick={handleDelete}
+                onMouseLeave={disarmDelete}
+                type="button"
+              >
+                {confirmingDelete ? "Delete?" : "Delete"}
+              </button>
+            </span>
+          )}
         </div>
-        {!!trimmed && (
-          <div className="qf-comment-body">
-            <Markdown>{trimmed}</Markdown>
-          </div>
+        {editing ? (
+          <AddCommentBox
+            autoFocus
+            initialMarkdown={body}
+            onCancel={onCancelEdit ?? disarmDelete}
+            onSubmit={handleSubmitEdit}
+            pending={false}
+            placeholder="Edit your comment…"
+            submitLabel="Save"
+          />
+        ) : (
+          !!trimmed && (
+            <div className="qf-comment-body">
+              <Markdown>{trimmed}</Markdown>
+            </div>
+          )
         )}
       </div>
     </div>

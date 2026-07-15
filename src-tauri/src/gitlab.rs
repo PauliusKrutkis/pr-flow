@@ -672,6 +672,53 @@ impl GitLabPlatform {
         Ok(())
     }
 
+    /// Edits a note's body through the MR-notes API, which addresses any note
+    /// — diff-anchored or not — by note id alone, so no discussion lookup is
+    /// needed (unlike replies).
+    pub async fn update_review_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        comment_id: u64,
+        body: &str,
+    ) -> Result<(), String> {
+        let resp = self
+            .client
+            .put(format!(
+                "{}/notes/{}",
+                self.mr_url(owner, repo, number),
+                comment_id
+            ))
+            .json(&json!({ "body": body }))
+            .send()
+            .await
+            .map_err(net_err)?;
+        read_body(resp).await?;
+        Ok(())
+    }
+
+    pub async fn delete_review_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        comment_id: u64,
+    ) -> Result<(), String> {
+        let resp = self
+            .client
+            .delete(format!(
+                "{}/notes/{}",
+                self.mr_url(owner, repo, number),
+                comment_id
+            ))
+            .send()
+            .await
+            .map_err(net_err)?;
+        read_body(resp).await?;
+        Ok(())
+    }
+
     pub async fn create_issue_comment(
         &self,
         owner: &str,
@@ -688,6 +735,32 @@ impl GitLabPlatform {
             .map_err(net_err)?;
         read_body(resp).await?;
         Ok(())
+    }
+
+    /// GitLab MR notes are one namespace — PR-level comments go through the
+    /// same notes endpoints as diff notes, so these mirror the
+    /// review-comment pair.
+    pub async fn update_issue_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        comment_id: u64,
+        body: &str,
+    ) -> Result<(), String> {
+        self.update_review_comment(owner, repo, number, comment_id, body)
+            .await
+    }
+
+    pub async fn delete_issue_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        comment_id: u64,
+    ) -> Result<(), String> {
+        self.delete_review_comment(owner, repo, number, comment_id)
+            .await
     }
 
     /// Posts each pending comment, then the review verdict. GitLab has no

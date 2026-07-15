@@ -22,6 +22,7 @@ import {
   MessageSquarePlus,
   PanelLeft,
   PanelRightOpen,
+  Pencil,
   Search,
   Send,
   TextSearch,
@@ -792,6 +793,9 @@ interface ReviewListCallbackArgs {
   ) => void;
   addReviewComment: ReturnType<typeof useCommentMutations>["addReviewComment"];
   copyTimerRef: React.RefObject<ReturnType<typeof setTimeout> | null>;
+  deleteReviewComment: ReturnType<
+    typeof useCommentMutations
+  >["deleteReviewComment"];
   dragRef: React.RefObject<{
     fileIndex: number;
     side: string;
@@ -833,6 +837,9 @@ interface ReviewListCallbackArgs {
   >;
   setSelection: (s: LineSelection | null) => void;
   toggleViewed: (key: string, filename: string, fingerprint: string) => void;
+  updateReviewComment: ReturnType<
+    typeof useCommentMutations
+  >["updateReviewComment"];
 }
 
 function reviewListOnCopyPath(
@@ -1047,6 +1054,12 @@ function useReviewListCallbacks(
     onCopyPath(fileIndex: number) {
       reviewListOnCopyPath(args, fileIndex);
     },
+    async onDeleteComment(a: { commentId: number }) {
+      await args.deleteReviewComment.mutateAsync(a);
+    },
+    async onEditComment(a: { commentId: number; body: string }) {
+      await args.updateReviewComment.mutateAsync(a);
+    },
     onMouseMove(x: number, y: number) {
       if (!args.isRealPointerAt(x, y)) {
         return;
@@ -1130,6 +1143,8 @@ function useReviewListCallbacks(
       onAddPending: (...a) => r.current.onAddPending(...a),
       onCloseBox: (...a) => r.current.onCloseBox(...a),
       onCopyPath: (...a) => r.current.onCopyPath(...a),
+      onDeleteComment: (...a) => r.current.onDeleteComment(...a),
+      onEditComment: (...a) => r.current.onEditComment(...a),
       onMouseMove: (...a) => r.current.onMouseMove(...a),
       onOpenBox: (...a) => r.current.onOpenBox(...a),
       onPlusDragEnd: () => r.current.onPlusDragEnd(),
@@ -1401,6 +1416,7 @@ function useReviewHotkeys(config: {
   copyLink: () => void;
   cursorMoverRefs: Parameters<typeof buildCursorMover>[0];
   cycleFile: (dir: number) => void;
+  editActiveThreadComment: () => void;
   extendSelection: (delta: 1 | -1) => void;
   findOpen: boolean;
   findOpenRef: React.RefObject<boolean>;
@@ -1552,6 +1568,13 @@ function useReviewHotkeys(config: {
         }
         config.resolveActiveThread();
       },
+    },
+    {
+      description: "Edit your comment",
+      group: "Comments",
+      icon: Pencil,
+      keys: "shift+e",
+      run: config.editActiveThreadComment,
     },
     {
       description: "Expand / collapse comment",
@@ -1757,6 +1780,7 @@ function useReviewThreadActions(args: {
   activeThreadRef: React.RefObject<{ rootId: number; path: string } | null>;
   commentIndex: number;
   commentsRef: React.RefObject<ReviewComment[]>;
+  editNonceRef: React.RefObject<number>;
   filesRef: React.RefObject<ChangedFile[]>;
   listRef: React.RefObject<ReviewListHandle | null>;
   modelRef: React.RefObject<ReviewListModel>;
@@ -1767,6 +1791,13 @@ function useReviewThreadActions(args: {
   >["requestResolveThread"];
   setActiveIndex: React.Dispatch<React.SetStateAction<number>>;
   setCommentIndex: React.Dispatch<React.SetStateAction<number>>;
+  setEditReq: React.Dispatch<
+    React.SetStateAction<{
+      rootId: number;
+      path: string;
+      nonce: number;
+    } | null>
+  >;
   setReplyReq: React.Dispatch<
     React.SetStateAction<{
       rootId: number;
@@ -1857,6 +1888,15 @@ function useReviewThreadActions(args: {
     });
   };
 
+  const editActiveThreadComment = () => {
+    const t = args.activeThreadRef.current;
+    if (!(t && args.commentsRef.current.some((c) => c.id === t.rootId))) {
+      return;
+    }
+    args.editNonceRef.current += 1;
+    args.setEditReq({ ...t, nonce: args.editNonceRef.current });
+  };
+
   const toggleActiveThread = () => {
     const t = args.activeThreadRef.current;
     if (!t) {
@@ -1867,6 +1907,7 @@ function useReviewThreadActions(args: {
   };
 
   return {
+    editActiveThreadComment,
     goToComment,
     jumpToThread,
     replyToActiveThreadOrNextFile,
@@ -2322,8 +2363,12 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
     addReviewComment,
     reply,
     addIssueComment,
+    deleteIssueComment,
+    deleteReviewComment,
     requestResolveThread,
     submitReview,
+    updateIssueComment,
+    updateReviewComment,
   } = useCommentMutations(owner, repo, number);
 
   const detail = data;
@@ -2367,6 +2412,11 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
     path: string;
     nonce: number;
   } | null>(null);
+  const [editReq, setEditReq] = useState<{
+    rootId: number;
+    path: string;
+    nonce: number;
+  } | null>(null);
 
   const [collapsed, setCollapsed] =
     useState<ReadonlyMap<number, ReadonlySet<number>>>(EMPTY_COLLAPSED);
@@ -2393,6 +2443,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
   const saveStateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replyNonceRef = useRef(0);
   const toggleNonceRef = useRef(0);
+  const editNonceRef = useRef(0);
   const threadFlashRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeThreadRef = useRef<{ rootId: number; path: string } | null>(null);
@@ -2646,6 +2697,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
     addPendingStore,
     addReviewComment,
     copyTimerRef,
+    deleteReviewComment,
     dragRef,
     filesRef,
     handleListScroll,
@@ -2669,6 +2721,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
     setOpenBoxes,
     setSelection,
     toggleViewed,
+    updateReviewComment,
   });
 
   const {
@@ -2788,6 +2841,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
     advanceToNextReview(owner, repo, number, goInbox);
 
   const {
+    editActiveThreadComment,
     goToComment,
     jumpToThread,
     replyToActiveThreadOrNextFile,
@@ -2798,6 +2852,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
     activeThreadRef,
     commentIndex,
     commentsRef,
+    editNonceRef,
     filesRef,
     listRef,
     modelRef,
@@ -2806,6 +2861,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
     requestResolveThread,
     setActiveIndex,
     setCommentIndex,
+    setEditReq,
     setReplyReq,
     setRightOpen,
     setToggleReq,
@@ -2894,6 +2950,14 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
     await addIssueComment.mutateAsync({ body });
   };
 
+  const onEditIssueComment = async (a: { commentId: number; body: string }) => {
+    await updateIssueComment.mutateAsync(a);
+  };
+
+  const onDeleteIssueComment = async (a: { commentId: number }) => {
+    await deleteIssueComment.mutateAsync(a);
+  };
+
   const onOpenPrFiles = () => {
     if (!pr?.url) {
       return;
@@ -2909,6 +2973,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
     copyLink,
     cursorMoverRefs,
     cycleFile,
+    editActiveThreadComment,
     extendSelection,
     findOpen,
     findOpenRef,
@@ -3111,6 +3176,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
                   : null
               }
               dragging={dragging}
+              editRequest={editReq}
               files={files}
               findCurrent={findCurrent}
               flashKey={flashKey}
@@ -3155,6 +3221,8 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
         inlineComments={detail.comments}
         onAddIssueComment={onAddIssueComment}
         onClose={onCloseRightPanel}
+        onDeleteIssueComment={onDeleteIssueComment}
+        onEditIssueComment={onEditIssueComment}
         onJumpToThread={jumpToThread}
         onOpenPr={onOpenPrUrl}
         onToggleWide={onToggleDrawerWide}

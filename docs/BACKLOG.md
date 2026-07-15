@@ -389,6 +389,26 @@ and several paths call `mutate` with no in-flight guard.
 - [ ] 🟢 **Issue comment (Info drawer)** — wire `addIssueComment.isPending` to
       `AddCommentBox` `pending` in `right-panel.tsx` (hardcoded `false`).
 
+### 5d. Comment-management follow-ups (post-comment-feature)
+
+Edit / delete / reply / resolve / unresolve now work end-to-end in **both**
+surfaces — inline threads (`comment-thread.tsx`, all five actions via
+`review-list.tsx` `MappedCommentThread` callbacks) and the Info drawer
+(`right-panel.tsx` add / edit / delete of issue comments; reply/resolve stay
+inline by design). These are cleanups, not new scope.
+
+- [ ] ⏸ 🟢 **Dedupe comment-row UI** — the own-guard + Edit/Delete two-step
+      confirm block is implemented near-identically twice: `ConversationItem`
+      in `right-panel.tsx` and the comment map in `comment-thread.tsx`. Extract
+      a shared `CommentTools` (own-guard + Edit/`Delete?` buttons, blur/mouseleave
+      disarm) and `CommentBody` (`editing ? AddCommentBox : Markdown`); ~40 lines
+      deduped. Do it **after** the edit/delete/drawer branches land, not before —
+      they were stacked.
+- [ ] ⏸ 🟢 **E2E for reply / resolve / unresolve** — edit and delete are covered
+      (`comment-edit.spec.ts`, `comment-delete.spec.ts`, `drawer-comment.spec.ts`),
+      but reply, resolve, and unresolve are wired yet unverified by any spec. Add
+      inline-thread coverage for all three.
+
 ---
 
 ## 7. Data freshness

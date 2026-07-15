@@ -47,6 +47,18 @@ export const api = {
     side: string;
     startLine?: number;
   }) => invoke<ReviewComment>("create_review_comment", args),
+  deleteIssueComment: (args: {
+    owner: string;
+    repo: string;
+    number: number;
+    commentId: number;
+  }) => invoke<void>("delete_issue_comment", args),
+  deleteReviewComment: (args: {
+    owner: string;
+    repo: string;
+    number: number;
+    commentId: number;
+  }) => invoke<void>("delete_review_comment", args),
   getCachedInbox: () => invoke<InboxData | null>("get_cached_inbox"),
   getCachedPullRequestDetail: (owner: string, repo: string, number: number) =>
     invoke<PullRequestDetail | null>("get_cached_pull_request_detail", {
@@ -129,4 +141,18 @@ export const api = {
       startLine?: number;
     }[];
   }) => invoke<void>("submit_review", args),
+  updateIssueComment: (args: {
+    owner: string;
+    repo: string;
+    number: number;
+    commentId: number;
+    body: string;
+  }) => invoke<void>("update_issue_comment", args),
+  updateReviewComment: (args: {
+    owner: string;
+    repo: string;
+    number: number;
+    commentId: number;
+    body: string;
+  }) => invoke<void>("update_review_comment", args),
 };

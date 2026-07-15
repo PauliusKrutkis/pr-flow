@@ -2055,6 +2055,48 @@ dialog.q-dialog::backdrop {
   color: #d6d6e6;
 }
 
+.dir-quiet .qf-comment-tools {
+  display: inline-flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.dir-quiet .qf-thread:hover .qf-comment-tools,
+.dir-quiet .qf-thread:focus-within .qf-comment-tools,
+.dir-quiet .qf-convo-item:hover .qf-comment-tools,
+.dir-quiet .qf-convo-item:focus-within .qf-comment-tools {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dir-quiet .qf-comment-tools {
+    transition: none;
+  }
+}
+.dir-quiet .qf-comment-tool {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: var(--faint);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
+}
+.dir-quiet .qf-comment-tool:hover {
+  color: var(--fg);
+  background: var(--surface-2);
+}
+.dir-quiet .qf-comment-tool-danger,
+.dir-quiet .qf-comment-tool-danger:hover {
+  color: var(--del);
+  background: var(--del-bg);
+}
+
 .dir-quiet .qf-reply-btn {
   display: flex;
   gap: 7px;

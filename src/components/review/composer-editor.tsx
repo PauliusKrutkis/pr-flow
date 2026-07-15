@@ -18,12 +18,12 @@ import { Kbd } from "../ui/kbd.tsx";
 export interface ComposerEditorHandle {
   clear: () => void;
   focus: () => void;
-  /** The composed comment, serialized to the hosts' wire format. */
   getMarkdown: () => string;
 }
 
 interface ComposerEditorProps {
   autoFocus?: boolean;
+  initialMarkdown?: string;
   onCancel: () => void;
   onEmptyChange: (empty: boolean) => void;
   onModeFlip?: () => void;
@@ -128,6 +128,7 @@ export function ComposerEditor({
   ref,
   placeholder,
   autoFocus,
+  initialMarkdown,
   suggestionText,
   onSubmitRequest,
   onCancel,
@@ -148,7 +149,8 @@ export function ComposerEditor({
 
   const editor = useEditor({
     autofocus: autoFocus ? "end" : false,
-    content: "",
+    content: initialMarkdown ?? "",
+    contentType: "markdown",
     editorProps: {
       attributes: {
         "aria-label": placeholder,

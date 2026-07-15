@@ -199,6 +199,132 @@ export function useCommentMutations(
     },
   });
 
+  const deleteReviewComment = useMutation<
+    void,
+    Error,
+    { commentId: number },
+    DetailSnapshot
+  >({
+    mutationFn: (args: { commentId: number }) =>
+      api.deleteReviewComment({ number, owner, repo, ...args }),
+    onError: (e, _args, before) => rollback(before, "Delete", e),
+    onMutate: async (args) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const before = queryClient.getQueryData<PullRequestDetail>(detailKey);
+      queryClient.setQueryData<PullRequestDetail>(detailKey, (cur) =>
+        cur
+          ? {
+              ...cur,
+              comments: cur.comments.filter((c) => c.id !== args.commentId),
+            }
+          : cur
+      );
+      return before;
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+  });
+
+  const updateReviewComment = useMutation<
+    void,
+    Error,
+    { commentId: number; body: string },
+    DetailSnapshot
+  >({
+    mutationFn: (args: { commentId: number; body: string }) =>
+      api.updateReviewComment({ number, owner, repo, ...args }),
+    onError: (e, _args, before) => rollback(before, "Edit", e),
+    onMutate: async (args) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const before = queryClient.getQueryData<PullRequestDetail>(detailKey);
+      queryClient.setQueryData<PullRequestDetail>(detailKey, (cur) =>
+        cur
+          ? {
+              ...cur,
+              comments: cur.comments.map((c) =>
+                c.id === args.commentId ? { ...c, body: args.body } : c
+              ),
+            }
+          : cur
+      );
+      return before;
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+  });
+
+  const updateIssueComment = useMutation<
+    void,
+    Error,
+    { commentId: number; body: string },
+    DetailSnapshot
+  >({
+    mutationFn: (args: { commentId: number; body: string }) =>
+      api.updateIssueComment({ number, owner, repo, ...args }),
+    onError: (e, _args, before) => rollback(before, "Edit", e),
+    onMutate: async (args) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const before = queryClient.getQueryData<PullRequestDetail>(detailKey);
+      queryClient.setQueryData<PullRequestDetail>(detailKey, (cur) =>
+        cur
+          ? {
+              ...cur,
+              issueComments: (cur.issueComments ?? []).map((c) =>
+                c.id === args.commentId ? { ...c, body: args.body } : c
+              ),
+            }
+          : cur
+      );
+      return before;
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+  });
+
+  const deleteIssueComment = useMutation<
+    void,
+    Error,
+    { commentId: number },
+    DetailSnapshot
+  >({
+    mutationFn: (args: { commentId: number }) =>
+      api.deleteIssueComment({ number, owner, repo, ...args }),
+    onError: (e, _args, before) => rollback(before, "Delete", e),
+    onMutate: async (args) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const before = queryClient.getQueryData<PullRequestDetail>(detailKey);
+      queryClient.setQueryData<PullRequestDetail>(detailKey, (cur) =>
+        cur
+          ? {
+              ...cur,
+              issueComments: (cur.issueComments ?? []).filter(
+                (c) => c.id !== args.commentId
+              ),
+            }
+          : cur
+      );
+      return before;
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+  });
+
   const resolveIntentRef = useRef(new Map<string, boolean>());
   const resolveInflightRef = useRef<string | null>(null);
 
@@ -292,9 +418,13 @@ export function useCommentMutations(
   return {
     addIssueComment,
     addReviewComment,
+    deleteIssueComment,
+    deleteReviewComment,
     reply,
     requestResolveThread,
     resolveThread,
     submitReview,
+    updateIssueComment,
+    updateReviewComment,
   };
 }
