@@ -884,9 +884,8 @@ link interception · Universal Links.
 - [ ] **Theming: CSS file vs Tailwind variables** — is theming really a CSS file
       rather than Tailwind variables? Consider using TW everywhere for better
       optimization.
-- [ ] **`ctrl+k` context action menu** — a context-driven quick-action menu
-      (distinct from the `mod+k` command palette). In a PR it offers an "Add
-      comment" item that opens a small dialog to quickly scribble a note —
-      skipping the need to comment inline in code or open the info drawer and
-      scroll to the comment area. Menu items adapt to the current context.
+- [ ] **Command palette "Add comment" item** — add an "Add comment" action to
+      the existing `mod+k` command palette (only in PR context). It opens a small
+      dialog to quickly scribble a note — skipping the need to comment inline in
+      code or open the info drawer and scroll to the comment area.
 - [ ] **Hide empty tabs**.
