@@ -10,10 +10,14 @@ import type { Page } from "./types.ts";
 
 export interface AppOptions {
   detail?: unknown;
+  appVersion?: string;
   detailByCall?: unknown[];
   detailByLoad?: unknown[];
   hangIssueComment?: boolean;
   hasToken?: boolean;
+  releases?:
+    | { tag: string; publishedAt: string | null; notes: string | null }[]
+    | null;
   inbox?: InboxFixture;
   inboxByCall?: unknown[];
   repoHits?: { fullName: string; description: string }[];
@@ -24,11 +28,13 @@ export interface AppOptions {
 export async function setupApp(page: Page, opts: AppOptions = {}) {
   const config = {
     account: ACCOUNT,
+    appVersion: opts.appVersion ?? "1.0.0",
     detail: (opts.detail ?? DETAIL) as typeof DETAIL,
     detailByCall: opts.detailByCall ?? null,
     detailByLoad: opts.detailByLoad ?? null,
     hangIssueComment: opts.hangIssueComment ?? false,
     hasToken: opts.hasToken ?? true,
+    releases: opts.releases ?? [],
     inbox: opts.inbox ?? INBOX,
     inboxByCall: opts.inboxByCall ?? null,
     repoHits: opts.repoHits ?? [],
@@ -73,6 +79,25 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
           user: "me",
           userAvatarUrl: "",
         }),
+        delete_issue_comment: (args) => {
+          cfg.detail.issueComments = (
+            cfg.detail.issueComments as Array<{ id: number }>
+          ).filter(
+            (c) => c.id !== args.commentId
+          ) as typeof cfg.detail.issueComments;
+          localStorage.setItem("e2e:lastConvoDelete", JSON.stringify(args));
+          return null;
+        },
+        delete_review_comment: (args) => {
+          cfg.detail.comments = (
+            cfg.detail.comments as Array<{ id: number }>
+          ).filter(
+            (c) => c.id !== args.commentId
+          ) as typeof cfg.detail.comments;
+          localStorage.setItem("e2e:lastCommentDelete", JSON.stringify(args));
+          return null;
+        },
+        get_app_version: () => cfg.appVersion,
         get_cached_inbox: () => null,
         get_cached_pull_request_detail: () => null,
         get_cached_subscribed: () => null,
@@ -96,6 +121,7 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
           inboxCalls += 1;
           return result;
         },
+        list_releases: () => cfg.releases,
         list_subscribed: () => cfg.subscribed,
         "plugin:opener|open": () => null,
         "plugin:opener|open_url": () => null,
@@ -121,6 +147,18 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
         set_watched_repos: () => null,
         submit_review: (args) => {
           localStorage.setItem("e2e:lastReview", JSON.stringify(args));
+          return null;
+        },
+        update_issue_comment: (args) => {
+          for (const c of cfg.detail.issueComments as Array<{
+            id: number;
+            body: string;
+          }>) {
+            if (c.id === args.commentId) {
+              c.body = args.body as string;
+            }
+          }
+          localStorage.setItem("e2e:lastConvoEdit", JSON.stringify(args));
           return null;
         },
         update_review_comment: (args) => {

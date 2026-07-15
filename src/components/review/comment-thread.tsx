@@ -27,6 +27,7 @@ export interface EditRequest {
 interface CommentThreadProps {
   comments: ReviewComment[];
   editRequest?: EditRequest | null;
+  onDelete?: (a: { commentId: number }) => Promise<void>;
   onEdit?: (a: { commentId: number; body: string }) => Promise<void>;
   onHoverChange?: (hovering: boolean) => void;
   onReply: (a: { inReplyTo: number; body: string }) => Promise<void>;
@@ -56,6 +57,7 @@ export function CommentThread({
   replyPending,
   onResolve,
   onEdit,
+  onDelete,
   onHoverChange,
   replyRequest,
   toggleRequest,
@@ -73,6 +75,9 @@ export function CommentThread({
 
   const [replying, setReplying] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(
+    null
+  );
   const [collapsed, setCollapsed] = useState(resolved);
   const [wasResolved, setWasResolved] = useState(resolved);
   const [lastReplyNonce, setLastReplyNonce] = useState(0);
@@ -130,11 +135,29 @@ export function CommentThread({
     if (Number.isFinite(id)) {
       setEditingId(id);
       setReplying(false);
+      setConfirmingDeleteId(null);
     }
   };
 
   const handleCancelEdit = () => {
     setEditingId(null);
+  };
+
+  const handleDelete = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const id = Number(e.currentTarget.dataset.commentId);
+    if (!Number.isFinite(id)) {
+      return;
+    }
+    if (confirmingDeleteId === id) {
+      setConfirmingDeleteId(null);
+      onDelete?.({ commentId: id });
+    } else {
+      setConfirmingDeleteId(id);
+    }
+  };
+
+  const disarmDelete = () => {
+    setConfirmingDeleteId(null);
   };
 
   const expand = () => {
@@ -260,22 +283,40 @@ export function CommentThread({
             >
               {formatRelativeTime(c.createdAt)}
             </span>
-            {!!onEdit && c.user === ownLogin && editingId !== c.id && (
+            {c.user === ownLogin && editingId !== c.id && (
               <span className="qf-comment-tools">
-                <button
-                  aria-label="Edit comment"
-                  className="qf-comment-tool qf-focusable"
-                  data-comment-id={c.id}
-                  onClick={handleStartEdit}
-                  type="button"
-                >
-                  Edit
-                  {c.id === lastOwnId && (
-                    <span aria-hidden className="qf-key-hint">
-                      <Kbd combo="shift+e" />
-                    </span>
-                  )}
-                </button>
+                {!!onEdit && (
+                  <button
+                    aria-label="Edit comment"
+                    className="qf-comment-tool qf-focusable"
+                    data-comment-id={c.id}
+                    onClick={handleStartEdit}
+                    type="button"
+                  >
+                    Edit
+                    {c.id === lastOwnId && (
+                      <span aria-hidden className="qf-key-hint">
+                        <Kbd combo="shift+e" />
+                      </span>
+                    )}
+                  </button>
+                )}
+                {!!onDelete && (
+                  <button
+                    aria-label="Delete comment"
+                    className={cn(
+                      "qf-comment-tool qf-focusable",
+                      confirmingDeleteId === c.id && "qf-comment-tool-danger"
+                    )}
+                    data-comment-id={c.id}
+                    onBlur={disarmDelete}
+                    onClick={handleDelete}
+                    onMouseLeave={disarmDelete}
+                    type="button"
+                  >
+                    {confirmingDeleteId === c.id ? "Delete?" : "Delete"}
+                  </button>
+                )}
               </span>
             )}
           </div>

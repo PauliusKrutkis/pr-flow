@@ -97,13 +97,18 @@ pub fn run() {
             commands::create_review_comment,
             commands::reply_to_review_comment,
             commands::update_review_comment,
+            commands::delete_review_comment,
             commands::resolve_thread,
             commands::create_issue_comment,
+            commands::update_issue_comment,
+            commands::delete_issue_comment,
             commands::submit_review,
             commands::get_viewed_map,
             commands::set_viewed_map,
             update::check_for_update,
             update::install_update,
+            update::get_app_version,
+            update::list_releases,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

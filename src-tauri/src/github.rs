@@ -1110,6 +1110,25 @@ impl GitHubPlatform {
         Ok(())
     }
 
+    pub async fn delete_review_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        _number: u64,
+        comment_id: u64,
+    ) -> Result<(), String> {
+        let resp = self
+            .client
+            .delete(format!(
+                "{API}/repos/{owner}/{repo}/pulls/comments/{comment_id}"
+            ))
+            .send()
+            .await
+            .map_err(net_err)?;
+        read_body(resp).await?;
+        Ok(())
+    }
+
     pub async fn create_issue_comment(
         &self,
         owner: &str,
@@ -1122,6 +1141,46 @@ impl GitHubPlatform {
             .client
             .post(format!("{API}/repos/{owner}/{repo}/issues/{number}/comments"))
             .json(&payload)
+            .send()
+            .await
+            .map_err(net_err)?;
+        read_body(resp).await?;
+        Ok(())
+    }
+
+    pub async fn update_issue_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        _number: u64,
+        comment_id: u64,
+        body: &str,
+    ) -> Result<(), String> {
+        let resp = self
+            .client
+            .patch(format!(
+                "{API}/repos/{owner}/{repo}/issues/comments/{comment_id}"
+            ))
+            .json(&json!({ "body": body }))
+            .send()
+            .await
+            .map_err(net_err)?;
+        read_body(resp).await?;
+        Ok(())
+    }
+
+    pub async fn delete_issue_comment(
+        &self,
+        owner: &str,
+        repo: &str,
+        _number: u64,
+        comment_id: u64,
+    ) -> Result<(), String> {
+        let resp = self
+            .client
+            .delete(format!(
+                "{API}/repos/{owner}/{repo}/issues/comments/{comment_id}"
+            ))
             .send()
             .await
             .map_err(net_err)?;
