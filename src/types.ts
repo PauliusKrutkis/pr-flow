@@ -103,7 +103,15 @@ export interface ReviewSummary {
   userAvatarUrl: string;
 }
 
+export interface CiStatus {
+  failed: number;
+  state: "success" | "failure" | "pending" | "none";
+  total: number;
+  url: string;
+}
+
 export interface PullRequestDetail {
+  ciStatus: CiStatus;
   comments: ReviewComment[];
   fetchedAt: number;
   files: ChangedFile[];
@@ -168,6 +176,13 @@ export interface UpdateInfo {
   currentVersion: string;
   notes: string | null;
   version: string;
+}
+
+/** One published version release on the app's GitHub repo. */
+export interface ReleaseInfo {
+  notes: string | null;
+  publishedAt: string | null;
+  tag: string;
 }
 
 export interface PRRef {

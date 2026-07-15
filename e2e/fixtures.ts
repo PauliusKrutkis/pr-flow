@@ -1,5 +1,3 @@
-/** Deterministic backend fixtures for the mocked Tauri bridge. */
-
 export const makePr = (
   n: number,
   title: string,
@@ -108,6 +106,12 @@ const PATCH = `@@ -1,5 +1,6 @@
  export const beta = true;`;
 
 export const DETAIL = {
+  ciStatus: {
+    failed: 1,
+    state: "failure",
+    total: 4,
+    url: "https://github.com/o/r/pull/1/checks",
+  },
   comments: [
     {
       body: "Is this constant right?",
@@ -247,6 +251,53 @@ export const DETAIL = {
       userAvatarUrl: "",
     },
   ],
+};
+
+/**
+ * DETAIL plus a thread and a PR-level comment authored by the signed-in
+ * fixture user ("me") — the edit/delete affordances only appear on your own
+ * comments. Bodies carry markdown so specs can prove the raw wire format
+ * round-trips into the composer instead of re-serialized HTML.
+ */
+export const DETAIL_WITH_OWN_COMMENT = {
+  ...DETAIL,
+  comments: [
+    ...DETAIL.comments,
+    {
+      body: "I will tighten this **loop** tomorrow.",
+      createdAt: "2026-07-02T09:50:00Z",
+      diffHunk: "",
+      id: 150,
+      inReplyToId: null,
+      line: 3,
+      originalLine: null,
+      path: "src/lib/fuzzy.ts",
+      resolved: false,
+      side: "RIGHT",
+      threadId: "T150",
+      user: "me",
+      userAvatarUrl: "",
+    },
+  ],
+  issueComments: [
+    ...DETAIL.issueComments,
+    {
+      body: "Deploying to **staging** first.",
+      createdAt: "2026-07-02T10:15:00Z",
+      id: 210,
+      user: "me",
+      userAvatarUrl: "",
+    },
+  ],
+};
+
+/**
+ * A repo with no CI configured: the pill must render nothing so quiet repos
+ * stay quiet. Serve via `detailByCall: [DETAIL_NO_CI]`.
+ */
+export const DETAIL_NO_CI = {
+  ...DETAIL,
+  ciStatus: { failed: 0, state: "none", total: 0, url: "" },
 };
 
 /**

@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { useRef } from "react";
 import { api } from "../lib/api.ts";
 import { queryClient, queryKeys } from "../lib/query-client.ts";
 import { useAppStore } from "../store/app-store.ts";
@@ -25,7 +26,6 @@ function nextTempId(): number {
 
 type DetailSnapshot = PullRequestDetail | undefined;
 
-/** A best-effort local comment standing in until the server echoes the real one. */
 function optimisticComment(c: {
   path: string;
   line: number | null;
@@ -199,6 +199,181 @@ export function useCommentMutations(
     },
   });
 
+  const deleteReviewComment = useMutation<
+    void,
+    Error,
+    { commentId: number },
+    DetailSnapshot
+  >({
+    mutationFn: (args: { commentId: number }) =>
+      api.deleteReviewComment({ number, owner, repo, ...args }),
+    onError: (e, _args, before) => rollback(before, "Delete", e),
+    onMutate: async (args) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const before = queryClient.getQueryData<PullRequestDetail>(detailKey);
+      queryClient.setQueryData<PullRequestDetail>(detailKey, (cur) =>
+        cur
+          ? {
+              ...cur,
+              comments: cur.comments.filter((c) => c.id !== args.commentId),
+            }
+          : cur
+      );
+      return before;
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+  });
+
+  const updateReviewComment = useMutation<
+    void,
+    Error,
+    { commentId: number; body: string },
+    DetailSnapshot
+  >({
+    mutationFn: (args: { commentId: number; body: string }) =>
+      api.updateReviewComment({ number, owner, repo, ...args }),
+    onError: (e, _args, before) => rollback(before, "Edit", e),
+    onMutate: async (args) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const before = queryClient.getQueryData<PullRequestDetail>(detailKey);
+      queryClient.setQueryData<PullRequestDetail>(detailKey, (cur) =>
+        cur
+          ? {
+              ...cur,
+              comments: cur.comments.map((c) =>
+                c.id === args.commentId ? { ...c, body: args.body } : c
+              ),
+            }
+          : cur
+      );
+      return before;
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+  });
+
+  const updateIssueComment = useMutation<
+    void,
+    Error,
+    { commentId: number; body: string },
+    DetailSnapshot
+  >({
+    mutationFn: (args: { commentId: number; body: string }) =>
+      api.updateIssueComment({ number, owner, repo, ...args }),
+    onError: (e, _args, before) => rollback(before, "Edit", e),
+    onMutate: async (args) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const before = queryClient.getQueryData<PullRequestDetail>(detailKey);
+      queryClient.setQueryData<PullRequestDetail>(detailKey, (cur) =>
+        cur
+          ? {
+              ...cur,
+              issueComments: (cur.issueComments ?? []).map((c) =>
+                c.id === args.commentId ? { ...c, body: args.body } : c
+              ),
+            }
+          : cur
+      );
+      return before;
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+  });
+
+  const deleteIssueComment = useMutation<
+    void,
+    Error,
+    { commentId: number },
+    DetailSnapshot
+  >({
+    mutationFn: (args: { commentId: number }) =>
+      api.deleteIssueComment({ number, owner, repo, ...args }),
+    onError: (e, _args, before) => rollback(before, "Delete", e),
+    onMutate: async (args) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const before = queryClient.getQueryData<PullRequestDetail>(detailKey);
+      queryClient.setQueryData<PullRequestDetail>(detailKey, (cur) =>
+        cur
+          ? {
+              ...cur,
+              issueComments: (cur.issueComments ?? []).filter(
+                (c) => c.id !== args.commentId
+              ),
+            }
+          : cur
+      );
+      return before;
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+  });
+
+  const resolveIntentRef = useRef(new Map<string, boolean>());
+  const resolveInflightRef = useRef<string | null>(null);
+
+  const patchThreadResolved = (threadId: string, resolved: boolean) => {
+    queryClient.setQueryData<PullRequestDetail>(detailKey, (cur) =>
+      cur
+        ? {
+            ...cur,
+            comments: cur.comments.map((c) =>
+              c.threadId === threadId ? { ...c, resolved } : c
+            ),
+          }
+        : cur
+    );
+  };
+
+  const flushResolveIntents = () => {
+    if (resolveInflightRef.current !== null) {
+      return;
+    }
+    const detail = queryClient.getQueryData<PullRequestDetail>(detailKey);
+    if (!detail) {
+      return;
+    }
+    for (const [threadId, intent] of resolveIntentRef.current) {
+      const current = detail.comments.find(
+        (c) => c.threadId === threadId
+      )?.resolved;
+      if (current !== undefined && current !== intent) {
+        resolveInflightRef.current = threadId;
+        resolveThread.mutate({ resolved: intent, threadId });
+        return;
+      }
+    }
+  };
+
+  const requestResolveThread = (args: {
+    threadId: string;
+    resolved: boolean;
+  }) => {
+    resolveIntentRef.current.set(args.threadId, args.resolved);
+    patchThreadResolved(args.threadId, args.resolved);
+    if (resolveInflightRef.current !== null) {
+      return;
+    }
+    resolveInflightRef.current = args.threadId;
+    resolveThread.mutate(args);
+  };
+
   const resolveThread = useMutation<
     void,
     Error,
@@ -212,22 +387,13 @@ export function useCommentMutations(
     onMutate: async (args) => {
       await queryClient.cancelQueries({ queryKey: detailKey });
       const before = queryClient.getQueryData<PullRequestDetail>(detailKey);
-      queryClient.setQueryData<PullRequestDetail>(detailKey, (cur) =>
-        cur
-          ? {
-              ...cur,
-              comments: cur.comments.map((c) =>
-                c.threadId === args.threadId
-                  ? { ...c, resolved: args.resolved }
-                  : c
-              ),
-            }
-          : cur
-      );
+      patchThreadResolved(args.threadId, args.resolved);
       return before;
     },
     onSettled: () => {
+      resolveInflightRef.current = null;
       queryClient.invalidateQueries({ queryKey: detailKey });
+      flushResolveIntents();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: detailKey });
@@ -252,8 +418,13 @@ export function useCommentMutations(
   return {
     addIssueComment,
     addReviewComment,
+    deleteIssueComment,
+    deleteReviewComment,
     reply,
+    requestResolveThread,
     resolveThread,
     submitReview,
+    updateIssueComment,
+    updateReviewComment,
   };
 }

@@ -43,7 +43,12 @@ import type { AccountInfo, ChangedFile, PendingComment } from "../../types.ts";
 import { Markdown } from "../markdown.tsx";
 import { Avatar } from "../ui/avatar.tsx";
 import { AddCommentBox } from "./add-comment-box.tsx";
-import { CommentThread, type ReplyRequest } from "./comment-thread.tsx";
+import {
+  CommentThread,
+  type EditRequest,
+  type ReplyRequest,
+  type ToggleRequest,
+} from "./comment-thread.tsx";
 import { ImageDiff } from "./image-diff.tsx";
 
 /**
@@ -101,6 +106,8 @@ export interface ReviewListCallbacks {
   }) => void;
   onCloseBox: (fileIndex: number, anchor: string) => void;
   onCopyPath: (fileIndex: number) => void;
+  onDeleteComment: (a: { commentId: number }) => Promise<void>;
+  onEditComment: (a: { commentId: number; body: string }) => Promise<void>;
   onMouseMove: (x: number, y: number) => void;
   onOpenBox: (fileIndex: number, anchor: string, startLine?: number) => void;
   onPlusDragEnd: () => void;
@@ -125,6 +132,7 @@ interface ReviewListProps {
   copiedPathIndex: number | null;
   cursorKey: string | null;
   dragging: boolean;
+  editRequest: (EditRequest & { path: string }) | null;
   files: readonly ChangedFile[];
   findCurrent: FindCurrent | null;
   flashKey: string | null;
@@ -143,6 +151,7 @@ interface ReviewListProps {
     toItem: number;
     endItem: number;
   } | null;
+  toggleRequest: (ToggleRequest & { path: string }) | null;
   viewedSet: ReadonlySet<string>;
 }
 
@@ -430,12 +439,16 @@ function MappedCommentThread({
   filename,
   addPending,
   replyRequest,
+  toggleRequest,
+  editRequest,
   callbacks,
 }: {
   thread: ReviewCommentsItem["threads"][number];
   filename: string;
   addPending: boolean;
   replyRequest: ReplyRequest | null;
+  toggleRequest: ToggleRequest | null;
+  editRequest: EditRequest | null;
   callbacks: ReviewListCallbacks;
 }) {
   const rootId = thread[0].id;
@@ -446,11 +459,15 @@ function MappedCommentThread({
   return (
     <CommentThread
       comments={thread}
+      editRequest={editRequest}
+      onDelete={callbacks.onDeleteComment}
+      onEdit={callbacks.onEditComment}
       onHoverChange={handleHoverChange}
       onReply={callbacks.onReply}
       onResolve={callbacks.onResolveThread}
       replyPending={addPending}
       replyRequest={replyRequest}
+      toggleRequest={toggleRequest}
     />
   );
 }
@@ -565,12 +582,16 @@ function CommentsBlock({
   filename,
   addPending,
   replyRequest,
+  toggleRequest,
+  editRequest,
   callbacks,
 }: {
   item: ReviewCommentsItem;
   filename: string;
   addPending: boolean;
   replyRequest: ReplyRequest | null;
+  toggleRequest: ToggleRequest | null;
+  editRequest: EditRequest | null;
   callbacks: ReviewListCallbacks;
 }) {
   const activeAccount = useAppStore((s) =>
@@ -587,10 +608,12 @@ function CommentsBlock({
         <MappedCommentThread
           addPending={addPending}
           callbacks={callbacks}
+          editRequest={editRequest}
           filename={filename}
           key={thread[0].id}
           replyRequest={replyRequest}
           thread={thread}
+          toggleRequest={toggleRequest}
         />
       ))}
       {item.pending.map((pending) => (
@@ -769,11 +792,21 @@ function renderCommentsItem(
     <CommentsBlock
       addPending={p.addPending}
       callbacks={p.callbacks}
+      editRequest={
+        p.editRequest && p.editRequest.path === file.filename
+          ? p.editRequest
+          : null
+      }
       filename={file.filename}
       item={item}
       replyRequest={
         p.replyRequest && p.replyRequest.path === file.filename
           ? p.replyRequest
+          : null
+      }
+      toggleRequest={
+        p.toggleRequest && p.toggleRequest.path === file.filename
+          ? p.toggleRequest
           : null
       }
     />

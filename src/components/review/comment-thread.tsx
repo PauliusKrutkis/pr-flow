@@ -1,6 +1,8 @@
-import { CheckCircle2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { CheckCircle2, MessageSquare } from "lucide-react";
+import { useState } from "react";
+import { cn } from "../../lib/cn.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
+import { useAppStore } from "../../store/app-store.ts";
 import type { ReviewComment } from "../../types.ts";
 import { Markdown } from "../markdown.tsx";
 import { Avatar } from "../ui/avatar.tsx";
@@ -12,13 +14,41 @@ export interface ReplyRequest {
   rootId: number;
 }
 
+export interface ToggleRequest {
+  nonce: number;
+  rootId: number;
+}
+
+export interface EditRequest {
+  nonce: number;
+  rootId: number;
+}
+
 interface CommentThreadProps {
   comments: ReviewComment[];
+  editRequest?: EditRequest | null;
+  onDelete?: (a: { commentId: number }) => Promise<void>;
+  onEdit?: (a: { commentId: number; body: string }) => Promise<void>;
   onHoverChange?: (hovering: boolean) => void;
   onReply: (a: { inReplyTo: number; body: string }) => Promise<void>;
   onResolve?: (a: { threadId: string; resolved: boolean }) => void;
   replyPending: boolean;
   replyRequest?: ReplyRequest | null;
+  toggleRequest?: ToggleRequest | null;
+}
+
+function applyCommand(
+  request: { nonce: number; rootId: number } | null | undefined,
+  rootId: number | undefined,
+  lastNonce: number,
+  setLastNonce: (nonce: number) => void,
+  apply: () => void
+): void {
+  if (!request || request.rootId !== rootId || request.nonce === lastNonce) {
+    return;
+  }
+  setLastNonce(request.nonce);
+  apply();
 }
 
 export function CommentThread({
@@ -26,27 +56,65 @@ export function CommentThread({
   onReply,
   replyPending,
   onResolve,
+  onEdit,
+  onDelete,
   onHoverChange,
   replyRequest,
+  toggleRequest,
+  editRequest,
 }: CommentThreadProps) {
-  const [replying, setReplying] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-
   const [root] = comments;
   const rootId = root?.id;
   const threadId = root?.threadId ?? null;
   const resolved = root?.resolved ?? false;
+  const ownLogin = useAppStore(
+    (s) => s.accounts.find((a) => a.id === s.activeAccountId)?.login
+  );
+  const ownComments = comments.filter((c) => c.user === ownLogin);
+  const lastOwnId = ownComments.at(-1)?.id;
 
-  useEffect(() => {
-    if (!replyRequest || replyRequest.rootId !== rootId) {
+  const [replying, setReplying] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<number | null>(
+    null
+  );
+  const [collapsed, setCollapsed] = useState(resolved);
+  const [wasResolved, setWasResolved] = useState(resolved);
+  const [lastReplyNonce, setLastReplyNonce] = useState(0);
+  const [lastToggleNonce, setLastToggleNonce] = useState(0);
+  const [lastEditNonce, setLastEditNonce] = useState(0);
+
+  if (wasResolved !== resolved) {
+    setWasResolved(resolved);
+    setCollapsed(resolved);
+    setReplying(false);
+    setEditingId(null);
+  }
+
+  applyCommand(replyRequest, rootId, lastReplyNonce, setLastReplyNonce, () => {
+    setCollapsed(false);
+    setReplying(true);
+    setEditingId(null);
+  });
+  applyCommand(
+    toggleRequest,
+    rootId,
+    lastToggleNonce,
+    setLastToggleNonce,
+    () => {
+      setCollapsed((v) => !v);
+      setReplying(false);
+      setEditingId(null);
+    }
+  );
+  applyCommand(editRequest, rootId, lastEditNonce, setLastEditNonce, () => {
+    if (lastOwnId === undefined || !onEdit) {
       return;
     }
-    const raf = requestAnimationFrame(() => {
-      setExpanded(true);
-      setReplying(true);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [replyRequest, rootId]);
+    setCollapsed(false);
+    setReplying(false);
+    setEditingId(lastOwnId);
+  });
 
   const submitReply = (body: string) => {
     if (rootId !== undefined) {
@@ -55,12 +123,50 @@ export function CommentThread({
     setReplying(false);
   };
 
-  const handleExpand = () => {
-    setExpanded(true);
+  const submitEdit = (body: string) => {
+    if (editingId !== null) {
+      onEdit?.({ body, commentId: editingId });
+    }
+    setEditingId(null);
   };
 
-  const handleCollapse = () => {
-    setExpanded(false);
+  const handleStartEdit = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const id = Number(e.currentTarget.dataset.commentId);
+    if (Number.isFinite(id)) {
+      setEditingId(id);
+      setReplying(false);
+      setConfirmingDeleteId(null);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const handleDelete = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const id = Number(e.currentTarget.dataset.commentId);
+    if (!Number.isFinite(id)) {
+      return;
+    }
+    if (confirmingDeleteId === id) {
+      setConfirmingDeleteId(null);
+      onDelete?.({ commentId: id });
+    } else {
+      setConfirmingDeleteId(id);
+    }
+  };
+
+  const disarmDelete = () => {
+    setConfirmingDeleteId(null);
+  };
+
+  const expand = () => {
+    setCollapsed(false);
+  };
+
+  const collapse = () => {
+    setCollapsed(true);
+    setReplying(false);
   };
 
   const handleCancelReply = () => {
@@ -74,7 +180,6 @@ export function CommentThread({
   const handleResolve = () => {
     if (threadId !== null && onResolve) {
       onResolve({ resolved: !resolved, threadId });
-      setExpanded(resolved);
     }
   };
 
@@ -87,38 +192,81 @@ export function CommentThread({
     onMouseLeave: () => onHoverChange?.(false),
   };
 
-  if (resolved && !expanded) {
+  if (collapsed) {
+    const canResolve = threadId !== null && !!onResolve;
     return (
-      <button
-        className="qf-thread qf-thread-collapsed qf-focusable"
+      <div
+        className={cn(
+          "qf-thread qf-thread-collapsed",
+          !resolved && "qf-thread-collapsed-open"
+        )}
         data-comment-root={rootId}
-        onClick={handleExpand}
-        title="Resolved — click to expand"
-        type="button"
         {...hoverProps}
       >
-        <CheckCircle2 aria-hidden size={13} />
-        <span className="qf-resolved-tag">Resolved</span>
-        <span className="qf-resolved-snip">
-          {root.user} · {firstLine(root.body)}
-        </span>
-      </button>
+        <button
+          className="qf-thread-collapsed-lead qf-focusable"
+          onClick={expand}
+          title="Expand (z)"
+          type="button"
+        >
+          {resolved ? (
+            <CheckCircle2 aria-hidden size={13} />
+          ) : (
+            <MessageSquare aria-hidden size={13} />
+          )}
+          {!!resolved && <span className="qf-resolved-tag">Resolved</span>}
+          <span className="qf-resolved-snip">
+            {root.user} · {firstLine(root.body)}
+          </span>
+        </button>
+        <div className="qf-thread-collapsed-actions">
+          {resolved && canResolve && (
+            <button
+              className="qf-thread-fold qf-focusable"
+              onClick={handleResolve}
+              type="button"
+            >
+              Unresolve
+              <span aria-hidden className="qf-key-hint">
+                <Kbd combo="x" />
+              </span>
+            </button>
+          )}
+          <button
+            aria-label="Expand thread"
+            className="qf-thread-fold qf-focusable"
+            onClick={expand}
+            title="Expand (z)"
+            type="button"
+          >
+            Expand
+            <span aria-hidden className="qf-key-hint">
+              <Kbd combo="z" />
+            </span>
+          </button>
+        </div>
+      </div>
     );
   }
 
   return (
     <div className="qf-thread" data-comment-root={rootId} {...hoverProps}>
+      <button
+        aria-label="Collapse thread"
+        className="qf-thread-fold qf-thread-fold-corner qf-focusable"
+        onClick={collapse}
+        title="Collapse (z)"
+        type="button"
+      >
+        Collapse
+        <span aria-hidden className="qf-key-hint">
+          <Kbd combo="z" />
+        </span>
+      </button>
       {!!resolved && (
         <div className="qf-thread-resolved-bar">
           <CheckCircle2 aria-hidden size={13} />
           <span className="qf-resolved-tag">Resolved</span>
-          <button
-            className="qf-resolved-collapse qf-focusable"
-            onClick={handleCollapse}
-            type="button"
-          >
-            Collapse
-          </button>
         </div>
       )}
       {comments.map((c, i) => (
@@ -135,10 +283,58 @@ export function CommentThread({
             >
               {formatRelativeTime(c.createdAt)}
             </span>
+            {c.user === ownLogin && editingId !== c.id && (
+              <span className="qf-comment-tools">
+                {!!onEdit && (
+                  <button
+                    aria-label="Edit comment"
+                    className="qf-comment-tool qf-focusable"
+                    data-comment-id={c.id}
+                    onClick={handleStartEdit}
+                    type="button"
+                  >
+                    Edit
+                    {c.id === lastOwnId && (
+                      <span aria-hidden className="qf-key-hint">
+                        <Kbd combo="shift+e" />
+                      </span>
+                    )}
+                  </button>
+                )}
+                {!!onDelete && (
+                  <button
+                    aria-label="Delete comment"
+                    className={cn(
+                      "qf-comment-tool qf-focusable",
+                      confirmingDeleteId === c.id && "qf-comment-tool-danger"
+                    )}
+                    data-comment-id={c.id}
+                    onBlur={disarmDelete}
+                    onClick={handleDelete}
+                    onMouseLeave={disarmDelete}
+                    type="button"
+                  >
+                    {confirmingDeleteId === c.id ? "Delete?" : "Delete"}
+                  </button>
+                )}
+              </span>
+            )}
           </div>
-          <div className="qf-comment-body">
-            <Markdown>{c.body}</Markdown>
-          </div>
+          {editingId === c.id ? (
+            <AddCommentBox
+              autoFocus
+              initialMarkdown={c.body}
+              onCancel={handleCancelEdit}
+              onSubmit={submitEdit}
+              pending={false}
+              placeholder="Edit your comment…"
+              submitLabel="Save"
+            />
+          ) : (
+            <div className="qf-comment-body">
+              <Markdown>{c.body}</Markdown>
+            </div>
+          )}
         </div>
       ))}
       {replying ? (

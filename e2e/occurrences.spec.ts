@@ -195,6 +195,25 @@ test("the find bar suppresses occurrence marks; closing it restores them", async
   await expect(occMarks(page)).toHaveCount(2);
 });
 
+test("with find open, selecting a token hands off: find closes, occurrences take over", async ({
+  page,
+}) => {
+  await page.keyboard.press("Control+f");
+  await expect(page.locator(".qf-findbar")).toBeVisible();
+  await page.locator(".qf-findbar-input").fill("alpha");
+  await expect(page.locator("mark.qf-find-mark").first()).toBeVisible();
+  await expect(occMarks(page)).toHaveCount(0);
+
+  await dblclickToken(page, 0, "return");
+
+  await expect(page.locator(".qf-findbar")).toHaveCount(0);
+  await expect(page.locator("mark.qf-find-mark")).toHaveCount(0);
+  await expect(occMarks(page)).toHaveCount(2);
+
+  await page.keyboard.press("n");
+  await expect(page.locator(".qf-row-active mark.qf-occ-mark")).toHaveCount(1);
+});
+
 test("Esc goes straight to the inbox — occurrence marks don't consume it", async ({
   page,
 }) => {

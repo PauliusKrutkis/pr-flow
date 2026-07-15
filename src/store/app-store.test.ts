@@ -47,6 +47,17 @@ describe("archive (dismiss until update)", () => {
       JSON.parse(localStorage.getItem("pr-flow:dismissed") ?? "{}")[KEY]
     ).toBe("2026-07-01T10:00:00Z");
   });
+
+  it("clearDismissed un-archives permanently, even after older activity", () => {
+    const s = useAppStore.getState();
+    s.dismiss(KEY, "2026-07-01T10:00:00Z");
+    s.clearDismissed(KEY);
+    const g = useAppStore.getState();
+    expect(g.isDismissed(KEY, "2026-07-01T10:00:00Z")).toBe(false);
+    expect(
+      JSON.parse(localStorage.getItem("pr-flow:dismissed") ?? "{}")[KEY]
+    ).toBeUndefined();
+  });
 });
 
 describe("unread tracking", () => {
