@@ -573,21 +573,21 @@ conflicts with zero-friction product goal).
 
 ### Wave 2 — quick wins
 
-- [ ] 🟢 **P04** — Hotkey for insert suggestion
-      (`mod+shift+s` in composer).
-- [ ] 🟢 **P05** — Comment thread expand/collapse hotkey
-      (`z` on active thread).
+- [x] 🟢 **P04** — Hotkey for insert suggestion — **done** as `mod+shift+g`
+      (`composer-editor.tsx`), not `mod+shift+s`.
+- [x] 🟢 **P05** — Comment thread expand/collapse hotkey — **done**; `z` toggles
+      the active thread (`review-screen.tsx`).
 - [ ] 🟢 **P06** — Next/previous diff hunk keybind (`}` /
       `{`).
-- [ ] 🟢 **P07** — Restore archived (`e`-archived) inbox
-      PRs (toggle view + `clearSeen`).
+- [x] 🟢 **P07** — Restore archived (`e`-archived) inbox
+      PRs — **done** (archived view toggle + restore).
 - [ ] 🟢 **`e` skips viewed files** — when marking viewed + next, jump to the
       next *unviewed* file instead of blindly advancing (next may already be
       viewed).
 - [ ] 🟢 **Pending comment discard hotkey** — keyboard shortcut for discard;
       improve discard button visibility (border/contrast is too subtle today).
-- [ ] 🟢 **Go to next/previous comment** — verify `]c` / `[c` coverage or add a
-      simpler binding if the sequence feels undiscoverable.
+- [x] 🟢 **Go to next/previous comment** — **done**; `]c` / `[c` bound in the
+      Comments group (`review-screen.tsx`).
 
 ### Wave 3 — review surfaces
 
@@ -603,8 +603,8 @@ conflicts with zero-friction product goal).
       an update (release notes via Rust command).
 - [ ] 🟢 **Distinct file header** — hard to tell when starting a new file; make
       the file header row more visually distinct in the diff list.
-- [ ] 🟢 **Info drawer author avatars** — PR discussion (`i`) threads should show
-      comment author avatars.
+- [x] 🟢 **Info drawer author avatars** — **done**; discussion rows render
+      `<Avatar>` per comment author (`right-panel.tsx`).
 - [ ] 🟢 **Copy comment text** — copy action for comment bodies in Code threads
       and Info drawer; fix text selection where comment markdown blocks
       selection unintentionally.
