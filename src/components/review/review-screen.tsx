@@ -655,7 +655,7 @@ function useOccurrenceTracking(refs: {
     (
       fileIndex: number,
       anchor: string,
-      opts?: { keepOccurrences?: boolean }
+      opts?: { keepOccurrences?: boolean; nudge?: boolean }
     ) => void
   >;
   setOccSpec: (next: OccState | null) => void;
@@ -2551,7 +2551,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
     (
       fileIndex: number,
       anchor: string,
-      opts?: { keepOccurrences?: boolean }
+      opts?: { keepOccurrences?: boolean; nudge?: boolean }
     ) => void
   >(() => undefined);
 
@@ -2582,7 +2582,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
   const selectLine = (
     fileIndex: number,
     anchor: string,
-    opts: { keepOccurrences?: boolean } = {}
+    opts: { keepOccurrences?: boolean; nudge?: boolean } = {}
   ) => {
     const m = modelRef.current;
     const key = fileAnchorKey(fileIndex, anchor);
@@ -2608,7 +2608,11 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
       setOccSpec,
     });
     if (itemIndex !== undefined) {
-      listRef.current?.centerItem(itemIndex);
+      if (opts.nudge) {
+        listRef.current?.nudgeItemIntoView(itemIndex);
+      } else {
+        listRef.current?.centerItem(itemIndex);
+      }
     }
   };
 
@@ -3340,7 +3344,7 @@ function buildOccNav(refs: {
     (
       fileIndex: number,
       anchor: string,
-      opts?: { keepOccurrences?: boolean }
+      opts?: { keepOccurrences?: boolean; nudge?: boolean }
     ) => void
   >;
 }): OccNav {
@@ -3368,6 +3372,7 @@ function buildOccNav(refs: {
       occMatchListRef.current[next].anchor,
       {
         keepOccurrences: true,
+        nudge: true,
       }
     );
   };
