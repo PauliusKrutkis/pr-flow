@@ -37,7 +37,7 @@ import { useAppStore } from "../../store/app-store.ts";
 import type { AccountInfo, ChangedFile, PendingComment } from "../../types.ts";
 import { Markdown } from "../markdown.tsx";
 import { Avatar } from "../ui/avatar.tsx";
-import { Kbd } from "../ui/kbd.tsx";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { AddCommentBox } from "./add-comment-box.tsx";
 import { CodeCell, highlightRowHtml } from "./code-cell.tsx";
 import {
@@ -685,22 +685,25 @@ function GroupHeader({
         <span className="qf-del">−{file.deletions}</span>
       </span>
       {canExpandFile(file) && (
-        <button
-          aria-busy={expanding || undefined}
-          aria-pressed={expanded}
-          className={cn("qf-expand-btn", expanded && "qf-expand-on")}
-          onClick={handleToggleExpand}
-          title={expanded ? "Back to the diff" : "Expand to the full file"}
-          type="button"
+        <Tooltip
+          combo="shift+v"
+          label={expanded ? "Back to the diff" : "Expand to the full file"}
         >
-          {expanded ? (
-            <FoldVertical aria-hidden size={12} />
-          ) : (
-            <UnfoldVertical aria-hidden size={12} />
-          )}
-          {expanded ? "Diff only" : "Full file"}
-          <Kbd className="qf-expand-kbd" combo="shift+v" />
-        </button>
+          <button
+            aria-busy={expanding || undefined}
+            aria-pressed={expanded}
+            className={cn("qf-expand-btn", expanded && "qf-expand-on")}
+            onClick={handleToggleExpand}
+            type="button"
+          >
+            {expanded ? (
+              <FoldVertical aria-hidden size={12} />
+            ) : (
+              <UnfoldVertical aria-hidden size={12} />
+            )}
+            {expanded ? "Diff only" : "Full file"}
+          </button>
+        </Tooltip>
       )}
       <button
         aria-pressed={viewed}

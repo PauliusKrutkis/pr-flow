@@ -14,6 +14,7 @@ export interface AppOptions {
   detailByCall?: unknown[];
   detailByLoad?: unknown[];
   fileBlobs?: Record<string, string>;
+  fileBlobDelayMs?: number;
   hangIssueComment?: boolean;
   hasToken?: boolean;
   releases?:
@@ -34,6 +35,7 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
     detailByCall: opts.detailByCall ?? null,
     detailByLoad: opts.detailByLoad ?? null,
     fileBlobs: opts.fileBlobs ?? FULL_FILES,
+    fileBlobDelayMs: opts.fileBlobDelayMs ?? 0,
     hangIssueComment: opts.hangIssueComment ?? false,
     hasToken: opts.hasToken ?? true,
     releases: opts.releases ?? [],
@@ -108,7 +110,13 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
           if (text === undefined) {
             throw new Error(`no blob fixture for ${String(args.path)}`);
           }
-          return { base64: btoa(text), size: text.length };
+          const blob = { base64: btoa(text), size: text.length };
+          if (cfg.fileBlobDelayMs > 0) {
+            return new Promise((resolve) =>
+              setTimeout(() => resolve(blob), cfg.fileBlobDelayMs)
+            );
+          }
+          return blob;
         },
         get_pull_request_detail: () => {
           const result = seq(cfg.detailByCall, detailCalls, detail);

@@ -326,7 +326,9 @@ export function useFileExpansion(args: {
   };
 }
 
-const RESTORE_HOLD_FRAMES = 10;
+const RESTORE_HOLD_FRAMES = 20;
+const REVEAL_QUIET_FRAMES = 3;
+const REVEAL_MIN_FRAMES = 6;
 
 /**
  * The restore half of the scroll-anchoring contract: whenever a capture is
@@ -340,9 +342,26 @@ const RESTORE_HOLD_FRAMES = 10;
  * the reader never sees it move. The virtualizer's scrollToIndex is only the
  * fallback for a row that left the render window, and it is NOT trusted for
  * final placement: it estimates item heights, and its own late corrections
- * would fight a competing delta. The position is then held for a few frames
- * against the virtualizer re-measuring the freshly inserted rows. `onRestored`
- * fires once — the screen uses it to flash the row, the "you are here" cue.
+ * would fight a competing delta.
+ *
+ * The position is then held against the virtualizer re-measuring the freshly
+ * inserted rows. This is the flash-critical part. When the swap inserts rows
+ * above the anchor, react-virtuoso first paints them at their estimated
+ * (defaultItemHeight) size, then re-measures them to their real height a frame
+ * later: the inner item-list grows before the compensating re-anchor lands, so
+ * the anchor row visibly drops (~77px) for a frame. Every after-the-fact hook
+ * (scroll, ResizeObserver, rAF) fires only once that bad frame has painted, so
+ * it can correct the position but not stop the flash.
+ *
+ * So the swap is masked instead of chased: the scroller is made invisible (but
+ * still laid out and measurable) synchronously before the first paint, held
+ * invisible while the virtualizer settles, and revealed only once the anchor
+ * row has held its captured offset for two consecutive frames — the reader
+ * never sees an intermediate frame. A ResizeObserver on the inner item-list
+ * plus an rAF loop drive the correction under the mask; a frame cap guarantees
+ * the content is always revealed even if it never fully settles. `onRestored`
+ * fires once on reveal — the screen uses it to flash the row, the "you are
+ * here" cue.
  *
  * The transient `qf-swapin` class on the scroller scopes the synthesized
  * rows' materialize animation to the swap itself — rows the virtualizer
@@ -368,15 +387,17 @@ export function useExpansionScrollRestore(
 
     const swapScroller = listRef.current?.scroller() ?? null;
     if (swapScroller) {
-      swapScroller.classList.add("qf-swapin");
+      swapScroller.classList.add("qf-swapin", "qf-swap-mask");
       setTimeout(() => swapScroller.classList.remove("qf-swapin"), 300);
     }
 
     let indexJumpUsed = false;
-    const correct = (): void => {
+    // The row's distance from its captured offset after a correction pass, or
+    // null when the row isn't rendered (the index-jump fallback path).
+    const correct = (): number | null => {
       const scroller = listRef.current?.scroller() ?? null;
       if (!scroller) {
-        return;
+        return null;
       }
       const top = rowViewportTop(scroller, captured.fileIndex, captured.anchor);
       if (top === null) {
@@ -387,23 +408,59 @@ export function useExpansionScrollRestore(
             listRef.current?.scrollItemTo(itemIndex, captured.top);
           }
         }
-        return;
+        return null;
       }
       if (Math.abs(top - captured.top) > 1) {
         scroller.scrollTop += top - captured.top;
+        return top - captured.top;
       }
+      return 0;
+    };
+
+    const reveal = () => {
+      swapScroller?.classList.remove("qf-swap-mask");
+      observer?.disconnect();
+      onRestoredRef.current(captured);
     };
 
     correct();
+
+    // Drive the correction under the mask: the virtualizer's re-measure grows
+    // the inner item-list, so a ResizeObserver on it re-pins the anchor as the
+    // list settles; the rAF loop backstops re-measures that don't resize the
+    // observed box. A resize also means the list is still settling, so the
+    // reveal waits for it to go quiet — the re-measures arrive over several
+    // frames, not just the first.
+    const scroller = listRef.current?.scroller() ?? null;
+    const innerList =
+      scroller?.querySelector<HTMLElement>(
+        '[data-testid="virtuoso-item-list"]'
+      ) ?? null;
+    // Start "hot": the first re-measure is expected but arrives a frame or two
+    // late, so the reveal must not fire in the quiet gap before it lands.
+    let framesSinceResize = -REVEAL_MIN_FRAMES;
+    const observer = innerList
+      ? new ResizeObserver(() => {
+          framesSinceResize = 0;
+          correct();
+        })
+      : null;
+    observer?.observe(innerList as HTMLElement);
+
     let frames = 0;
     const hold = () => {
       frames += 1;
-      correct();
-      if (frames < RESTORE_HOLD_FRAMES) {
-        requestAnimationFrame(hold);
-      } else {
-        onRestoredRef.current(captured);
+      framesSinceResize += 1;
+      const drift = correct();
+      const settled =
+        drift === 0 &&
+        frames >= REVEAL_MIN_FRAMES &&
+        framesSinceResize >= REVEAL_QUIET_FRAMES;
+      if (settled || frames >= RESTORE_HOLD_FRAMES) {
+        reveal();
+        return;
       }
+      requestAnimationFrame(hold);
     };
     requestAnimationFrame(hold);
   });

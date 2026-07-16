@@ -1,6 +1,7 @@
 import { setupApp } from "./bridge.ts";
 import { DETAIL_NO_CI } from "./fixtures.ts";
 import { expect, test } from "./test.ts";
+import type { Page } from "./types.ts";
 
 const SUBMIT_REVIEW = /Submit review/;
 const COPY_FILE_PATH = /Copy file path/;
@@ -526,6 +527,118 @@ test("expanding keeps the row you were reading where it was", async ({
   await page.keyboard.press("Shift+v");
   await expect(page.locator(".qf-row-xctx")).toHaveCount(0);
   await expect.poll(cursorDrift).toBeLessThan(3);
+});
+
+/**
+ * The worst *visible* movement of the top-most anchored row across the frames
+ * of a swap, not just where it lands. The scroll-anchoring contract corrects
+ * the row to its old offset, but the virtualizer re-measures the inserted rows
+ * a frame later and shoves the content — so the swap is masked (the scroller is
+ * hidden) until the row holds steady. The sampler locks onto whichever anchored
+ * row is top-most, presses the key, and reports the largest offset the row
+ * wanders from its start over 40 frames, ignoring frames where the scroller is
+ * masked — those never reach the reader.
+ */
+async function transientAnchorDrift(
+  page: Page,
+  press: string
+): Promise<number> {
+  await page.evaluate(() => {
+    const el = document.querySelector<HTMLElement>(".qf-scrollhost");
+    if (!el) {
+      throw new Error("no scroller");
+    }
+    const hostTop = el.getBoundingClientRect().top;
+    let key = "";
+    let base = 0;
+    for (const row of el.querySelectorAll<HTMLElement>("[data-anchor]")) {
+      const top = row.getBoundingClientRect().top - hostTop;
+      if (top > 4) {
+        key = `${row.getAttribute("data-file-index")}::${row.getAttribute("data-anchor")}`;
+        base = top;
+        break;
+      }
+    }
+    const w = window as unknown as { __drift: number };
+    w.__drift = 0;
+    let frames = 0;
+    const sample = () => {
+      const scroller = document.querySelector<HTMLElement>(".qf-scrollhost");
+      const masked = scroller?.classList.contains("qf-swap-mask");
+      if (scroller && !masked) {
+        const [fileIndex, anchor] = key.split("::");
+        const row = scroller.querySelector<HTMLElement>(
+          `[data-file-index="${fileIndex}"][data-anchor="${anchor}"]`
+        );
+        if (row) {
+          const top =
+            row.getBoundingClientRect().top -
+            scroller.getBoundingClientRect().top;
+          w.__drift = Math.max(w.__drift, Math.abs(top - base));
+        }
+      }
+      frames += 1;
+      if (frames < 40) {
+        requestAnimationFrame(sample);
+      }
+    };
+    requestAnimationFrame(sample);
+  });
+  await page.keyboard.press(press);
+  await page.waitForTimeout(800);
+  return page.evaluate(
+    () => (window as unknown as { __drift: number }).__drift
+  );
+}
+
+const MAX_TRANSIENT_DRIFT_PX = 8;
+
+// Drive the cursor deep into a file with the fast-down key. The full-file
+// toggle anchors on the cursor row (not the scroll position), so the cursor is
+// what has to be parked mid-file for the swap to insert rows above the anchor.
+async function moveCursorDeep(page: Page): Promise<void> {
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  for (let i = 0; i < 8; i += 1) {
+    await page.keyboard.press("f");
+    await page.waitForTimeout(30);
+  }
+  await page.waitForTimeout(300);
+}
+
+test("expanding deep in a file does not flash the anchor row", async ({
+  page,
+}) => {
+  await moveCursorDeep(page);
+  const drift = await transientAnchorDrift(page, "Shift+v");
+  await expect(page.locator(".qf-row-xctx").first()).toBeVisible();
+  expect(drift).toBeLessThan(MAX_TRANSIENT_DRIFT_PX);
+});
+
+test("collapsing deep in a file does not flash the anchor row", async ({
+  page,
+}) => {
+  await moveCursorDeep(page);
+  await page.keyboard.press("Shift+v");
+  await expect(page.locator(".qf-row-xctx").first()).toBeVisible();
+  const drift = await transientAnchorDrift(page, "Shift+v");
+  await expect(page.locator(".qf-row-xctx")).toHaveCount(0);
+  expect(drift).toBeLessThan(MAX_TRANSIENT_DRIFT_PX);
+});
+
+test("expanding with an in-flight blob does not flash the anchor row", async ({
+  page,
+}) => {
+  // Re-init the bridge to delay the blob fetch. The reload restores straight
+  // into the review screen (the PR opened in beforeEach persists), so there is
+  // no inbox step to redo — just wait for the files to come back.
+  await setupApp(page, { fileBlobDelayMs: 250 });
+  await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
+
+  await moveCursorDeep(page);
+  const drift = await transientAnchorDrift(page, "Shift+v");
+  await expect(page.locator(".qf-row-xctx").first()).toBeVisible();
+  expect(drift).toBeLessThan(MAX_TRANSIENT_DRIFT_PX);
 });
 
 test("the header button toggles the full file and reads Diff only while expanded", async ({

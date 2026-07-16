@@ -440,10 +440,14 @@ dialog.q-dialog::backdrop {
 
 .q-tooltip {
   z-index: 60;
+  display: inline-flex;
+  align-items: center;
   padding: 5px 9px;
   font-family: var(--font-ui);
   font-size: 11.5px;
   color: var(--fg);
+  white-space: nowrap;
+  pointer-events: none;
   background: var(--surface-hi);
   border: 1px solid var(--line-2);
   border-radius: 7px;
@@ -452,6 +456,19 @@ dialog.q-dialog::backdrop {
 }
 .q-tooltip .q-kbd {
   margin-left: 5px;
+}
+/* First layout pass, before the portal knows the trigger's rect: render it
+   off-screen so it can be measured without a flash at 0,0. */
+.q-tooltip-measure {
+  position: fixed;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .q-tooltip {
+    animation: none;
+  }
 }
 
 /* ---- markdown (global; the review drawer's scoped copy overrides inside .dir-quiet) ---- */
@@ -1481,69 +1498,43 @@ dialog.q-dialog::backdrop {
   font-family: var(--font-mono);
   font-size: 11px;
 }
-.dir-quiet .qf-viewed-btn {
+/* Header actions (Full file, Viewed) share the flat, borderless treatment of
+   the inline-comment actions (Reply/Resolve): text-forward buttons that fill a
+   quiet hover tint instead of carrying a pill outline. On the raised header
+   band the hover fill is --line, one step up from the --surface-2 ground —
+   the same figure/ground step reply/resolve get on their footer. */
+.dir-quiet .qf-viewed-btn,
+.dir-quiet .qf-expand-btn {
   display: inline-flex;
-  gap: 5px;
+  gap: 6px;
   align-items: center;
-  padding: 3px 8px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--faint);
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--muted);
   cursor: pointer;
   background: transparent;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: 6px;
   transition:
     color 120ms ease,
-    border-color 120ms ease,
     background-color 120ms ease;
 }
-.dir-quiet .qf-viewed-btn:hover {
+.dir-quiet .qf-viewed-btn:hover,
+.dir-quiet .qf-expand-btn:hover {
   color: var(--fg);
-  border-color: var(--line-2);
+  background: var(--line);
 }
 .dir-quiet .qf-viewed-btn.qf-viewed-on {
   color: var(--add);
+}
+.dir-quiet .qf-viewed-btn.qf-viewed-on:hover {
   background: var(--add-bg);
-  border-color: rgba(95, 208, 138, 0.35);
 }
-/* Full-file expansion toggle: always present; only its hotkey hint waits for
-   attention — revealed on header hover and on the active file, like the
-   inline-comment affordance. The chip keeps its width at opacity 0 so the
-   header never shifts. */
-.dir-quiet .qf-expand-btn {
-  display: inline-flex;
-  gap: 5px;
-  align-items: center;
-  padding: 3px 8px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--faint);
-  cursor: pointer;
-  background: transparent;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  transition:
-    color 120ms ease,
-    border-color 120ms ease,
-    background-color 120ms ease;
-}
-.dir-quiet .qf-expand-btn:hover {
-  color: var(--fg);
-  border-color: var(--line-2);
-}
+/* Full-file expansion toggle: always present. The shift+v hint lives in the
+   button's tooltip now, not an inline chip — the button stays label-tight so
+   it sits flush with Viewed with no dead space. */
 .dir-quiet .qf-expand-btn.qf-expand-on {
   color: var(--accent);
-  border-color: var(--line-2);
-}
-.dir-quiet .qf-expand-kbd {
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-.dir-quiet .qf-fsec-head:hover .qf-expand-kbd,
-.dir-quiet .qf-fsec-active .qf-expand-kbd,
-.dir-quiet .qf-expand-btn:focus-visible .qf-expand-kbd {
-  opacity: 1;
 }
 /* Blob still in flight (rare — the active file prefetches): the icon breathes
    so the press reads as registered. Not a loading state — nothing blocks. */
@@ -1740,6 +1731,15 @@ dialog.q-dialog::backdrop {
 }
 .dir-quiet .qf-row-xctx .qf-gutter {
   opacity: 0.55;
+}
+/* Mask the scroller while the swap settles (.qf-swap-mask, use-file-expansion
+   .ts). The virtualizer re-measures the inserted rows a frame after they first
+   paint, jolting the anchor row before it re-anchors; hiding the content until
+   the anchor holds steady keeps that intermediate frame off-screen. opacity is
+   used, not display/visibility, so the rows stay laid out and measurable for
+   the correction math underneath. */
+.dir-quiet .qf-swap-mask {
+  opacity: 0;
 }
 /* During the expand swap (transient .qf-swapin, use-file-expansion.ts) the
    synthesized rows materialize instead of popping in — it reads as the file
