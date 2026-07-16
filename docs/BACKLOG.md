@@ -747,11 +747,11 @@ already used in `keyboard-provider.tsx`), React Compiler enabled,
 
 | # | Location | Problem | Suggested fix | Effort |
 |---|---|---|---|---|
-| 1 | `hooks/use-token-gate.ts:80` | Manual fetch of OAuth config into `useState`, no race guard | Two `useQuery` calls with `staleTime: Infinity`; delete both `useState`s | Low |
+| 1 | ~~`hooks/use-token-gate.ts:80`~~ | ~~Manual fetch of OAuth config into `useState`, no race guard~~ | ~~Two `useQuery` calls with `staleTime: Infinity`; delete both `useState`s~~ | Low · **done** (two `useQuery` calls, no `useState`) |
 | 2 | ~~`hooks/use-viewed.ts:14`~~ | ~~One-time app-init load of viewed map inside a hook~~ | ~~Run at bootstrap (`main.tsx` or next to the store)~~ | Low · **done** |
-| 3 | `components/review/review-screen.tsx:2191` | Sets `activeThreadRef.current = null` on mount; ref already initializes to `null` | Delete the effect | Low |
-| 4 | `components/review/review-screen.tsx:2280` | Manual "latest ref" `useLayoutEffect` for `selectLine`, duplicated by `useLatest(selectLine)` on the next line | Delete the layout effect + `selectLineRef`, use the existing `selectLineLatestRef` everywhere (incl. `useReviewFind`) | Low-Med |
-| 5 | `keyboard/use-hotkeys.ts:23` | Manual latest-ref effect (`ref.current = bindings` every render) | `const getBindings = useEffectEvent(() => bindings)` and pass it to `registerSource`; collapses two effects into one | Low |
+| 3 | ~~`components/review/review-screen.tsx:2191`~~ | ~~Sets `activeThreadRef.current = null` on mount; ref already initializes to `null`~~ | ~~Delete the effect~~ | Low · **done** (effect no longer present) |
+| 4 | ~~`components/review/review-screen.tsx:2280`~~ | ~~Manual "latest ref" `useLayoutEffect` for `selectLine`, duplicated by `useLatest(selectLine)` on the next line~~ | ~~Delete the layout effect + `selectLineRef`~~ — **won't do**: there is no duplicate `useLatest(selectLine)`. `selectLineRef` is created empty *before* `useReviewFind` and filled after, but `selectLine` reads `findOpenRef` (a `useReviewFind` output) — a genuine init cycle `useLatest` can't express. The empty-ref-then-fill layout effect is required. | Low-Med |
+| 5 | ~~`keyboard/use-hotkeys.ts:23`~~ | ~~Manual latest-ref effect (`ref.current = bindings` every render)~~ | ~~`const getBindings = useEffectEvent(() => bindings)`~~ — **won't do**: the source getter is called during render by the command palette (`command-palette.tsx:87`) and help overlay (`help-overlay.tsx:94`) to enumerate bindings; `useEffectEvent` throws when invoked outside an effect/event, so the ref is required. | Low |
 | 6 | `hooks/use-inbox.ts:13` + `hooks/use-subscribed.ts:13` + `hooks/use-pull-request-detail.ts:23` | Disk-cache seeding of the query cache bolted onto component mounts; races the network fetch, re-runs per consumer | Hydrate once at app bootstrap (or adopt TanStack Query's persister). For PR detail, reuse the seeding logic already in `prefetchPullRequest` and call it from the navigation event | Med |
 | 7 | `app.tsx:92` | Bootstrap fetch (`hasToken`, `listAccounts`) with `.then` chains, imperative `setRoute` | Model as `useQuery`s (or module-level init in `main.tsx`) and derive the initial route from query state | Med |
 | 8 | `components/inbox/watch-repos-dialog.tsx:219` | Hand-rolled debounced repo search with manual `requestSeq` race protection | `useDebouncedValue` + `useQuery({ queryKey: ["repoSearch", q], enabled: q.length >= 2, placeholderData: keepPreviousData })`; map `searching` to `isFetching`/`isPlaceholderData` | Med |
@@ -781,7 +781,7 @@ as effects. Minor hardening notes included where useful.
 
 | Location | What it does | Notes |
 |---|---|---|
-| `hooks/use-modal-dialog.ts:7` | `dialog.showModal()` on mount | Bug: doc comment promises close-on-unmount but there is no cleanup; add `return () => dialog.close()` |
+| `hooks/use-modal-dialog.ts:7` | `dialog.showModal()` on mount | Close-on-unmount deliberately omitted (React removal closes it; explicit `close()` misfires under StrictMode) — doc comment now explains this |
 | `components/command-palette.tsx:105` | rAF focus of input on mount | See "focus dedup" note below |
 | `components/command-palette.tsx:109` | Scrolls active row into view on `activeIndex` change | Could use a ref on the active row instead of `querySelector` |
 | `components/token-gate.tsx:185` | rAF focus of host input on panel mount | `autoFocus` would likely suffice (not a dialog/portal) |
@@ -833,15 +833,15 @@ shared `useAutoFocus(ref)` hook, or the native `autoFocus` attribute where no
 
 | Location | Issue | Action |
 |---|---|---|
-| `components/inbox/watch-repos-dialog.tsx:213` | Scrolls `[data-armed="true"]` into view with `[]` deps, but `armed` starts `null`, so it never matches | Add `armed` to deps if keeping the armed row visible is desired; otherwise delete |
-| `components/inbox/search-pane.tsx:118` | Scrolls `[data-active="true"]` into view with `[]` deps; `sel` is 0 at mount so it is a no-op, and it never re-runs on arrow keys | Depend on `sel` (like `inbox.tsx:251`) or delete |
-| `components/review/pr-search.tsx:209` | Mount-only active-row scroll; selection changes on arrow keys are not kept in view | Move the scroll into the keydown handler or key on `[sel]` |
-| `hooks/use-modal-dialog.ts:7` | Missing the close-on-unmount cleanup its comment promises | Add `return () => dialog.close()` |
+| ~~`components/inbox/watch-repos-dialog.tsx:213`~~ | ~~Scrolls `[data-armed="true"]` into view with `[]` deps, but `armed` starts `null`, so it never matches~~ | **Done** — effect now keys on `[armed]` |
+| ~~`components/inbox/search-pane.tsx:118`~~ | ~~Scrolls `[data-active="true"]` into view with `[]` deps; `sel` is 0 at mount so it is a no-op, and it never re-runs on arrow keys~~ | **Done** — effect now keys on `[sel]` |
+| ~~`components/review/pr-search.tsx:209`~~ | ~~Mount-only active-row scroll; selection changes on arrow keys are not kept in view~~ | **Done** — effect now keys on `[sel]` |
+| ~~`hooks/use-modal-dialog.ts:7`~~ | ~~Missing the close-on-unmount cleanup its comment promises~~ | **No longer relevant** — close-on-unmount is now deliberately omitted; the doc comment explains React removal closes the dialog and an explicit `close()` would misfire under StrictMode |
 
 ### Suggested migration order
 
-1. Quick wins, no behavior change: candidates 3, 4, 5 (delete dead/redundant latest-ref effects) plus the dead-effect fixes above.
-2. Low-risk query adoption: candidate 1 (candidate 2 done).
+1. Quick wins, no behavior change: candidates 4, 5 (delete redundant latest-ref effects). ~~Candidate 3~~ and the dead-effect fixes above are **done**.
+2. Low-risk query adoption: ~~candidate 1~~ and candidate 2 both **done**.
 3. Shared hooks: `useAutoFocus`, `useTimeout`; fold dialog focus into `useModalDialog`.
 4. Cache hydration rework (candidate 6) as one PR since the three hooks share the pattern.
 5. Bootstrap/route rework (candidate 7).
@@ -909,3 +909,16 @@ link interception · Universal Links.
 - [ ] **Split `ReviewScreenInner`** in `review-screen.tsx` into smaller
   components so React Doctor's `no-giant-component` passes without the
   `test-noise` tag ignore in `doctor.config.json` — remove that ignore once done.
+
+## Inbox (2026-07-15)
+
+- [ ] **`ctrl+c` copy on click-highlighted word** — copy doesn't fire when a word
+      is highlighted via click; investigate editor-level selection handling for a
+      better approach (unsure whether to follow a standard here).
+- [ ] **Check for updates action** — explicit user-triggered update check.
+- [ ] **Info comment section design rework**.
+- [ ] **Theming: CSS file vs Tailwind variables** — is theming really a CSS file
+      rather than Tailwind variables? Consider using TW everywhere for better
+      optimization.
+- [ ] **`ctrl+k` → add comment shortcut**.
+- [ ] **Hide empty tabs**.
