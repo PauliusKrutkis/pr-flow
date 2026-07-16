@@ -2576,6 +2576,19 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
   });
   const modelRef = useLatest(model);
 
+  /**
+   * The expand/collapse swap shifts rows under a stationary pointer, and the
+   * browser re-dispatches hover on those shifts — through the settle window
+   * and past the mask reveal (the mask is opacity-only, so rows stay
+   * hit-testable). Hold hover reseeds until the pointer genuinely moves
+   * (isRealPointer clears the hold at >6px) so the swap can never walk the
+   * cursor.
+   */
+  const toggleExpandHeld = (fileIndex: number) => {
+    keyboardHoldRef.current = true;
+    toggleExpand(fileIndex);
+  };
+
   const onExpandRestored = (row: { anchor: string; fileIndex: number }) => {
     if (flashTimerRef.current) {
       clearTimeout(flashTimerRef.current);
@@ -2774,7 +2787,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
     setInputMode,
     setOpenBoxes,
     setSelection,
-    toggleExpand,
+    toggleExpand: toggleExpandHeld,
     toggleViewed,
     updateReviewComment,
   });
@@ -3058,7 +3071,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
     sidebarOverlayOpenRef,
     toggleActiveThread,
     toggleDrawerWide: onToggleDrawerWide,
-    toggleFullFile: () => toggleExpand(activeIndexRef.current),
+    toggleFullFile: () => toggleExpandHeld(activeIndexRef.current),
     toggleSidebar: onToggleSidebar,
     closeSidebar: onCloseSidebar,
     toggleViewedFile,

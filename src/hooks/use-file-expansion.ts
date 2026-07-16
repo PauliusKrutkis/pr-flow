@@ -391,6 +391,23 @@ export function useExpansionScrollRestore(
       setTimeout(() => swapScroller.classList.remove("qf-swapin"), 300);
     }
 
+    // Temporary diagnostic for the off-center cursor drift (PR #47 known
+    // issue): logs each correction pass so a manual run shows whether the
+    // drift oscillates in sign (fighting the re-measure) or overshoots
+    // monotonically (bad offset math). Dev builds only — remove once the
+    // restore approach is settled.
+    const probe = (source: string, drift: number | null) => {
+      if (!import.meta.env.DEV) {
+        return;
+      }
+      console.debug("[expand-restore]", source, {
+        anchor: `${captured.fileIndex}/${captured.anchor}`,
+        capturedTop: captured.top,
+        drift,
+        scrollTop: listRef.current?.scroller()?.scrollTop,
+      });
+    };
+
     let indexJumpUsed = false;
     // The row's distance from its captured offset after a correction pass, or
     // null when the row isn't rendered (the index-jump fallback path).
@@ -418,12 +435,13 @@ export function useExpansionScrollRestore(
     };
 
     const reveal = () => {
+      probe("reveal", null);
       swapScroller?.classList.remove("qf-swap-mask");
       observer?.disconnect();
       onRestoredRef.current(captured);
     };
 
-    correct();
+    probe("init", correct());
 
     // Drive the correction under the mask: the virtualizer's re-measure grows
     // the inner item-list, so a ResizeObserver on it re-pins the anchor as the
@@ -442,7 +460,7 @@ export function useExpansionScrollRestore(
     const observer = innerList
       ? new ResizeObserver(() => {
           framesSinceResize = 0;
-          correct();
+          probe("resize", correct());
         })
       : null;
     observer?.observe(innerList as HTMLElement);
@@ -452,6 +470,7 @@ export function useExpansionScrollRestore(
       frames += 1;
       framesSinceResize += 1;
       const drift = correct();
+      probe(`frame ${frames}`, drift);
       const settled =
         drift === 0 &&
         frames >= REVEAL_MIN_FRAMES &&
