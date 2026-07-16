@@ -2608,8 +2608,6 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
       setOccSpec,
     });
     if (itemIndex !== undefined) {
-      // Occurrence stepping nudges: a match already fully in view shouldn't
-      // yank the page to re-center it. Direct jumps (search) still center.
       if (opts.nudge) {
         listRef.current?.nudgeItemIntoView(itemIndex);
       } else {

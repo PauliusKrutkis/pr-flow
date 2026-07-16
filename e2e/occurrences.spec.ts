@@ -217,7 +217,6 @@ test("with find open, selecting a token hands off: find closes, occurrences take
 test("stepping to an already-visible occurrence does not scroll", async ({
   page,
 }) => {
-  // Both "return" matches in file 0 sit near the top, fully in view at once.
   const { x, y } = await tokenCenter(page, 0, "return");
   await page.mouse.move(x, y);
   await page.waitForTimeout(100);
