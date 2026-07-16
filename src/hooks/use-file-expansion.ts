@@ -257,11 +257,13 @@ export function useFileExpansion(args: {
         });
         return;
       }
-      pendingRestoreRef.current ??= captureAnchorRow(
-        listRef,
-        cursorRef.current,
-        true
-      );
+      if (pendingRestoreRef.current === null) {
+        pendingRestoreRef.current = captureAnchorRow(
+          listRef,
+          cursorRef.current,
+          true
+        );
+      }
       setPromoted((prev) =>
         new Map(prev).set(name, { lines, sha: cur.headSha })
       );
@@ -274,11 +276,13 @@ export function useFileExpansion(args: {
       return;
     }
     if (expandedNames.has(file.filename)) {
-      pendingRestoreRef.current ??= captureAnchorRow(
-        listRef,
-        cursorRef.current,
-        false
-      );
+      if (pendingRestoreRef.current === null) {
+        pendingRestoreRef.current = captureAnchorRow(
+          listRef,
+          cursorRef.current,
+          false
+        );
+      }
       setExpandedNames((prev) => {
         const next = new Set(prev);
         next.delete(file.filename);
@@ -326,9 +330,11 @@ export function useFileExpansion(args: {
   };
 }
 
-const RESTORE_HOLD_FRAMES = 20;
+const RESTORE_HOLD_FRAMES = 40;
 const REVEAL_QUIET_FRAMES = 3;
 const REVEAL_MIN_FRAMES = 6;
+const REVEAL_STEADY_FRAMES = 2;
+const REVEAL_GRACE_MS = 400;
 
 /**
  * The restore half of the scroll-anchoring contract: whenever a capture is
@@ -336,13 +342,26 @@ const REVEAL_MIN_FRAMES = 6;
  * model that just rendered. Called by the review screen after its model ref
  * exists, so the anchor lookup sees the post-swap items.
  *
- * The mechanism is a plain scrollTop delta from a synchronous pre-paint DOM
- * measurement — the row was visible before the swap, so with the overscan it
- * is almost always still rendered after, and correcting before paint means
- * the reader never sees it move. The virtualizer's scrollToIndex is only the
+ * The mechanism is a scrollTop correction from a fresh DOM measurement — the
+ * row was visible before the swap, so with the overscan it is almost always
+ * still rendered after, and the first correction lands pre-paint so the
+ * reader never sees it move. The virtualizer's scrollToIndex is only the
  * fallback for a row that left the render window, and it is NOT trusted for
- * final placement: it estimates item heights, and its own late corrections
- * would fight a competing delta.
+ * final placement: its height cache keeps the defaultItemHeight estimate for
+ * rows that never render, so its notion of the anchor's offset can sit tens
+ * of pixels from the DOM's — permanently (measured: 26 estimated vs 26.875
+ * real × ~50 unrendered inserted rows ≈ 44px). Only the DOM is ground truth.
+ *
+ * Corrections are gated to quiet gaps: the virtualizer re-measures the
+ * freshly inserted rows over several frames, and correcting mid-storm races
+ * the re-measure — the measurement is stale by the time the write lands, the
+ * write mounts new estimated rows whose own re-measure moves the row again,
+ * and the loop can still be oscillating when the frame cap forces the reveal.
+ * That residual leaked into the next toggle's capture as the cumulative
+ * off-center cursor drift (PR #47 known issue). Waiting for the resize
+ * observer to go quiet before measuring, and requiring the drift to hold
+ * steady for consecutive quiet frames before revealing, makes each
+ * correction exact instead of chased.
  *
  * The position is then held against the virtualizer re-measuring the freshly
  * inserted rows. This is the flash-critical part. When the swap inserts rows
@@ -374,8 +393,13 @@ export function useExpansionScrollRestore(
   onRestored: (row: CapturedRow) => void
 ): void {
   const onRestoredRef = useLatest(onRestored);
+  const activeRef = useRef<{
+    captured: CapturedRow;
+    cancel: () => void;
+    revealed: boolean;
+  } | null>(null);
   useLayoutEffect(() => {
-    const captured = pendingRestoreRef.current;
+    let captured = pendingRestoreRef.current;
     if (!captured) {
       return;
     }
@@ -384,6 +408,20 @@ export function useExpansionScrollRestore(
       return;
     }
     pendingRestoreRef.current = null;
+
+    // Supersede an in-flight restore (toggling again before the last swap
+    // settled): its loop would keep correcting toward a stale capture and its
+    // reveal could unmask this swap mid-settle. And if it never revealed, its
+    // captured row is the last position the reader actually saw — the fresh
+    // capture read a masked, half-settled frame — so restore to the reader's
+    // truth, not the transient.
+    const prior = activeRef.current;
+    if (prior) {
+      prior.cancel();
+      if (!prior.revealed) {
+        captured = prior.captured;
+      }
+    }
 
     const swapScroller = listRef.current?.scroller() ?? null;
     if (swapScroller) {
@@ -429,26 +467,30 @@ export function useExpansionScrollRestore(
       }
       if (Math.abs(top - captured.top) > 1) {
         scroller.scrollTop += top - captured.top;
-        return top - captured.top;
       }
-      return 0;
+      return top - captured.top;
     };
 
     const reveal = () => {
       probe("reveal", null);
+      self.revealed = true;
       swapScroller?.classList.remove("qf-swap-mask");
-      observer?.disconnect();
       onRestoredRef.current(captured);
+      // A straggling re-measure (rows the corrections mounted, measured
+      // lazily under load) can still shove the anchor after the reveal. The
+      // observer stays on for a grace window and re-pins inside the RO
+      // callback — which runs before paint, so the reader never sees it.
+      setTimeout(cancel, REVEAL_GRACE_MS);
     };
 
     probe("init", correct());
 
-    // Drive the correction under the mask: the virtualizer's re-measure grows
-    // the inner item-list, so a ResizeObserver on it re-pins the anchor as the
-    // list settles; the rAF loop backstops re-measures that don't resize the
-    // observed box. A resize also means the list is still settling, so the
-    // reveal waits for it to go quiet — the re-measures arrive over several
-    // frames, not just the first.
+    // Drive the correction under the mask. The ResizeObserver on the inner
+    // item-list only marks the list as still settling — it must NOT correct:
+    // re-measures arrive over several frames, and a correction issued
+    // mid-storm is stale by the time it lands (the source of the residual).
+    // The rAF loop corrects from a fresh measurement only in quiet gaps and
+    // reveals once the drift has held steady across consecutive quiet frames.
     const scroller = listRef.current?.scroller() ?? null;
     const innerList =
       scroller?.querySelector<HTMLElement>(
@@ -459,23 +501,50 @@ export function useExpansionScrollRestore(
     let framesSinceResize = -REVEAL_MIN_FRAMES;
     const observer = innerList
       ? new ResizeObserver(() => {
+          if (self.revealed) {
+            probe("late", correct());
+            return;
+          }
           framesSinceResize = 0;
-          probe("resize", correct());
+          probe("resize", null);
         })
       : null;
     observer?.observe(innerList as HTMLElement);
 
+    let cancelled = false;
+    const cancel = () => {
+      cancelled = true;
+      if (activeRef.current === self) {
+        activeRef.current = null;
+      }
+      observer?.disconnect();
+    };
+    const self = { cancel, captured, revealed: false };
+    activeRef.current = self;
+
     let frames = 0;
+    let steadyFrames = 0;
     const hold = () => {
+      if (cancelled) {
+        return;
+      }
       frames += 1;
       framesSinceResize += 1;
-      const drift = correct();
-      probe(`frame ${frames}`, drift);
-      const settled =
-        drift === 0 &&
-        frames >= REVEAL_MIN_FRAMES &&
-        framesSinceResize >= REVEAL_QUIET_FRAMES;
-      if (settled || frames >= RESTORE_HOLD_FRAMES) {
+      if (frames >= RESTORE_HOLD_FRAMES) {
+        // Cap hit — pin once more from the freshest measurement and show it.
+        probe("cap", correct());
+        reveal();
+        return;
+      }
+      if (framesSinceResize < REVEAL_QUIET_FRAMES) {
+        steadyFrames = 0;
+        requestAnimationFrame(hold);
+        return;
+      }
+      const d = correct();
+      probe(`frame ${frames}`, d);
+      steadyFrames = d !== null && Math.abs(d) <= 1 ? steadyFrames + 1 : 0;
+      if (steadyFrames >= REVEAL_STEADY_FRAMES && frames >= REVEAL_MIN_FRAMES) {
         reveal();
         return;
       }

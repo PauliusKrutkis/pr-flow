@@ -8,6 +8,7 @@ const COPY_FILE_PATH = /Copy file path/;
 const COPY_PR_LINK = /Copy PR link/;
 const REVIEW_REQUESTS = /Review requests/;
 const QF_ROW_FLASH = /qf-row-flash/;
+const QF_SWAP_MASK = /qf-swap-mask/;
 const QF_FILE_ACTIVE = /qf-file-active/;
 const QF_DRAWER_WIDE = /qf-drawer-wide/;
 
@@ -515,6 +516,21 @@ test("expanding keeps the row you were reading where it was", async ({
   }
   const cursorRow = page.locator(".qf-row-active");
   await expect(cursorRow).toBeVisible();
+  // The last j's scroll nudge is rAF-batched and can land a frame after the
+  // press — wait for the row to hold still before taking the baseline, or
+  // the baseline races the nudge and reads one row high.
+  await expect
+    .poll(async () => {
+      const a = (await cursorRow.boundingBox())?.y;
+      await page.evaluate(
+        () =>
+          new Promise((r) =>
+            requestAnimationFrame(() => requestAnimationFrame(r))
+          )
+      );
+      return a === (await cursorRow.boundingBox())?.y;
+    })
+    .toBe(true);
   const before = await cursorRow.boundingBox();
   const cursorDrift = async () =>
     Math.abs(
@@ -621,6 +637,9 @@ test("collapsing deep in a file does not flash the anchor row", async ({
   await moveCursorDeep(page);
   await page.keyboard.press("Shift+v");
   await expect(page.locator(".qf-row-xctx").first()).toBeVisible();
+  // toBeVisible passes while the swap mask (opacity 0) is still up — wait for
+  // the reveal, or the sampler baselines on a frame the reader never saw.
+  await expect(page.locator(".qf-scrollhost")).not.toHaveClass(QF_SWAP_MASK);
   const drift = await transientAnchorDrift(page, "Shift+v");
   await expect(page.locator(".qf-row-xctx")).toHaveCount(0);
   expect(drift).toBeLessThan(MAX_TRANSIENT_DRIFT_PX);
