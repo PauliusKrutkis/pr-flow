@@ -516,18 +516,11 @@ test("toggling parks the cursor row at a stable reading line", async ({
   }
   const cursorRow = page.locator(".qf-row-active");
   await expect(cursorRow).toBeVisible();
-  // The toggle parks the cursor row at a constant reading line rather than
-  // preserving its old offset, so it stays visible and lands at the same spot
-  // on every toggle — no cumulative drift. Read the position after each swap
-  // reveals (the row is masked until then) and assert it doesn't walk.
   const readReadingLine = async () => {
     await expect(page.locator(".qf-scrollhost")).not.toHaveClass(QF_SWAP_MASK);
     await expect(cursorRow).toBeVisible();
     return (await cursorRow.boundingBox())?.y ?? Number.NaN;
   };
-  // Expand → collapse → expand. The row must stay findable across every swap,
-  // and returning to the same mode must return to the same reading line — no
-  // cumulative drift, which was the whole point of dropping offset restoration.
   await page.keyboard.press("Shift+v");
   await expect(page.locator(".qf-row-xctx").first()).toBeVisible();
   const firstExpand = await readReadingLine();
@@ -596,9 +589,11 @@ async function transientAnchorDrift(
 
 const MAX_TRANSIENT_DRIFT_PX = 8;
 
-// Drive the cursor deep into a file with the fast-down key. The full-file
-// toggle anchors on the cursor row (not the scroll position), so the cursor is
-// what has to be parked mid-file for the swap to insert rows above the anchor.
+/**
+ * Drive the cursor deep into a file with the fast-down key. The full-file
+ * toggle anchors on the cursor row (not the scroll position), so the cursor is
+ * what has to be parked mid-file for the swap to insert rows above the anchor.
+ */
 async function moveCursorDeep(page: Page): Promise<void> {
   await page.keyboard.press("Tab");
   await page.keyboard.press("Tab");
@@ -635,9 +630,9 @@ test("collapsing deep in a file does not flash the anchor row", async ({
 test("expanding with an in-flight blob does not flash the anchor row", async ({
   page,
 }) => {
-  // Re-init the bridge to delay the blob fetch. The reload restores straight
-  // into the review screen (the PR opened in beforeEach persists), so there is
-  // no inbox step to redo — just wait for the files to come back.
+  // Re-init the bridge to delay the blob fetch so the expand fires while the
+  // blob is still in flight; the reload restores straight into the review
+  // screen, so wait for the files to come back before driving the cursor.
   await setupApp(page, { fileBlobDelayMs: 250 });
   await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
 

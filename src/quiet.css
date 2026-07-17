@@ -457,6 +457,9 @@ dialog.q-dialog::backdrop {
 .q-tooltip .q-kbd {
   margin-left: 5px;
 }
+.q-tooltip-anchor {
+  display: inline-flex;
+}
 .q-tooltip-measure {
   position: fixed;
   top: 0;
