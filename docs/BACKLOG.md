@@ -909,6 +909,16 @@ link interception · Universal Links.
 - [ ] **Split `ReviewScreenInner`** in `review-screen.tsx` into smaller
   components so React Doctor's `no-giant-component` passes without the
   `test-noise` tag ignore in `doctor.config.json` — remove that ignore once done.
+- [ ] **E2E composer submit is macOS-red (`Control+Enter` vs `Mod`)** — the
+  Tiptap composer binds submit to `Mod-Enter` (`composer-editor.tsx`), which
+  ProseMirror resolves to **Cmd on macOS, Ctrl on Linux/Windows**. The e2e
+  specs hardcode `page.keyboard.press("Control+Enter")`, so they pass on Linux
+  CI but silently no-op on macOS (composer stays open, `e2e:lastReview` never
+  written) — `multiline.spec.ts:45/59/63/173`, `composer.spec.ts:70/85`,
+  `review.spec.ts:488`. Fix: replace those with the platform-agnostic
+  `ControlOrMeta+Enter` (precedent: `release-history.spec.ts:25` already uses
+  `ControlOrMeta+k`). Test-only; verified via probes (button click + `Meta+Enter`
+  submit; `Control+Enter` doesn't). Pre-existing, reproduces on clean `main`.
 
 ## Inbox (2026-07-15)
 
