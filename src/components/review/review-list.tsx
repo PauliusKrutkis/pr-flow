@@ -83,6 +83,7 @@ export interface ReviewListHandle {
   nudgeItemIntoView: (itemIndex: number) => void;
   scroller: () => HTMLElement | null;
   scrollItemTo: (itemIndex: number, topPx: number) => void;
+  scrollItemToReadingLine: (itemIndex: number) => void;
   scrollToFileStart: (fileIndex: number) => void;
 }
 
@@ -165,6 +166,14 @@ interface ListContext {
  * Measured lazily from the rendered header; this is the pre-measure fallback.
  */
 const HEADER_FALLBACK_PX = 36;
+
+/**
+ * Where the expand/collapse swap parks the row you're reading: a constant
+ * "reading line" this fraction of the viewport below the sticky header (vim's
+ * `zz` is centered; ~1/3 keeps more of the newly revealed context visible
+ * below the line, which is the point of expanding). See useExpansionScrollRestore.
+ */
+const READING_LINE_FRACTION = 1 / 3;
 
 function glyphFor(status: string): { letter: string; cls: string } {
   switch (status) {
@@ -1076,6 +1085,17 @@ export function ReviewList({
           align: "start",
           index: itemIndex,
           offset: -topPx,
+        });
+      },
+      scrollItemToReadingLine(itemIndex) {
+        const scroller = scrollerRef.current;
+        const viewport = scroller?.clientHeight ?? 0;
+        const readingLine =
+          stickyHeaderPx() + Math.round(viewport * READING_LINE_FRACTION);
+        vRef.current?.scrollToIndex({
+          align: "start",
+          index: itemIndex,
+          offset: -readingLine,
         });
       },
       scrollToFileStart(fileIndex) {

@@ -5,15 +5,23 @@
  * feed buildReviewItems. Everything downstream (cursor, find, occurrences,
  * ruler, comments) rides the row stream and needs no expansion awareness.
  *
- * Scroll anchoring is the contract that makes the toggle feel in-place: the
- * first visible row is captured from the DOM BEFORE the row swap renders
- * (synchronously in the toggle handler on collapse; in the promotion effect,
- * one commit before the rows appear, on expand) and restored right after by
- * useExpansionScrollRestore — which the screen must call AFTER its model ref
- * is in scope, so the restore resolves anchors against the post-swap model.
- * Anchors are stable across modes ("SIDE:line" means the same row in both),
- * so restoring is a lookup, with a nearest-line fallback for the one case an
- * anchor can vanish: collapsing while a synthesized row was topmost.
+ * The toggle contract is a fixed reading line, not offset preservation. On
+ * expand/collapse the row the reader is on (the keyboard cursor, or the first
+ * visible row when there's no cursor) is placed at a constant position — a
+ * reading line ~1/3 from the viewport top — and flashed ("you are here").
+ * Anchors are stable across modes ("SIDE:line" means the same row in both), so
+ * the target survives the swap; a nearest-line fallback covers the one case an
+ * anchor can vanish (collapsing while a synthesized row was the target).
+ *
+ * Why a reading line instead of restoring the old pixel offset: offset
+ * preservation is a fixed-point fight against the virtualizer — every
+ * corrective scroll mounts estimated rows whose re-measure moves the target
+ * again, so it drifts a little, cumulatively, worst when the cursor sits far
+ * from center (PR #47 known issue). A reading line derives position from the
+ * cursor line absolutely: no capture offset, no baseline, nothing for a
+ * residual to compound through. Expand replaces everything around the cursor
+ * row anyway; one deliberate reposition to a learned, constant spot is honest
+ * about that and keeps the line you're reading findable.
  *
  * No loading states (design principle #6): expanding is a quiet swap when the
  * blob lands; failures (binary, too large, blob/diff mismatch after a push)
@@ -45,67 +53,33 @@ import { useLatest } from "./use-latest.ts";
  * model and leave the swap unanchored. Captures taken in event handlers
  * (collapse) are followed immediately by the swap render, so they don't skip.
  */
-interface CapturedRow {
+interface RestoreTarget {
   anchor: string;
   fileIndex: number;
   preSwap: boolean;
-  top: number;
 }
 
 interface ExpansionListHandle {
   firstVisibleRow: () => {
     anchor: string;
     fileIndex: number;
-    top: number;
   } | null;
   scroller: () => HTMLElement | null;
-  scrollItemTo: (itemIndex: number, topPx: number) => void;
-}
-
-/** The row's offset from the scroller's viewport top, or null when the
- *  virtualizer doesn't have it rendered. May be negative / beyond the
- *  viewport — the restore math wants the position either way. */
-function rowViewportTop(
-  scroller: HTMLElement,
-  fileIndex: number,
-  anchor: string
-): number | null {
-  const el = scroller.querySelector(
-    `[data-file-index="${fileIndex}"][data-anchor="${anchor}"]`
-  );
-  if (!el) {
-    return null;
-  }
-  return el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-}
-
-function rowIsInView(scroller: HTMLElement, top: number | null): boolean {
-  return (
-    top !== null && top > -1 && top < scroller.getBoundingClientRect().height
-  );
+  scrollItemToReadingLine: (itemIndex: number) => void;
 }
 
 /**
- * The row to hold steady through a row swap: the keyboard cursor's row when
- * it's in view — that's where the reader's attention is — otherwise the first
- * visible row.
+ * The row to place at the reading line through a swap: the keyboard cursor's
+ * row — that's where the reader's attention is — otherwise the first visible
+ * row.
  */
-function captureAnchorRow(
+function captureTarget(
   listRef: React.RefObject<ExpansionListHandle | null>,
   cursor: { anchor: string; fileIndex: number } | null,
   preSwap: boolean
-): CapturedRow | null {
-  const scroller = listRef.current?.scroller() ?? null;
-  if (scroller && cursor) {
-    const top = rowViewportTop(scroller, cursor.fileIndex, cursor.anchor);
-    if (rowIsInView(scroller, top) && top !== null) {
-      return {
-        anchor: cursor.anchor,
-        fileIndex: cursor.fileIndex,
-        preSwap,
-        top,
-      };
-    }
+): RestoreTarget | null {
+  if (cursor) {
+    return { anchor: cursor.anchor, fileIndex: cursor.fileIndex, preSwap };
   }
   const first = listRef.current?.firstVisibleRow() ?? null;
   return first === null ? null : { ...first, preSwap };
@@ -159,7 +133,7 @@ export function useFileExpansion(args: {
     useState<ReadonlySet<string>>(EMPTY_NAMES);
   const [promoted, setPromoted] =
     useState<ReadonlyMap<string, PromotedBlob>>(EMPTY_PROMOTED);
-  const pendingRestoreRef = useRef<CapturedRow | null>(null);
+  const pendingRestoreRef = useRef<RestoreTarget | null>(null);
 
   const names = [...expandedNames].sort();
   const results = useQueries({
@@ -222,8 +196,8 @@ export function useFileExpansion(args: {
   /**
    * Promote resolved blobs into rendered state one commit AFTER the data
    * lands, never in the same render — this is the window where the DOM still
-   * shows the old rows and the scroll anchor can be captured. Re-runs every
-   * render; the `has` guards make it converge.
+   * shows the old rows and the reading-line target can be captured. Re-runs
+   * every render; the `has` guards make it converge.
    */
   useLayoutEffect(() => {
     const cur = promotionRef.current;
@@ -258,7 +232,7 @@ export function useFileExpansion(args: {
         return;
       }
       if (pendingRestoreRef.current === null) {
-        pendingRestoreRef.current = captureAnchorRow(
+        pendingRestoreRef.current = captureTarget(
           listRef,
           cursorRef.current,
           true
@@ -277,7 +251,7 @@ export function useFileExpansion(args: {
     }
     if (expandedNames.has(file.filename)) {
       if (pendingRestoreRef.current === null) {
-        pendingRestoreRef.current = captureAnchorRow(
+        pendingRestoreRef.current = captureTarget(
           listRef,
           cursorRef.current,
           false
@@ -330,98 +304,64 @@ export function useFileExpansion(args: {
   };
 }
 
-const RESTORE_HOLD_FRAMES = 40;
-const REVEAL_QUIET_FRAMES = 3;
-const REVEAL_MIN_FRAMES = 6;
-const REVEAL_STEADY_FRAMES = 2;
-const REVEAL_GRACE_MS = 400;
+const SETTLE_HOLD_FRAMES = 24;
+const SETTLE_QUIET_FRAMES = 3;
+const SETTLE_MIN_FRAMES = 4;
+const REVEAL_GRACE_MS = 300;
 
 /**
- * The restore half of the scroll-anchoring contract: whenever a capture is
- * pending, put the captured row back at its captured viewport offset in the
- * model that just rendered. Called by the review screen after its model ref
- * exists, so the anchor lookup sees the post-swap items.
+ * The restore half of the reading-line contract: whenever a target is
+ * pending, jump the target row to the reading line in the model that just
+ * rendered, hold it there while the virtualizer re-measures the freshly
+ * inserted rows, then reveal and flash it. Called by the review screen after
+ * its model ref exists, so the anchor lookup sees the post-swap items.
  *
- * The mechanism is a scrollTop correction from a fresh DOM measurement — the
- * row was visible before the swap, so with the overscan it is almost always
- * still rendered after, and the first correction lands pre-paint so the
- * reader never sees it move. The virtualizer's scrollToIndex is only the
- * fallback for a row that left the render window, and it is NOT trusted for
- * final placement: its height cache keeps the defaultItemHeight estimate for
- * rows that never render, so its notion of the anchor's offset can sit tens
- * of pixels from the DOM's — permanently (measured: 26 estimated vs 26.875
- * real × ~50 unrendered inserted rows ≈ 44px). Only the DOM is ground truth.
+ * The placement is a single `scrollToIndex({ align: 'start', offset })`:
+ * virtuoso computes the position from its own height cache, so — unlike a
+ * scrollTop delta — it doesn't accumulate a residual as re-measures land. It
+ * still isn't pixel-perfect (the cache keeps the defaultItemHeight estimate
+ * for rows that never render), but the reading line has no baseline to be
+ * visible against: a few px of settle error just means the row sits a hair
+ * off the third-line, not that it "drifted" from a promised offset.
  *
- * Corrections are gated to quiet gaps: the virtualizer re-measures the
- * freshly inserted rows over several frames, and correcting mid-storm races
- * the re-measure — the measurement is stale by the time the write lands, the
- * write mounts new estimated rows whose own re-measure moves the row again,
- * and the loop can still be oscillating when the frame cap forces the reveal.
- * That residual leaked into the next toggle's capture as the cumulative
- * off-center cursor drift (PR #47 known issue). Waiting for the resize
- * observer to go quiet before measuring, and requiring the drift to hold
- * steady for consecutive quiet frames before revealing, makes each
- * correction exact instead of chased.
- *
- * The position is then held against the virtualizer re-measuring the freshly
- * inserted rows. This is the flash-critical part. When the swap inserts rows
- * above the anchor, react-virtuoso first paints them at their estimated
- * (defaultItemHeight) size, then re-measures them to their real height a frame
- * later: the inner item-list grows before the compensating re-anchor lands, so
- * the anchor row visibly drops (~77px) for a frame. Every after-the-fact hook
- * (scroll, ResizeObserver, rAF) fires only once that bad frame has painted, so
- * it can correct the position but not stop the flash.
- *
- * So the swap is masked instead of chased: the scroller is made invisible (but
- * still laid out and measurable) synchronously before the first paint, held
- * invisible while the virtualizer settles, and revealed only once the anchor
- * row has held its captured offset for two consecutive frames — the reader
- * never sees an intermediate frame. A ResizeObserver on the inner item-list
- * plus an rAF loop drive the correction under the mask; a frame cap guarantees
- * the content is always revealed even if it never fully settles. `onRestored`
- * fires once on reveal — the screen uses it to flash the row, the "you are
- * here" cue.
+ * The swap is masked to hide the re-measure: the scroller is made invisible
+ * (but laid out and measurable) before the first paint, the target is re-issued
+ * to the reading line in quiet gaps while the virtualizer settles, and it's
+ * revealed once the list has been quiet for a few frames (or a frame cap fires,
+ * so content always shows). A ResizeObserver on the inner item-list marks the
+ * list as settling; a short grace window after reveal re-issues the jump inside
+ * the RO callback (pre-paint) to catch a straggling late re-measure. `onRestored`
+ * fires once on reveal — the screen flashes the row, the "you are here" cue.
  *
  * The transient `qf-swapin` class on the scroller scopes the synthesized
  * rows' materialize animation to the swap itself — rows the virtualizer
  * mounts later, while scrolling, must not re-fade.
  */
 export function useExpansionScrollRestore(
-  pendingRestoreRef: React.RefObject<CapturedRow | null>,
+  pendingRestoreRef: React.RefObject<RestoreTarget | null>,
   modelRef: React.RefObject<ReviewListModel>,
   listRef: React.RefObject<ExpansionListHandle | null>,
-  onRestored: (row: CapturedRow) => void
+  onRestored: (row: RestoreTarget) => void
 ): void {
   const onRestoredRef = useLatest(onRestored);
-  const activeRef = useRef<{
-    captured: CapturedRow;
-    cancel: () => void;
-    revealed: boolean;
-  } | null>(null);
+  const activeRef = useRef<{ cancel: () => void } | null>(null);
   useLayoutEffect(() => {
-    let captured = pendingRestoreRef.current;
-    if (!captured) {
+    const target = pendingRestoreRef.current;
+    if (!target) {
       return;
     }
-    if (captured.preSwap) {
-      captured.preSwap = false;
+    if (target.preSwap) {
+      target.preSwap = false;
       return;
     }
     pendingRestoreRef.current = null;
 
     // Supersede an in-flight restore (toggling again before the last swap
-    // settled): its loop would keep correcting toward a stale capture and its
-    // reveal could unmask this swap mid-settle. And if it never revealed, its
-    // captured row is the last position the reader actually saw — the fresh
-    // capture read a masked, half-settled frame — so restore to the reader's
-    // truth, not the transient.
-    const prior = activeRef.current;
-    if (prior) {
-      prior.cancel();
-      if (!prior.revealed) {
-        captured = prior.captured;
-      }
-    }
+    // settled): its loop would keep re-issuing a stale target and its reveal
+    // could unmask this swap mid-settle.
+    activeRef.current?.cancel();
+
+    const itemIndex = restoreItemIndex(modelRef.current, target);
 
     const swapScroller = listRef.current?.scroller() ?? null;
     if (swapScroller) {
@@ -429,89 +369,21 @@ export function useExpansionScrollRestore(
       setTimeout(() => swapScroller.classList.remove("qf-swapin"), 300);
     }
 
-    // Temporary diagnostic for the off-center cursor drift (PR #47 known
-    // issue): logs each correction pass so a manual run shows whether the
-    // drift oscillates in sign (fighting the re-measure) or overshoots
-    // monotonically (bad offset math). Dev builds only — remove once the
-    // restore approach is settled.
-    const probe = (source: string, drift: number | null) => {
-      if (!import.meta.env.DEV) {
-        return;
+    const place = () => {
+      if (itemIndex !== undefined) {
+        listRef.current?.scrollItemToReadingLine(itemIndex);
       }
-      console.debug("[expand-restore]", source, {
-        anchor: `${captured.fileIndex}/${captured.anchor}`,
-        capturedTop: captured.top,
-        drift,
-        scrollTop: listRef.current?.scroller()?.scrollTop,
-      });
     };
+    place();
 
-    let indexJumpUsed = false;
-    // The row's distance from its captured offset after a correction pass, or
-    // null when the row isn't rendered (the index-jump fallback path).
-    const correct = (): number | null => {
-      const scroller = listRef.current?.scroller() ?? null;
-      if (!scroller) {
-        return null;
-      }
-      const top = rowViewportTop(scroller, captured.fileIndex, captured.anchor);
-      if (top === null) {
-        if (!indexJumpUsed) {
-          indexJumpUsed = true;
-          const itemIndex = restoreItemIndex(modelRef.current, captured);
-          if (itemIndex !== undefined) {
-            listRef.current?.scrollItemTo(itemIndex, captured.top);
-          }
-        }
-        return null;
-      }
-      if (Math.abs(top - captured.top) > 1) {
-        scroller.scrollTop += top - captured.top;
-      }
-      return top - captured.top;
-    };
-
-    const reveal = () => {
-      probe("reveal", null);
-      self.revealed = true;
-      swapScroller?.classList.remove("qf-swap-mask");
-      onRestoredRef.current(captured);
-      // A straggling re-measure (rows the corrections mounted, measured
-      // lazily under load) can still shove the anchor after the reveal. The
-      // observer stays on for a grace window and re-pins inside the RO
-      // callback — which runs before paint, so the reader never sees it.
-      setTimeout(cancel, REVEAL_GRACE_MS);
-    };
-
-    probe("init", correct());
-
-    // Drive the correction under the mask. The ResizeObserver on the inner
-    // item-list only marks the list as still settling — it must NOT correct:
-    // re-measures arrive over several frames, and a correction issued
-    // mid-storm is stale by the time it lands (the source of the residual).
-    // The rAF loop corrects from a fresh measurement only in quiet gaps and
-    // reveals once the drift has held steady across consecutive quiet frames.
     const scroller = listRef.current?.scroller() ?? null;
     const innerList =
       scroller?.querySelector<HTMLElement>(
         '[data-testid="virtuoso-item-list"]'
       ) ?? null;
-    // Start "hot": the first re-measure is expected but arrives a frame or two
-    // late, so the reveal must not fire in the quiet gap before it lands.
-    let framesSinceResize = -REVEAL_MIN_FRAMES;
-    const observer = innerList
-      ? new ResizeObserver(() => {
-          if (self.revealed) {
-            probe("late", correct());
-            return;
-          }
-          framesSinceResize = 0;
-          probe("resize", null);
-        })
-      : null;
-    observer?.observe(innerList as HTMLElement);
 
     let cancelled = false;
+    let revealed = false;
     const cancel = () => {
       cancelled = true;
       if (activeRef.current === self) {
@@ -519,32 +391,51 @@ export function useExpansionScrollRestore(
       }
       observer?.disconnect();
     };
-    const self = { cancel, captured, revealed: false };
+    const self = { cancel };
     activeRef.current = self;
 
+    const reveal = () => {
+      revealed = true;
+      swapScroller?.classList.remove("qf-swap-mask");
+      onRestoredRef.current(target);
+      // A straggling re-measure (rows measured lazily under load) can still
+      // shove the target after reveal. The observer stays on for a grace
+      // window and re-issues the jump inside the RO callback — which runs
+      // before paint, so the reader never sees it.
+      setTimeout(cancel, REVEAL_GRACE_MS);
+    };
+
+    // Start "hot": the first re-measure is expected but arrives a frame or two
+    // late, so the reveal must not fire in the quiet gap before it lands.
+    let framesSinceResize = -SETTLE_MIN_FRAMES;
+    const observer = innerList
+      ? new ResizeObserver(() => {
+          if (revealed) {
+            place();
+            return;
+          }
+          framesSinceResize = 0;
+          place();
+        })
+      : null;
+    observer?.observe(innerList as HTMLElement);
+
     let frames = 0;
-    let steadyFrames = 0;
     const hold = () => {
       if (cancelled) {
         return;
       }
       frames += 1;
       framesSinceResize += 1;
-      if (frames >= RESTORE_HOLD_FRAMES) {
-        // Cap hit — pin once more from the freshest measurement and show it.
-        probe("cap", correct());
+      if (frames >= SETTLE_HOLD_FRAMES) {
+        place();
         reveal();
         return;
       }
-      if (framesSinceResize < REVEAL_QUIET_FRAMES) {
-        steadyFrames = 0;
-        requestAnimationFrame(hold);
-        return;
-      }
-      const d = correct();
-      probe(`frame ${frames}`, d);
-      steadyFrames = d !== null && Math.abs(d) <= 1 ? steadyFrames + 1 : 0;
-      if (steadyFrames >= REVEAL_STEADY_FRAMES && frames >= REVEAL_MIN_FRAMES) {
+      if (
+        framesSinceResize >= SETTLE_QUIET_FRAMES &&
+        frames >= SETTLE_MIN_FRAMES
+      ) {
         reveal();
         return;
       }
@@ -556,20 +447,20 @@ export function useExpansionScrollRestore(
 
 function restoreItemIndex(
   m: ReviewListModel,
-  captured: CapturedRow
+  target: RestoreTarget
 ): number | undefined {
   const exact = m.anchorItem.get(
-    fileAnchorKey(captured.fileIndex, captured.anchor)
+    fileAnchorKey(target.fileIndex, target.anchor)
   );
   if (exact !== undefined) {
     return exact;
   }
-  const side = captured.anchor.slice(0, captured.anchor.indexOf(":"));
-  const line = anchorLine(captured.anchor);
+  const side = target.anchor.slice(0, target.anchor.indexOf(":"));
+  const line = anchorLine(target.anchor);
   let best: number | undefined;
   let bestDist = Number.POSITIVE_INFINITY;
   for (const entry of m.nav) {
-    if (entry.fileIndex !== captured.fileIndex) {
+    if (entry.fileIndex !== target.fileIndex) {
       continue;
     }
     if (!entry.anchor.startsWith(side)) {

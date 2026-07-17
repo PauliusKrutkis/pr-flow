@@ -506,7 +506,7 @@ test("shift+v expands the active file in place and collapses back", async ({
   await expect(page.locator(".qf-row-xctx")).toHaveCount(0);
 });
 
-test("expanding keeps the row you were reading where it was", async ({
+test("toggling parks the cursor row at a stable reading line", async ({
   page,
 }) => {
   await page.keyboard.press("Tab");
@@ -516,94 +516,81 @@ test("expanding keeps the row you were reading where it was", async ({
   }
   const cursorRow = page.locator(".qf-row-active");
   await expect(cursorRow).toBeVisible();
-  // The last j's scroll nudge is rAF-batched and can land a frame after the
-  // press — wait for the row to hold still before taking the baseline, or
-  // the baseline races the nudge and reads one row high.
-  await expect
-    .poll(async () => {
-      const a = (await cursorRow.boundingBox())?.y;
-      await page.evaluate(
-        () =>
-          new Promise((r) =>
-            requestAnimationFrame(() => requestAnimationFrame(r))
-          )
-      );
-      return a === (await cursorRow.boundingBox())?.y;
-    })
-    .toBe(true);
-  const before = await cursorRow.boundingBox();
-  const cursorDrift = async () =>
-    Math.abs(
-      ((await cursorRow.boundingBox())?.y ?? Number.NaN) -
-        (before?.y ?? Number.NaN)
-    );
+  // The toggle parks the cursor row at a constant reading line rather than
+  // preserving its old offset, so it stays visible and lands at the same spot
+  // on every toggle — no cumulative drift. Read the position after each swap
+  // reveals (the row is masked until then) and assert it doesn't walk.
+  const readReadingLine = async () => {
+    await expect(page.locator(".qf-scrollhost")).not.toHaveClass(QF_SWAP_MASK);
+    await expect(cursorRow).toBeVisible();
+    return (await cursorRow.boundingBox())?.y ?? Number.NaN;
+  };
+  // Expand → collapse → expand. The row must stay findable across every swap,
+  // and returning to the same mode must return to the same reading line — no
+  // cumulative drift, which was the whole point of dropping offset restoration.
   await page.keyboard.press("Shift+v");
   await expect(page.locator(".qf-row-xctx").first()).toBeVisible();
-  await expect.poll(cursorDrift).toBeLessThan(3);
+  const firstExpand = await readReadingLine();
   await page.keyboard.press("Shift+v");
   await expect(page.locator(".qf-row-xctx")).toHaveCount(0);
-  await expect.poll(cursorDrift).toBeLessThan(3);
+  await readReadingLine();
+  await page.keyboard.press("Shift+v");
+  await expect(page.locator(".qf-row-xctx").first()).toBeVisible();
+  const secondExpand = await readReadingLine();
+  expect(Math.abs(firstExpand - secondExpand)).toBeLessThan(4);
 });
 
 /**
- * The worst *visible* movement of the top-most anchored row across the frames
- * of a swap, not just where it lands. The scroll-anchoring contract corrects
- * the row to its old offset, but the virtualizer re-measures the inserted rows
- * a frame later and shoves the content — so the swap is masked (the scroller is
- * hidden) until the row holds steady. The sampler locks onto whichever anchored
- * row is top-most, presses the key, and reports the largest offset the row
- * wanders from its start over 40 frames, ignoring frames where the scroller is
- * masked — those never reach the reader.
+ * The worst *visible* movement of the flashed reading row across the frames
+ * after the swap reveals. The reading-line contract repositions the cursor row
+ * to a constant spot on toggle (so its old offset is *meant* to change), and
+ * the swap is masked (the scroller is hidden) while the virtualizer re-measures
+ * the inserted rows — the reader sees nothing until reveal. What must not flash
+ * is the row *after* reveal: a straggling re-measure jerking it. The sampler
+ * presses the key, waits for the mask to lift, baselines the flashed row, and
+ * reports the largest offset it wanders over the following frames.
  */
 async function transientAnchorDrift(
   page: Page,
   press: string
 ): Promise<number> {
-  await page.evaluate(() => {
-    const el = document.querySelector<HTMLElement>(".qf-scrollhost");
-    if (!el) {
-      throw new Error("no scroller");
-    }
-    const hostTop = el.getBoundingClientRect().top;
-    let key = "";
-    let base = 0;
-    for (const row of el.querySelectorAll<HTMLElement>("[data-anchor]")) {
-      const top = row.getBoundingClientRect().top - hostTop;
-      if (top > 4) {
-        key = `${row.getAttribute("data-file-index")}::${row.getAttribute("data-anchor")}`;
-        base = top;
-        break;
-      }
-    }
-    const w = window as unknown as { __drift: number };
-    w.__drift = 0;
-    let frames = 0;
-    const sample = () => {
-      const scroller = document.querySelector<HTMLElement>(".qf-scrollhost");
-      const masked = scroller?.classList.contains("qf-swap-mask");
-      if (scroller && !masked) {
-        const [fileIndex, anchor] = key.split("::");
-        const row = scroller.querySelector<HTMLElement>(
-          `[data-file-index="${fileIndex}"][data-anchor="${anchor}"]`
-        );
-        if (row) {
-          const top =
-            row.getBoundingClientRect().top -
-            scroller.getBoundingClientRect().top;
-          w.__drift = Math.max(w.__drift, Math.abs(top - base));
-        }
-      }
-      frames += 1;
-      if (frames < 40) {
-        requestAnimationFrame(sample);
-      }
-    };
-    requestAnimationFrame(sample);
-  });
   await page.keyboard.press(press);
-  await page.waitForTimeout(800);
+  await expect(page.locator(".qf-scrollhost")).not.toHaveClass(QF_SWAP_MASK);
   return page.evaluate(
-    () => (window as unknown as { __drift: number }).__drift
+    () =>
+      new Promise<number>((resolve) => {
+        const scroller = document.querySelector<HTMLElement>(".qf-scrollhost");
+        const flashed = scroller?.querySelector<HTMLElement>(".qf-row-flash");
+        if (!(scroller && flashed)) {
+          resolve(0);
+          return;
+        }
+        const key = `${flashed.getAttribute("data-file-index")}::${flashed.getAttribute("data-anchor")}`;
+        const base =
+          flashed.getBoundingClientRect().top -
+          scroller.getBoundingClientRect().top;
+        let worst = 0;
+        let frames = 0;
+        const sample = () => {
+          const [fileIndex, anchor] = key.split("::");
+          const row = scroller.querySelector<HTMLElement>(
+            `[data-file-index="${fileIndex}"][data-anchor="${anchor}"]`
+          );
+          if (row) {
+            const top =
+              row.getBoundingClientRect().top -
+              scroller.getBoundingClientRect().top;
+            worst = Math.max(worst, Math.abs(top - base));
+          }
+          frames += 1;
+          if (frames < 30) {
+            requestAnimationFrame(sample);
+          } else {
+            resolve(worst);
+          }
+        };
+        requestAnimationFrame(sample);
+      })
   );
 }
 
