@@ -27,6 +27,8 @@ Read `docs/ARCHITECTURE.md` (section "Comments") first; it is the source of trut
 - Allowed as-is: `// eslint-disable-next-line`, `// @ts-expect-error`, `// biome-ignore`, `/* ignore */` in intentionally-empty catch blocks.
 - Tests (e2e): file-level scenario block OK; step narration (`// Click submit`) is a violation unless it documents a timing/race workaround.
 
+Scan test files too — run this check over `e2e/` specs, not just `src/` and `src-tauri/src/`. Step narration in specs is the most commonly missed violation.
+
 Flag both directions: comments added where they're banned, and deleted code whose non-obvious rationale should have moved to a file header.
 
 ## Check 2 — Effect usage (You Might Not Need an Effect)
