@@ -149,11 +149,6 @@ editor and diff editor):
 - **One navigation** — anchors + `buildOccNav`/find-step over match lists;
   surfaces differ only in their match *source* and scroll-to-anchor.
 
-Because `code-cell.tsx` deliberately co-locates the `highlightRowHtml` helper
-with the `CodeCell` component, React Doctor's `only-export-components` warning
-on that file is expected — it is the cost of the single paint unit, not a
-regression to "fix".
-
 **Re-evaluation trigger:** if a feature needs the document to restructure
 under the reader — code folding, semantic re-highlighting, inline widgets
 between arbitrary tokens — we would be rebuilding an editor's

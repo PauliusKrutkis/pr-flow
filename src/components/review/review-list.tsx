@@ -20,6 +20,7 @@ import { useLatest } from "../../hooks/use-latest.ts";
 import { cn } from "../../lib/cn.ts";
 import { canExpandFile } from "../../lib/expand-file.ts";
 import { findMatchRangesInLine } from "../../lib/find-in-diff.ts";
+import { highlightRowHtml } from "../../lib/highlight.ts";
 import type { IntralineRanges } from "../../lib/intraline.ts";
 import { occurrenceRangesInLine } from "../../lib/occurrences.ts";
 import {
@@ -39,7 +40,7 @@ import { Markdown } from "../markdown.tsx";
 import { Avatar } from "../ui/avatar.tsx";
 import { Tooltip } from "../ui/tooltip.tsx";
 import { AddCommentBox } from "./add-comment-box.tsx";
-import { CodeCell, highlightRowHtml } from "./code-cell.tsx";
+import { CodeCell } from "./code-cell.tsx";
 import {
   CommentThread,
   type EditRequest,
