@@ -26,6 +26,16 @@
  * No loading states (design principle #6): expanding is a quiet swap when the
  * blob lands; failures (binary, too large, blob/diff mismatch after a push)
  * flash once and drop the file back to hunks.
+ *
+ * Settle/reveal: the restore holds the swap under a mask, then reveals once the
+ * target sits at the reading line. Toggling again before a swap settles cancels
+ * the in-flight restore, which would otherwise re-issue a stale target and
+ * unmask mid-settle. Rows measure lazily under load, so a straggling
+ * re-measure can shove the target after reveal; a ResizeObserver stays armed
+ * for a grace window and re-issues the jump inside its callback (before paint,
+ * so it's invisible). It starts "hot" because the first re-measure is expected
+ * but lands a frame or two late — the reveal must not fire in the quiet gap
+ * before it arrives.
  */
 
 import { useQueries } from "@tanstack/react-query";
@@ -356,9 +366,6 @@ export function useExpansionScrollRestore(
     }
     pendingRestoreRef.current = null;
 
-    // Supersede an in-flight restore (toggling again before the last swap
-    // settled): its loop would keep re-issuing a stale target and its reveal
-    // could unmask this swap mid-settle.
     activeRef.current?.cancel();
 
     const itemIndex = restoreItemIndex(modelRef.current, target);
@@ -398,15 +405,9 @@ export function useExpansionScrollRestore(
       revealed = true;
       swapScroller?.classList.remove("qf-swap-mask");
       onRestoredRef.current(target);
-      // A straggling re-measure (rows measured lazily under load) can still
-      // shove the target after reveal. The observer stays on for a grace
-      // window and re-issues the jump inside the RO callback — which runs
-      // before paint, so the reader never sees it.
       setTimeout(cancel, REVEAL_GRACE_MS);
     };
 
-    // Start "hot": the first re-measure is expected but arrives a frame or two
-    // late, so the reveal must not fire in the quiet gap before it lands.
     let framesSinceResize = -SETTLE_MIN_FRAMES;
     const observer = innerList
       ? new ResizeObserver(() => {

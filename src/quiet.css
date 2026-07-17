@@ -457,8 +457,6 @@ dialog.q-dialog::backdrop {
 .q-tooltip .q-kbd {
   margin-left: 5px;
 }
-/* First layout pass, before the portal knows the trigger's rect: render it
-   off-screen so it can be measured without a flash at 0,0. */
 .q-tooltip-measure {
   position: fixed;
   top: 0;
@@ -1408,9 +1406,6 @@ dialog.q-dialog::backdrop {
 /* One sticky header per file group — react-virtuoso owns the stickiness (its
    grouped list pins the current group's header), so the class carries only
    the visuals. */
-/* The header is a raised bar so a new file reads as a clear break in the diff
-   plane below it — same surface as the sidebar/panels, lifted off the code
-   background it used to share, with a stronger top rule to mark the seam. */
 .dir-quiet .qf-fsec-head {
   display: flex;
   gap: 10px;
@@ -1498,11 +1493,6 @@ dialog.q-dialog::backdrop {
   font-family: var(--font-mono);
   font-size: 11px;
 }
-/* Header actions (Full file, Viewed) share the flat, borderless treatment of
-   the inline-comment actions (Reply/Resolve): text-forward buttons that fill a
-   quiet hover tint instead of carrying a pill outline. On the raised header
-   band the hover fill is --line, one step up from the --surface-2 ground —
-   the same figure/ground step reply/resolve get on their footer. */
 .dir-quiet .qf-viewed-btn,
 .dir-quiet .qf-expand-btn {
   display: inline-flex;
@@ -1530,14 +1520,9 @@ dialog.q-dialog::backdrop {
 .dir-quiet .qf-viewed-btn.qf-viewed-on:hover {
   background: var(--add-bg);
 }
-/* Full-file expansion toggle: always present. The shift+v hint lives in the
-   button's tooltip now, not an inline chip — the button stays label-tight so
-   it sits flush with Viewed with no dead space. */
 .dir-quiet .qf-expand-btn.qf-expand-on {
   color: var(--accent);
 }
-/* Blob still in flight (rare — the active file prefetches): the icon breathes
-   so the press reads as registered. Not a loading state — nothing blocks. */
 .dir-quiet .qf-expand-btn[aria-busy="true"] svg {
   animation: qf-expand-wait 900ms ease-in-out infinite;
 }
@@ -1723,28 +1708,15 @@ dialog.q-dialog::backdrop {
 .dir-quiet .qf-row-del .qf-gutter-old {
   color: var(--del-num);
 }
-/* Synthesized full-file context (expand-file.ts): present for orientation,
-   at reduced ink so the diff still carries the contrast. Opacity, not color —
-   the hljs token spans keep their hues, just quieter. */
 .dir-quiet .qf-row-xctx .qf-code {
   opacity: 0.66;
 }
 .dir-quiet .qf-row-xctx .qf-gutter {
   opacity: 0.55;
 }
-/* Mask the scroller while the swap settles (.qf-swap-mask, use-file-expansion
-   .ts). The virtualizer re-measures the inserted rows a frame after they first
-   paint, jolting the anchor row before it re-anchors; hiding the content until
-   the anchor holds steady keeps that intermediate frame off-screen. opacity is
-   used, not display/visibility, so the rows stay laid out and measurable for
-   the correction math underneath. */
 .dir-quiet .qf-swap-mask {
   opacity: 0;
 }
-/* During the expand swap (transient .qf-swapin, use-file-expansion.ts) the
-   synthesized rows materialize instead of popping in — it reads as the file
-   inflating around the diff. Scoped to the swap window: rows the virtualizer
-   mounts later while scrolling must not re-fade. */
 .dir-quiet .qf-swapin .qf-row-xctx {
   animation: qf-xctx-in 220ms ease-out backwards;
 }
@@ -3688,7 +3660,6 @@ dialog.q-dialog::backdrop {
   color: var(--del);
 }
 
-/* what's-new card: a Sparkles glyph and scrollable markdown release notes */
 .qb-whatsnew .qb-update-icon {
   color: var(--add);
   background: var(--add-bg);
@@ -3715,8 +3686,6 @@ dialog.q-dialog::backdrop {
   margin-top: 0;
 }
 
-/* release history: a version spine — one dot per release on a hairline
-   timeline, the running version's dot filled green ("you are here") */
 .qrh-panel {
   width: min(600px, calc(100vw - 32px));
 }
