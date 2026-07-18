@@ -6,8 +6,8 @@
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
-use crate::github::GitHubPlatform;
-use crate::gitlab::GitLabPlatform;
+use crate::platform::github::GitHubPlatform;
+use crate::platform::gitlab::GitLabPlatform;
 use crate::platform::AnyPlatform;
 use crate::storage;
 

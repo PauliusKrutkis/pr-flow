@@ -14,11 +14,12 @@
 
 use serde_json::{json, Value};
 
-use crate::github::{
-    fbool, fopt_u64, fstr, fu64, get_all_pages, get_json, log, net_err, now_millis, nstr,
-    read_body, ChangedFile, CiStatus, FileBlob, GitHubUser, InboxBucket, InboxData, IssueComment,
-    PullRequest, PullRequestDetail, RepoHit, ReviewComment, ReviewCommentInput, ReviewSummary,
-    MAX_BLOB_BYTES,
+use crate::http::{
+    fbool, fopt_u64, fstr, fu64, get_all_pages, get_json, log, net_err, now_millis, nstr, read_body,
+};
+use crate::model::{
+    ChangedFile, CiStatus, FileBlob, GitHubUser, InboxBucket, InboxData, IssueComment, PullRequest,
+    PullRequestDetail, RepoHit, ReviewComment, ReviewCommentInput, ReviewSummary, MAX_BLOB_BYTES,
 };
 
 pub struct GitLabPlatform {
