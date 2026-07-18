@@ -1,10 +1,21 @@
+/**
+ * Default fixture: only Review requests (3) and Created (1) hold PRs, so
+ * Assigned, Involved and Watching start out empty and hidden from the tab
+ * bar. Digit hotkeys still reach a hidden tab directly, landing on its
+ * zero-state. Watching repos is a separate action from the tab bar's
+ * content tabs (the docked Watch button opens the same dialog as "w"), so
+ * it stays reachable even while the Watching tab itself is hidden.
+ */
 import { setupApp } from "./bridge.ts";
 import { expect, test } from "./test.ts";
 
 const REVIEW_REQUESTS = /Review requests/;
 const ASSIGNED = /Assigned/;
+const CREATED = /Created/;
+const INVOLVED = /Involved/;
 const WATCHING = /Watching/;
 const WATCH_A_REPOSITORY = /Watch a repository/;
+const SEARCH_REPOSITORIES = /Search repositories/;
 const ARCHIVED = /Archived/;
 
 test.beforeEach(async ({ page }) => {
@@ -34,9 +45,37 @@ test("j/k move the selection; the reading pane follows", async ({ page }) => {
   await expect(options.nth(0)).toHaveAttribute("aria-selected", "true");
 });
 
-test("tab cycles tabs; digits jump directly", async ({ page }) => {
-  await page.keyboard.press("Tab");
+test("empty tabs are hidden; digits still reach them", async ({ page }) => {
+  await expect(
+    page.getByRole("button", { name: REVIEW_REQUESTS })
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: CREATED })).toBeVisible();
+  await expect(page.getByRole("button", { name: ASSIGNED })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: INVOLVED })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: WATCHING })).toHaveCount(0);
+
+  if (process.env.CAPTURE_EVIDENCE) {
+    await page.screenshot({ path: "evidence/inbox-hide-empty-tabs.png" });
+  }
+
+  await page.keyboard.press("2");
   await expect(page.getByRole("button", { name: ASSIGNED })).toHaveAttribute(
+    "data-state",
+    "active"
+  );
+});
+
+test("the docked Watch button opens the dialog regardless of tab state", async ({
+  page,
+}) => {
+  await expect(page.getByRole("button", { name: WATCHING })).toHaveCount(0);
+  await page.getByRole("button", { name: "Watch" }).click();
+  await expect(page.getByPlaceholder(SEARCH_REPOSITORIES)).toBeFocused();
+});
+
+test("tab cycles only visible tabs; digits jump directly", async ({ page }) => {
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: CREATED })).toHaveAttribute(
     "data-state",
     "active"
   );

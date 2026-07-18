@@ -1,3 +1,13 @@
+/**
+ * Tabs hide when empty (and not active) so the bar reflects where work
+ * actually is; digit hotkeys (1-5) still reach a hidden tab directly, so
+ * InboxTabButton keeps its digit hint tied to the tab's fixed position in
+ * TABS rather than its slot among the visible ones. cycleTab walks only the
+ * visible tabs, falling back to index 0 when the active tab is itself
+ * hidden. Watching repos is a separate action (the "w" hotkey, command
+ * palette, and docked Watch button all open the same dialog), so the
+ * Watching tab follows the same visibility rule as every other tab.
+ */
 import {
   Archive,
   ArchiveRestore,
@@ -139,6 +149,11 @@ export function Inbox() {
     return m;
   })();
 
+  const tabsLoaded = data !== null;
+  const visibleTabs = TABS.filter(
+    (t) => !tabsLoaded || visibleCounts[t.key] > 0 || t.key === tab
+  );
+
   const selectedIndex = (() => {
     if (!selectedKey) {
       return 0;
@@ -166,9 +181,13 @@ export function Inbox() {
   };
 
   const cycleTab = (dir: number) => {
-    const order = TABS.map((t) => t.key);
+    const order = visibleTabs.map((t) => t.key);
+    if (order.length === 0) {
+      return;
+    }
     const i = order.indexOf(tab);
-    selectTab(order[(i + dir + order.length) % order.length]);
+    const from = i < 0 ? 0 : i;
+    selectTab(order[(from + dir + order.length) % order.length]);
   };
 
   const moveTo = (index: number) => {
@@ -313,9 +332,11 @@ export function Inbox() {
         archivedActive={showArchived}
         archivedCount={archivedList.length}
         counts={visibleCounts}
+        onOpenWatch={openWatchDialog}
         onSelectTab={selectTab}
         onToggleArchived={toggleArchived}
         tab={tab}
+        tabs={visibleTabs}
       />
 
       <InboxMainContent
@@ -488,31 +509,44 @@ function useInboxHotkeys({
 
 function InboxTabBar({
   tab,
+  tabs,
   counts,
   onSelectTab,
   archivedActive,
   archivedCount,
   onToggleArchived,
+  onOpenWatch,
 }: {
   tab: InboxTabKey;
+  tabs: (typeof TABS)[number][];
   counts: Record<InboxTabKey, number>;
   onSelectTab: (key: InboxTabKey) => void;
   archivedActive: boolean;
   archivedCount: number;
   onToggleArchived: () => void;
+  onOpenWatch: () => void;
 }) {
   return (
     <div className="qi-tabs shrink-0 border-line border-b px-3">
-      {TABS.map((t, i) => (
+      {tabs.map((t) => (
         <InboxTabButton
           active={t.key === tab}
           count={counts[t.key]}
-          index={i}
+          index={TABS.findIndex((d) => d.key === t.key)}
           key={t.key}
           onSelectTab={onSelectTab}
           tabDef={t}
         />
       ))}
+      <button
+        className="qi-watch-button"
+        onClick={onOpenWatch}
+        title="Watch repositories… (w)"
+        type="button"
+      >
+        <Eye size={14} />
+        Watch
+      </button>
       <button
         className="qi-archived-toggle"
         data-state={archivedActive ? "active" : "inactive"}
