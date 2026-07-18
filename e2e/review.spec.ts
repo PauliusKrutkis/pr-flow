@@ -86,9 +86,9 @@ test("pending drafts survive leaving and reopening the PR", async ({
     .getByRole("textbox", { name: "Add a review comment…" })
     .fill("Draft to keep");
   await page.getByRole("button", { name: "Add to review" }).click();
-  await page.keyboard.press("Escape"); // back to inbox
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("option").first()).toBeVisible();
-  await page.keyboard.press("Enter"); // reopen
+  await page.keyboard.press("Enter");
   await expect(page.getByText("Draft to keep")).toBeVisible();
 });
 
@@ -619,8 +619,6 @@ test("collapsing deep in a file does not flash the anchor row", async ({
   await moveCursorDeep(page);
   await page.keyboard.press("Shift+v");
   await expect(page.locator(".qf-row-xctx").first()).toBeVisible();
-  // toBeVisible passes while the swap mask (opacity 0) is still up — wait for
-  // the reveal, or the sampler baselines on a frame the reader never saw.
   await expect(page.locator(".qf-scrollhost")).not.toHaveClass(QF_SWAP_MASK);
   const drift = await transientAnchorDrift(page, "Shift+v");
   await expect(page.locator(".qf-row-xctx")).toHaveCount(0);
@@ -630,9 +628,6 @@ test("collapsing deep in a file does not flash the anchor row", async ({
 test("expanding with an in-flight blob does not flash the anchor row", async ({
   page,
 }) => {
-  // Re-init the bridge to delay the blob fetch so the expand fires while the
-  // blob is still in flight; the reload restores straight into the review
-  // screen, so wait for the files to come back before driving the cursor.
   await setupApp(page, { fileBlobDelayMs: 250 });
   await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
 

@@ -164,11 +164,6 @@ export function useFileExpansion(args: {
     results,
   });
 
-  /**
-   * Warm the active file's blob so pressing expand is a same-frame swap, not
-   * a fetch — the no-loading-states answer to loading. Debounced: j/k and Tab
-   * sweep the active file across the PR; only a file you settle on fetches.
-   */
   const activeFile = files[activeFileIndex];
   const prefetchName =
     activeFile && canExpandFile(activeFile) ? activeFile.filename : null;
@@ -437,6 +432,7 @@ export function useExpansionScrollRestore(
         framesSinceResize >= SETTLE_QUIET_FRAMES &&
         frames >= SETTLE_MIN_FRAMES
       ) {
+        place();
         reveal();
         return;
       }
