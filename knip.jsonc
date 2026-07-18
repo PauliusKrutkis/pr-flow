@@ -4,5 +4,13 @@
   "tags": ["-lintignore"],
   // Rust/Tauri build output — not part of the JS/TS project graph.
   "ignoreFiles": ["**/src-tauri/target/**"],
-  "ignoreDependencies": ["@biomejs/biome"]
+  "ignoreDependencies": ["@biomejs/biome"],
+  // Cloudflare Pages Functions: each file is a route handler invoked by the
+  // platform, not imported from anywhere in the JS graph — the Astro plugin
+  // only knows about src/pages entries.
+  "workspaces": {
+    "apps/web": {
+      "entry": ["functions/**/*.ts!"]
+    }
+  }
 }

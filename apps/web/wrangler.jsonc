@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Pages Functions config for local dev only (`wrangler pages dev`). The
+  // live KV namespace + secrets below are set via the Cloudflare dashboard /
+  // `wrangler pages secret put` once the account exists — this file has no
+  // real credentials in it.
+  "name": "nod-web",
+  "compatibility_date": "2026-07-18",
+  "pages_build_output_dir": "dist",
+  "kv_namespaces": [{ "binding": "LICENSES", "id": "REPLACE_WITH_REAL_KV_NAMESPACE_ID" }]
+  // Required secrets (not declared here): POLAR_WEBHOOK_SECRET,
+  // LICENSE_SIGNING_SEED (32-byte hex, the Ed25519 private seed),
+  // POLAR_API_KEY (for /restore, not yet used).
+  // Public counterpart LICENSE_SIGNING_PUBLIC_KEY is not secret and can be a
+  // plain `vars` entry once generated.
+}

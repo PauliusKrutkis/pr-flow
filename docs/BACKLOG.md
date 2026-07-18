@@ -490,6 +490,12 @@ payments and tax.
 above. Do not build MoR / Worker / license code until five external developers
 have used the app for one week and retention is plausible.
 
+**2026-07-18:** Started the license-server (Pages Functions) skeleton ahead
+of this gate — owner call, logged here rather than silently checking off
+`Release gate` items that aren't actually done (`Perf budget met` still has
+an open item: production-build perf e2e). Landing page (§0) and MoR account
++ real secrets are still gated as written.
+
 | Phase | What | When |
 | --- | --- | --- |
 | **0** | Domain + static landing page (video, GitHub release downloads). No payments. | After release gate |
