@@ -142,12 +142,6 @@ importers:
       '@astrojs/check':
         specifier: ^0.9.9
         version: 0.9.9(prettier@3.9.5)(typescript@5.8.3)
-      '@tailwindcss/vite':
-        specifier: ^4.0.0
-        version: 4.3.2(vite@7.3.6(@types/node@26.1.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
-      tailwindcss:
-        specifier: ^4.0.0
-        version: 4.3.2
       typescript:
         specifier: ~5.8.3
         version: 5.8.3

@@ -1,7 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
   <rect width="32" height="32" rx="8" fill="#15151f" />
   <rect x="0.5" y="0.5" width="31" height="31" rx="7.5" fill="none" stroke="#2c2c40" />
-  <!-- a "nod": a downward check, the gesture of approving a review -->
-  <path d="M9 14.5 L15 20 L23 11" fill="none" stroke="#8b80ff" stroke-width="2.6"
+  <!-- 32px derivative of app-icon.svg's keycap + return glyph, so the site favicon matches the real product mark. -->
+  <rect x="7" y="8" width="18" height="16" rx="3.5" fill="#1c1c2a" />
+  <path d="M21 12.5 v3.5 a2 2 0 0 1 -2 2 H13" fill="none" stroke="#8b80ff" stroke-width="2.2"
+    stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M16 15 L12 18 L16 21" fill="none" stroke="#8b80ff" stroke-width="2.2"
     stroke-linecap="round" stroke-linejoin="round" />
 </svg>
