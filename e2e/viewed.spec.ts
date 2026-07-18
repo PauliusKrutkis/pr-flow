@@ -38,7 +38,7 @@ test("an unchanged viewed file keeps its mark across reopen", async ({
   await page.keyboard.press("Enter");
   await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
 
-  await page.keyboard.press("r"); // next file
+  await page.keyboard.press("r");
   await expect(page.locator(".qf-file-active")).toHaveAttribute(
     "data-file-index",
     "1"
@@ -90,8 +90,7 @@ test("e skips files already viewed when advancing", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
 
-  // Mark the middle file (index 1) viewed first, then start from the top.
-  await page.keyboard.press("r"); // to file 1
+  await page.keyboard.press("r");
   await expect(page.locator(".qf-file-active")).toHaveAttribute(
     "data-file-index",
     "1"
@@ -99,14 +98,12 @@ test("e skips files already viewed when advancing", async ({ page }) => {
   await page.keyboard.press("v");
   await expect(page.locator(".qf-side-count")).toHaveText("1/3 viewed");
 
-  await page.keyboard.press("t"); // previous file, back to file 0
+  await page.keyboard.press("t");
   await expect(page.locator(".qf-file-active")).toHaveAttribute(
     "data-file-index",
     "0"
   );
 
-  // e on file 0 marks it viewed and jumps past the already-viewed file 1
-  // straight to file 2.
   await page.keyboard.press("e");
   await expect(page.locator(".qf-file-active")).toHaveAttribute(
     "data-file-index",

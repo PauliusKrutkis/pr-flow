@@ -2289,9 +2289,6 @@ function useReviewSubmitActions(args: {
     if (wasViewed) {
       return;
     }
-    // Advance to the next file the reviewer hasn't seen yet — the one right
-    // after this may already be viewed, and stopping on it wastes a keystroke.
-    // Fall back to the immediate next file if everything ahead is viewed.
     const from = args.activeIndexRef.current;
     let target = from + 1;
     for (let i = from + 1; i < args.files.length; i += 1) {
