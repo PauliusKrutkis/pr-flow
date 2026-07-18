@@ -61,13 +61,16 @@ export async function verifyLicenseToken(
   encodedToken: string,
   publicKeyHex: string
 ): Promise<LicensePayload | null> {
-  let token: SignedLicenseToken;
+  let decoded: unknown;
   try {
-    token = JSON.parse(base64UrlDecode(encodedToken)) as SignedLicenseToken;
+    decoded = JSON.parse(base64UrlDecode(encodedToken));
   } catch {
     return null;
   }
-  const { signature, ...payload } = token;
+  if (typeof decoded !== "object" || decoded === null) {
+    return null;
+  }
+  const { signature, ...payload } = decoded as SignedLicenseToken;
   if (!signature) {
     return null;
   }

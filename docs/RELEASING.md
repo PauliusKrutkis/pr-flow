@@ -226,7 +226,7 @@ KV namespace or secrets exist.
 functions/
   lib/
     env.ts             Env type: KV binding + secret bindings
-    kv.ts               get/put license record
+    kv.ts               get/put license record + single-use order_id index
     license-token.ts    Ed25519 sign + verify (@noble/ed25519) — a separate
                          keypair from the updater's minisign chain
     polar.ts             Standard Webhooks verify (standardwebhooks package)
@@ -252,16 +252,25 @@ pnpm --filter @nod/web run typecheck:functions
   deep link when/if that plugin gets added — until then this is the
   faithful reuse of the mechanism that already works.
 - **Checkout metadata field name** (`metadata.github_id` on the Polar
-  order) and **`/activate`'s `?github_id=` query param** are both
-  assumptions, not confirmed against a real Polar account — flagged in
-  `functions/lib/polar.ts`'s file header. Verify against Polar's API
-  reference once an account exists.
+  order) is still an assumption, not confirmed against a real Polar account
+  — flagged in `functions/lib/polar.ts`'s file header. Verify against
+  Polar's API reference once an account exists.
+- **`/activate` is keyed by `?order_id=`, not `?github_id=`.** An earlier
+  version of this took a bare github_id, which is public — anyone could
+  have minted themselves a signed license token for any known customer's
+  account with zero proof of purchase. The webhook now also stores a
+  single-use `order_id → github_id` index (`putOrderIndex`/`consumeOrderIndex`
+  in `functions/lib/kv.ts`); `/activate` consumes it, so an activation link
+  only works once and only if you have the opaque order id, not just a
+  username. Which query param Polar's actual checkout success URL templates
+  in is still to be confirmed once an account exists.
 
 **Required secrets** (not in the repo, set via `wrangler pages secret put`
 or the Cloudflare dashboard once an account exists): `POLAR_WEBHOOK_SECRET`,
-`LICENSE_SIGNING_SEED` (32-byte hex Ed25519 seed). `LICENSE_SIGNING_PUBLIC_KEY`
-is not secret (ships embedded in the desktop app later) and `POLAR_API_KEY`
-is only needed once `/restore` is implemented for real.
+`LICENSE_SIGNING_SEED` (32-byte hex Ed25519 seed). The public half of the
+signing keypair is not a Worker secret — it ships embedded in the desktop
+app, which is the only thing that verifies tokens. `POLAR_API_KEY` is only
+needed once `/restore` is implemented for real.
 
 ## Commercial launch
 

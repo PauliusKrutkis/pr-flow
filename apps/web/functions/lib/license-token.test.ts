@@ -35,4 +35,12 @@ describe("license token", () => {
     const { publicKey } = await keygenAsync();
     expect(await verifyLicenseToken("not-a-real-token", toHex(publicKey))).toBeNull();
   });
+
+  it("rejects a token that decodes to non-object JSON instead of throwing", async () => {
+    const { publicKey } = await keygenAsync();
+    const encodedNull = btoa("null").replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+    const encodedNumber = btoa("42").replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+    await expect(verifyLicenseToken(encodedNull, toHex(publicKey))).resolves.toBeNull();
+    await expect(verifyLicenseToken(encodedNumber, toHex(publicKey))).resolves.toBeNull();
+  });
 });

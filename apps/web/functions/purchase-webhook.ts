@@ -4,7 +4,7 @@
  * metadata.github_id assumption this depends on.
  */
 import type { Env } from "./lib/env";
-import { putLicense } from "./lib/kv";
+import { putLicense, putOrderIndex } from "./lib/kv";
 import { extractGithubId, isOrderPaidEvent, verifyPolarWebhook } from "./lib/polar";
 
 const LICENSE_DURATION_MS = 365 * 24 * 60 * 60 * 1000;
@@ -29,6 +29,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   const updatesUntil = new Date(Date.now() + LICENSE_DURATION_MS).toISOString();
   await putLicense(context.env.LICENSES, githubId, { orderId: event.data.id, updatesUntil });
+  await putOrderIndex(context.env.LICENSES, event.data.id, githubId);
 
   return new Response(null, { status: 200 });
 };

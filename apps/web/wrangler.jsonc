@@ -10,7 +10,7 @@
   "kv_namespaces": [{ "binding": "LICENSES", "id": "REPLACE_WITH_REAL_KV_NAMESPACE_ID" }]
   // Required secrets (not declared here): POLAR_WEBHOOK_SECRET,
   // LICENSE_SIGNING_SEED (32-byte hex, the Ed25519 private seed),
-  // POLAR_API_KEY (for /restore, not yet used).
-  // Public counterpart LICENSE_SIGNING_PUBLIC_KEY is not secret and can be a
-  // plain `vars` entry once generated.
+  // POLAR_API_KEY (for /restore, not yet used). The signing keypair's
+  // public half is not a Worker binding at all — it ships embedded in the
+  // desktop app, which is the only thing that verifies tokens.
 }
