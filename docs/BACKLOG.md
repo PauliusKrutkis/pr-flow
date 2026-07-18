@@ -593,9 +593,12 @@ conflicts with zero-friction product goal).
 
 - [ ] 🟢 **P01** — GitHub OAuth on Windows opens Documents
       folder instead of the browser (`tauri_plugin_opener::open_url`).
-- [ ] 🟢 **P02** — File-tree active/focus ring persists
+- [x] 🟢 **P02** — File-tree active/focus ring persists
       after `r`/`t` when a file was mouse-clicked (blur on click; audit inbox rows).
       *Also covers:* remove `qf-focusable` focus ring on file sidebar buttons.
+      File sidebar was already fixed; inbox rows (`pr-list-item.tsx`) now blur
+      on click too, since `role="option"` divs otherwise keep the browser's
+      native focus outline after a mouse click.
 - [ ] 🟢 **P03** — Occurrence navigation blocked while find
       (`mod+f`) is open — explicit handoff (select token → close find → start
       occurrences).
