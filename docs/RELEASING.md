@@ -213,6 +213,65 @@ Until a domain is bought the site ships on `*.pages.dev`. Future
 `/activated` / `/restore` pages and the license webhook will live alongside it
 as Pages Functions (see [Commercial launch](#commercial-launch)).
 
+### License server (Pages Functions)
+
+The license server is `apps/web/functions` — Cloudflare **Pages Functions**
+(file-based routing, deployed automatically by the same git integration as
+the rest of `apps/web`), not a standalone Worker. This is a skeleton: the
+endpoints and crypto are real and tested, but nothing calls them yet (no
+landing-page buy button, no in-app Rust verification) and no live Cloudflare
+KV namespace or secrets exist.
+
+```
+functions/
+  lib/
+    env.ts             Env type: KV binding + secret bindings
+    kv.ts               get/put license record + single-use order_id index
+    license-token.ts    Ed25519 sign + verify (@noble/ed25519) — a separate
+                         keypair from the updater's minisign chain
+    polar.ts             Standard Webhooks verify (standardwebhooks package)
+  purchase-webhook.ts   POST — verify Polar signature, store license in KV
+  activate.ts           GET  — look up license, sign token, redirect
+  license/[github_id].ts GET — read-only { active, updatesUntil }
+  restore.ts            GET  — stubbed 501 until POLAR_API_KEY exists
+```
+
+```bash
+pnpm --filter @nod/web test               # vitest — real sign+verify round-trips
+pnpm --filter @nod/web run typecheck:functions
+```
+
+**Corrections to the plan below, found while building this:**
+
+- **Redirect target.** The plan below says `/activate` redirects to
+  `prflow://purchase?token=…`. The app doesn't have a custom URL scheme —
+  `tauri-plugin-deep-link` isn't a dependency. The *existing* GitHub sign-in
+  (`src-tauri/src/auth.rs`) uses a loopback HTTP server instead
+  (`127.0.0.1:8765/callback`), which is what `activate.ts` redirects to today
+  (`ACTIVATION_REDIRECT_BASE`, one constant). Swap it for a real `prflow://`
+  deep link when/if that plugin gets added — until then this is the
+  faithful reuse of the mechanism that already works.
+- **Checkout metadata field name** (`metadata.github_id` on the Polar
+  order) is still an assumption, not confirmed against a real Polar account
+  — flagged in `functions/lib/polar.ts`'s file header. Verify against
+  Polar's API reference once an account exists.
+- **`/activate` is keyed by `?order_id=`, not `?github_id=`.** An earlier
+  version of this took a bare github_id, which is public — anyone could
+  have minted themselves a signed license token for any known customer's
+  account with zero proof of purchase. The webhook now also stores a
+  single-use `order_id → github_id` index (`putOrderIndex`/`consumeOrderIndex`
+  in `functions/lib/kv.ts`); `/activate` consumes it, so an activation link
+  only works once and only if you have the opaque order id, not just a
+  username. Which query param Polar's actual checkout success URL templates
+  in is still to be confirmed once an account exists.
+
+**Required secrets** (not in the repo, set via `wrangler pages secret put`
+or the Cloudflare dashboard once an account exists): `POLAR_WEBHOOK_SECRET`,
+`LICENSE_SIGNING_SEED` (32-byte hex Ed25519 seed). The public half of the
+signing keypair is not a Worker secret — it ships embedded in the desktop
+app, which is the only thing that verifies tokens. `POLAR_API_KEY` is only
+needed once `/restore` is implemented for real.
+
 ## Commercial launch
 
 Paid distribution layered on top of the existing updater feed, signing chain,
@@ -267,6 +326,11 @@ GET  /activate             Post-checkout success page → sign token → redirec
 GET  /license/:github_id   App polls on launch → { active, updates_until }
 GET  /restore              Email fallback → MoR lookup → same prflow:// redirect
 ```
+
+Built as Cloudflare **Pages Functions** in `apps/web/functions` (see [License
+server](#license-server-pages-functions) above), not a standalone Worker —
+see that section for why, and for a correction to the `prflow://` redirect
+target assumed above.
 
 Webhook flow: checkout collects GitHub username (or user signs in with GitHub
 on the success page) → webhook maps purchase to `github_id` → Worker stores it.
