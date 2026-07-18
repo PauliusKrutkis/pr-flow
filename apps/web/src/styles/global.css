@@ -4,6 +4,10 @@
    Nod landing page — "Quiet" design language, lifted from the desktop app so
    the site reads as a calm extension of the product (dark, iris accent, mono
    keyboard cues). Palette + type are copied verbatim from the app's tokens.
+
+   The `.dr` block below ("diff replay") is the signature element: a keyboard
+   review that plays itself as a pure-CSS animation loop, zero JS. It freezes
+   on the composed frame under `prefers-reduced-motion`.
    =========================================================================== */
 
 :root {
@@ -45,7 +49,6 @@ body {
   letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  /* Barely-there iris lift from the top, exactly like the app's review canvas. */
   background-image: radial-gradient(
     1100px 560px at 50% -8%,
     rgba(139, 128, 255, 0.08),
@@ -61,8 +64,6 @@ body {
 a {
   color: inherit;
 }
-
-/* --- shared shell --------------------------------------------------------- */
 
 .wrap {
   width: 100%;
@@ -84,7 +85,6 @@ a {
   font-family: var(--font-mono);
 }
 
-/* keyboard cue, reused in copy and the download command */
 .kbd {
   font-family: var(--font-mono);
   font-size: 0.78em;
@@ -96,8 +96,6 @@ a {
   padding: 3px 6px;
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
 }
-
-/* --- top bar -------------------------------------------------------------- */
 
 .nav {
   position: sticky;
@@ -145,8 +143,6 @@ a {
   color: var(--fg);
 }
 
-/* --- hero ----------------------------------------------------------------- */
-
 .hero {
   padding-top: clamp(56px, 12vh, 128px);
   padding-bottom: 40px;
@@ -174,7 +170,6 @@ a {
   font-size: clamp(1rem, 1.4vw, 1.16rem);
 }
 
-/* the hypothesis, set as a terminal line */
 .hero__thesis {
   display: inline-block;
   margin-top: 26px;
@@ -193,13 +188,6 @@ a {
   content: "› ";
   color: var(--accent);
 }
-
-/* =====================================================================
-   SIGNATURE: the diff-replay card. A keyboard review runs itself —
-   the cursor steps down the diff (j), a comment opens (c), the file is
-   marked viewed (e), with the matching keycaps lighting up in time.
-   Pure CSS, zero JS. Reduced motion freezes it to the composed frame.
-   ===================================================================== */
 
 .dr {
   margin: 48px auto 0;
@@ -251,7 +239,6 @@ a {
   color: var(--add);
   border-color: rgba(95, 208, 138, 0.35);
   background: rgba(95, 208, 138, 0.08);
-  /* composed-frame default: still reviewing, not yet viewed */
   display: none;
 }
 
@@ -263,7 +250,6 @@ a {
   line-height: var(--dr-row);
 }
 
-/* the line cursor — a soft iris band that steps between rows */
 .dr__cursor {
   position: absolute;
   left: 0;
@@ -272,7 +258,6 @@ a {
   height: var(--dr-row);
   background: var(--accent-soft);
   border-left: 2px solid var(--accent);
-  /* composed frame: resting on the added line (idx 3) */
   transform: translateY(calc(var(--dr-row) * 3));
 }
 
@@ -315,11 +300,10 @@ a {
   color: var(--muted);
 }
 
-/* the inline comment composer, opening under the added line */
 .dr__composer {
   overflow: hidden;
   margin: 0 16px;
-  height: 46px; /* composed-frame default: open */
+  height: 46px;
   opacity: 1;
   transition: none;
 }
@@ -355,7 +339,6 @@ a {
   color: var(--accent);
 }
 
-/* keycap legend under the diff */
 .dr__keys {
   display: flex;
   flex-wrap: wrap;
@@ -478,7 +461,6 @@ a {
     }
   }
 
-  /* keycap "press": brief iris flash as the action fires */
   @keyframes dr-key-j {
     0%,
     8% {
@@ -553,8 +535,6 @@ a {
     }
   }
 }
-
-/* --- download ------------------------------------------------------------- */
 
 .get {
   display: flex;
@@ -645,8 +625,6 @@ a {
   text-underline-offset: 3px;
 }
 
-/* --- features ------------------------------------------------------------- */
-
 .features {
   margin-top: 104px;
   display: grid;
@@ -695,8 +673,6 @@ a {
   color: var(--muted);
 }
 
-/* --- demo slot ------------------------------------------------------------ */
-
 .demo {
   margin-top: 32px;
 }
@@ -723,8 +699,6 @@ a {
   font-size: 12px;
   letter-spacing: 0.02em;
 }
-
-/* --- footer --------------------------------------------------------------- */
 
 .foot {
   margin-top: 96px;
@@ -762,7 +736,6 @@ a {
   color: var(--fg);
 }
 
-/* accessible focus ring — one treatment everywhere, from the app */
 :focus-visible {
   outline: none;
   box-shadow:
