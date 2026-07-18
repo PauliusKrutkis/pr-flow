@@ -142,7 +142,9 @@ export function Inbox() {
   // Show a tab if it holds something, if it is the active tab (so an empty
   // active tab still shows its zero-state and you're never stranded), or until
   // the first load resolves (avoids tabs popping in). Digit hotkeys still reach
-  // every tab, so a hidden one is one keypress away.
+  // every tab, so a hidden one is one keypress away. Watching repos is a
+  // separate action (the "w" hotkey / command palette / docked button), so
+  // this tab can follow the exact same content-only rule as the rest.
   const tabsLoaded = data !== null;
   const visibleTabs = TABS.filter(
     (t) => !tabsLoaded || visibleCounts[t.key] > 0 || t.key === tab
@@ -328,6 +330,7 @@ export function Inbox() {
         archivedActive={showArchived}
         archivedCount={archivedList.length}
         counts={visibleCounts}
+        onOpenWatch={openWatchDialog}
         onSelectTab={selectTab}
         onToggleArchived={toggleArchived}
         tab={tab}
@@ -510,6 +513,7 @@ function InboxTabBar({
   archivedActive,
   archivedCount,
   onToggleArchived,
+  onOpenWatch,
 }: {
   tab: InboxTabKey;
   tabs: (typeof TABS)[number][];
@@ -518,6 +522,7 @@ function InboxTabBar({
   archivedActive: boolean;
   archivedCount: number;
   onToggleArchived: () => void;
+  onOpenWatch: () => void;
 }) {
   return (
     <div className="qi-tabs shrink-0 border-line border-b px-3">
@@ -533,6 +538,15 @@ function InboxTabBar({
           tabDef={t}
         />
       ))}
+      <button
+        className="qi-watch-button"
+        onClick={onOpenWatch}
+        title="Watch repositories… (w)"
+        type="button"
+      >
+        <Eye size={14} />
+        Watch
+      </button>
       <button
         className="qi-archived-toggle"
         data-state={archivedActive ? "active" : "inactive"}

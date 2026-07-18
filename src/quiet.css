@@ -2996,11 +2996,11 @@ dialog.q-dialog::backdrop {
 .qi-tab[data-state="active"] .qi-tab-count {
   color: var(--accent);
 }
-.qi-archived-toggle {
+.qi-archived-toggle,
+.qi-watch-button {
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  margin-left: auto;
   padding: 5px 9px;
   font-family: var(--font-ui);
   font-size: 12px;
@@ -3015,7 +3015,11 @@ dialog.q-dialog::backdrop {
     background-color 120ms ease,
     border-color 120ms ease;
 }
-.qi-archived-toggle:hover {
+.qi-watch-button {
+  margin-left: auto;
+}
+.qi-archived-toggle:hover,
+.qi-watch-button:hover {
   color: var(--fg);
   background: var(--surface-hi);
 }

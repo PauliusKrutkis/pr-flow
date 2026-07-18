@@ -7,6 +7,7 @@ const CREATED = /Created/;
 const INVOLVED = /Involved/;
 const WATCHING = /Watching/;
 const WATCH_A_REPOSITORY = /Watch a repository/;
+const SEARCH_REPOSITORIES = /Search repositories/;
 const ARCHIVED = /Archived/;
 
 test.beforeEach(async ({ page }) => {
@@ -60,6 +61,16 @@ test("empty tabs are hidden; digits still reach them", async ({ page }) => {
   );
 });
 
+test("the docked Watch button opens the dialog regardless of tab state", async ({
+  page,
+}) => {
+  // Watching repos is a separate action from the tab bar's content tabs, so
+  // it stays reachable even while the Watching tab itself is hidden (empty).
+  await expect(page.getByRole("button", { name: WATCHING })).toHaveCount(0);
+  await page.getByRole("button", { name: "Watch" }).click();
+  await expect(page.getByPlaceholder(SEARCH_REPOSITORIES)).toBeFocused();
+});
+
 test("tab cycles only visible tabs; digits jump directly", async ({ page }) => {
   // Tab skips the hidden Assigned/Involved tabs: Review requests → Created.
   await page.keyboard.press("Tab");
@@ -67,8 +78,8 @@ test("tab cycles only visible tabs; digits jump directly", async ({ page }) => {
     "data-state",
     "active"
   );
-  // Watching is hidden until a digit reveals it (then its zero-state offers the
-  // watch-a-repository onboarding).
+  // Watching is hidden until a digit reveals it (then its zero-state offers
+  // the watch-a-repository onboarding).
   await page.keyboard.press("5");
   await expect(page.getByRole("button", { name: WATCHING })).toHaveAttribute(
     "data-state",
