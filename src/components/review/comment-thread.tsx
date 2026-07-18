@@ -125,7 +125,7 @@ export function CommentThread({
 
   const submitEdit = (body: string) => {
     if (editingId !== null) {
-      onEdit?.({ body, commentId: editingId });
+      onEdit?.({ body, commentId: editingId })?.catch(() => undefined);
     }
     setEditingId(null);
   };
@@ -150,7 +150,7 @@ export function CommentThread({
     }
     if (confirmingDeleteId === id) {
       setConfirmingDeleteId(null);
-      onDelete?.({ commentId: id });
+      onDelete?.({ commentId: id })?.catch(() => undefined);
     } else {
       setConfirmingDeleteId(id);
     }

@@ -456,3 +456,49 @@ export function highlightLineWithOccurrences(
     }))
   );
 }
+
+/**
+ * The kind of mark to paint on a code row: the find bar's (mod+f) matches or
+ * the selection-occurrence highlights. Null means no marks — plain syntax
+ * highlighting (with any intra-line diff ranges) only.
+ */
+export type MarkKind = "find" | "occurrence" | null;
+
+/**
+ * Syntax-highlighted HTML for one code line, with find/occurrence marks layered
+ * on top of the base highlight. The single implementation of "how a code line
+ * is painted" — highlighting, intra-line diff ranges, find `<mark>`s,
+ * occurrence `<mark>`s — so every surface that renders code (diff rows today,
+ * the planned full-file context expansion) can never drift. Rows without
+ * intra-line diff ranges pass null for `intra`.
+ */
+export function highlightRowHtml(
+  content: string,
+  filename: string,
+  intra: IntraRanges,
+  markKind: MarkKind,
+  markQuery: string | null,
+  markFlag: boolean,
+  findOrdinal: number | null
+): string {
+  if (markQuery === null) {
+    return highlightLineWithIntra(content, filename, intra);
+  }
+  if (markKind === "find") {
+    return highlightLineWithFind(
+      content,
+      filename,
+      markQuery,
+      markFlag,
+      findOrdinal,
+      intra
+    );
+  }
+  return highlightLineWithOccurrences(
+    content,
+    filename,
+    markQuery,
+    markFlag,
+    intra
+  );
+}

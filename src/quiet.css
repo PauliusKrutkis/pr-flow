@@ -440,10 +440,14 @@ dialog.q-dialog::backdrop {
 
 .q-tooltip {
   z-index: 60;
+  display: inline-flex;
+  align-items: center;
   padding: 5px 9px;
   font-family: var(--font-ui);
   font-size: 11.5px;
   color: var(--fg);
+  white-space: nowrap;
+  pointer-events: none;
   background: var(--surface-hi);
   border: 1px solid var(--line-2);
   border-radius: 7px;
@@ -452,6 +456,20 @@ dialog.q-dialog::backdrop {
 }
 .q-tooltip .q-kbd {
   margin-left: 5px;
+}
+.q-tooltip-anchor {
+  display: inline-flex;
+}
+.q-tooltip-measure {
+  position: fixed;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .q-tooltip {
+    animation: none;
+  }
 }
 
 /* ---- markdown (global; the review drawer's scoped copy overrides inside .dir-quiet) ---- */
@@ -1395,9 +1413,9 @@ dialog.q-dialog::backdrop {
   display: flex;
   gap: 10px;
   align-items: center;
-  padding: 7px 16px;
-  background: var(--bg);
-  border-top: 1px solid var(--line);
+  padding: 8px 16px;
+  background: var(--surface-2);
+  border-top: 1px solid var(--line-2);
   border-bottom: 1px solid var(--line);
   /* the iris edge marks the file the keyboard is talking to */
   box-shadow: inset 2px 0 0 transparent;
@@ -1422,7 +1440,7 @@ dialog.q-dialog::backdrop {
   white-space: nowrap;
 }
 .dir-quiet .qf-fsec-base {
-  font-weight: 500;
+  font-weight: 600;
   color: var(--fg);
 }
 /* The path doubles as a copy target: plain text at rest, underline on hover
@@ -1478,31 +1496,49 @@ dialog.q-dialog::backdrop {
   font-family: var(--font-mono);
   font-size: 11px;
 }
-.dir-quiet .qf-viewed-btn {
+.dir-quiet .qf-viewed-btn,
+.dir-quiet .qf-expand-btn {
   display: inline-flex;
-  gap: 5px;
+  gap: 6px;
   align-items: center;
-  padding: 3px 8px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--faint);
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--muted);
   cursor: pointer;
   background: transparent;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: 6px;
   transition:
     color 120ms ease,
-    border-color 120ms ease,
     background-color 120ms ease;
 }
-.dir-quiet .qf-viewed-btn:hover {
+.dir-quiet .qf-viewed-btn:hover,
+.dir-quiet .qf-expand-btn:hover {
   color: var(--fg);
-  border-color: var(--line-2);
+  background: var(--line);
 }
 .dir-quiet .qf-viewed-btn.qf-viewed-on {
   color: var(--add);
+}
+.dir-quiet .qf-viewed-btn.qf-viewed-on:hover {
   background: var(--add-bg);
-  border-color: rgba(95, 208, 138, 0.35);
+}
+.dir-quiet .qf-expand-btn.qf-expand-on {
+  color: var(--accent);
+}
+.dir-quiet .qf-expand-btn[aria-busy="true"] svg {
+  animation: qf-expand-wait 900ms ease-in-out infinite;
+}
+@keyframes qf-expand-wait {
+  50% {
+    opacity: 0.25;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dir-quiet .qf-expand-btn[aria-busy="true"] svg {
+    animation: none;
+    opacity: 0.5;
+  }
 }
 /* ============ IMAGE DIFF ============ */
 .dir-quiet .qf-imgdiff {
@@ -1674,6 +1710,28 @@ dialog.q-dialog::backdrop {
 }
 .dir-quiet .qf-row-del .qf-gutter-old {
   color: var(--del-num);
+}
+.dir-quiet .qf-row-xctx .qf-code {
+  opacity: 0.66;
+}
+.dir-quiet .qf-row-xctx .qf-gutter {
+  opacity: 0.55;
+}
+.dir-quiet .qf-swap-mask {
+  opacity: 0;
+}
+.dir-quiet .qf-swapin .qf-row-xctx {
+  animation: qf-xctx-in 220ms ease-out backwards;
+}
+@keyframes qf-xctx-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dir-quiet .qf-swapin .qf-row-xctx {
+    animation: none;
+  }
 }
 
 .dir-quiet .qf-row:not(.qf-row-hunk) {
@@ -3605,7 +3663,6 @@ dialog.q-dialog::backdrop {
   color: var(--del);
 }
 
-/* what's-new card: a Sparkles glyph and scrollable markdown release notes */
 .qb-whatsnew .qb-update-icon {
   color: var(--add);
   background: var(--add-bg);
@@ -3632,8 +3689,6 @@ dialog.q-dialog::backdrop {
   margin-top: 0;
 }
 
-/* release history: a version spine — one dot per release on a hairline
-   timeline, the running version's dot filled green ("you are here") */
 .qrh-panel {
   width: min(600px, calc(100vw - 32px));
 }

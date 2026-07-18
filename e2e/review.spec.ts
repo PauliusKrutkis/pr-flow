@@ -1,12 +1,14 @@
 import { setupApp } from "./bridge.ts";
 import { DETAIL_NO_CI } from "./fixtures.ts";
 import { expect, test } from "./test.ts";
+import type { Page } from "./types.ts";
 
 const SUBMIT_REVIEW = /Submit review/;
 const COPY_FILE_PATH = /Copy file path/;
 const COPY_PR_LINK = /Copy PR link/;
 const REVIEW_REQUESTS = /Review requests/;
 const QF_ROW_FLASH = /qf-row-flash/;
+const QF_SWAP_MASK = /qf-swap-mask/;
 const QF_FILE_ACTIVE = /qf-file-active/;
 const QF_DRAWER_WIDE = /qf-drawer-wide/;
 
@@ -84,9 +86,9 @@ test("pending drafts survive leaving and reopening the PR", async ({
     .getByRole("textbox", { name: "Add a review comment…" })
     .fill("Draft to keep");
   await page.getByRole("button", { name: "Add to review" }).click();
-  await page.keyboard.press("Escape"); // back to inbox
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("option").first()).toBeVisible();
-  await page.keyboard.press("Enter"); // reopen
+  await page.keyboard.press("Enter");
   await expect(page.getByText("Draft to keep")).toBeVisible();
 });
 
@@ -488,6 +490,163 @@ test("comment posting is optimistic even when the network hangs", async ({
     page.locator(".qf-convo").getByText("Ship it when green")
   ).toBeVisible({ timeout: 1000 });
   await expect(box).toHaveText("");
+});
+
+test("shift+v expands the active file in place and collapses back", async ({
+  page,
+}) => {
+  await expect(page.getByText("export function omega() {")).toHaveCount(0);
+  await page.keyboard.press("Shift+v");
+  const tail = page.locator(".qf-row-xctx", {
+    hasText: "export function omega() {",
+  });
+  await expect(tail.first()).toBeVisible();
+  await expect(page.locator(".qf-row-xctx .qf-add-btn")).toHaveCount(0);
+  await page.keyboard.press("Shift+v");
+  await expect(page.locator(".qf-row-xctx")).toHaveCount(0);
+});
+
+test("toggling parks the cursor row at a stable reading line", async ({
+  page,
+}) => {
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  for (let i = 0; i < 8; i += 1) {
+    await page.keyboard.press("j");
+  }
+  const cursorRow = page.locator(".qf-row-active");
+  await expect(cursorRow).toBeVisible();
+  const readReadingLine = async () => {
+    await expect(page.locator(".qf-scrollhost")).not.toHaveClass(QF_SWAP_MASK);
+    await expect(cursorRow).toBeVisible();
+    return (await cursorRow.boundingBox())?.y ?? Number.NaN;
+  };
+  await page.keyboard.press("Shift+v");
+  await expect(page.locator(".qf-row-xctx").first()).toBeVisible();
+  const firstExpand = await readReadingLine();
+  await page.keyboard.press("Shift+v");
+  await expect(page.locator(".qf-row-xctx")).toHaveCount(0);
+  await readReadingLine();
+  await page.keyboard.press("Shift+v");
+  await expect(page.locator(".qf-row-xctx").first()).toBeVisible();
+  const secondExpand = await readReadingLine();
+  expect(Math.abs(firstExpand - secondExpand)).toBeLessThan(4);
+});
+
+/**
+ * The worst *visible* movement of the flashed reading row across the frames
+ * after the swap reveals. The reading-line contract repositions the cursor row
+ * to a constant spot on toggle (so its old offset is *meant* to change), and
+ * the swap is masked (the scroller is hidden) while the virtualizer re-measures
+ * the inserted rows — the reader sees nothing until reveal. What must not flash
+ * is the row *after* reveal: a straggling re-measure jerking it. The sampler
+ * presses the key, waits for the mask to lift, baselines the flashed row, and
+ * reports the largest offset it wanders over the following frames.
+ */
+async function transientAnchorDrift(
+  page: Page,
+  press: string
+): Promise<number> {
+  await page.keyboard.press(press);
+  await expect(page.locator(".qf-scrollhost")).not.toHaveClass(QF_SWAP_MASK);
+  return page.evaluate(
+    () =>
+      new Promise<number>((resolve) => {
+        const scroller = document.querySelector<HTMLElement>(".qf-scrollhost");
+        const flashed = scroller?.querySelector<HTMLElement>(".qf-row-flash");
+        if (!(scroller && flashed)) {
+          resolve(0);
+          return;
+        }
+        const key = `${flashed.getAttribute("data-file-index")}::${flashed.getAttribute("data-anchor")}`;
+        const base =
+          flashed.getBoundingClientRect().top -
+          scroller.getBoundingClientRect().top;
+        let worst = 0;
+        let frames = 0;
+        const sample = () => {
+          const [fileIndex, anchor] = key.split("::");
+          const row = scroller.querySelector<HTMLElement>(
+            `[data-file-index="${fileIndex}"][data-anchor="${anchor}"]`
+          );
+          if (row) {
+            const top =
+              row.getBoundingClientRect().top -
+              scroller.getBoundingClientRect().top;
+            worst = Math.max(worst, Math.abs(top - base));
+          }
+          frames += 1;
+          if (frames < 30) {
+            requestAnimationFrame(sample);
+          } else {
+            resolve(worst);
+          }
+        };
+        requestAnimationFrame(sample);
+      })
+  );
+}
+
+const MAX_TRANSIENT_DRIFT_PX = 8;
+
+/**
+ * Drive the cursor deep into a file with the fast-down key. The full-file
+ * toggle anchors on the cursor row (not the scroll position), so the cursor is
+ * what has to be parked mid-file for the swap to insert rows above the anchor.
+ */
+async function moveCursorDeep(page: Page): Promise<void> {
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  for (let i = 0; i < 8; i += 1) {
+    await page.keyboard.press("f");
+    await page.waitForTimeout(30);
+  }
+  await page.waitForTimeout(300);
+}
+
+test("expanding deep in a file does not flash the anchor row", async ({
+  page,
+}) => {
+  await moveCursorDeep(page);
+  const drift = await transientAnchorDrift(page, "Shift+v");
+  await expect(page.locator(".qf-row-xctx").first()).toBeVisible();
+  expect(drift).toBeLessThan(MAX_TRANSIENT_DRIFT_PX);
+});
+
+test("collapsing deep in a file does not flash the anchor row", async ({
+  page,
+}) => {
+  await moveCursorDeep(page);
+  await page.keyboard.press("Shift+v");
+  await expect(page.locator(".qf-row-xctx").first()).toBeVisible();
+  await expect(page.locator(".qf-scrollhost")).not.toHaveClass(QF_SWAP_MASK);
+  const drift = await transientAnchorDrift(page, "Shift+v");
+  await expect(page.locator(".qf-row-xctx")).toHaveCount(0);
+  expect(drift).toBeLessThan(MAX_TRANSIENT_DRIFT_PX);
+});
+
+test("expanding with an in-flight blob does not flash the anchor row", async ({
+  page,
+}) => {
+  await setupApp(page, { fileBlobDelayMs: 250 });
+  await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
+
+  await moveCursorDeep(page);
+  const drift = await transientAnchorDrift(page, "Shift+v");
+  await expect(page.locator(".qf-row-xctx").first()).toBeVisible();
+  expect(drift).toBeLessThan(MAX_TRANSIENT_DRIFT_PX);
+});
+
+test("the header button toggles the full file and reads Diff only while expanded", async ({
+  page,
+}) => {
+  const header = page.locator(".qf-fsec-head").first();
+  await header.getByRole("button", { name: "Full file" }).click();
+  await expect(page.locator(".qf-row-xctx").first()).toBeVisible();
+  const collapse = header.getByRole("button", { name: "Diff only" });
+  await expect(collapse).toHaveAttribute("aria-pressed", "true");
+  await collapse.click();
+  await expect(page.locator(".qf-row-xctx")).toHaveCount(0);
 });
 
 test("the header shows an approvals verdict with the reviewer's face", async ({

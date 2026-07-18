@@ -345,3 +345,28 @@ test("file tree collapses to an overlay on small screens", async ({ page }) => {
   await page.locator('.qf-sidebar [data-file-index="1"]').click();
   await expect(overlay).not.toHaveClass(SIDEBAR_OPEN);
 });
+
+// A new file must read as a break in the diff, not blend into the code plane:
+// the header sits on a raised surface distinct from the diff body background.
+test("the file header stands off the diff background", async ({ page }) => {
+  const bg = await page.evaluate(() => {
+    const head = document.querySelector(".qf-fsec-head");
+    const code = document.querySelector(".qf-row:not(.qf-row-hunk) .qf-code");
+    if (!(head && code)) {
+      return null;
+    }
+    return {
+      head: getComputedStyle(head).backgroundColor,
+      body: getComputedStyle(code.closest(".qf-diff") ?? code).backgroundColor,
+    };
+  });
+  expect(bg).not.toBeNull();
+  expect(bg?.head).not.toBe(bg?.body);
+
+  if (process.env.CAPTURE_EVIDENCE) {
+    await page
+      .locator('.qf-fsec-head[data-file-index="1"]')
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({ path: "evidence/file-header.png" });
+  }
+});

@@ -7,7 +7,7 @@
  * selection inside a single diff code line" gating).
  */
 
-import { parsePatch, rowAnchor } from "./diff.ts";
+import { type DiffRow, parsePatch, rowAnchor } from "./diff.ts";
 import { findMatchRangesInLine } from "./find-in-diff.ts";
 
 export interface OccurrenceSpec {
@@ -87,22 +87,34 @@ export interface OccurrenceMatch {
  * order (rows top to bottom, hits left to right). Scanned from the patch
  * text — like findInDiff — so the overview ruler's ticks and n/p navigation
  * see the whole file, including rows scrolled far off-screen. Hunk headers
- * are metadata, not code, and never match.
+ * are metadata, not code, and never match. `rows` overrides the patch when
+ * the file is expanded to its full contents (expand-file.ts), so occurrences
+ * in synthesized context lines count too.
  */
 export function occurrenceMatches(
   file: { patch?: string | null },
-  spec: OccurrenceSpec
+  spec: OccurrenceSpec,
+  rows?: readonly DiffRow[]
 ): OccurrenceMatch[] {
   const out: OccurrenceMatch[] = [];
+  const scan = (row: DiffRow) => {
+    const anchor = rowAnchor(row);
+    if (anchor === null) {
+      return;
+    }
+    for (const [start, end] of occurrenceRangesInLine(row.content, spec)) {
+      out.push({ anchor, end, start });
+    }
+  };
+  if (rows) {
+    for (const row of rows) {
+      scan(row);
+    }
+    return out;
+  }
   for (const hunk of parsePatch(file.patch)) {
     for (const row of hunk.rows) {
-      const anchor = rowAnchor(row);
-      if (anchor === null) {
-        continue;
-      }
-      for (const [start, end] of occurrenceRangesInLine(row.content, spec)) {
-        out.push({ anchor, end, start });
-      }
+      scan(row);
     }
   }
   return out;

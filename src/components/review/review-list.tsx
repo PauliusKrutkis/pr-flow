@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check, FoldVertical, UnfoldVertical } from "lucide-react";
 import {
   type CSSProperties,
   type HTMLAttributes,
@@ -18,13 +18,9 @@ import {
 } from "react-virtuoso";
 import { useLatest } from "../../hooks/use-latest.ts";
 import { cn } from "../../lib/cn.ts";
+import { canExpandFile } from "../../lib/expand-file.ts";
 import { findMatchRangesInLine } from "../../lib/find-in-diff.ts";
-import {
-  highlightHtmlToNodes,
-  highlightLineWithFind,
-  highlightLineWithIntra,
-  highlightLineWithOccurrences,
-} from "../../lib/highlight.ts";
+import { highlightRowHtml } from "../../lib/highlight.ts";
 import type { IntralineRanges } from "../../lib/intraline.ts";
 import { occurrenceRangesInLine } from "../../lib/occurrences.ts";
 import {
@@ -42,7 +38,9 @@ import { useAppStore } from "../../store/app-store.ts";
 import type { AccountInfo, ChangedFile, PendingComment } from "../../types.ts";
 import { Markdown } from "../markdown.tsx";
 import { Avatar } from "../ui/avatar.tsx";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { AddCommentBox } from "./add-comment-box.tsx";
+import { CodeCell } from "./code-cell.tsx";
 import {
   CommentThread,
   type EditRequest,
@@ -86,6 +84,7 @@ export interface ReviewListHandle {
   nudgeItemIntoView: (itemIndex: number) => void;
   scroller: () => HTMLElement | null;
   scrollItemTo: (itemIndex: number, topPx: number) => void;
+  scrollItemToReadingLine: (itemIndex: number) => void;
   scrollToFileStart: (fileIndex: number) => void;
 }
 
@@ -119,6 +118,7 @@ export interface ReviewListCallbacks {
   onRowEnter: (fileIndex: number, anchor: string, x: number, y: number) => void;
   onScroll: () => void;
   onThreadHover: (t: { rootId: number; path: string } | null) => void;
+  onToggleExpand: (fileIndex: number) => void;
   onToggleHunk: (fileIndex: number, hunkIndex: number) => void;
   onToggleViewed: (fileIndex: number) => void;
 }
@@ -133,6 +133,8 @@ interface ReviewListProps {
   cursorKey: string | null;
   dragging: boolean;
   editRequest: (EditRequest & { path: string }) | null;
+  expandedFiles: ReadonlySet<string>;
+  expandingFiles: ReadonlySet<string>;
   files: readonly ChangedFile[];
   findCurrent: FindCurrent | null;
   flashKey: string | null;
@@ -166,6 +168,14 @@ interface ListContext {
  */
 const HEADER_FALLBACK_PX = 36;
 
+/**
+ * Where the expand/collapse swap parks the row you're reading: a constant
+ * "reading line" this fraction of the viewport below the sticky header (vim's
+ * `zz` is centered; ~1/3 keeps more of the newly revealed context visible
+ * below the line, which is the point of expanding). See useExpansionScrollRestore.
+ */
+const READING_LINE_FRACTION = 1 / 3;
+
 function glyphFor(status: string): { letter: string; cls: string } {
   switch (status) {
     case "added":
@@ -189,37 +199,6 @@ function diffRowMarker(type: ReviewRowItem["row"]["type"]): string {
     return "-";
   }
   return " ";
-}
-
-function highlightDiffRow(
-  content: string,
-  filename: string,
-  intra: IntralineRanges | null,
-  markQuery: string | null,
-  markKind: "find" | "occurrence" | null,
-  markFlag: boolean,
-  findOrdinal: number | null
-): string {
-  if (markQuery === null) {
-    return highlightLineWithIntra(content, filename, intra);
-  }
-  if (markKind === "find") {
-    return highlightLineWithFind(
-      content,
-      filename,
-      markQuery,
-      markFlag,
-      findOrdinal,
-      intra
-    );
-  }
-  return highlightLineWithOccurrences(
-    content,
-    filename,
-    markQuery,
-    markFlag,
-    intra
-  );
 }
 
 function rowIsMarked(item: ReviewRowItem, marks: MarkSpec): boolean {
@@ -319,12 +298,12 @@ function DiffLine({
   const { row, anchor, fileIndex, hasAnchored } = item;
   const canComment = item.target !== null;
   const marker = diffRowMarker(row.type);
-  const lineHtml = highlightDiffRow(
+  const lineHtml = highlightRowHtml(
     row.content,
     filename,
     intra,
-    markQuery,
     markKind,
+    markQuery,
     markFlag,
     findOrdinal
   );
@@ -372,6 +351,7 @@ function DiffLine({
         "qf-row",
         row.type === "add" && "qf-row-add",
         row.type === "del" && "qf-row-del",
+        row.synthetic && "qf-row-xctx",
         stateCls,
         hasAnchored && "qf-row-threaded"
       )}
@@ -398,16 +378,7 @@ function DiffLine({
       </span>
       <span className="qf-gutter qf-gutter-new">{row.newLine ?? ""}</span>
       <span className="qf-marker">{marker}</span>
-      <code
-        className="qf-code"
-        style={
-          guideLvl === null
-            ? undefined
-            : ({ "--qf-lvl": guideLvl } as CSSProperties)
-        }
-      >
-        <span className="hljs">{highlightHtmlToNodes(lineHtml)}</span>
-      </code>
+      <CodeCell guideLvl={guideLvl} html={lineHtml} />
     </div>
   );
 }
@@ -659,6 +630,8 @@ function GroupHeader({
     viewedSet,
     changedSinceViewed,
     copiedPathIndex,
+    expandedFiles,
+    expandingFiles,
     callbacks,
   } = ctx.props;
   const file = files[groupIndex];
@@ -668,7 +641,9 @@ function GroupHeader({
   const handleToggleViewed = () => {
     callbacks.onToggleViewed(groupIndex);
   };
-
+  const handleToggleExpand = () => {
+    callbacks.onToggleExpand(groupIndex);
+  };
   if (!file) {
     return <div className="qf-fsec-head" />;
   }
@@ -679,6 +654,8 @@ function GroupHeader({
     slash === -1 ? file.filename : file.filename.slice(slash + 1);
   const viewed = viewedSet.has(file.filename);
   const copied = copiedPathIndex === groupIndex;
+  const expanded = expandedFiles.has(file.filename);
+  const expanding = expandingFiles.has(file.filename);
   return (
     <header
       className={cn(
@@ -717,6 +694,27 @@ function GroupHeader({
         <span className="qf-add">+{file.additions}</span>
         <span className="qf-del">−{file.deletions}</span>
       </span>
+      {canExpandFile(file) && (
+        <Tooltip
+          combo="shift+v"
+          label={expanded ? "Back to the diff" : "Expand to the full file"}
+        >
+          <button
+            aria-busy={expanding || undefined}
+            aria-pressed={expanded}
+            className={cn("qf-expand-btn", expanded && "qf-expand-on")}
+            onClick={handleToggleExpand}
+            type="button"
+          >
+            {expanded ? (
+              <FoldVertical aria-hidden size={12} />
+            ) : (
+              <UnfoldVertical aria-hidden size={12} />
+            )}
+            {expanded ? "Diff only" : "Full file"}
+          </button>
+        </Tooltip>
+      )}
       <button
         aria-pressed={viewed}
         className={cn("qf-viewed-btn", viewed && "qf-viewed-on")}
@@ -1088,6 +1086,17 @@ export function ReviewList({
           align: "start",
           index: itemIndex,
           offset: -topPx,
+        });
+      },
+      scrollItemToReadingLine(itemIndex) {
+        const scroller = scrollerRef.current;
+        const viewport = scroller?.clientHeight ?? 0;
+        const readingLine =
+          stickyHeaderPx() + Math.round(viewport * READING_LINE_FRACTION);
+        vRef.current?.scrollToIndex({
+          align: "start",
+          index: itemIndex,
+          offset: -readingLine,
         });
       },
       scrollToFileStart(fileIndex) {

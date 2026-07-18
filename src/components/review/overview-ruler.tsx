@@ -22,7 +22,7 @@ export function OverviewRuler({
     return null;
   }
   const stride = Math.max(1, Math.ceil(fractions.length / MAX_TICKS));
-  const ticks: Array<{ frac: number; current: boolean }> = [];
+  const ticks: Array<{ frac: number; current: boolean; index: number }> = [];
   for (let i = 0; i < fractions.length; i += 1) {
     const current = i === currentIndex;
     if (i % stride !== 0 && !current) {
@@ -32,21 +32,21 @@ export function OverviewRuler({
     if (frac < 0) {
       continue;
     }
-    ticks.push({ current, frac });
+    ticks.push({ current, frac, index: i });
   }
   if (ticks.length === 0) {
     return null;
   }
   return (
     <div aria-hidden className="qf-ruler">
-      {ticks.map((t, _i) => (
+      {ticks.map((t) => (
         <div
           className={cn(
             "qf-ruler-tick",
             kind === "find" ? "qf-ruler-find" : "qf-ruler-occ",
             t.current && "qf-ruler-current"
           )}
-          key={`${t.frac}-${String(t.current)}`}
+          key={t.index}
           style={{ top: `${t.frac * 100}%` }}
         />
       ))}

@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useState } from "react";
+import { type KeyboardEvent, useRef, useState } from "react";
 import { useModalDialog } from "../../hooks/use-modal-dialog.ts";
 import { useHotkeys } from "../../keyboard/use-hotkeys.ts";
 import { cn } from "../../lib/cn.ts";
@@ -23,10 +23,6 @@ const PLACEHOLDERS: Record<ReviewEvent, string> = {
   COMMENT: "Review summary…",
   REQUEST_CHANGES: "What needs to change?",
 };
-
-function focusOnMount(el: HTMLTextAreaElement | null) {
-  el?.focus();
-}
 
 interface Props {
   busy: boolean;
@@ -72,7 +68,11 @@ function SubmitReviewModalContent({
 }: Omit<Props, "open">) {
   const [event, setEvent] = useState<ReviewEvent>("COMMENT");
   const [body, setBody] = useState("");
-  const { dialogRef, onDialogCancel, onDialogClose } = useModalDialog(onClose);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const { dialogRef, onDialogCancel, onDialogClose } = useModalDialog(
+    onClose,
+    bodyRef
+  );
 
   useHotkeys(
     "submit",
@@ -188,7 +188,7 @@ function SubmitReviewModalContent({
           onChange={handleBodyChange}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          ref={focusOnMount}
+          ref={bodyRef}
           rows={4}
           value={body}
         />

@@ -13,6 +13,7 @@ import {
   ChevronsUp,
   Copy,
   ExternalLink,
+  FileCode,
   FileSearch,
   GitBranch,
   Inbox,
@@ -36,6 +37,10 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useCommentMutations } from "../../hooks/use-comments.ts";
+import {
+  useExpansionScrollRestore,
+  useFileExpansion,
+} from "../../hooks/use-file-expansion.ts";
 import { useInboxDetailNudge } from "../../hooks/use-inbox-detail-nudge.ts";
 import { useLatest } from "../../hooks/use-latest.ts";
 import { usePullRequestDetail } from "../../hooks/use-pull-request-detail.ts";
@@ -44,6 +49,7 @@ import { useViewedFileReconcile } from "../../hooks/use-viewed-file-reconcile.ts
 import type { Binding } from "../../keyboard/types.ts";
 import { useHotkeys } from "../../keyboard/use-hotkeys.ts";
 import { cn } from "../../lib/cn.ts";
+import type { DiffRow } from "../../lib/diff.ts";
 import { type FindMatch, findInDiff } from "../../lib/find-in-diff.ts";
 import { warmHighlightCache } from "../../lib/highlight.ts";
 import { isImageFile } from "../../lib/image-file.ts";
@@ -819,6 +825,7 @@ interface ReviewListCallbackArgs {
   } | null>;
   modelRef: React.RefObject<ReviewListModel>;
   removePendingStore: (key: string, id: string) => void;
+  toggleExpand: (fileIndex: number) => void;
   reply: ReturnType<typeof useCommentMutations>["reply"];
   requestResolveThread: ReturnType<
     typeof useCommentMutations
@@ -1109,6 +1116,9 @@ function useReviewListCallbacks(
     onThreadHover(t: { rootId: number; path: string } | null) {
       reviewListOnThreadHover(args, t);
     },
+    onToggleExpand(fileIndex: number) {
+      args.toggleExpand(fileIndex);
+    },
     onToggleHunk(fileIndex: number, hunkIndex: number) {
       args.setCollapsed((prev) => {
         const next = new Map(prev);
@@ -1156,6 +1166,7 @@ function useReviewListCallbacks(
       onRowEnter: (...a) => r.current.onRowEnter(...a),
       onScroll: () => r.current.onScroll(),
       onThreadHover: (...a) => r.current.onThreadHover(...a),
+      onToggleExpand: (...a) => r.current.onToggleExpand(...a),
       onToggleHunk: (...a) => r.current.onToggleHunk(...a),
       onToggleViewed: (...a) => r.current.onToggleViewed(...a),
     };
@@ -1443,6 +1454,7 @@ function useReviewHotkeys(config: {
   sidebarOverlayOpenRef: React.RefObject<boolean>;
   toggleActiveThread: () => void;
   toggleDrawerWide: () => void;
+  toggleFullFile: () => void;
   toggleSidebar: () => void;
   toggleViewedFile: () => void;
 }): void {
@@ -1596,6 +1608,13 @@ function useReviewHotkeys(config: {
       icon: Check,
       keys: "v",
       run: config.toggleViewedFile,
+    },
+    {
+      description: "Expand full file",
+      group: "Files",
+      icon: FileCode,
+      keys: "shift+v",
+      run: config.toggleFullFile,
     },
     {
       description: "Toggle file tree",
@@ -2002,13 +2021,14 @@ function useReviewFind(args: {
   files: ChangedFile[];
   listRef: React.RefObject<ReviewListHandle | null>;
   model: ReviewListModel;
+  rowsByFile: ReadonlyMap<number, readonly DiffRow[]>;
   selectLine: (
     fileIndex: number,
     anchor: string,
     opts?: { keepOccurrences?: boolean }
   ) => void;
 }) {
-  const { files, listRef, model, selectLine } = args;
+  const { files, listRef, model, rowsByFile, selectLine } = args;
   const [findUi, dispatchFindUi] = useReducer(findUiReducer, INITIAL_FIND_UI);
   const {
     caseSensitive: findCase,
@@ -2023,7 +2043,7 @@ function useReviewFind(args: {
 
   const findMatches =
     findOpen && findQuery
-      ? findInDiff(files, findQuery, { caseSensitive: findCase })
+      ? findInDiff(files, findQuery, { caseSensitive: findCase, rowsByFile })
       : EMPTY_MATCHES;
   const findSeededIndex = seededMatchIndex(findMatches, model, findSeed);
   const findSafeIndex =
@@ -2527,15 +2547,61 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
   );
   const pendingByFile = buildPendingByFile(pending);
 
+  const rawCursorRef = useLatest(cursor);
+  const {
+    expandedNames,
+    expandedRows,
+    expandingNames,
+    pendingRestoreRef: expandRestoreRef,
+    toggleExpand,
+  } = useFileExpansion({
+    activeFileIndex: clampedIndex,
+    cursorRef: rawCursorRef,
+    files,
+    headSha: pr?.headSha ?? "",
+    listRef,
+    owner,
+    repo,
+    setFlash,
+  });
+
   const model: ReviewListModel = buildReviewItems({
     collapsed,
     commentsByFile,
+    expandedRows,
     files,
     isImage: isImageFile,
     openBoxes,
     pendingByFile,
   });
   const modelRef = useLatest(model);
+
+  /**
+   * The expand/collapse swap shifts rows under a stationary pointer, and the
+   * browser re-dispatches hover on those shifts — through the settle window
+   * and past the mask reveal (the mask is opacity-only, so rows stay
+   * hit-testable). Hold hover reseeds until the pointer genuinely moves
+   * (isRealPointer clears the hold at >6px) so the swap can never walk the
+   * cursor.
+   */
+  const toggleExpandHeld = (fileIndex: number) => {
+    keyboardHoldRef.current = true;
+    toggleExpand(fileIndex);
+  };
+
+  const onExpandRestored = (row: { anchor: string; fileIndex: number }) => {
+    if (flashTimerRef.current) {
+      clearTimeout(flashTimerRef.current);
+    }
+    flashTimerRef.current = setTimeout(() => setFlashKey(null), 1600);
+    setFlashKey(fileAnchorKey(row.fileIndex, row.anchor));
+  };
+  useExpansionScrollRestore(
+    expandRestoreRef,
+    modelRef,
+    listRef,
+    onExpandRestored
+  );
 
   const liveCursor =
     cursor &&
@@ -2576,6 +2642,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
     files,
     listRef,
     model,
+    rowsByFile: expandedRows,
     selectLine: (...args) => selectLineRef.current(...args),
   });
 
@@ -2724,6 +2791,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
     setInputMode,
     setOpenBoxes,
     setSelection,
+    toggleExpand: toggleExpandHeld,
     toggleViewed,
     updateReviewComment,
   });
@@ -2798,7 +2866,11 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
   );
 
   const occMatchList = occSpec
-    ? occurrenceMatches(files[occSpec.fileIndex] ?? {}, occSpec)
+    ? occurrenceMatches(
+        files[occSpec.fileIndex] ?? {},
+        occSpec,
+        expandedRows.get(occSpec.fileIndex)
+      )
     : EMPTY_OCC;
   const occMatchListRef = useLatest(occMatchList);
 
@@ -3003,6 +3075,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
     sidebarOverlayOpenRef,
     toggleActiveThread,
     toggleDrawerWide: onToggleDrawerWide,
+    toggleFullFile: () => toggleExpandHeld(activeIndexRef.current),
     toggleSidebar: onToggleSidebar,
     closeSidebar: onCloseSidebar,
     toggleViewedFile,
@@ -3181,6 +3254,8 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
               }
               dragging={dragging}
               editRequest={editReq}
+              expandedFiles={expandedNames}
+              expandingFiles={expandingNames}
               files={files}
               findCurrent={findCurrent}
               flashKey={flashKey}

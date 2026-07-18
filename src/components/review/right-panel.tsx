@@ -98,7 +98,7 @@ export function RightPanel({
   };
 
   const submitEdit = (commentId: number, text: string) => {
-    onEditIssueComment({ body: text, commentId });
+    onEditIssueComment({ body: text, commentId }).catch(() => undefined);
     setEditingId(null);
   };
 
@@ -404,7 +404,7 @@ function ConversationItem({
     }
     if (confirmingDelete) {
       setConfirmingDelete(false);
-      onDelete?.({ commentId });
+      onDelete?.({ commentId })?.catch(() => undefined);
     } else {
       setConfirmingDelete(true);
     }

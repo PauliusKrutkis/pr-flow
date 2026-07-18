@@ -114,7 +114,11 @@ export function WatchReposDialog({
 function WatchReposDialogContent({ onClose }: { onClose: () => void }) {
   const { data } = useWatchedRepos();
   const listId = useId();
-  const { dialogRef, onDialogCancel, onDialogClose } = useModalDialog(onClose);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { dialogRef, onDialogCancel, onDialogClose } = useModalDialog(
+    onClose,
+    inputRef
+  );
   const [optimisticRepos, setOptimisticRepos] = useState<string[] | null>(null);
   const repos = optimisticRepos ?? data ?? [];
   const [input, setInput] = useState("");
@@ -130,7 +134,6 @@ function WatchReposDialogContent({ onClose }: { onClose: () => void }) {
     "done",
   ];
   const { armed, cycle, setArmed } = useArmedRing(armOrder, null);
-  const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<number | null>(null);
   const requestSeq = useRef(0);
@@ -205,10 +208,6 @@ function WatchReposDialogContent({ onClose }: { onClose: () => void }) {
       watch,
     });
   };
-
-  useEffect(() => {
-    requestAnimationFrame(() => inputRef.current?.focus());
-  }, []);
 
   useEffect(() => {
     if (armed === null) {
