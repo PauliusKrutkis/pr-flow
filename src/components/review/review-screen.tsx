@@ -94,6 +94,7 @@ import { parsePrKey, prKey } from "../../types.ts";
 import { Avatar } from "../ui/avatar.tsx";
 import { Kbd } from "../ui/kbd.tsx";
 import { TicketTitle } from "../ui/ticket-title.tsx";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { FileSidebar } from "./file-sidebar.tsx";
 import { FindBar } from "./find-bar.tsx";
 import { OverviewRuler } from "./overview-ruler.tsx";
@@ -3119,8 +3120,8 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
 
   const ciDot = ciDotClass(detail.ciStatus);
   const infoTitle = ciDot
-    ? `PR info & checks — ${ciDotLabel(detail.ciStatus)} (i)`
-    : "PR description & conversation (i)";
+    ? `PR info & checks — ${ciDotLabel(detail.ciStatus)}`
+    : "PR description & conversation";
   return (
     <div className="dir-quiet relative flex h-full min-h-0 overflow-hidden">
       <aside
@@ -3155,16 +3156,17 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
       <main className="qf-main flex min-w-0 flex-1 flex-col">
         <header className="qf-header flex shrink-0 items-center gap-4 px-6 py-3">
           {(sidebarCompact || !sidebarOpen) && (
-            <button
-              aria-label="Show files"
-              aria-pressed={sidebarOpen}
-              className="qf-files-toggle qf-focusable"
-              onClick={onToggleSidebar}
-              title="Show files (b)"
-              type="button"
-            >
-              <PanelLeft aria-hidden size={16} />
-            </button>
+            <Tooltip combo="b" label="Show files">
+              <button
+                aria-label="Show files"
+                aria-pressed={sidebarOpen}
+                className="qf-files-toggle qf-focusable"
+                onClick={onToggleSidebar}
+                type="button"
+              >
+                <PanelLeft aria-hidden size={16} />
+              </button>
+            </Tooltip>
           )}
           <div className="qf-header-id min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-2">
@@ -3207,19 +3209,22 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
             <span className="qf-header-meta qf-muted text-xs">
               {viewedNow}/{fileCount} viewed
             </span>
-            <button
-              aria-pressed={rightOpen}
-              className="qf-info-btn qf-focusable"
-              onClick={onToggleRightPanel}
-              title={infoTitle}
-              type="button"
-            >
-              i
-              {ciDot && <span aria-hidden className={cn("qf-ci-dot", ciDot)} />}
-              {convoCount > 0 && (
-                <span className="qf-info-count">{convoCount}</span>
-              )}
-            </button>
+            <Tooltip combo="i" label={infoTitle}>
+              <button
+                aria-pressed={rightOpen}
+                className="qf-info-btn qf-focusable"
+                onClick={onToggleRightPanel}
+                type="button"
+              >
+                i
+                {ciDot && (
+                  <span aria-hidden className={cn("qf-ci-dot", ciDot)} />
+                )}
+                {convoCount > 0 && (
+                  <span className="qf-info-count">{convoCount}</span>
+                )}
+              </button>
+            </Tooltip>
             <button
               className="qf-submit qf-focusable"
               onClick={openSubmit}
@@ -3725,18 +3730,19 @@ function BranchChip({ name, label }: { name: string; label: string }) {
     timerRef.current = setTimeout(() => setCopied(false), 1200);
   };
   return (
-    <button
-      className={cn("qf-branch-chip", copied && "qf-branch-copied")}
-      onClick={onCopy}
-      title={copied ? "Copied" : label}
-      type="button"
-    >
-      {copied ? (
-        <Check aria-hidden size={11} />
-      ) : (
-        <GitBranch aria-hidden size={11} />
-      )}
-      {name}
-    </button>
+    <Tooltip label={copied ? "Copied" : label}>
+      <button
+        className={cn("qf-branch-chip", copied && "qf-branch-copied")}
+        onClick={onCopy}
+        type="button"
+      >
+        {copied ? (
+          <Check aria-hidden size={11} />
+        ) : (
+          <GitBranch aria-hidden size={11} />
+        )}
+        {name}
+      </button>
+    </Tooltip>
   );
 }

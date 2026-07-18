@@ -24,6 +24,7 @@ import type {
 import { Markdown } from "../markdown.tsx";
 import { Avatar } from "../ui/avatar.tsx";
 import { TicketTitle } from "../ui/ticket-title.tsx";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { AddCommentBox } from "./add-comment-box.tsx";
 import { CiPill } from "./ci-pill.tsx";
 
@@ -176,29 +177,34 @@ export function RightPanel({
         <div className="qf-drawer-head">
           <span className="qf-drawer-title">Pull request</span>
           <div className="qf-drawer-head-actions">
-            <button
-              aria-label={wide ? "Narrow panel" : "Widen panel"}
-              aria-pressed={wide}
-              className="qf-drawer-wide-btn qf-focusable"
-              onClick={onToggleWide}
-              title={`${wide ? "Narrow" : "Widen"} panel (⇧I)`}
-              type="button"
+            <Tooltip
+              combo="shift+i"
+              label={`${wide ? "Narrow" : "Widen"} panel`}
             >
-              {wide ? (
-                <PanelRightClose aria-hidden size={15} />
-              ) : (
-                <PanelRightOpen aria-hidden size={15} />
-              )}
-            </button>
-            <button
-              aria-label="Close"
-              className="qf-drawer-close qf-focusable"
-              onClick={onClose}
-              title="Close (Esc)"
-              type="button"
-            >
-              Esc
-            </button>
+              <button
+                aria-label={wide ? "Narrow panel" : "Widen panel"}
+                aria-pressed={wide}
+                className="qf-drawer-wide-btn qf-focusable"
+                onClick={onToggleWide}
+                type="button"
+              >
+                {wide ? (
+                  <PanelRightClose aria-hidden size={15} />
+                ) : (
+                  <PanelRightOpen aria-hidden size={15} />
+                )}
+              </button>
+            </Tooltip>
+            <Tooltip combo="esc" label="Close">
+              <button
+                aria-label="Close"
+                className="qf-drawer-close qf-focusable"
+                onClick={onClose}
+                type="button"
+              >
+                Esc
+              </button>
+            </Tooltip>
           </div>
         </div>
 
@@ -301,37 +307,41 @@ export function RightPanel({
               </h3>
               <div className="qf-drawer-threads">
                 {threads.map(({ root, replyCount }) => (
-                  <button
-                    className="qf-thread-row qf-focusable"
-                    data-thread-path={root.path}
-                    data-thread-root={root.id}
+                  <Tooltip
                     key={root.id}
-                    onClick={handleJumpToThread}
-                    title="Jump to this thread in the diff"
-                    type="button"
+                    label="Jump to this thread in the diff"
                   >
-                    <span className="qf-thread-loc">
-                      {!!root.resolved && (
-                        <CheckCircle2
-                          aria-label="Resolved"
-                          className="qf-thread-check"
-                          size={12}
-                        />
-                      )}
-                      <span className="qf-thread-path">{root.path}</span>
-                      <span className="qf-thread-line">
-                        {root.line === null ? " · outdated" : `:${root.line}`}
-                      </span>
-                      {replyCount > 0 && (
-                        <span className="qf-thread-replies">
-                          {replyCount} {replyCount === 1 ? "reply" : "replies"}
+                    <button
+                      className="qf-thread-row qf-focusable"
+                      data-thread-path={root.path}
+                      data-thread-root={root.id}
+                      onClick={handleJumpToThread}
+                      type="button"
+                    >
+                      <span className="qf-thread-loc">
+                        {!!root.resolved && (
+                          <CheckCircle2
+                            aria-label="Resolved"
+                            className="qf-thread-check"
+                            size={12}
+                          />
+                        )}
+                        <span className="qf-thread-path">{root.path}</span>
+                        <span className="qf-thread-line">
+                          {root.line === null ? " · outdated" : `:${root.line}`}
                         </span>
-                      )}
-                    </span>
-                    <span className="qf-thread-snip">
-                      {firstLine(root.body)}
-                    </span>
-                  </button>
+                        {replyCount > 0 && (
+                          <span className="qf-thread-replies">
+                            {replyCount}{" "}
+                            {replyCount === 1 ? "reply" : "replies"}
+                          </span>
+                        )}
+                      </span>
+                      <span className="qf-thread-snip">
+                        {firstLine(root.body)}
+                      </span>
+                    </button>
+                  </Tooltip>
                 ))}
               </div>
             </section>

@@ -935,3 +935,32 @@ link interception · Universal Links.
       dialog to quickly scribble a note — skipping the need to comment inline in
       code or open the info drawer and scroll to the comment area.
 - [ ] **Hide empty tabs**.
+
+## Inbox (2026-07-18)
+
+- [ ] **Private repos don't show up** — on certain setups (org restrictions,
+      token scopes, etc.) private repos may be missing from the list; needs
+      manual debugging to find the root cause.
+- [ ] **Unfocused-window hotkeys/sidebar stale** — when the app window isn't
+      focused, scrolling still works but hotkeys that only surface on
+      focus/hover don't appear, and the sidebar's active-file highlight stops
+      updating.
+- [x] **Tooltips on buttons** — many buttons only have a `title` attribute
+      today; add real tooltips. Converted icon-only affordances (find bar,
+      right-panel widen/close/jump-to-thread, copy-path/viewed-toggle, CI
+      pill, ticket links, inbox watch/archived/tab, header show-files/info,
+      branch chips) to the existing `<Tooltip>` component. Left native
+      `title` where a visible label/`<Kbd>` hint already shows (composer
+      toolbar, thread expand/collapse — by existing design) or where the
+      button can be `disabled` (submit-review approve/request-changes —
+      disabled elements don't reliably fire the pointer/focus events the
+      custom Tooltip relies on) and on file-tree/file-header rows (native
+      title for truncated-path overflow, not an action hint).
+- [ ] **Multi-line comment highlighting is partial** — block comments
+      (`/* ... */`) only grey out the first line instead of the whole
+      comment, e.g.:
+      ```
+      /* Head-blob fixtures for full-file expansion (get_file_blob). fuzzy.ts must
+      agree with PATCH line-for-line on the new side — expandFileRows validates —
+      and carries extra tail lines that only exist when expanded. */
+      ```

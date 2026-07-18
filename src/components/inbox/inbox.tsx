@@ -34,6 +34,7 @@ import { Avatar } from "../ui/avatar.tsx";
 import { Kbd } from "../ui/kbd.tsx";
 import { Spinner } from "../ui/spinner.tsx";
 import { TicketTitle } from "../ui/ticket-title.tsx";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { PRListItem } from "./pr-list-item.tsx";
 import { WatchReposDialog } from "./watch-repos-dialog.tsx";
 
@@ -538,32 +539,35 @@ function InboxTabBar({
           tabDef={t}
         />
       ))}
-      <button
-        className="qi-watch-button"
-        onClick={onOpenWatch}
-        title="Watch repositories… (w)"
-        type="button"
-      >
-        <Eye size={14} />
-        Watch
-      </button>
-      <button
-        className="qi-archived-toggle"
-        data-state={archivedActive ? "active" : "inactive"}
-        onClick={onToggleArchived}
-        title={
-          archivedActive
-            ? "Back to the inbox (u)"
-            : "Show archived pull requests (u)"
+      <Tooltip combo="w" label="Watch repositories…">
+        <button className="qi-watch-button" onClick={onOpenWatch} type="button">
+          <Eye size={14} />
+          Watch
+        </button>
+      </Tooltip>
+      <Tooltip
+        combo="u"
+        label={
+          archivedActive ? "Back to the inbox" : "Show archived pull requests"
         }
-        type="button"
       >
-        {archivedActive ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-        Archived
-        {archivedCount > 0 && (
-          <span className="qi-tab-count">{archivedCount}</span>
-        )}
-      </button>
+        <button
+          className="qi-archived-toggle"
+          data-state={archivedActive ? "active" : "inactive"}
+          onClick={onToggleArchived}
+          type="button"
+        >
+          {archivedActive ? (
+            <ArchiveRestore size={14} />
+          ) : (
+            <Archive size={14} />
+          )}
+          Archived
+          {archivedCount > 0 && (
+            <span className="qi-tab-count">{archivedCount}</span>
+          )}
+        </button>
+      </Tooltip>
     </div>
   );
 }
@@ -586,16 +590,17 @@ function InboxTabButton({
   };
 
   return (
-    <button
-      className="qi-tab"
-      data-state={active ? "active" : "inactive"}
-      onClick={handleClick}
-      title={`${tabDef.hint} (${index + 1})`}
-      type="button"
-    >
-      {tabDef.label}
-      <span className="qi-tab-count">{count}</span>
-    </button>
+    <Tooltip combo={String(index + 1)} label={tabDef.hint}>
+      <button
+        className="qi-tab"
+        data-state={active ? "active" : "inactive"}
+        onClick={handleClick}
+        type="button"
+      >
+        {tabDef.label}
+        <span className="qi-tab-count">{count}</span>
+      </button>
+    </Tooltip>
   );
 }
 
