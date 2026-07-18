@@ -1,3 +1,13 @@
+/**
+ * Tabs hide when empty (and not active) so the bar reflects where work
+ * actually is; digit hotkeys (1-5) still reach a hidden tab directly, so
+ * InboxTabButton keeps its digit hint tied to the tab's fixed position in
+ * TABS rather than its slot among the visible ones. cycleTab walks only the
+ * visible tabs, falling back to index 0 when the active tab is itself
+ * hidden. Watching repos is a separate action (the "w" hotkey, command
+ * palette, and docked Watch button all open the same dialog), so the
+ * Watching tab follows the same visibility rule as every other tab.
+ */
 import {
   Archive,
   ArchiveRestore,
@@ -139,12 +149,6 @@ export function Inbox() {
     return m;
   })();
 
-  // Show a tab if it holds something, if it is the active tab (so an empty
-  // active tab still shows its zero-state and you're never stranded), or until
-  // the first load resolves (avoids tabs popping in). Digit hotkeys still reach
-  // every tab, so a hidden one is one keypress away. Watching repos is a
-  // separate action (the "w" hotkey / command palette / docked button), so
-  // this tab can follow the exact same content-only rule as the rest.
   const tabsLoaded = data !== null;
   const visibleTabs = TABS.filter(
     (t) => !tabsLoaded || visibleCounts[t.key] > 0 || t.key === tab
@@ -182,8 +186,6 @@ export function Inbox() {
       return;
     }
     const i = order.indexOf(tab);
-    // If the active tab is hidden (only reachable via digit), start the walk
-    // from its position in the full list so direction still feels natural.
     const from = i < 0 ? 0 : i;
     selectTab(order[(from + dir + order.length) % order.length]);
   };
@@ -530,8 +532,6 @@ function InboxTabBar({
         <InboxTabButton
           active={t.key === tab}
           count={counts[t.key]}
-          // Keep the digit hint tied to the tab's real position in TABS, not
-          // its slot among the visible tabs.
           index={TABS.findIndex((d) => d.key === t.key)}
           key={t.key}
           onSelectTab={onSelectTab}

@@ -1,3 +1,11 @@
+/**
+ * Default fixture: only Review requests (3) and Created (1) hold PRs, so
+ * Assigned, Involved and Watching start out empty and hidden from the tab
+ * bar. Digit hotkeys still reach a hidden tab directly, landing on its
+ * zero-state. Watching repos is a separate action from the tab bar's
+ * content tabs (the docked Watch button opens the same dialog as "w"), so
+ * it stays reachable even while the Watching tab itself is hidden.
+ */
 import { setupApp } from "./bridge.ts";
 import { expect, test } from "./test.ts";
 
@@ -38,8 +46,6 @@ test("j/k move the selection; the reading pane follows", async ({ page }) => {
 });
 
 test("empty tabs are hidden; digits still reach them", async ({ page }) => {
-  // Default fixture: only Review requests (3) and Created (1) hold PRs;
-  // Assigned, Involved and Watching are empty and stay out of the bar.
   await expect(
     page.getByRole("button", { name: REVIEW_REQUESTS })
   ).toBeVisible();
@@ -52,8 +58,6 @@ test("empty tabs are hidden; digits still reach them", async ({ page }) => {
     await page.screenshot({ path: "evidence/inbox-hide-empty-tabs.png" });
   }
 
-  // A digit selects an empty tab, which then appears as the active tab so you
-  // land on its zero-state rather than nowhere.
   await page.keyboard.press("2");
   await expect(page.getByRole("button", { name: ASSIGNED })).toHaveAttribute(
     "data-state",
@@ -64,22 +68,17 @@ test("empty tabs are hidden; digits still reach them", async ({ page }) => {
 test("the docked Watch button opens the dialog regardless of tab state", async ({
   page,
 }) => {
-  // Watching repos is a separate action from the tab bar's content tabs, so
-  // it stays reachable even while the Watching tab itself is hidden (empty).
   await expect(page.getByRole("button", { name: WATCHING })).toHaveCount(0);
   await page.getByRole("button", { name: "Watch" }).click();
   await expect(page.getByPlaceholder(SEARCH_REPOSITORIES)).toBeFocused();
 });
 
 test("tab cycles only visible tabs; digits jump directly", async ({ page }) => {
-  // Tab skips the hidden Assigned/Involved tabs: Review requests → Created.
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: CREATED })).toHaveAttribute(
     "data-state",
     "active"
   );
-  // Watching is hidden until a digit reveals it (then its zero-state offers
-  // the watch-a-repository onboarding).
   await page.keyboard.press("5");
   await expect(page.getByRole("button", { name: WATCHING })).toHaveAttribute(
     "data-state",
