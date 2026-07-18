@@ -9,6 +9,7 @@
  */
 import type { ChangedFile, PendingComment, ReviewComment } from "../types.ts";
 import { type DiffHunk, type DiffRow, parsePatch, rowAnchor } from "./diff.ts";
+import { markBlockCommentRows } from "./highlight.ts";
 import {
   detectIndentUnit,
   guideLevelsForHunk,
@@ -460,6 +461,7 @@ export function buildReviewItems(
  * without recomputing per render or per item.
  */
 export interface FileRenderMeta {
+  commentByRow: ReadonlyMap<DiffRow, boolean>;
   guideByRow: ReadonlyMap<DiffRow, number>;
   indentUnit: IndentUnit;
   intraByRow: ReadonlyMap<DiffRow, IntralineRanges>;
@@ -467,7 +469,10 @@ export interface FileRenderMeta {
 
 const metaCache = new WeakMap<object, FileRenderMeta>();
 
-export function fileRenderMeta(patch: string): FileRenderMeta {
+export function fileRenderMeta(
+  patch: string,
+  filename: string
+): FileRenderMeta {
   const hunks: DiffHunk[] = parsePatch(patch);
   const hit = metaCache.get(hunks);
   if (hit) {
@@ -485,6 +490,7 @@ export function fileRenderMeta(patch: string): FileRenderMeta {
     });
   }
   const meta: FileRenderMeta = {
+    commentByRow: markBlockCommentRows(hunks, filename),
     guideByRow,
     indentUnit,
     intraByRow: intralinePairs(hunks),

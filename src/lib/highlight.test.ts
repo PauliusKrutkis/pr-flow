@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parsePatch } from "./diff.ts";
 import {
   highlightLine,
   highlightLineWithFind,
@@ -6,6 +7,7 @@ import {
   highlightLineWithMatch,
   highlightLineWithOccurrences,
   isHighlightable,
+  markBlockCommentRows,
 } from "./highlight.ts";
 
 describe("language resolution", () => {
@@ -40,6 +42,78 @@ describe("highlightLine", () => {
   it("does not mistake C dereferences for comments", () => {
     const html = highlightLine("*ptr = 5;", "a.c");
     expect(html).not.toContain("hljs-comment");
+  });
+
+  it("treats a flowing continuation line (no leading *) as a comment when told it's open", () => {
+    const html = highlightLine(
+      "agree with PATCH line-for-line on the new side",
+      "a.ts",
+      true
+    );
+    expect(html).toBe(
+      '<span class="hljs-comment">agree with PATCH line-for-line on the new side</span>'
+    );
+  });
+
+  it("splits a closing continuation line into comment + normal code", () => {
+    const html = highlightLine(
+      "and carries extra tail lines. */ const x = 1;",
+      "a.ts",
+      true
+    );
+    expect(html.startsWith('<span class="hljs-comment">')).toBe(true);
+    expect(html).toContain("and carries extra tail lines. */");
+    expect(html).toContain("hljs-keyword");
+    expect(html.replace(/<[^>]+>/g, "")).toBe(
+      "and carries extra tail lines. */ const x = 1;"
+    );
+  });
+
+  it("ignores startsInComment for languages without C-style block comments", () => {
+    const html = highlightLine("no leading star here", "a.py", true);
+    expect(html).not.toContain("hljs-comment");
+  });
+});
+
+describe("markBlockCommentRows", () => {
+  it("marks flowing continuation rows as inside a comment", () => {
+    const patch = [
+      "@@ -1,4 +1,4 @@",
+      " /* Head-blob fixtures for full-file expansion. fuzzy.ts must",
+      " agree with PATCH line-for-line on the new side —",
+      " and carries extra tail lines that only exist when expanded. */",
+      " const x = 1;",
+    ].join("\n");
+    const [hunk] = parsePatch(patch);
+    const rows = hunk.rows.filter((r) => r.type !== "hunk");
+    const marks = markBlockCommentRows([hunk], "a.ts");
+
+    expect(marks.get(rows[0])).toBe(false); // the "/*" opener line itself
+    expect(marks.get(rows[1])).toBe(true); // flowing continuation, no leading *
+    expect(marks.get(rows[2])).toBe(true); // closes mid-line with */
+    expect(marks.get(rows[3])).toBe(false); // after the comment closed
+  });
+
+  it("returns an empty map for languages without C-style block comments", () => {
+    const patch = ["@@ -1,1 +1,1 @@", " x = 1"].join("\n");
+    const [hunk] = parsePatch(patch);
+    expect(markBlockCommentRows([hunk], "a.py").size).toBe(0);
+  });
+
+  it("resets comment state at hunk boundaries", () => {
+    const patchA = [
+      "@@ -1,2 +1,2 @@",
+      " /* opens and never closes",
+      " more",
+    ].join("\n");
+    const patchB = ["@@ -10,1 +10,1 @@", " plain code, not a comment"].join(
+      "\n"
+    );
+    const [hunkA] = parsePatch(patchA);
+    const [hunkB] = parsePatch(patchB);
+    const marks = markBlockCommentRows([hunkA, hunkB], "a.ts");
+    const bodyRow = hunkB.rows.find((r) => r.type !== "hunk");
+    expect(bodyRow && marks.get(bodyRow)).toBe(false);
   });
 });
 
