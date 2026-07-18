@@ -19,6 +19,14 @@ interface Coords {
   top: number;
 }
 
+interface TriggerProps {
+  "aria-describedby"?: string;
+  onBlur?: (e: React.FocusEvent) => void;
+  onFocus?: (e: React.FocusEvent) => void;
+  onPointerEnter?: (e: React.PointerEvent) => void;
+  onPointerLeave?: (e: React.PointerEvent) => void;
+}
+
 /**
  * A hover/focus tooltip themed with the existing .q-tooltip tokens. Portals to
  * the body so it is never clipped by the virtualized diff scroller, positions
@@ -26,15 +34,18 @@ interface Coords {
  * keyboard hint in the slot .q-tooltip already reserves. Opens on pointer and
  * on keyboard focus, closes on leave, blur, or Escape — the label is wired to
  * the child control with aria-describedby so it is announced, not just shown.
- * The trigger is held by an inline-flex wrapper span (measured for placement)
- * rather than cloned onto the child, so no ref threads through render.
+ * The open/close handlers are cloned onto the child (always the interactive
+ * control — a button, in practice) rather than a wrapper span, so the wrapper
+ * stays a plain measurement anchor with no interaction handlers of its own.
+ * The wrapper still exists, instead of measuring the child directly, because
+ * cloning a ref onto an arbitrary child isn't guaranteed to work.
  */
 export function Tooltip({
   children,
   label,
   combo,
 }: {
-  children: ReactElement<{ "aria-describedby"?: string }>;
+  children: ReactElement<TriggerProps>;
   label: string;
   combo?: string;
 }) {
@@ -95,22 +106,30 @@ export function Tooltip({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open]);
 
+  const childProps = children.props;
   const trigger = cloneElement(children, {
     "aria-describedby": open ? id : undefined,
+    onBlur: (e: React.FocusEvent) => {
+      childProps.onBlur?.(e);
+      hide();
+    },
+    onFocus: (e: React.FocusEvent) => {
+      childProps.onFocus?.(e);
+      show(true);
+    },
+    onPointerEnter: (e: React.PointerEvent) => {
+      childProps.onPointerEnter?.(e);
+      show(false);
+    },
+    onPointerLeave: (e: React.PointerEvent) => {
+      childProps.onPointerLeave?.(e);
+      hide();
+    },
   });
 
   return (
     <>
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: wrapper only mirrors hover/focus of its interactive child for positioning; the child stays the control. */}
-      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: wrapper only mirrors hover/focus of its interactive child for positioning; the child stays the control. */}
-      <span
-        className="q-tooltip-anchor"
-        onBlur={hide}
-        onFocus={() => show(true)}
-        onPointerEnter={() => show(false)}
-        onPointerLeave={hide}
-        ref={triggerRef}
-      >
+      <span className="q-tooltip-anchor" ref={triggerRef}>
         {trigger}
       </span>
       {open &&
