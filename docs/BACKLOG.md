@@ -672,7 +672,7 @@ conflicts with zero-friction product goal).
       (composer + info-drawer form; visual-only).
 - [ ] ⏸ **P21** — Multi-line selection box via drag
       (defer; improve gutter-drag discoverability instead).
-- [ ] 🟢 **Rust tests — split into files** — break up large inline `#[cfg(test)]`
+- [x] 🟢 **Rust tests — split into files** — break up large inline `#[cfg(test)]`
       modules into separate test files where it aids navigation.
 - [x] **Split-pr skill — PR evidence in description** — skill should attach
       Playwright screenshots / UI evidence to the PR body, not just local
@@ -935,3 +935,23 @@ link interception · Universal Links.
       dialog to quickly scribble a note — skipping the need to comment inline in
       code or open the info drawer and scroll to the comment area.
 - [ ] **Hide empty tabs**.
+
+## Inbox (2026-07-18)
+
+- [ ] **Private repos don't show up** — on certain setups (org restrictions,
+      token scopes, etc.) private repos may be missing from the list; needs
+      manual debugging to find the root cause.
+- [ ] **Unfocused-window hotkeys/sidebar stale** — when the app window isn't
+      focused, scrolling still works but hotkeys that only surface on
+      focus/hover don't appear, and the sidebar's active-file highlight stops
+      updating.
+- [ ] **Tooltips on buttons** — many buttons only have a `title` attribute
+      today; add real tooltips.
+- [ ] **Multi-line comment highlighting is partial** — block comments
+      (`/* ... */`) only grey out the first line instead of the whole
+      comment, e.g.:
+      ```
+      /* Head-blob fixtures for full-file expansion (get_file_blob). fuzzy.ts must
+      agree with PATCH line-for-line on the new side — expandFileRows validates —
+      and carries extra tail lines that only exist when expanded. */
+      ```

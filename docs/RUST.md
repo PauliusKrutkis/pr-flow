@@ -218,6 +218,17 @@ When touching the backend:
 
 ---
 
+## Tests
+
+Unit tests live in a sibling `{module}_tests.rs` file, pulled in via
+`#[cfg(test)] #[path = "{module}_tests.rs"] mod tests;` at the bottom of the
+module they test (e.g. `github.rs` → `github_tests.rs`). This keeps large
+modules (`github.rs`, `gitlab.rs`) navigable without the test module pushing
+the real code further down the file. Add new tests to the sibling file, not
+inline, once a module has one.
+
+---
+
 ## Related docs
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — stack-wide layering, comments, state

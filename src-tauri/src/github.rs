@@ -267,7 +267,10 @@ pub(crate) fn log(msg: &str) {
 pub(crate) fn build_client(token: &str) -> Result<reqwest::Client, String> {
     use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, USER_AGENT};
     let mut headers = HeaderMap::new();
-    headers.insert(ACCEPT, HeaderValue::from_static("application/vnd.github+json"));
+    headers.insert(
+        ACCEPT,
+        HeaderValue::from_static("application/vnd.github+json"),
+    );
     headers.insert(USER_AGENT, HeaderValue::from_static("pr-flow"));
     headers.insert(
         "X-GitHub-Api-Version",
@@ -363,10 +366,7 @@ fn resolve_conditional(
 /// failure falls through to a plain fetch — the cache is a pure optimisation
 /// and must never break a request.
 pub(crate) async fn get_json(client: &reqwest::Client, url: &str) -> Result<Value, String> {
-    let stored = etag_cache()
-        .lock()
-        .ok()
-        .and_then(|c| c.get(url).cloned());
+    let stored = etag_cache().lock().ok().and_then(|c| c.get(url).cloned());
 
     let mut req = client.get(url);
     if let Some(hit) = &stored {
@@ -472,7 +472,13 @@ fn bucket_from(data: &Value, alias: &str) -> InboxBucket {
     let prs = node
         .and_then(|b| b.get("nodes"))
         .and_then(Value::as_array)
-        .map(|nodes| nodes.iter().filter(|n| !n.is_null()).map(pr_from_graphql).collect())
+        .map(|nodes| {
+            nodes
+                .iter()
+                .filter(|n| !n.is_null())
+                .map(pr_from_graphql)
+                .collect()
+        })
         .unwrap_or_default();
     InboxBucket { count, prs }
 }
@@ -709,7 +715,10 @@ impl GitHubPlatform {
         let text = resp.text().await.map_err(net_err)?;
         if !status.is_success() {
             log(&format!("GraphQL HTTP {}: {}", status.as_u16(), text));
-            return Err(format!("GitHub GraphQL error ({}): {text}", status.as_u16()));
+            return Err(format!(
+                "GitHub GraphQL error ({}): {text}",
+                status.as_u16()
+            ));
         }
         let v: Value = serde_json::from_str(&text)
             .map_err(|e| format!("could not parse GraphQL response: {e}"))?;
@@ -787,7 +796,10 @@ impl GitHubPlatform {
     /// One search request; multiple `repo:` qualifiers OR together.
     pub async fn subscribed_prs(&self, repos: &[String]) -> Result<InboxBucket, String> {
         if repos.is_empty() {
-            return Ok(InboxBucket { count: 0, prs: Vec::new() });
+            return Ok(InboxBucket {
+                count: 0,
+                prs: Vec::new(),
+            });
         }
         let quals: String = repos
             .iter()
@@ -876,7 +888,10 @@ impl GitHubPlatform {
                     return None;
                 }
                 if body.trim().is_empty()
-                    && !matches!(state.as_str(), "APPROVED" | "CHANGES_REQUESTED" | "DISMISSED")
+                    && !matches!(
+                        state.as_str(),
+                        "APPROVED" | "CHANGES_REQUESTED" | "DISMISSED"
+                    )
                 {
                     return None;
                 }
@@ -891,7 +906,9 @@ impl GitHubPlatform {
             })
             .collect();
 
-        let ci_status = self.ci_status(owner, repo, number, &pr.head_sha, &pr.url).await;
+        let ci_status = self
+            .ci_status(owner, repo, number, &pr.head_sha, &pr.url)
+            .await;
 
         let detail = PullRequestDetail {
             pr,
@@ -936,9 +953,7 @@ impl GitHubPlatform {
         )
         .await;
         match (check_runs, combined) {
-            (Ok(check_runs), Ok(combined)) => {
-                ci_from_github(&check_runs, &combined, &checks_url)
-            }
+            (Ok(check_runs), Ok(combined)) => ci_from_github(&check_runs, &combined, &checks_url),
             (check_runs, combined) => {
                 let err = check_runs.err().or(combined.err()).unwrap_or_default();
                 log(&format!(
@@ -1057,7 +1072,9 @@ impl GitHubPlatform {
         }
         let resp = self
             .client
-            .post(format!("{API}/repos/{owner}/{repo}/pulls/{number}/comments"))
+            .post(format!(
+                "{API}/repos/{owner}/{repo}/pulls/{number}/comments"
+            ))
             .json(&payload)
             .send()
             .await
@@ -1077,7 +1094,9 @@ impl GitHubPlatform {
         let payload = json!({ "body": body, "in_reply_to": in_reply_to });
         let resp = self
             .client
-            .post(format!("{API}/repos/{owner}/{repo}/pulls/{number}/comments"))
+            .post(format!(
+                "{API}/repos/{owner}/{repo}/pulls/{number}/comments"
+            ))
             .json(&payload)
             .send()
             .await
@@ -1139,7 +1158,9 @@ impl GitHubPlatform {
         let payload = json!({ "body": body });
         let resp = self
             .client
-            .post(format!("{API}/repos/{owner}/{repo}/issues/{number}/comments"))
+            .post(format!(
+                "{API}/repos/{owner}/{repo}/issues/{number}/comments"
+            ))
             .json(&payload)
             .send()
             .await
@@ -1280,180 +1301,5 @@ impl GitHubPlatform {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pr_from_pull_maps_rich_fields() {
-        let v = serde_json::json!({
-            "id": 1, "number": 7, "title": "T", "state": "open",
-            "draft": true, "merged": false,
-            "updated_at": "u", "created_at": "c", "review_comments": 4,
-            "html_url": "https://github.com/o/r/pull/7", "body": "b",
-            "additions": 10, "deletions": 2, "changed_files": 3,
-            "user": { "login": "alice", "avatar_url": "av" },
-            "head": { "sha": "h", "ref": "feat" },
-            "base": { "sha": "bs", "ref": "main" }
-        });
-        let pr = pr_from_pull(&v, "o", "r");
-        assert_eq!(pr.number, 7);
-        assert_eq!(pr.repo, "o/r");
-        assert!(pr.draft);
-        assert_eq!(pr.head_sha, "h");
-        assert_eq!(pr.base_sha, "bs");
-        assert_eq!(pr.base_ref, "main");
-        assert_eq!(pr.additions, 10);
-    }
-
-    #[test]
-    fn missing_fields_degrade_to_defaults_not_panics() {
-        let pr = pr_from_pull(&serde_json::json!({}), "o", "r");
-        assert_eq!(pr.number, 0);
-        assert_eq!(pr.title, "");
-        assert!(!pr.merged);
-        let c = comment_from(&serde_json::json!({}));
-        assert_eq!(c.side, "RIGHT");
-        assert_eq!(c.line, None);
-    }
-
-    #[test]
-    fn graphql_bucket_maps_states_and_counts() {
-        let data = serde_json::json!({
-            "alias": {
-                "issueCount": 12,
-                "nodes": [
-                    {
-                        "databaseId": 5, "number": 2, "title": "x",
-                        "url": "https://github.com/o/r/pull/2",
-                        "state": "MERGED", "isDraft": false,
-                        "createdAt": "c", "updatedAt": "u",
-                        "author": { "login": "a", "avatarUrl": "av" },
-                        "repository": { "name": "r", "owner": { "login": "o" } },
-                        "comments": { "totalCount": 1 }
-                    },
-                    null
-                ]
-            }
-        });
-        let bucket = bucket_from(&data, "alias");
-        assert_eq!(bucket.count, 12);
-        assert_eq!(bucket.prs.len(), 1);
-        assert_eq!(bucket.prs[0].owner, "o");
-        assert!(bucket.prs[0].merged);
-        assert_eq!(bucket.prs[0].state, "merged");
-    }
-
-    #[test]
-    fn ci_from_github_aggregates_checks_and_status() {
-        let check_runs = serde_json::json!({
-            "check_runs": [
-                { "status": "completed", "conclusion": "success", "html_url": "ok" },
-                { "status": "completed", "conclusion": "failure", "html_url": "boom" },
-                { "status": "in_progress", "conclusion": null, "html_url": "wip" }
-            ]
-        });
-        let combined = serde_json::json!({
-            "statuses": [ { "state": "success", "target_url": "t" } ]
-        });
-        let ci = ci_from_github(&check_runs, &combined, "https://x/checks");
-        assert_eq!(ci.state, "failure");
-        assert_eq!(ci.total, 4);
-        assert_eq!(ci.failed, 1);
-        assert_eq!(ci.url, "boom");
-    }
-
-    #[test]
-    fn ci_from_github_pending_then_success_then_none() {
-        let pending = ci_from_github(
-            &serde_json::json!({ "check_runs": [
-                { "status": "queued", "conclusion": null }
-            ] }),
-            &serde_json::json!({ "statuses": [] }),
-            "cx",
-        );
-        assert_eq!(pending.state, "pending");
-        assert_eq!(pending.url, "cx");
-
-        let success = ci_from_github(
-            &serde_json::json!({ "check_runs": [
-                { "status": "completed", "conclusion": "success" }
-            ] }),
-            &serde_json::json!({ "statuses": [] }),
-            "cx",
-        );
-        assert_eq!(success.state, "success");
-        assert_eq!(success.total, 1);
-
-        let none = ci_from_github(
-            &serde_json::json!({ "check_runs": [] }),
-            &serde_json::json!({ "statuses": [] }),
-            "cx",
-        );
-        assert_eq!(none.state, "none");
-        assert_eq!(none.total, 0);
-        assert_eq!(none.url, "");
-    }
-
-    #[test]
-    fn conditional_304_serves_cached_body() {
-        let cached = CachedResponse {
-            etag: "\"abc\"".to_string(),
-            body: serde_json::json!({ "cached": true }),
-        };
-        let out = resolve_conditional(304, Some("\"abc\""), Some(&cached), Value::Null);
-        assert_eq!(out, Conditional::Cached(serde_json::json!({ "cached": true })));
-    }
-
-    #[test]
-    fn conditional_200_stores_new_etag_and_body() {
-        let out = resolve_conditional(
-            200,
-            Some("\"new\""),
-            None,
-            serde_json::json!({ "fresh": 1 }),
-        );
-        assert_eq!(
-            out,
-            Conditional::Fresh {
-                body: serde_json::json!({ "fresh": 1 }),
-                etag: Some("\"new\"".to_string()),
-            }
-        );
-    }
-
-    #[test]
-    fn conditional_304_without_cache_falls_back_to_fresh() {
-        let out = resolve_conditional(304, None, None, Value::Null);
-        assert_eq!(
-            out,
-            Conditional::Fresh {
-                body: Value::Null,
-                etag: None,
-            }
-        );
-    }
-
-    #[test]
-    fn conditional_200_without_etag_stores_nothing() {
-        let out = resolve_conditional(200, None, None, serde_json::json!({ "x": 1 }));
-        assert_eq!(
-            out,
-            Conditional::Fresh {
-                body: serde_json::json!({ "x": 1 }),
-                etag: None,
-            }
-        );
-    }
-
-    #[test]
-    fn comment_from_threads_replies() {
-        let v = serde_json::json!({
-            "id": 9, "path": "f.ts", "line": 3, "side": "LEFT",
-            "body": "b", "created_at": "t", "in_reply_to_id": 4,
-            "user": { "login": "u", "avatar_url": "" }
-        });
-        let c = comment_from(&v);
-        assert_eq!(c.in_reply_to_id, Some(4));
-        assert_eq!(c.side, "LEFT");
-    }
-}
+#[path = "github_tests.rs"]
+mod tests;
