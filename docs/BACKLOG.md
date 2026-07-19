@@ -957,7 +957,7 @@ link interception · Universal Links.
       disabled elements don't reliably fire the pointer/focus events the
       custom Tooltip relies on) and on file-tree/file-header rows (native
       title for truncated-path overflow, not an action hint).
-- [ ] **Multi-line comment highlighting is partial** — block comments
+- [x] **Multi-line comment highlighting is partial** — block comments
       (`/* ... */`) only grey out the first line instead of the whole
       comment, e.g.:
       ```
@@ -965,3 +965,16 @@ link interception · Universal Links.
       agree with PATCH line-for-line on the new side — expandFileRows validates —
       and carries extra tail lines that only exist when expanded. */
       ```
+      Root cause: `highlight.ts` highlights strictly per-line with no
+      cross-line grammar state; the existing `COMMENT_CONTINUATION` regex
+      only patches continuation lines with a leading `*` (JSDoc style), not
+      flowing comments like the one above. Fixed with `markBlockCommentRows`
+      (`lib/highlight.ts`) — a per-file pass over a patch's hunks (mirrors
+      the existing `guideByRow`/`intraByRow` pattern in
+      `review-items.ts`'s `fileRenderMeta`) that records which rows start
+      inside an unterminated block comment; `highlightRowHtml` takes the new
+      flag and either comments the whole row or splits it at the closing
+      marker. Best-effort (ignores string/char literals, resets at hunk
+      boundaries) — same spirit as the pre-existing heuristic. Full-file
+      expansion's synthesized context rows aren't covered (same limitation
+      `guideByRow`/`intraByRow` already have for those rows).

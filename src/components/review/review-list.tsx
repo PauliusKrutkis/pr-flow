@@ -273,6 +273,7 @@ function DiffLine({
   markQuery,
   markFlag,
   findOrdinal,
+  startsInComment,
   onEnter,
   onOpenBox,
   onPlusDragStart,
@@ -289,6 +290,7 @@ function DiffLine({
   markQuery: string | null;
   markFlag: boolean;
   findOrdinal: number | null;
+  startsInComment: boolean;
   onEnter: (fileIndex: number, anchor: string, x: number, y: number) => void;
   onOpenBox: (fileIndex: number, anchor: string, startLine?: number) => void;
   onPlusDragStart: (fileIndex: number, anchor: string) => void;
@@ -305,7 +307,8 @@ function DiffLine({
     markKind,
     markQuery,
     markFlag,
-    findOrdinal
+    findOrdinal,
+    startsInComment
   );
 
   const handleMouseEnter = (e: MouseEvent<HTMLDivElement>) => {
@@ -830,7 +833,7 @@ function renderRowItem(
   if (!patch) {
     return <div style={{ height: 1 }} />;
   }
-  const meta = fileRenderMeta(patch);
+  const meta = fileRenderMeta(patch, file.filename);
   const key =
     item.anchor === null ? null : fileAnchorKey(item.fileIndex, item.anchor);
   const { marks } = p;
@@ -869,6 +872,7 @@ function renderRowItem(
       onPlusDragEnd={p.callbacks.onPlusDragEnd}
       onPlusDragOver={p.callbacks.onPlusDragOver}
       onPlusDragStart={p.callbacks.onPlusDragStart}
+      startsInComment={meta.commentByRow.get(item.row) ?? false}
       stateCls={cn(
         key !== null && key === p.cursorKey && "qf-row-active",
         inSel && "qf-row-selected",
