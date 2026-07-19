@@ -30,8 +30,8 @@ namespaced by `account.id`.
 
 ## Module map
 
-The crate is intentionally flat (~10 files). Layers exist, but names do not
-always match them. Use this table as the mental model:
+The crate is intentionally flat. Layers exist, but names do not always match
+them. Use this table as the mental model:
 
 | File | Layer | Responsibility |
 | ---- | ----- | -------------- |
@@ -40,9 +40,11 @@ always match them. Use this table as the mental model:
 | `commands.rs` | Handlers | PR/inbox/review/file commands; cache key helpers. |
 | `auth.rs` | Handlers + infra | OAuth loopback server (GitHub + GitLab), token exchange. |
 | `accounts.rs` | Domain + handlers | `Account` types, `accounts.json`, migration, account commands, `active_platform`. |
-| `platform.rs` | Seam | `AnyPlatform` enum; forwards calls to the active provider. |
-| `github.rs` | Model + adapter + HTTP | **Shared** serde types, JSON helpers, `GitHubPlatform` impl. |
-| `gitlab.rs` | Adapter | `GitLabPlatform` — maps GitLab payloads onto shared types. |
+| `model.rs` | DTOs | **Shared** serde types consumed by the frontend (`PullRequest`, `InboxData`, …). |
+| `http.rs` | Infrastructure | Shared reqwest helpers (pagination, body parsing, ETag cache). |
+| `platform.rs` | Seam | `AnyPlatform` enum; forwards calls to the active provider; declares the `platform::github` / `platform::gitlab` submodules. |
+| `platform/github.rs` | Adapter | `GitHubPlatform` — GraphQL/REST calls + GitHub-only mapping functions. |
+| `platform/gitlab.rs` | Adapter | `GitLabPlatform` — maps GitLab payloads onto the shared model. |
 | `storage.rs` | Infrastructure | JSON read/write under the app config dir. |
 | `update.rs` | Handlers | `tauri-plugin-updater` wrappers. |
 
@@ -50,8 +52,8 @@ Rough mapping to familiar terms:
 
 - **Controller / handler** → `#[tauri::command]` functions (spread across four modules; registered in `lib.rs`).
 - **Use-case orchestration** → mostly inline in those commands (account → platform → cache).
-- **Port / adapter** → `AnyPlatform` + `GitHubPlatform` / `GitLabPlatform`.
-- **DTOs / models** → structs at the top of `github.rs` (`PullRequest`, `InboxData`, …).
+- **Port / adapter** → `AnyPlatform` + `platform::github::GitHubPlatform` / `platform::gitlab::GitLabPlatform`.
+- **DTOs / models** → `model.rs` (`PullRequest`, `InboxData`, …).
 - **Persistence** → `storage.rs` + account file logic in `accounts.rs`.
 
 ---
@@ -62,8 +64,8 @@ Rough mapping to familiar terms:
 | ---------- | ---------- |
 | See every command the frontend can call | `lib.rs` → `generate_handler![…]` |
 | Change inbox / PR detail / review behavior | `commands.rs` → method on `AnyPlatform` in `platform.rs` → provider impl |
-| Add or change a shared JSON shape | Top of `github.rs` (serde structs, `camelCase`) |
-| Add a new code host | New `*Platform` struct + variant on `AnyPlatform` + `accounts::platform_for` |
+| Add or change a shared JSON shape | `model.rs` (serde structs, `camelCase`) |
+| Add a new code host | New `platform::<host>` module + variant on `AnyPlatform` + `accounts::platform_for` |
 | Change OAuth / sign-in | `auth.rs` |
 | Change multi-account storage | `accounts.rs` + `storage.rs` |
 | Change cache file layout | `commands.rs` (`*_cache_name` helpers) + `storage.rs` |
@@ -112,30 +114,26 @@ GitLab directly — they always go through `accounts::active_platform`.
 Adding a third host means:
 
 1. Implement the same method surface as the other platforms (follow
-   `GitHubPlatform` / `GitLabPlatform`).
-2. Add a variant to `AnyPlatform` and a match arm in each forwarded method.
+   `platform::github::GitHubPlatform` / `platform::gitlab::GitLabPlatform`).
+2. Add a `platform::<host>` submodule declaration in `platform.rs`, a variant
+   on `AnyPlatform`, and a match arm in each forwarded method.
 3. Extend `accounts::platform_for` and account validation in `add_account`.
 
 ---
 
-## Shared types (naming quirk)
+## Shared types and HTTP helpers
 
 Domain types consumed by the frontend (`PullRequest`, `PullRequestDetail`,
-`ReviewComment`, `InboxData`, …) live in **`github.rs`** because GitHub was
-the first provider. They are **not** GitHub-specific — GitLab maps MR data
-onto them so the webview stays host-agnostic.
+`ReviewComment`, `InboxData`, `GitHubUser`, …) live in **`model.rs`** — the
+name is historical baggage from when GitHub was the only provider, but
+they're host-agnostic; GitLab maps MR data onto the same shapes so the
+webview never learns the difference.
 
-Similarly, `GitHubUser` is the shared “current user” shape for every provider.
-HTTP helpers in `github.rs` (`read_body`, `get_all_pages`, `fstr`, …) are also
-shared; `gitlab.rs` imports them from there.
-
-If this becomes confusing as the crate grows, a likely refactor is:
-
-- `model/` — shared serde types
-- `http/` — shared reqwest helpers
-- `platform/github/` and `platform/gitlab/` — provider impls
-
-No behavior change required; the current layout is fine at ~3k lines.
+Generic reqwest helpers (`read_body`, `get_all_pages`, `get_json`'s ETag
+cache, the `fstr`/`fu64`/… JSON field extractors) live in **`http.rs`**,
+shared by both `platform::github` and `platform::gitlab`. Only
+`platform::github` builds its own `reqwest::Client` with GitHub-specific
+headers (`build_client`) — GitLab's provider constructs its own inline.
 
 ---
 
@@ -196,8 +194,9 @@ the token against the host before persisting.
 
 - Commands return `Result<T, String>` — errors are user-facing strings.
 - API failures surface the host's `message` when present (`read_body` in
-  `github.rs`).
-- Debug logging goes to stderr with a `[pr-flow]` prefix (`log()` helper).
+  `http.rs`).
+- Debug logging goes to stderr with a `[pr-flow]` prefix (`log()` helper in
+  `http.rs`).
 
 ---
 
@@ -222,10 +221,10 @@ When touching the backend:
 
 Unit tests live in a sibling `{module}_tests.rs` file, pulled in via
 `#[cfg(test)] #[path = "{module}_tests.rs"] mod tests;` at the bottom of the
-module they test (e.g. `github.rs` → `github_tests.rs`). This keeps large
-modules (`github.rs`, `gitlab.rs`) navigable without the test module pushing
-the real code further down the file. Add new tests to the sibling file, not
-inline, once a module has one.
+module they test (e.g. `platform/github.rs` → `platform/github_tests.rs`).
+This keeps large modules navigable without the test module pushing the real
+code further down the file. Add new tests to the sibling file, not inline,
+once a module has one.
 
 ---
 

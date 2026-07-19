@@ -94,7 +94,7 @@ the first paint is instant; the live fetch then reconciles in the background.
 
 Key source files:
 
-- `src-tauri/src/github.rs` — GitHub client + commands: a single GraphQL request powers the inbox (all four tabs + counts at once); REST handles PR detail / diffs / comments
+- `src-tauri/src/platform/github.rs` — GitHub client + commands: a single GraphQL request powers the inbox (all four tabs + counts at once); REST handles PR detail / diffs / comments
 - `src-tauri/src/storage.rs` — JSON file persistence + token storage
 - `src/lib/api.ts` — typed `invoke()` wrappers
 - `src/keyboard/` — the scope-aware keyboard system (the differentiator)
