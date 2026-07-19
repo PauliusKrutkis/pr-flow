@@ -70,8 +70,8 @@ The GitLab/GitHub → shared-model mappers are the highest-risk untested code
 
 | Module | What to pin down |
 | --- | --- |
-| `github.rs` | `pr_from_pull`, `pr_from_graphql`, `file_from`, `comment_from` — defaults on missing/null fields |
-| `gitlab.rs` | `mr_to_pr` (iid→number, `references.full` owner/name split incl. subgroups, state mapping opened/merged), `file_from_diff` (new/deleted/renamed, diff stats), `note_to_comment` (root vs reply threading, LEFT/RIGHT from position), `enc` percent-encoding (`/`→`%2F`, unicode), `diff_stats` |
+| `platform/github.rs` | `pr_from_pull`, `pr_from_graphql`, `file_from`, `comment_from` — defaults on missing/null fields |
+| `platform/gitlab.rs` | `mr_to_pr` (iid→number, `references.full` owner/name split incl. subgroups, state mapping opened/merged), `file_from_diff` (new/deleted/renamed, diff stats), `note_to_comment` (root vs reply threading, LEFT/RIGHT from position), `enc` percent-encoding (`/`→`%2F`, unicode), `diff_stats` |
 | `accounts.rs` | `account_id` sanitization, `normalize_host` (default hosts, scheme-less input, trailing slash) |
 
 ### Priority 2 — storage & migration (integration, tempdir)
@@ -96,7 +96,7 @@ params, non-callback paths) against a loopback `TcpStream`.
 ## Suggested landing order
 
 1. Vitest scaffolding + `lib/diff` + `lib/highlight` (pure, immediate value).
-2. Rust mapper fixtures (gitlab.rs especially — it has never run against real data).
+2. Rust mapper fixtures (platform/gitlab.rs especially — it has never run against real data).
 3. KeyboardProvider dispatch suite.
 4. DiffViewer cursor model with fake timers.
 5. Store/hooks integration; CI job once 1–2 exist.

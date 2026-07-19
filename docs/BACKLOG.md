@@ -688,7 +688,7 @@ conflicts with zero-friction product goal).
       containers with `tabIndex={-1}` for programmatic focus, the
       `q-focus`/`qf-focusable` ring on real controls, and the
       watch-repos-dialog Tab-arms pattern. Supersedes the P02 blur fixes.
-- [ ] 🟢 **Rust tests — split into files** — break up large inline `#[cfg(test)]`
+- [x] 🟢 **Rust tests — split into files** — break up large inline `#[cfg(test)]`
       modules into separate test files where it aids navigation.
 - [x] **Split-pr skill — PR evidence in description** — skill should attach
       Playwright screenshots / UI evidence to the PR body, not just local

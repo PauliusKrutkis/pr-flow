@@ -1,273 +1,32 @@
-//! Shared data model + the GitHub implementation of the platform seam.
+//! The GitHub implementation of the platform seam.
 //!
 //! Every network call routes through the backend (never from the webview) so
 //! tokens stay out of the UI process and we sidestep CORS entirely. Responses
 //! are parsed defensively from `serde_json::Value` — a missing or null field
 //! degrades to a sensible default rather than panicking.
 
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+
+use crate::http::{
+    fbool, fopt_str, fopt_u64, fstr, fu64, get_all_pages, get_json, log, net_err, now_millis, nstr,
+    read_body,
+};
+use crate::model::{
+    ChangedFile, CiStatus, FileBlob, GitHubUser, InboxBucket, InboxData, IssueComment, LastComment,
+    PullRequest, PullRequestDetail, RepoHit, ReviewComment, ReviewCommentInput, ReviewSummary,
+    MAX_BLOB_BYTES,
+};
 
 const API: &str = "https://api.github.com";
 const GRAPHQL_URL: &str = "https://api.github.com/graphql";
 
-/// Data model (serialized as camelCase for the TypeScript frontend). Shared by
-/// every platform implementation — providers map their payloads onto these.
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct GitHubUser {
-    pub login: String,
-    pub avatar_url: String,
-    pub name: String,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct PullRequest {
-    pub id: u64,
-    pub number: u64,
-    pub title: String,
-    pub repo: String,
-    pub owner: String,
-    pub name: String,
-    pub author: String,
-    pub author_avatar_url: String,
-    pub url: String,
-    pub state: String,
-    pub draft: bool,
-    #[serde(default)]
-    pub merged: bool,
-    pub updated_at: String,
-    pub created_at: String,
-    pub comments_count: u64,
-    pub head_sha: String,
-    #[serde(default)]
-    pub base_sha: String,
-    #[serde(default)]
-    pub head_ref: String,
-    #[serde(default)]
-    pub base_ref: String,
-    pub additions: u64,
-    pub deletions: u64,
-    pub changed_files: u64,
-    pub body: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub last_comment: Option<LastComment>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct LastComment {
-    pub author: String,
-    pub author_avatar_url: String,
-    pub body: String,
-    pub created_at: String,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct ChangedFile {
-    pub filename: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub previous_filename: Option<String>,
-    pub status: String,
-    pub additions: u64,
-    pub deletions: u64,
-    pub changes: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub patch: Option<String>,
-    pub sha: String,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct ReviewComment {
-    pub id: u64,
-    pub path: String,
-    pub line: Option<u64>,
-    pub original_line: Option<u64>,
-    pub side: String,
-    pub diff_hunk: String,
-    pub body: String,
-    pub user: String,
-    pub user_avatar_url: String,
-    pub created_at: String,
-    pub in_reply_to_id: Option<u64>,
-    #[serde(default)]
-    pub thread_id: Option<String>,
-    #[serde(default)]
-    pub resolved: bool,
-}
-
-/// A PR-level conversation comment (not anchored to a diff line).
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct IssueComment {
-    pub id: u64,
-    pub body: String,
-    pub user: String,
-    pub user_avatar_url: String,
-    pub created_at: String,
-}
-
-/// A submitted review: an approval / change request / review with a summary
-/// body. These are the "LGTM" moments the conversation view would otherwise
-/// silently drop — inline comments live in `ReviewComment`, but the verdict
-/// itself only exists here.
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct ReviewSummary {
-    pub id: u64,
-    pub user: String,
-    pub user_avatar_url: String,
-    pub state: String,
-    pub body: String,
-    pub submitted_at: String,
-}
-
-/// Aggregated CI/pipeline state for the PR's head commit, mapped from GitHub
-/// check-runs + commit statuses or GitLab pipelines onto one host-agnostic
-/// shape. `state: "none"` means the repo has no CI configured (the header pill
-/// renders nothing so quiet repos stay quiet).
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct CiStatus {
-    pub state: String,
-    pub total: u64,
-    pub failed: u64,
-    pub url: String,
-}
-
-impl Default for CiStatus {
-    fn default() -> Self {
-        CiStatus {
-            state: "none".to_string(),
-            total: 0,
-            failed: 0,
-            url: String::new(),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct PullRequestDetail {
-    pub pr: PullRequest,
-    pub files: Vec<ChangedFile>,
-    pub comments: Vec<ReviewComment>,
-    #[serde(default)]
-    pub issue_comments: Vec<IssueComment>,
-    #[serde(default)]
-    pub reviews: Vec<ReviewSummary>,
-    #[serde(default)]
-    pub ci_status: CiStatus,
-    pub fetched_at: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct InboxBucket {
-    pub count: u64,
-    pub prs: Vec<PullRequest>,
-}
-
-/// All inbox tabs fetched in a single request (where the host allows it).
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct InboxData {
-    pub review_requested: InboxBucket,
-    pub assigned: InboxBucket,
-    pub created: InboxBucket,
-    pub involved: InboxBucket,
-}
-
-/// Hard cap on blob size shipped to the webview — images beyond this are
-/// better opened on the host than base64-encoded into the UI.
-pub const MAX_BLOB_BYTES: usize = 20 * 1024 * 1024;
-
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct FileBlob {
-    pub base64: String,
-    pub size: u64,
-}
-
-/// A repository search hit (the watch-repos picker).
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct RepoHit {
-    pub full_name: String,
-    pub description: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReviewCommentInput {
-    pub path: String,
-    pub line: u64,
-    pub side: String,
-    pub body: String,
-    #[serde(default)]
-    pub start_line: Option<u64>,
-}
-
-pub(crate) fn fstr(v: &Value, key: &str) -> String {
-    v.get(key)
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_string()
-}
-
-pub(crate) fn fu64(v: &Value, key: &str) -> u64 {
-    v.get(key).and_then(Value::as_u64).unwrap_or(0)
-}
-
-pub(crate) fn fbool(v: &Value, key: &str) -> bool {
-    v.get(key).and_then(Value::as_bool).unwrap_or(false)
-}
-
-pub(crate) fn fopt_u64(v: &Value, key: &str) -> Option<u64> {
-    v.get(key).and_then(Value::as_u64)
-}
-
-pub(crate) fn fopt_str(v: &Value, key: &str) -> Option<String> {
-    v.get(key)
-        .and_then(Value::as_str)
-        .map(|s| s.to_string())
-        .filter(|s| !s.is_empty())
-}
-
-pub(crate) fn nstr(v: &Value, parent: &str, key: &str) -> String {
-    v.get(parent)
-        .and_then(|p| p.get(key))
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_string()
-}
-
-pub(crate) fn now_millis() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
-}
-
-pub(crate) fn net_err(e: reqwest::Error) -> String {
-    format!("network error: {e}")
-}
-
-/// Lightweight stderr logging — shows up in the `tauri dev` terminal.
-pub(crate) fn log(msg: &str) {
-    eprintln!("[pr-flow] {msg}");
-}
-
 pub(crate) fn build_client(token: &str) -> Result<reqwest::Client, String> {
     use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION, USER_AGENT};
     let mut headers = HeaderMap::new();
-    headers.insert(ACCEPT, HeaderValue::from_static("application/vnd.github+json"));
+    headers.insert(
+        ACCEPT,
+        HeaderValue::from_static("application/vnd.github+json"),
+    );
     headers.insert(USER_AGENT, HeaderValue::from_static("pr-flow"));
     headers.insert(
         "X-GitHub-Api-Version",
@@ -280,158 +39,6 @@ pub(crate) fn build_client(token: &str) -> Result<reqwest::Client, String> {
         .default_headers(headers)
         .build()
         .map_err(|e| format!("could not build http client: {e}"))
-}
-
-/// Reads a response body, turning non-2xx responses into a friendly error that
-/// surfaces the host's own `message` field when present.
-pub(crate) async fn read_body(resp: reqwest::Response) -> Result<Value, String> {
-    let status = resp.status();
-    let text = resp.text().await.map_err(net_err)?;
-    if !status.is_success() {
-        let parsed = serde_json::from_str::<Value>(&text).ok();
-        let mut msg = parsed
-            .as_ref()
-            .and_then(|v| v.get("message").and_then(Value::as_str))
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| text.clone());
-        if let Some(errors) = parsed.as_ref().and_then(|v| v.get("errors")) {
-            if !errors.is_null() {
-                msg = format!("{msg} — {errors}");
-            }
-        }
-        log(&format!("API error {}: {}", status.as_u16(), msg));
-        return Err(format!("API error ({}): {}", status.as_u16(), msg));
-    }
-    if text.trim().is_empty() {
-        return Ok(Value::Null);
-    }
-    serde_json::from_str::<Value>(&text).map_err(|e| format!("could not parse response: {e}"))
-}
-
-/// One cached conditional GET: the `ETag` we last saw plus the body that came
-/// with it. Kept in-memory only — the process is long-lived, so we don't need
-/// to persist it (the on-disk cache in RUST.md already covers cold starts).
-#[derive(Clone)]
-struct CachedResponse {
-    etag: String,
-    body: Value,
-}
-
-/// Process-wide ETag cache, keyed by full request URL. Because the token is
-/// baked into each account's `reqwest::Client` and account switches change the
-/// active client, the URL alone is a safe key: a 304 is only ever returned for
-/// the same resource the caller is authorised to see.
-fn etag_cache() -> &'static Mutex<HashMap<String, CachedResponse>> {
-    static CACHE: OnceLock<Mutex<HashMap<String, CachedResponse>>> = OnceLock::new();
-    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-/// Outcome of a conditional GET, decided purely from inputs so it can be unit
-/// tested without a network. `Cached` means serve the stored body (a 304);
-/// `Fresh` means a new body arrived and, if it carried an `ETag`, we should
-/// remember it for next time.
-#[derive(Debug, PartialEq)]
-enum Conditional {
-    Cached(Value),
-    Fresh { body: Value, etag: Option<String> },
-}
-
-/// Pure decision core for a conditional GET. Given what we had cached and the
-/// response we just received, decide whether to serve the cache or the fresh
-/// body. Anything that isn't a clean 304-with-a-cached-body is treated as
-/// fresh, so a stale/missing cache can never wedge the request.
-fn resolve_conditional(
-    status: u16,
-    resp_etag: Option<&str>,
-    cached: Option<&CachedResponse>,
-    fresh_body: Value,
-) -> Conditional {
-    if status == 304 {
-        if let Some(hit) = cached {
-            return Conditional::Cached(hit.body.clone());
-        }
-    }
-    Conditional::Fresh {
-        body: fresh_body,
-        etag: resp_etag.filter(|e| !e.is_empty()).map(str::to_string),
-    }
-}
-
-/// Conditional GET: sends `If-None-Match` when we hold an `ETag` for the URL.
-/// GitHub (and GitLab) answer `304 Not Modified` without spending rate limit
-/// when nothing changed, letting the inbox poll far more often for free. Any
-/// failure falls through to a plain fetch — the cache is a pure optimisation
-/// and must never break a request.
-pub(crate) async fn get_json(client: &reqwest::Client, url: &str) -> Result<Value, String> {
-    let stored = etag_cache()
-        .lock()
-        .ok()
-        .and_then(|c| c.get(url).cloned());
-
-    let mut req = client.get(url);
-    if let Some(hit) = &stored {
-        req = req.header(reqwest::header::IF_NONE_MATCH, hit.etag.clone());
-    }
-    let resp = req.send().await.map_err(net_err)?;
-
-    let status = resp.status().as_u16();
-    let resp_etag = resp
-        .headers()
-        .get(reqwest::header::ETAG)
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_string);
-
-    let fresh_body = if status == 304 {
-        Value::Null
-    } else {
-        read_body(resp).await?
-    };
-
-    match resolve_conditional(status, resp_etag.as_deref(), stored.as_ref(), fresh_body) {
-        Conditional::Cached(body) => Ok(body),
-        Conditional::Fresh { body, etag } => {
-            if let Some(etag) = etag {
-                if let Ok(mut cache) = etag_cache().lock() {
-                    cache.insert(
-                        url.to_string(),
-                        CachedResponse {
-                            etag,
-                            body: body.clone(),
-                        },
-                    );
-                }
-            }
-            Ok(body)
-        }
-    }
-}
-
-/// Fetches every page of a list endpoint (100/page, capped at 20 pages).
-/// GitHub and GitLab share the `per_page`/`page` convention.
-pub(crate) async fn get_all_pages(
-    client: &reqwest::Client,
-    url: &str,
-) -> Result<Vec<Value>, String> {
-    let mut out: Vec<Value> = Vec::new();
-    let mut page: u32 = 1;
-    loop {
-        let page_str = page.to_string();
-        let resp = client
-            .get(url)
-            .query(&[("per_page", "100"), ("page", page_str.as_str())])
-            .send()
-            .await
-            .map_err(net_err)?;
-        let body = read_body(resp).await?;
-        let arr = body.as_array().cloned().unwrap_or_default();
-        let len = arr.len();
-        out.extend(arr);
-        if len < 100 || page >= 20 {
-            break;
-        }
-        page += 1;
-    }
-    Ok(out)
 }
 
 pub(crate) async fn fetch_user(client: &reqwest::Client) -> Result<GitHubUser, String> {
@@ -472,7 +79,13 @@ fn bucket_from(data: &Value, alias: &str) -> InboxBucket {
     let prs = node
         .and_then(|b| b.get("nodes"))
         .and_then(Value::as_array)
-        .map(|nodes| nodes.iter().filter(|n| !n.is_null()).map(pr_from_graphql).collect())
+        .map(|nodes| {
+            nodes
+                .iter()
+                .filter(|n| !n.is_null())
+                .map(pr_from_graphql)
+                .collect()
+        })
         .unwrap_or_default();
     InboxBucket { count, prs }
 }
@@ -709,7 +322,10 @@ impl GitHubPlatform {
         let text = resp.text().await.map_err(net_err)?;
         if !status.is_success() {
             log(&format!("GraphQL HTTP {}: {}", status.as_u16(), text));
-            return Err(format!("GitHub GraphQL error ({}): {text}", status.as_u16()));
+            return Err(format!(
+                "GitHub GraphQL error ({}): {text}",
+                status.as_u16()
+            ));
         }
         let v: Value = serde_json::from_str(&text)
             .map_err(|e| format!("could not parse GraphQL response: {e}"))?;
@@ -787,7 +403,10 @@ impl GitHubPlatform {
     /// One search request; multiple `repo:` qualifiers OR together.
     pub async fn subscribed_prs(&self, repos: &[String]) -> Result<InboxBucket, String> {
         if repos.is_empty() {
-            return Ok(InboxBucket { count: 0, prs: Vec::new() });
+            return Ok(InboxBucket {
+                count: 0,
+                prs: Vec::new(),
+            });
         }
         let quals: String = repos
             .iter()
@@ -876,7 +495,10 @@ impl GitHubPlatform {
                     return None;
                 }
                 if body.trim().is_empty()
-                    && !matches!(state.as_str(), "APPROVED" | "CHANGES_REQUESTED" | "DISMISSED")
+                    && !matches!(
+                        state.as_str(),
+                        "APPROVED" | "CHANGES_REQUESTED" | "DISMISSED"
+                    )
                 {
                     return None;
                 }
@@ -891,7 +513,9 @@ impl GitHubPlatform {
             })
             .collect();
 
-        let ci_status = self.ci_status(owner, repo, number, &pr.head_sha, &pr.url).await;
+        let ci_status = self
+            .ci_status(owner, repo, number, &pr.head_sha, &pr.url)
+            .await;
 
         let detail = PullRequestDetail {
             pr,
@@ -936,9 +560,7 @@ impl GitHubPlatform {
         )
         .await;
         match (check_runs, combined) {
-            (Ok(check_runs), Ok(combined)) => {
-                ci_from_github(&check_runs, &combined, &checks_url)
-            }
+            (Ok(check_runs), Ok(combined)) => ci_from_github(&check_runs, &combined, &checks_url),
             (check_runs, combined) => {
                 let err = check_runs.err().or(combined.err()).unwrap_or_default();
                 log(&format!(
@@ -1057,7 +679,9 @@ impl GitHubPlatform {
         }
         let resp = self
             .client
-            .post(format!("{API}/repos/{owner}/{repo}/pulls/{number}/comments"))
+            .post(format!(
+                "{API}/repos/{owner}/{repo}/pulls/{number}/comments"
+            ))
             .json(&payload)
             .send()
             .await
@@ -1077,7 +701,9 @@ impl GitHubPlatform {
         let payload = json!({ "body": body, "in_reply_to": in_reply_to });
         let resp = self
             .client
-            .post(format!("{API}/repos/{owner}/{repo}/pulls/{number}/comments"))
+            .post(format!(
+                "{API}/repos/{owner}/{repo}/pulls/{number}/comments"
+            ))
             .json(&payload)
             .send()
             .await
@@ -1139,7 +765,9 @@ impl GitHubPlatform {
         let payload = json!({ "body": body });
         let resp = self
             .client
-            .post(format!("{API}/repos/{owner}/{repo}/issues/{number}/comments"))
+            .post(format!(
+                "{API}/repos/{owner}/{repo}/issues/{number}/comments"
+            ))
             .json(&payload)
             .send()
             .await
@@ -1280,180 +908,5 @@ impl GitHubPlatform {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pr_from_pull_maps_rich_fields() {
-        let v = serde_json::json!({
-            "id": 1, "number": 7, "title": "T", "state": "open",
-            "draft": true, "merged": false,
-            "updated_at": "u", "created_at": "c", "review_comments": 4,
-            "html_url": "https://github.com/o/r/pull/7", "body": "b",
-            "additions": 10, "deletions": 2, "changed_files": 3,
-            "user": { "login": "alice", "avatar_url": "av" },
-            "head": { "sha": "h", "ref": "feat" },
-            "base": { "sha": "bs", "ref": "main" }
-        });
-        let pr = pr_from_pull(&v, "o", "r");
-        assert_eq!(pr.number, 7);
-        assert_eq!(pr.repo, "o/r");
-        assert!(pr.draft);
-        assert_eq!(pr.head_sha, "h");
-        assert_eq!(pr.base_sha, "bs");
-        assert_eq!(pr.base_ref, "main");
-        assert_eq!(pr.additions, 10);
-    }
-
-    #[test]
-    fn missing_fields_degrade_to_defaults_not_panics() {
-        let pr = pr_from_pull(&serde_json::json!({}), "o", "r");
-        assert_eq!(pr.number, 0);
-        assert_eq!(pr.title, "");
-        assert!(!pr.merged);
-        let c = comment_from(&serde_json::json!({}));
-        assert_eq!(c.side, "RIGHT");
-        assert_eq!(c.line, None);
-    }
-
-    #[test]
-    fn graphql_bucket_maps_states_and_counts() {
-        let data = serde_json::json!({
-            "alias": {
-                "issueCount": 12,
-                "nodes": [
-                    {
-                        "databaseId": 5, "number": 2, "title": "x",
-                        "url": "https://github.com/o/r/pull/2",
-                        "state": "MERGED", "isDraft": false,
-                        "createdAt": "c", "updatedAt": "u",
-                        "author": { "login": "a", "avatarUrl": "av" },
-                        "repository": { "name": "r", "owner": { "login": "o" } },
-                        "comments": { "totalCount": 1 }
-                    },
-                    null
-                ]
-            }
-        });
-        let bucket = bucket_from(&data, "alias");
-        assert_eq!(bucket.count, 12);
-        assert_eq!(bucket.prs.len(), 1);
-        assert_eq!(bucket.prs[0].owner, "o");
-        assert!(bucket.prs[0].merged);
-        assert_eq!(bucket.prs[0].state, "merged");
-    }
-
-    #[test]
-    fn ci_from_github_aggregates_checks_and_status() {
-        let check_runs = serde_json::json!({
-            "check_runs": [
-                { "status": "completed", "conclusion": "success", "html_url": "ok" },
-                { "status": "completed", "conclusion": "failure", "html_url": "boom" },
-                { "status": "in_progress", "conclusion": null, "html_url": "wip" }
-            ]
-        });
-        let combined = serde_json::json!({
-            "statuses": [ { "state": "success", "target_url": "t" } ]
-        });
-        let ci = ci_from_github(&check_runs, &combined, "https://x/checks");
-        assert_eq!(ci.state, "failure");
-        assert_eq!(ci.total, 4);
-        assert_eq!(ci.failed, 1);
-        assert_eq!(ci.url, "boom");
-    }
-
-    #[test]
-    fn ci_from_github_pending_then_success_then_none() {
-        let pending = ci_from_github(
-            &serde_json::json!({ "check_runs": [
-                { "status": "queued", "conclusion": null }
-            ] }),
-            &serde_json::json!({ "statuses": [] }),
-            "cx",
-        );
-        assert_eq!(pending.state, "pending");
-        assert_eq!(pending.url, "cx");
-
-        let success = ci_from_github(
-            &serde_json::json!({ "check_runs": [
-                { "status": "completed", "conclusion": "success" }
-            ] }),
-            &serde_json::json!({ "statuses": [] }),
-            "cx",
-        );
-        assert_eq!(success.state, "success");
-        assert_eq!(success.total, 1);
-
-        let none = ci_from_github(
-            &serde_json::json!({ "check_runs": [] }),
-            &serde_json::json!({ "statuses": [] }),
-            "cx",
-        );
-        assert_eq!(none.state, "none");
-        assert_eq!(none.total, 0);
-        assert_eq!(none.url, "");
-    }
-
-    #[test]
-    fn conditional_304_serves_cached_body() {
-        let cached = CachedResponse {
-            etag: "\"abc\"".to_string(),
-            body: serde_json::json!({ "cached": true }),
-        };
-        let out = resolve_conditional(304, Some("\"abc\""), Some(&cached), Value::Null);
-        assert_eq!(out, Conditional::Cached(serde_json::json!({ "cached": true })));
-    }
-
-    #[test]
-    fn conditional_200_stores_new_etag_and_body() {
-        let out = resolve_conditional(
-            200,
-            Some("\"new\""),
-            None,
-            serde_json::json!({ "fresh": 1 }),
-        );
-        assert_eq!(
-            out,
-            Conditional::Fresh {
-                body: serde_json::json!({ "fresh": 1 }),
-                etag: Some("\"new\"".to_string()),
-            }
-        );
-    }
-
-    #[test]
-    fn conditional_304_without_cache_falls_back_to_fresh() {
-        let out = resolve_conditional(304, None, None, Value::Null);
-        assert_eq!(
-            out,
-            Conditional::Fresh {
-                body: Value::Null,
-                etag: None,
-            }
-        );
-    }
-
-    #[test]
-    fn conditional_200_without_etag_stores_nothing() {
-        let out = resolve_conditional(200, None, None, serde_json::json!({ "x": 1 }));
-        assert_eq!(
-            out,
-            Conditional::Fresh {
-                body: serde_json::json!({ "x": 1 }),
-                etag: None,
-            }
-        );
-    }
-
-    #[test]
-    fn comment_from_threads_replies() {
-        let v = serde_json::json!({
-            "id": 9, "path": "f.ts", "line": 3, "side": "LEFT",
-            "body": "b", "created_at": "t", "in_reply_to_id": 4,
-            "user": { "login": "u", "avatar_url": "" }
-        });
-        let c = comment_from(&v);
-        assert_eq!(c.in_reply_to_id, Some(4));
-        assert_eq!(c.side, "LEFT");
-    }
-}
+#[path = "github_tests.rs"]
+mod tests;

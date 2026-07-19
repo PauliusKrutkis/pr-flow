@@ -1,8 +1,8 @@
 mod accounts;
 mod auth;
 mod commands;
-mod github;
-mod gitlab;
+mod http;
+mod model;
 mod platform;
 mod storage;
 mod update;

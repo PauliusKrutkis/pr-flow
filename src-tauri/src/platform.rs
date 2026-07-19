@@ -3,11 +3,16 @@
 //! the active account to an `AnyPlatform` and never talk to a provider
 //! directly — adding a host means adding a variant + impl, nothing else.
 
-use crate::github::{
-    FileBlob, GitHubPlatform, GitHubUser, InboxBucket, InboxData, PullRequestDetail, RepoHit,
-    ReviewComment, ReviewCommentInput,
+pub(crate) mod github;
+pub(crate) mod gitlab;
+
+use github::GitHubPlatform;
+use gitlab::GitLabPlatform;
+
+use crate::model::{
+    FileBlob, GitHubUser, InboxBucket, InboxData, PullRequestDetail, RepoHit, ReviewComment,
+    ReviewCommentInput,
 };
-use crate::gitlab::GitLabPlatform;
 
 pub enum AnyPlatform {
     GitHub(GitHubPlatform),
