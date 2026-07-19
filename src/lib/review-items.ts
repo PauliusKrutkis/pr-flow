@@ -456,9 +456,12 @@ export function buildReviewItems(
 
 /**
  * Intraline emphasis, indent guides, and the indent unit are derived from the
- * parsed hunks. parsePatch caches by patch string, so the hunks array identity
- * is stable — a WeakMap keyed by it gives every rendered row O(1) access
- * without recomputing per render or per item.
+ * parsed hunks alone, but commentByRow also depends on filename (language).
+ * parsePatch caches by patch string, so the hunks array identity is stable —
+ * a WeakMap keyed by it, nested under filename, gives every rendered row
+ * O(1) access without recomputing per render or per item, while still
+ * keeping distinct results for two files whose patch text happens to match
+ * byte-for-byte but whose languages differ.
  */
 export interface FileRenderMeta {
   commentByRow: ReadonlyMap<DiffRow, boolean>;
@@ -467,14 +470,15 @@ export interface FileRenderMeta {
   intraByRow: ReadonlyMap<DiffRow, IntralineRanges>;
 }
 
-const metaCache = new WeakMap<object, FileRenderMeta>();
+const metaCache = new WeakMap<object, Map<string, FileRenderMeta>>();
 
 export function fileRenderMeta(
   patch: string,
   filename: string
 ): FileRenderMeta {
   const hunks: DiffHunk[] = parsePatch(patch);
-  const hit = metaCache.get(hunks);
+  let byFilename = metaCache.get(hunks);
+  const hit = byFilename?.get(filename);
   if (hit) {
     return hit;
   }
@@ -495,6 +499,10 @@ export function fileRenderMeta(
     indentUnit,
     intraByRow: intralinePairs(hunks),
   };
-  metaCache.set(hunks, meta);
+  if (!byFilename) {
+    byFilename = new Map<string, FileRenderMeta>();
+    metaCache.set(hunks, byFilename);
+  }
+  byFilename.set(filename, meta);
   return meta;
 }

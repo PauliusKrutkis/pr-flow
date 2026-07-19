@@ -88,10 +88,10 @@ describe("markBlockCommentRows", () => {
     const rows = hunk.rows.filter((r) => r.type !== "hunk");
     const marks = markBlockCommentRows([hunk], "a.ts");
 
-    expect(marks.get(rows[0])).toBe(false); // the "/*" opener line itself
-    expect(marks.get(rows[1])).toBe(true); // flowing continuation, no leading *
-    expect(marks.get(rows[2])).toBe(true); // closes mid-line with */
-    expect(marks.get(rows[3])).toBe(false); // after the comment closed
+    expect(marks.get(rows[0])).toBe(false);
+    expect(marks.get(rows[1])).toBe(true);
+    expect(marks.get(rows[2])).toBe(true);
+    expect(marks.get(rows[3])).toBe(false);
   });
 
   it("returns an empty map for languages without C-style block comments", () => {

@@ -41,7 +41,6 @@ test("a flowing multi-line block comment is highlighted on every line, not just 
     page.locator(".hljs-comment", { hasText: "carries extra tail lines" })
   ).toBeVisible();
 
-  // The line after the comment closes highlights normally (not greyed).
   await expect(
     page.locator(".hljs-comment", { hasText: "const x = 1" })
   ).toHaveCount(0);
