@@ -17,8 +17,9 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
 
 use crate::accounts;
-use crate::github::{build_client, fetch_user, GitHubUser};
-use crate::gitlab::GitLabPlatform;
+use crate::model::GitHubUser;
+use crate::platform::github::{build_client, fetch_user};
+use crate::platform::gitlab::GitLabPlatform;
 
 const OAUTH_PORT: u16 = 8765;
 const REDIRECT_URI: &str = "http://127.0.0.1:8765/callback";

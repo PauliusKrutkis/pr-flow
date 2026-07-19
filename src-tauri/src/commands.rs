@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use tauri::AppHandle;
 
 use crate::accounts;
-use crate::github::{
+use crate::model::{
     FileBlob, GitHubUser, InboxBucket, InboxData, PullRequestDetail, RepoHit, ReviewComment,
     ReviewCommentInput,
 };
