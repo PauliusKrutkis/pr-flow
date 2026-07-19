@@ -1,6 +1,6 @@
 [package]
 name = "pr-flow"
-version = "0.1.0"
+version = "0.3.0"
 description = "PR Flow — a keyboard-first, cache-first GitHub pull request reviewer"
 authors = ["Paulius Krutkis"]
 edition = "2021"
