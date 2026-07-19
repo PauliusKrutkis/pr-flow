@@ -1,4 +1,5 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { Tooltip } from "./tooltip.tsx";
 
 /**
  * Titles with issue-tracker links: ticket IDs (SCR-2891, ABC-42, …) become
@@ -48,9 +49,11 @@ function TicketLink({ id, trackerBase }: { id: string; trackerBase: string }) {
     openUrl(href).catch(() => undefined);
   };
   return (
-    <button className="q-ticket" onClick={onClick} title={href} type="button">
-      {id}
-    </button>
+    <Tooltip label={href}>
+      <button className="q-ticket" onClick={onClick} type="button">
+        {id}
+      </button>
+    </Tooltip>
   );
 }
 

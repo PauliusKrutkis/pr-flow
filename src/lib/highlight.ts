@@ -1,6 +1,6 @@
 import hljs from "highlight.js";
 import { createElement, type ReactNode } from "react";
-import { parsePatch } from "./diff.ts";
+import { type DiffHunk, type DiffRow, parsePatch } from "./diff.ts";
 import { findMatchRangesInLine } from "./find-in-diff.ts";
 import { occurrenceRangesInLine } from "./occurrences.ts";
 
@@ -129,10 +129,37 @@ const C_BLOCK_COMMENT_LANGS = new Set([
 const COMMENT_CONTINUATION = /^\s*\*(?:$|[\s/])/;
 
 /**
+ * Handles a row that `markBlockCommentRows` says starts inside an
+ * unterminated block comment but doesn't match COMMENT_CONTINUATION (no
+ * leading `*`) — the case that regex alone misses (see BACKLOG.md "Inbox
+ * (2026-07-18)"). If the comment's closing marker appears on this line, only
+ * the text up to and including it is treated as a comment; the rest is
+ * highlighted normally (a comment reopening later on the same line is not
+ * handled — rare enough to leave for a future pass).
+ */
+function highlightOpenComment(code: string, filename: string): string {
+  const closeAt = code.indexOf("*/");
+  if (closeAt === -1) {
+    return `<span class="hljs-comment">${escapeHtml(code)}</span>`;
+  }
+  const commentHtml = escapeHtml(code.slice(0, closeAt + 2));
+  const rest = code.slice(closeAt + 2);
+  const restHtml = rest.length > 0 ? highlightLine(rest, filename) : "";
+  return `<span class="hljs-comment">${commentHtml}</span>${restHtml}`;
+}
+
+/**
  * Returns an HTML string (hljs token spans) for a single line of code.
+ * `startsInComment` (from `markBlockCommentRows`) marks a line that continues
+ * an unterminated block comment from a previous row — otherwise per-line
+ * highlighting has no way to know it's still inside a comment.
  * Safe to dangerouslySetInnerHTML — input is highlighted or HTML-escaped.
  */
-export function highlightLine(code: string, filename: string): string {
+export function highlightLine(
+  code: string,
+  filename: string,
+  startsInComment = false
+): string {
   if (code.length === 0) {
     return "";
   }
@@ -141,8 +168,13 @@ export function highlightLine(code: string, filename: string): string {
     return escapeHtml(code);
   }
 
-  if (C_BLOCK_COMMENT_LANGS.has(lang) && COMMENT_CONTINUATION.test(code)) {
-    return `<span class="hljs-comment">${escapeHtml(code)}</span>`;
+  if (C_BLOCK_COMMENT_LANGS.has(lang)) {
+    if (COMMENT_CONTINUATION.test(code)) {
+      return `<span class="hljs-comment">${escapeHtml(code)}</span>`;
+    }
+    if (startsInComment) {
+      return highlightOpenComment(code, filename);
+    }
   }
 
   const key = `${lang}\0${code}`;
@@ -166,6 +198,64 @@ export function highlightLine(code: string, filename: string): string {
 }
 
 /**
+ * For C-style languages, walks a file's hunks in row order and records which
+ * rows START inside an unterminated block comment — the input `markKind`
+ * check in `highlightLine`'s COMMENT_CONTINUATION only catches continuation
+ * lines with a leading `*`; this covers flowing block comments that don't.
+ * State resets at each hunk boundary (content between visible hunks isn't
+ * available to scan) and del/add rows from either side of the diff are
+ * walked in patch order, same as every other per-row computation in this
+ * codebase. Best-effort: ignores string/char literals, so a literal `/*` or
+ * comment-closer inside a string can throw off tracking until the next real
+ * boundary — acceptable for a "best-effort" highlighter (see file doc above).
+ */
+export function markBlockCommentRows(
+  hunks: readonly DiffHunk[],
+  filename: string
+): ReadonlyMap<DiffRow, boolean> {
+  const out = new Map<DiffRow, boolean>();
+  const lang = langForFilename(filename);
+  if (!(lang && C_BLOCK_COMMENT_LANGS.has(lang))) {
+    return out;
+  }
+  for (const hunk of hunks) {
+    let inComment = false;
+    for (const row of hunk.rows) {
+      if (row.type === "hunk") {
+        continue;
+      }
+      out.set(row, inComment);
+      inComment = advanceBlockComment(row.content, inComment);
+    }
+  }
+  return out;
+}
+
+/** Scans one line for `/*`/comment-closer pairs, returning whether it ends still open. */
+function advanceBlockComment(line: string, inComment: boolean): boolean {
+  let open = inComment;
+  let i = 0;
+  while (i < line.length) {
+    if (open) {
+      const end = line.indexOf("*/", i);
+      if (end === -1) {
+        return true;
+      }
+      open = false;
+      i = end + 2;
+    } else {
+      const start = line.indexOf("/*", i);
+      if (start === -1) {
+        return false;
+      }
+      open = true;
+      i = start + 2;
+    }
+  }
+  return open;
+}
+
+/**
  * Pre-highlights every line of every patch during IDLE time, so scrolling a
  * section into view (which mounts and highlights its rows synchronously)
  * finds the per-line cache already hot. Without this, each section mounting
@@ -177,17 +267,20 @@ export function highlightLine(code: string, filename: string): string {
 export function warmHighlightCache(
   files: ReadonlyArray<{ filename: string; patch?: string | null }>
 ): () => void {
-  const queue: [code: string, filename: string][] = [];
+  const queue: [code: string, filename: string, startsInComment: boolean][] =
+    [];
   for (const f of files) {
     if (!(f.patch && isHighlightable(f.filename))) {
       continue;
     }
-    for (const hunk of parsePatch(f.patch)) {
+    const hunks = parsePatch(f.patch);
+    const commentByRow = markBlockCommentRows(hunks, f.filename);
+    for (const hunk of hunks) {
       for (const row of hunk.rows) {
         if (row.type === "hunk") {
           continue;
         }
-        queue.push([row.content, f.filename]);
+        queue.push([row.content, f.filename, commentByRow.get(row) ?? false]);
       }
     }
   }
@@ -211,7 +304,7 @@ export function warmHighlightCache(
       if (out) {
         break;
       }
-      highlightLine(queue[i][0], queue[i][1]);
+      highlightLine(queue[i][0], queue[i][1], queue[i][2]);
       i += 1;
     }
     if (i < queue.length) {
@@ -364,9 +457,10 @@ export function highlightHtmlToNodes(html: string): ReactNode[] {
 export function highlightLineWithIntra(
   code: string,
   filename: string,
-  intra: IntraRanges
+  intra: IntraRanges,
+  startsInComment = false
 ): string {
-  return withIntra(highlightLine(code, filename), intra);
+  return withIntra(highlightLine(code, filename, startsInComment), intra);
 }
 
 /**
@@ -408,9 +502,10 @@ export function highlightLineWithFind(
   query: string,
   caseSensitive: boolean,
   currentOrdinal: number | null,
-  intra: IntraRanges = null
+  intra: IntraRanges = null,
+  startsInComment = false
 ): string {
-  const html = withIntra(highlightLine(code, filename), intra);
+  const html = withIntra(highlightLine(code, filename, startsInComment), intra);
   if (!query || code.length === 0) {
     return html;
   }
@@ -441,9 +536,10 @@ export function highlightLineWithOccurrences(
   filename: string,
   query: string,
   wholeWord: boolean,
-  intra: IntraRanges = null
+  intra: IntraRanges = null,
+  startsInComment = false
 ): string {
-  const html = withIntra(highlightLine(code, filename), intra);
+  const html = withIntra(highlightLine(code, filename, startsInComment), intra);
   if (!query || code.length === 0) {
     return html;
   }
@@ -479,10 +575,11 @@ export function highlightRowHtml(
   markKind: MarkKind,
   markQuery: string | null,
   markFlag: boolean,
-  findOrdinal: number | null
+  findOrdinal: number | null,
+  startsInComment = false
 ): string {
   if (markQuery === null) {
-    return highlightLineWithIntra(content, filename, intra);
+    return highlightLineWithIntra(content, filename, intra, startsInComment);
   }
   if (markKind === "find") {
     return highlightLineWithFind(
@@ -491,7 +588,8 @@ export function highlightRowHtml(
       markQuery,
       markFlag,
       findOrdinal,
-      intra
+      intra,
+      startsInComment
     );
   }
   return highlightLineWithOccurrences(
@@ -499,6 +597,7 @@ export function highlightRowHtml(
     filename,
     markQuery,
     markFlag,
-    intra
+    intra,
+    startsInComment
   );
 }

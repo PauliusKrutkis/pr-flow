@@ -2,6 +2,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { Check, Loader, X } from "lucide-react";
 import { cn } from "../../lib/cn.ts";
 import type { CiStatus } from "../../types.ts";
+import { Tooltip } from "../ui/tooltip.tsx";
 
 /**
  * Header CI/pipeline pill: one glanceable icon + count, colour-matched to the
@@ -21,15 +22,18 @@ export function CiPill({ ci }: { ci: CiStatus | undefined }) {
     }
   };
   return (
-    <button
-      className={cn("qf-ci", meta.className)}
-      onClick={open}
-      title={`${meta.label} · ${ci.total} check${ci.total === 1 ? "" : "s"}`}
-      type="button"
+    <Tooltip
+      label={`${meta.label} · ${ci.total} check${ci.total === 1 ? "" : "s"}`}
     >
-      {meta.icon}
-      <span className="qf-ci-count">{count}</span>
-    </button>
+      <button
+        className={cn("qf-ci", meta.className)}
+        onClick={open}
+        type="button"
+      >
+        {meta.icon}
+        <span className="qf-ci-count">{count}</span>
+      </button>
+    </Tooltip>
   );
 }
 

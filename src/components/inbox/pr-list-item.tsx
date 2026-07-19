@@ -28,6 +28,11 @@ export function PRListItem({
     }
   };
 
+  const onClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    onOpen();
+    e.currentTarget.blur();
+  };
+
   return (
     <div
       aria-selected={selected}
@@ -37,7 +42,7 @@ export function PRListItem({
           ? "border-accent bg-accent/15"
           : "border-transparent hover:bg-surface-2"
       )}
-      onClick={onOpen}
+      onClick={onClick}
       onKeyDown={onKeyDown}
       onMouseEnter={onHover}
       role="option"
