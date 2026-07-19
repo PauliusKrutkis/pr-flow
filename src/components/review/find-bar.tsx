@@ -1,6 +1,7 @@
 import { CaseSensitive, ChevronDown, ChevronUp, X } from "lucide-react";
 import { type ChangeEvent, type KeyboardEvent, useRef } from "react";
 import { cn } from "../../lib/cn.ts";
+import { Tooltip } from "../ui/tooltip.tsx";
 
 /**
  * Editor/browser-style find bar, floated over the diff's top-right corner
@@ -112,17 +113,18 @@ export function FindBar({
       >
         {query.length > 0 ? `${current}/${total}` : ""}
       </span>
-      <button
-        aria-label="Match case"
-        aria-pressed={caseSensitive}
-        className={cn("qf-findbar-btn", caseSensitive && "qf-findbar-btn-on")}
-        onClick={onToggleCase}
-        onMouseDown={keepFocus}
-        title="Match case"
-        type="button"
-      >
-        <CaseSensitive aria-hidden size={15} />
-      </button>
+      <Tooltip label="Match case">
+        <button
+          aria-label="Match case"
+          aria-pressed={caseSensitive}
+          className={cn("qf-findbar-btn", caseSensitive && "qf-findbar-btn-on")}
+          onClick={onToggleCase}
+          onMouseDown={keepFocus}
+          type="button"
+        >
+          <CaseSensitive aria-hidden size={15} />
+        </button>
+      </Tooltip>
       <span aria-hidden className="qf-findbar-sep" />
       <button
         aria-label="Previous match"
@@ -146,16 +148,17 @@ export function FindBar({
       >
         <ChevronDown aria-hidden size={15} />
       </button>
-      <button
-        aria-label="Close find"
-        className="qf-findbar-btn"
-        onClick={onClose}
-        onMouseDown={keepFocus}
-        title="Close (Esc)"
-        type="button"
-      >
-        <X aria-hidden size={15} />
-      </button>
+      <Tooltip combo="esc" label="Close">
+        <button
+          aria-label="Close find"
+          className="qf-findbar-btn"
+          onClick={onClose}
+          onMouseDown={keepFocus}
+          type="button"
+        >
+          <X aria-hidden size={15} />
+        </button>
+      </Tooltip>
     </search>
   );
 }

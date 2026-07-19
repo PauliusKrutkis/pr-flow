@@ -40,15 +40,21 @@ interface TriggerProps {
  * stays a plain measurement anchor with no interaction handlers of its own.
  * The wrapper still exists, instead of measuring the child directly, because
  * cloning a ref onto an arbitrary child isn't guaranteed to work.
+ * When the wrapped control relies on flex sizing from its parent row (flex-1,
+ * margin-left: auto, …), that layout must be re-applied to the wrapper itself
+ * via anchorClassName — the child's own flex/margin rules no longer reach the
+ * row once the child is no longer the row's direct flex item.
  */
 export function Tooltip({
   children,
   label,
   combo,
+  anchorClassName,
 }: {
   children: ReactElement<TriggerProps>;
   label: string;
   combo?: string;
+  anchorClassName?: string;
 }) {
   const id = useId();
   const triggerRef = useRef<HTMLSpanElement | null>(null);
@@ -130,7 +136,10 @@ export function Tooltip({
 
   return (
     <>
-      <span className="q-tooltip-anchor" ref={triggerRef}>
+      <span
+        className={cn("q-tooltip-anchor", anchorClassName)}
+        ref={triggerRef}
+      >
         {trigger}
       </span>
       {open &&

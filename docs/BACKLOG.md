@@ -945,8 +945,18 @@ link interception · Universal Links.
       focused, scrolling still works but hotkeys that only surface on
       focus/hover don't appear, and the sidebar's active-file highlight stops
       updating.
-- [ ] **Tooltips on buttons** — many buttons only have a `title` attribute
-      today; add real tooltips.
+- [x] **Tooltips on buttons** — many buttons only have a `title` attribute
+      today; add real tooltips. Converted icon-only affordances (find bar,
+      right-panel widen/close/jump-to-thread, copy-path/viewed-toggle, CI
+      pill, ticket links, inbox watch/archived/tab, header show-files/info,
+      branch chips) to the existing `<Tooltip>` component. Left native
+      `title` where a visible label/`<Kbd>` hint already shows (composer
+      toolbar, thread expand/collapse — by existing design) or where the
+      button can be `disabled` (submit-review approve/request-changes,
+      find-bar previous/next match —
+      disabled elements don't reliably fire the pointer/focus events the
+      custom Tooltip relies on) and on file-tree/file-header rows (native
+      title for truncated-path overflow, not an action hint).
 - [x] **Multi-line comment highlighting is partial** — block comments
       (`/* ... */`) only grey out the first line instead of the whole
       comment, e.g.:

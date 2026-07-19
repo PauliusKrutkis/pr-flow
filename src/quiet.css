@@ -3073,9 +3073,6 @@ dialog.q-dialog::backdrop {
     background-color 120ms ease,
     border-color 120ms ease;
 }
-.qi-watch-button {
-  margin-left: auto;
-}
 .qi-archived-toggle:hover,
 .qi-watch-button:hover {
   color: var(--fg);

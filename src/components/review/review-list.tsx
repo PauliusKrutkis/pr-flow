@@ -668,23 +668,27 @@ function GroupHeader({
       data-file-index={groupIndex}
     >
       <span className={cn("qf-file-glyph", glyph.cls)}>{glyph.letter}</span>
-      <button
-        className="qf-fsec-name qf-fsec-copy"
-        onClick={handleCopyPath}
-        title={copied ? "Copied" : `${file.filename} — click to copy path`}
-        type="button"
+      <Tooltip
+        anchorClassName="flex-1 min-w-0"
+        label={copied ? "Copied" : `${file.filename} — click to copy path`}
       >
-        {file.previousFilename && file.status === "renamed" && (
-          <span className="qf-filebar-prev">{file.previousFilename} → </span>
-        )}
-        <span className="qf-file-dir">{dir}</span>
-        <span className="qf-fsec-base">{basename}</span>
-        {copied && (
-          <span aria-live="polite" className="qf-fsec-copied">
-            <Check aria-hidden size={11} /> copied
-          </span>
-        )}
-      </button>
+        <button
+          className="qf-fsec-name qf-fsec-copy"
+          onClick={handleCopyPath}
+          type="button"
+        >
+          {file.previousFilename && file.status === "renamed" && (
+            <span className="qf-filebar-prev">{file.previousFilename} → </span>
+          )}
+          <span className="qf-file-dir">{dir}</span>
+          <span className="qf-fsec-base">{basename}</span>
+          {copied && (
+            <span aria-live="polite" className="qf-fsec-copied">
+              <Check aria-hidden size={11} /> copied
+            </span>
+          )}
+        </button>
+      </Tooltip>
       {changedSinceViewed.has(file.filename) && (
         <span
           className="qf-updated-chip"
@@ -718,16 +722,20 @@ function GroupHeader({
           </button>
         </Tooltip>
       )}
-      <button
-        aria-pressed={viewed}
-        className={cn("qf-viewed-btn", viewed && "qf-viewed-on")}
-        onClick={handleToggleViewed}
-        title={viewed ? "Viewed — click to unmark (v)" : "Mark as viewed (v)"}
-        type="button"
+      <Tooltip
+        combo="v"
+        label={viewed ? "Viewed — click to unmark" : "Mark as viewed"}
       >
-        <Check aria-hidden size={12} />
-        Viewed
-      </button>
+        <button
+          aria-pressed={viewed}
+          className={cn("qf-viewed-btn", viewed && "qf-viewed-on")}
+          onClick={handleToggleViewed}
+          type="button"
+        >
+          <Check aria-hidden size={12} />
+          Viewed
+        </button>
+      </Tooltip>
     </header>
   );
 }

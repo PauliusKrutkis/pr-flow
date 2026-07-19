@@ -24,6 +24,7 @@ import type {
 import { Markdown } from "../markdown.tsx";
 import { Avatar } from "../ui/avatar.tsx";
 import { TicketTitle } from "../ui/ticket-title.tsx";
+import { Tooltip } from "../ui/tooltip.tsx";
 import { AddCommentBox } from "./add-comment-box.tsx";
 import { CiPill } from "./ci-pill.tsx";
 
@@ -176,29 +177,34 @@ export function RightPanel({
         <div className="qf-drawer-head">
           <span className="qf-drawer-title">Pull request</span>
           <div className="qf-drawer-head-actions">
-            <button
-              aria-label={wide ? "Narrow panel" : "Widen panel"}
-              aria-pressed={wide}
-              className="qf-drawer-wide-btn qf-focusable"
-              onClick={onToggleWide}
-              title={`${wide ? "Narrow" : "Widen"} panel (⇧I)`}
-              type="button"
+            <Tooltip
+              combo="shift+i"
+              label={`${wide ? "Narrow" : "Widen"} panel`}
             >
-              {wide ? (
-                <PanelRightClose aria-hidden size={15} />
-              ) : (
-                <PanelRightOpen aria-hidden size={15} />
-              )}
-            </button>
-            <button
-              aria-label="Close"
-              className="qf-drawer-close qf-focusable"
-              onClick={onClose}
-              title="Close (Esc)"
-              type="button"
-            >
-              Esc
-            </button>
+              <button
+                aria-label={wide ? "Narrow panel" : "Widen panel"}
+                aria-pressed={wide}
+                className="qf-drawer-wide-btn qf-focusable"
+                onClick={onToggleWide}
+                type="button"
+              >
+                {wide ? (
+                  <PanelRightClose aria-hidden size={15} />
+                ) : (
+                  <PanelRightOpen aria-hidden size={15} />
+                )}
+              </button>
+            </Tooltip>
+            <Tooltip combo="esc" label="Close">
+              <button
+                aria-label="Close"
+                className="qf-drawer-close qf-focusable"
+                onClick={onClose}
+                type="button"
+              >
+                Esc
+              </button>
+            </Tooltip>
           </div>
         </div>
 
@@ -227,14 +233,16 @@ export function RightPanel({
             </div>
             <div className="qf-drawer-links">
               <CiPill ci={ci} />
-              <button
-                className="qf-drawer-link qf-focusable"
-                onClick={onOpenPr}
-                type="button"
-              >
-                {openOnProviderLabel(pr.url)}
-                <ExternalLink aria-hidden size={13} />
-              </button>
+              <Tooltip label={pr.url}>
+                <button
+                  className="qf-drawer-link qf-focusable"
+                  onClick={onOpenPr}
+                  type="button"
+                >
+                  {openOnProviderLabel(pr.url)}
+                  <ExternalLink aria-hidden size={13} />
+                </button>
+              </Tooltip>
             </div>
           </section>
 

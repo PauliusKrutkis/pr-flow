@@ -662,9 +662,13 @@ test("the header shows an approvals verdict with the reviewer's face", async ({
 test("the header shows a failing CI pill with the failed count", async ({
   page,
 }) => {
+  await page.keyboard.press("i");
   const pill = page.locator(".qf-ci-failure");
   await expect(pill).toBeVisible();
-  await expect(pill).toHaveAttribute("title", "Checks failing · 4 checks");
+  await pill.hover();
+  await expect(page.locator(".q-tooltip")).toContainText(
+    "Checks failing · 4 checks"
+  );
   await expect(pill.locator(".qf-ci-count")).toHaveText("1/4");
 });
 
