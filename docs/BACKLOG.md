@@ -935,3 +935,36 @@ link interception · Universal Links.
       dialog to quickly scribble a note — skipping the need to comment inline in
       code or open the info drawer and scroll to the comment area.
 - [ ] **Hide empty tabs**.
+
+## Inbox (2026-07-18)
+
+- [ ] **Private repos don't show up** — on certain setups (org restrictions,
+      token scopes, etc.) private repos may be missing from the list; needs
+      manual debugging to find the root cause.
+- [ ] **Unfocused-window hotkeys/sidebar stale** — when the app window isn't
+      focused, scrolling still works but hotkeys that only surface on
+      focus/hover don't appear, and the sidebar's active-file highlight stops
+      updating.
+- [ ] **Tooltips on buttons** — many buttons only have a `title` attribute
+      today; add real tooltips.
+- [x] **Multi-line comment highlighting is partial** — block comments
+      (`/* ... */`) only grey out the first line instead of the whole
+      comment, e.g.:
+      ```
+      /* Head-blob fixtures for full-file expansion (get_file_blob). fuzzy.ts must
+      agree with PATCH line-for-line on the new side — expandFileRows validates —
+      and carries extra tail lines that only exist when expanded. */
+      ```
+      Root cause: `highlight.ts` highlights strictly per-line with no
+      cross-line grammar state; the existing `COMMENT_CONTINUATION` regex
+      only patches continuation lines with a leading `*` (JSDoc style), not
+      flowing comments like the one above. Fixed with `markBlockCommentRows`
+      (`lib/highlight.ts`) — a per-file pass over a patch's hunks (mirrors
+      the existing `guideByRow`/`intraByRow` pattern in
+      `review-items.ts`'s `fileRenderMeta`) that records which rows start
+      inside an unterminated block comment; `highlightRowHtml` takes the new
+      flag and either comments the whole row or splits it at the closing
+      marker. Best-effort (ignores string/char literals, resets at hunk
+      boundaries) — same spirit as the pre-existing heuristic. Full-file
+      expansion's synthesized context rows aren't covered (same limitation
+      `guideByRow`/`intraByRow` already have for those rows).
