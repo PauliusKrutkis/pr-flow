@@ -662,8 +662,6 @@ test("the header shows an approvals verdict with the reviewer's face", async ({
 test("the header shows a failing CI pill with the failed count", async ({
   page,
 }) => {
-  // CiPill lives in the info drawer (right-panel.tsx), not the header itself —
-  // open it so the pill is actually on-screen and hoverable.
   await page.keyboard.press("i");
   const pill = page.locator(".qf-ci-failure");
   await expect(pill).toBeVisible();

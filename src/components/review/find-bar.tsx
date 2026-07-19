@@ -126,30 +126,28 @@ export function FindBar({
         </button>
       </Tooltip>
       <span aria-hidden className="qf-findbar-sep" />
-      <Tooltip combo="shift+enter" label="Previous match">
-        <button
-          aria-label="Previous match"
-          className="qf-findbar-btn"
-          disabled={total === 0}
-          onClick={onPrev}
-          onMouseDown={keepFocus}
-          type="button"
-        >
-          <ChevronUp aria-hidden size={15} />
-        </button>
-      </Tooltip>
-      <Tooltip combo="enter" label="Next match">
-        <button
-          aria-label="Next match"
-          className="qf-findbar-btn"
-          disabled={total === 0}
-          onClick={onNext}
-          onMouseDown={keepFocus}
-          type="button"
-        >
-          <ChevronDown aria-hidden size={15} />
-        </button>
-      </Tooltip>
+      <button
+        aria-label="Previous match"
+        className="qf-findbar-btn"
+        disabled={total === 0}
+        onClick={onPrev}
+        onMouseDown={keepFocus}
+        title="Previous match (Shift+Enter)"
+        type="button"
+      >
+        <ChevronUp aria-hidden size={15} />
+      </button>
+      <button
+        aria-label="Next match"
+        className="qf-findbar-btn"
+        disabled={total === 0}
+        onClick={onNext}
+        onMouseDown={keepFocus}
+        title="Next match (Enter)"
+        type="button"
+      >
+        <ChevronDown aria-hidden size={15} />
+      </button>
       <Tooltip combo="esc" label="Close">
         <button
           aria-label="Close find"

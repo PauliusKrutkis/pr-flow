@@ -666,6 +666,7 @@ function GroupHeader({
     >
       <span className={cn("qf-file-glyph", glyph.cls)}>{glyph.letter}</span>
       <Tooltip
+        anchorClassName="flex-1 min-w-0"
         label={copied ? "Copied" : `${file.filename} — click to copy path`}
       >
         <button

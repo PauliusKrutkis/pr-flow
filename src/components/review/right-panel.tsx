@@ -233,14 +233,16 @@ export function RightPanel({
             </div>
             <div className="qf-drawer-links">
               <CiPill ci={ci} />
-              <button
-                className="qf-drawer-link qf-focusable"
-                onClick={onOpenPr}
-                type="button"
-              >
-                {openOnProviderLabel(pr.url)}
-                <ExternalLink aria-hidden size={13} />
-              </button>
+              <Tooltip label={pr.url}>
+                <button
+                  className="qf-drawer-link qf-focusable"
+                  onClick={onOpenPr}
+                  type="button"
+                >
+                  {openOnProviderLabel(pr.url)}
+                  <ExternalLink aria-hidden size={13} />
+                </button>
+              </Tooltip>
             </div>
           </section>
 
@@ -307,41 +309,37 @@ export function RightPanel({
               </h3>
               <div className="qf-drawer-threads">
                 {threads.map(({ root, replyCount }) => (
-                  <Tooltip
+                  <button
+                    className="qf-thread-row qf-focusable"
+                    data-thread-path={root.path}
+                    data-thread-root={root.id}
                     key={root.id}
-                    label="Jump to this thread in the diff"
+                    onClick={handleJumpToThread}
+                    title="Jump to this thread in the diff"
+                    type="button"
                   >
-                    <button
-                      className="qf-thread-row qf-focusable"
-                      data-thread-path={root.path}
-                      data-thread-root={root.id}
-                      onClick={handleJumpToThread}
-                      type="button"
-                    >
-                      <span className="qf-thread-loc">
-                        {!!root.resolved && (
-                          <CheckCircle2
-                            aria-label="Resolved"
-                            className="qf-thread-check"
-                            size={12}
-                          />
-                        )}
-                        <span className="qf-thread-path">{root.path}</span>
-                        <span className="qf-thread-line">
-                          {root.line === null ? " · outdated" : `:${root.line}`}
+                    <span className="qf-thread-loc">
+                      {!!root.resolved && (
+                        <CheckCircle2
+                          aria-label="Resolved"
+                          className="qf-thread-check"
+                          size={12}
+                        />
+                      )}
+                      <span className="qf-thread-path">{root.path}</span>
+                      <span className="qf-thread-line">
+                        {root.line === null ? " · outdated" : `:${root.line}`}
+                      </span>
+                      {replyCount > 0 && (
+                        <span className="qf-thread-replies">
+                          {replyCount} {replyCount === 1 ? "reply" : "replies"}
                         </span>
-                        {replyCount > 0 && (
-                          <span className="qf-thread-replies">
-                            {replyCount}{" "}
-                            {replyCount === 1 ? "reply" : "replies"}
-                          </span>
-                        )}
-                      </span>
-                      <span className="qf-thread-snip">
-                        {firstLine(root.body)}
-                      </span>
-                    </button>
-                  </Tooltip>
+                      )}
+                    </span>
+                    <span className="qf-thread-snip">
+                      {firstLine(root.body)}
+                    </span>
+                  </button>
                 ))}
               </div>
             </section>

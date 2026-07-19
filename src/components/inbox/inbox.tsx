@@ -539,7 +539,7 @@ function InboxTabBar({
           tabDef={t}
         />
       ))}
-      <Tooltip combo="w" label="Watch repositories…">
+      <Tooltip anchorClassName="ml-auto" combo="w" label="Watch repositories…">
         <button className="qi-watch-button" onClick={onOpenWatch} type="button">
           <Eye size={14} />
           Watch

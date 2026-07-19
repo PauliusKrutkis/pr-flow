@@ -952,7 +952,8 @@ link interception · Universal Links.
       branch chips) to the existing `<Tooltip>` component. Left native
       `title` where a visible label/`<Kbd>` hint already shows (composer
       toolbar, thread expand/collapse — by existing design) or where the
-      button can be `disabled` (submit-review approve/request-changes —
+      button can be `disabled` (submit-review approve/request-changes,
+      find-bar previous/next match —
       disabled elements don't reliably fire the pointer/focus events the
       custom Tooltip relies on) and on file-tree/file-header rows (native
       title for truncated-path overflow, not an action hint).
