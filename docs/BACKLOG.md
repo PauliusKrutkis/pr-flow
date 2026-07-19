@@ -548,6 +548,17 @@ worth it after validation.
 
 - [~] 🔴 Before external users — `tauri-plugin-updater` + CI releases.
       *Plugin + in-app prompt scaffolded; real signing key, feed & CI signing remain (see README "Auto-updates").*
+- [ ] 🟡 **Don't offer an install CTA on `.deb`/`.rpm`** — Tauri's updater can
+      only self-update the Linux AppImage; it replaces a bundled `.tar.gz`, and
+      there's no in-place update path for system packages. On `.deb`/`.rpm`
+      installs, `check_for_update` still reports a newer version (it only
+      compares `latest.json` against the running version), so today's
+      "Restart & update" button appears and then fails or no-ops instead of
+      updating. Detect the install format at startup (e.g. the `APPIMAGE` env
+      var Tauri's AppImage runtime sets — absent on `.deb`/`.rpm`) and, when not
+      running as an AppImage, swap `UpdatePrompt`'s CTA for a passive "New
+      version available — reinstall the package to update" notice with no
+      install button.
 - [ ] ⏸ Crash reporting — see [July 2026 batch · Sentry](#july-2026-batch).
 
 ### 11c. Commercial launch
