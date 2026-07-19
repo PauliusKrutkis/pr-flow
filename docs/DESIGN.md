@@ -137,6 +137,31 @@ bolted on: **new-review notification toast**, **orient / "PR updated" banners**,
 - **Two ways in:** resume the last PR, or `⌘K` to jump. Inbox is the fallback,
   reachable with `Esc`.
 
+### Selection vs. focus
+
+This is a desktop app, so navigable items are **active**, not focused — two
+models coexist and every surface must pick one deliberately:
+
+- **Selection model** — lists and navigable surfaces (inbox rows, file sidebar,
+  review list, dialog result lists). The active item is app state
+  (`selected` / `armed`), styled by the component, moved by keys owned by the
+  container or the keyboard layer. Items are **never DOM-focusable**: no
+  `tabIndex` on rows, `aria-activedescendant` on the container for assistive
+  tech. Inside overlays, `Tab` arms the next actionable element and `Enter`
+  executes — it never moves DOM focus out of the overlay (see
+  `watch-repos-dialog.tsx`, the reference implementation).
+- **Focus model** — real controls: text inputs, editors, and buttons reachable
+  by `Tab` in form-like contexts. These use genuine DOM focus with the single
+  shared `:focus-visible` ring (`q-focus` / `qf-focusable`). Containers that
+  take programmatic focus on open (dialogs, drawers) keep `tabIndex={-1}`;
+  that is correct focus-model usage.
+
+The failure mode this prevents: a mouse click silently focuses a row, the next
+keypress promotes it to `:focus-visible`, and a ring appears out of nowhere
+(P02). Never patch that with `blur()` — remove the item's focusability
+instead. The existing `blur()` calls are tactical fixes pending the
+selection-model refactor (backlog).
+
 ---
 
 ## What the rework will address

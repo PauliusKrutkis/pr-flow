@@ -593,9 +593,12 @@ conflicts with zero-friction product goal).
 
 - [ ] 🟢 **P01** — GitHub OAuth on Windows opens Documents
       folder instead of the browser (`tauri_plugin_opener::open_url`).
-- [ ] 🟢 **P02** — File-tree active/focus ring persists
+- [x] 🟢 **P02** — File-tree active/focus ring persists
       after `r`/`t` when a file was mouse-clicked (blur on click; audit inbox rows).
       *Also covers:* remove `qf-focusable` focus ring on file sidebar buttons.
+      File sidebar was already fixed; inbox rows (`pr-list-item.tsx`) now blur
+      on click too, since `role="option"` divs otherwise keep the browser's
+      native focus outline after a mouse click.
 - [ ] 🟢 **P03** — Occurrence navigation blocked while find
       (`mod+f`) is open — explicit handoff (select token → close find → start
       occurrences).
@@ -672,6 +675,19 @@ conflicts with zero-friction product goal).
       (composer + info-drawer form; visual-only).
 - [ ] ⏸ **P21** — Multi-line selection box via drag
       (defer; improve gutter-drag discoverability instead).
+- [ ] 🟢 **P22** — Selection-model audit + refactor (DESIGN.md
+      "Selection vs. focus"): sweep **every** focus site against the
+      documented convention — all `tabIndex` / `.focus()` / `blur()` call
+      sites, `:focus` styles in `quiet.css`, and Tab handling in overlays —
+      and classify each as selection-model, focus-model, or violation. Known
+      violations: list rows are focusable in inbox rows, file sidebar, review
+      list, and search-pane hits — make them non-focusable (drop row
+      `tabIndex`, `aria-activedescendant` on containers) and delete the three
+      tactical `blur()` calls (`pr-list-item.tsx`, `file-sidebar.tsx`,
+      `right-panel.tsx`). Known conformant (leave alone): dialog/drawer
+      containers with `tabIndex={-1}` for programmatic focus, the
+      `q-focus`/`qf-focusable` ring on real controls, and the
+      watch-repos-dialog Tab-arms pattern. Supersedes the P02 blur fixes.
 - [ ] 🟢 **Rust tests — split into files** — break up large inline `#[cfg(test)]`
       modules into separate test files where it aids navigation.
 - [x] **Split-pr skill — PR evidence in description** — skill should attach
