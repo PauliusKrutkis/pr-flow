@@ -100,7 +100,7 @@ Or resume where you left off. **No Slack link handling required.**
 - [x] Keyboard workflow + stable review
 - [x] **Resume where you left off**
 - [x] **`mod+k` jump to any PR**
-- [ ] **Auto-updates**
+- [x] **Auto-updates**
 - [x] Inbox zero-state
 
 **Can wait until users complain:**
@@ -564,8 +564,10 @@ worth it after validation.
 
 ### 11b. Auto-updates
 
-- [~] 🔴 Before external users — `tauri-plugin-updater` + CI releases.
-      *Plugin + in-app prompt scaffolded; real signing key, feed & CI signing remain (see README "Auto-updates").*
+- [x] 🔴 Before external users — `tauri-plugin-updater` + CI releases.
+      *Shipped: signed feed live since v0.2.0/v0.3.0 releases (minisign, pubkey
+      baked into `tauri.conf.json`, `latest.json` + `.sig` on every platform
+      asset). See README "Auto-updates".*
 - [ ] 🟡 **Don't offer an install CTA on `.deb`/`.rpm`** — Tauri's updater can
       only self-update the Linux AppImage; it replaces a bundled `.tar.gz`, and
       there's no in-place update path for system packages. On `.deb`/`.rpm`
