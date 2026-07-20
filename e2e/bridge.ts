@@ -103,6 +103,7 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
           localStorage.setItem("e2e:lastCommentDelete", JSON.stringify(args));
           return null;
         },
+        ensure_repo_snapshot: () => ({ detail: "", state: "skipped" }),
         get_app_version: () => cfg.appVersion,
         get_cached_inbox: () => null,
         get_cached_pull_request_detail: () => null,

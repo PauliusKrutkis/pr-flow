@@ -159,6 +159,11 @@ export interface FileBlob {
   size: number;
 }
 
+export interface SnapshotStatus {
+  state: "idle" | "downloading" | "ready" | "skipped" | "failed";
+  detail: string;
+}
+
 export interface AccountInfo {
   avatarUrl: string;
   host: string;

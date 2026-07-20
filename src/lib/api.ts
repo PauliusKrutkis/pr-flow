@@ -11,6 +11,7 @@ import type {
   RepoHit,
   ReviewComment,
   ReviewEvent,
+  SnapshotStatus,
   UpdateInfo,
   ViewedMap,
 } from "../types.ts";
@@ -70,6 +71,9 @@ export const api = {
   getCachedSubscribed: () =>
     invoke<InboxBucket | null>("get_cached_subscribed"),
   getCurrentUser: () => invoke<GitHubUser>("get_current_user"),
+
+  ensureRepoSnapshot: (owner: string, repo: string, sha: string) =>
+    invoke<SnapshotStatus>("ensure_repo_snapshot", { owner, repo, sha }),
 
   getFileBlob: (owner: string, repo: string, path: string, ref: string) =>
     invoke<FileBlob>("get_file_blob", { owner, path, ref, repo }),
