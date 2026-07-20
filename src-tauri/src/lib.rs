@@ -4,6 +4,8 @@ mod commands;
 mod http;
 mod model;
 mod platform;
+#[allow(dead_code)]
+mod snapshot;
 mod storage;
 mod update;
 

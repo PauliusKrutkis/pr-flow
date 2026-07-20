@@ -2,6 +2,11 @@
 //! state and the GitHub token are all stored as plain JSON files inside the
 //! application config directory. No SQLite, no server — just files, per the
 //! MVP spec.
+//!
+//! Two roots, deliberately: the **config dir** holds state the user would miss
+//! if it vanished (accounts, token, viewed marks) and stays all-JSON; the
+//! **cache dir** holds large regenerable data (repo snapshots — see
+//! `snapshot::store`) that is safe to delete at any time.
 
 use std::fs;
 use std::path::PathBuf;
@@ -19,6 +24,19 @@ pub fn config_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .app_config_dir()
         .map_err(|e| format!("could not resolve config dir: {e}"))?;
     fs::create_dir_all(&dir).map_err(|e| format!("could not create config dir: {e}"))?;
+    Ok(dir)
+}
+
+/// Returns the app cache directory, creating it if necessary. Everything under
+/// it is regenerable from the host, so it can be wiped without data loss —
+/// which is why snapshots live here and not next to `accounts.json`.
+#[allow(dead_code)]
+pub fn cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| format!("could not resolve cache dir: {e}"))?;
+    fs::create_dir_all(&dir).map_err(|e| format!("could not create cache dir: {e}"))?;
     Ok(dir)
 }
 
