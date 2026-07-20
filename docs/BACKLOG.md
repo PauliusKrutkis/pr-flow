@@ -181,6 +181,14 @@ No inbox. Just continue.
 - [x] 🔴 **Resume where you left off** — default app open.
 - [x] 🟡 Auto-advance to next review-requested PR after submit.
 - [x] 🟡 **`Esc` → inbox** — exception, not home.
+- [ ] 🟡 **Inbox forgets last tab across app restarts** — close the app while
+      on a PR, reopen, then `Esc`: lands on the "Requested" inbox tab even
+      when it's empty (switching to "Created" shows reviews, but "Requested"
+      state then disappears). Should restore whichever tab the user was last
+      on instead of always defaulting to "Requested".
+- [ ] 🟢 **Land on first non-empty inbox tab** — on cold start, if "Requested"
+      is empty, land on the first tab that actually has content instead of
+      always defaulting to "Requested".
 
 ---
 
@@ -308,6 +316,9 @@ hotkey collapses.
 - [ ] ❓ Open: does expanding lock j/k / scroll into the file, or stay part of
       the continuous scroll? Shipped continuous (fewer modes; matches "review
       pane is one scroll"); revisit after using it.
+- [ ] 🟡 **Full file view broken on GitLab** — `shift+v` full-file expansion
+      doesn't work against GitLab-hosted PRs; needs investigation (blob fetch
+      / API path likely GitHub-only today).
 
 ---
 
@@ -345,6 +356,8 @@ Primary navigation. Inbox optional.
 
 - [x] 🔴 **`mod+k` PR search** — v0.1 blocker.
 - [x] 🟡 PR-context actions — after search works.
+- [ ] 🟢 **Branch name not visible in index/search** — PR branch name doesn't
+      show in the inbox list or `mod+k` search results.
 
 ---
 
@@ -379,6 +392,9 @@ but ticks do not follow you to github.com or another machine.
 ## 5. Comments UX
 
 Inline → Code view. PR-level → Info tab + badge. ⏸ Conversation mode.
+
+- [ ] 🟡 **Hide comments feature** — ability to hide/collapse comment threads
+      from the diff view.
 
 - [x] 🟢 Thread hotkeys — `r` reply / `x` resolve on the hovered or
       `]c`-focused thread; hints fade in on the thread's own action buttons.
@@ -453,6 +469,8 @@ inline by design). These are cleanups, not new scope.
 
 - [x] 🟢 Remove manual refresh.
 - [x] 🟡 Banner when open PR changes externally.
+- [ ] 🟢 **Remove "pull request updated" toast** — redundant with the existing
+      change banner; drop the toast fired from `use-review-head-sha-sync.ts`.
 - [ ] 🟡 **GitHub cheap-polling via the Notifications API (P16 PR2)** — the
       ETag/304 conditional-request cache (PR #49) lets GitLab + every REST GET
       re-poll for free and drops the inbox interval to 15s, but GitHub's inbox
@@ -559,6 +577,10 @@ worth it after validation.
       running as an AppImage, swap `UpdatePrompt`'s CTA for a passive "New
       version available — reinstall the package to update" notice with no
       install button.
+- [ ] 🟢 **Update install failure on Linux** — user on 0.2.0 saw "Failed to
+      install package" from the in-app updater ("You're on 0.2.0. Installs on
+      the next restart..." then install fails). Likely the same AppImage vs.
+      package-manager install-format mismatch as the item above; investigate.
 - [ ] ⏸ Crash reporting — see [July 2026 batch · Sentry](#july-2026-batch).
 
 ### 11c. Commercial launch
@@ -653,6 +675,16 @@ conflicts with zero-friction product goal).
       an update (release notes via Rust command).
 - [ ] 🟢 **Distinct file header** — hard to tell when starting a new file; make
       the file header row more visually distinct in the diff list.
+- [ ] 🟢 **Astro syntax highlighting** — `.astro` files don't get diff syntax
+      highlighting; extend the language map in `highlight.ts`.
+- [ ] 🟡 **Render SVG previews** — SVG files in diffs show raw markup instead
+      of a rendered image preview.
+- [ ] 🟢 **Approvals indicator tooltip** — add a tooltip to the approve /
+      changes-requested indicators in the review header (ties to P08) naming
+      who approved.
+- [ ] 🟢 **File tooltip positioning** — the file-path tooltip is centered on
+      the row; consider anchoring it near the filename's end instead (keep
+      the large click target).
 - [x] 🟢 **Info drawer author avatars** — **done**; discussion rows render
       `<Avatar>` per comment author (`right-panel.tsx`).
 - [ ] 🟢 **Copy comment text** — copy action for comment bodies in Code threads
@@ -882,6 +914,12 @@ AI · GitLab · Slack integration · streaks · celebration · Conversation mode
 webhooks · icon · Ultracite · vim jumps · persist pending comments · Stage 3
 link interception · Universal Links.
 
+- [ ] ❓ **AI introduction (BYOK)** — bring-your-own-key model (e.g. a Nexos
+      API key) so AI features "just work" with the user's own key; open
+      question whether OpenRouter compatibility is needed too or Nexos
+      coverage is enough on its own. Conflicts with the current "no AI"
+      go-to-market direction — needs a product decision before scoping.
+
 ---
 
 ## Suggested build order
@@ -936,6 +974,9 @@ link interception · Universal Links.
 - [ ] **Split `ReviewScreenInner`** in `review-screen.tsx` into smaller
   components so React Doctor's `no-giant-component` passes without the
   `test-noise` tag ignore in `doctor.config.json` — remove that ignore once done.
+- [ ] **React Doctor full-codebase score not 100/100** — run react-doctor
+  across the whole codebase and address remaining findings beyond the known
+  `no-giant-component` ignore above.
 - [ ] **E2E composer submit is macOS-red (`Control+Enter` vs `Mod`)** — the
   Tiptap composer binds submit to `Mod-Enter` (`composer-editor.tsx`), which
   ProseMirror resolves to **Cmd on macOS, Ctrl on Linux/Windows**. The e2e
