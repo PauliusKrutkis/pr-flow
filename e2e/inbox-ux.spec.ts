@@ -221,3 +221,40 @@ test("scrollbar thumb is invisible at rest and themed while scrolling", async ({
   await expect(list).not.toHaveClass(IS_SCROLLING, { timeout: 3000 });
   expect(await thumbColor()).toBe("rgba(0, 0, 0, 0)");
 });
+
+test("selected inbox tab survives a reload", async ({ page }) => {
+  await setupApp(page);
+  await expect(page.getByRole("option").first()).toBeVisible();
+
+  await page.locator(".qi-tab", { hasText: "Created" }).click();
+  await expect(page.locator('.qi-tab[data-state="active"]')).toContainText(
+    "Created"
+  );
+
+  await page.reload();
+  await expect(page.getByRole("option").first()).toBeVisible();
+  await expect(page.locator('.qi-tab[data-state="active"]')).toContainText(
+    "Created"
+  );
+});
+
+test("cold start skips an empty default tab for the first tab with content", async ({
+  page,
+}) => {
+  const requestedEmpty: InboxFixture = {
+    assigned: { count: 0, prs: [] },
+    created: {
+      count: 1,
+      prs: [makePr(4, "My own PR", "me", "2026-07-01T12:00:00Z")],
+    },
+    involved: { count: 0, prs: [] },
+    reviewRequested: { count: 0, prs: [] },
+  };
+  await setupApp(page, { inbox: requestedEmpty });
+
+  await expect(page.locator('.qi-tab[data-state="active"]')).toContainText(
+    "Created"
+  );
+  await expect(page.getByRole("option").first()).toBeVisible();
+  await page.screenshot({ path: "evidence/inbox-cold-start-tab.png" });
+});
