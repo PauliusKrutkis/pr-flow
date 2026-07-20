@@ -27,6 +27,7 @@ import { TicketTitle } from "../ui/ticket-title.tsx";
 import { Tooltip } from "../ui/tooltip.tsx";
 import { AddCommentBox } from "./add-comment-box.tsx";
 import { CiPill } from "./ci-pill.tsx";
+import { CommentBody, CommentTools } from "./comment-item.tsx";
 
 interface RightPanelProps {
   ci: CiStatus | undefined;
@@ -390,15 +391,6 @@ function ConversationItem({
   onDelete?: (a: { commentId: number }) => Promise<void>;
 }) {
   const chip = state ? (REVIEW_STATES[state] ?? REVIEW_STATES.COMMENTED) : null;
-  const trimmed = body.trim();
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-
-  const handleStartEdit = () => {
-    if (commentId !== undefined) {
-      setConfirmingDelete(false);
-      onStartEdit?.(commentId);
-    }
-  };
 
   const handleSubmitEdit = (text: string) => {
     if (commentId !== undefined) {
@@ -406,21 +398,11 @@ function ConversationItem({
     }
   };
 
-  const handleDelete = () => {
-    if (commentId === undefined) {
-      return;
-    }
-    if (confirmingDelete) {
-      setConfirmingDelete(false);
-      onDelete?.({ commentId })?.catch(() => undefined);
-    } else {
-      setConfirmingDelete(true);
-    }
+  const handleDelete = (id: number) => {
+    onDelete?.({ commentId: id })?.catch(() => undefined);
   };
 
-  const disarmDelete = () => {
-    setConfirmingDelete(false);
-  };
+  const noop = () => undefined;
 
   return (
     <div className="qf-convo-item">
@@ -434,49 +416,20 @@ function ConversationItem({
           <span className="qf-comment-time" title={formatAbsolute(at)}>
             {formatRelativeTime(at)}
           </span>
-          {own && !editing && (
-            <span className="qf-comment-tools">
-              <button
-                aria-label="Edit comment"
-                className="qf-comment-tool qf-focusable"
-                onClick={handleStartEdit}
-                type="button"
-              >
-                Edit
-              </button>
-              <button
-                aria-label="Delete comment"
-                className={cn(
-                  "qf-comment-tool qf-focusable",
-                  confirmingDelete && "qf-comment-tool-danger"
-                )}
-                onBlur={disarmDelete}
-                onClick={handleDelete}
-                onMouseLeave={disarmDelete}
-                type="button"
-              >
-                {confirmingDelete ? "Delete?" : "Delete"}
-              </button>
-            </span>
+          {own && !editing && commentId !== undefined && (
+            <CommentTools
+              commentId={commentId}
+              onDelete={onDelete ? handleDelete : undefined}
+              onStartEdit={onStartEdit}
+            />
           )}
         </div>
-        {editing ? (
-          <AddCommentBox
-            autoFocus
-            initialMarkdown={body}
-            onCancel={onCancelEdit ?? disarmDelete}
-            onSubmit={handleSubmitEdit}
-            pending={false}
-            placeholder="Edit your comment…"
-            submitLabel="Save"
-          />
-        ) : (
-          !!trimmed && (
-            <div className="qf-comment-body">
-              <Markdown>{trimmed}</Markdown>
-            </div>
-          )
-        )}
+        <CommentBody
+          body={body}
+          editing={editing}
+          onCancelEdit={onCancelEdit ?? noop}
+          onSubmitEdit={handleSubmitEdit}
+        />
       </div>
     </div>
   );

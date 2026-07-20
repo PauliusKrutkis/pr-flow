@@ -449,13 +449,13 @@ surfaces — inline threads (`comment-thread.tsx`, all five actions via
 (`right-panel.tsx` add / edit / delete of issue comments; reply/resolve stay
 inline by design). These are cleanups, not new scope.
 
-- [ ] ⏸ 🟢 **Dedupe comment-row UI** — the own-guard + Edit/Delete two-step
-      confirm block is implemented near-identically twice: `ConversationItem`
-      in `right-panel.tsx` and the comment map in `comment-thread.tsx`. Extract
-      a shared `CommentTools` (own-guard + Edit/`Delete?` buttons, blur/mouseleave
-      disarm) and `CommentBody` (`editing ? AddCommentBox : Markdown`); ~40 lines
-      deduped. Do it **after** the edit/delete/drawer branches land, not before —
-      they were stacked.
+- [x] 🟢 **Dedupe comment-row UI** — the own-guard + Edit/Delete two-step
+      confirm block was implemented near-identically twice: `ConversationItem`
+      in `right-panel.tsx` and the comment map in `comment-thread.tsx`. Extracted
+      a shared `CommentTools` (Edit/`Delete?` buttons, blur/mouseleave disarm,
+      confirm state now self-contained) and `CommentBody`
+      (`editing ? AddCommentBox : Markdown`) in `comment-item.tsx`; both
+      surfaces consume them so the affordance can't drift.
 - [ ] ⏸ 🟢 **E2E for reply / resolve / unresolve** — edit and delete are covered
       (`comment-edit.spec.ts`, `comment-delete.spec.ts`, `drawer-comment.spec.ts`),
       but reply, resolve, and unresolve are wired yet unverified by any spec. Add
