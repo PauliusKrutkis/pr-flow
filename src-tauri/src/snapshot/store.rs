@@ -106,7 +106,6 @@ pub fn safe_join(base: &Path, relative: &str) -> Option<PathBuf> {
 /// Reads one file out of a finished snapshot. `None` covers every miss the
 /// caller treats identically — no snapshot, not extracted yet, or no such file
 /// at this SHA — so callers fall back to the network without branching.
-#[allow(dead_code)]
 pub fn read_file(root: &Path, key: &SnapshotKey, path: &str) -> Option<Vec<u8>> {
     let base = snapshot_dir(root, key);
     if !base.is_dir() {
@@ -117,6 +116,14 @@ pub fn read_file(root: &Path, key: &SnapshotKey, path: &str) -> Option<Vec<u8>> 
         return None;
     }
     fs::read(target).ok()
+}
+
+/// Size of a file inside a finished snapshot, without reading it. Lets a caller
+/// with a size cap reject an oversized blob before pulling it through memory.
+pub fn file_size(root: &Path, key: &SnapshotKey, path: &str) -> Option<u64> {
+    let target = safe_join(&snapshot_dir(root, key), path)?;
+    let meta = fs::metadata(target).ok()?;
+    meta.is_file().then_some(meta.len())
 }
 
 /// Replaces any existing snapshot at `key` with the staged `.partial`

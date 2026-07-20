@@ -2,16 +2,17 @@
 //! platform, and namespaces the on-disk caches per account so switching never
 //! bleeds one host's data into another.
 
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
 use tauri::AppHandle;
 
 use crate::accounts;
 use crate::model::{
     FileBlob, GitHubUser, InboxBucket, InboxData, PullRequestDetail, RepoHit, ReviewComment,
-    ReviewCommentInput,
+    ReviewCommentInput, MAX_BLOB_BYTES,
 };
 use crate::snapshot::service as snapshot_service;
-use crate::snapshot::store::SnapshotKey;
+use crate::snapshot::store::{self as snapshot_store, SnapshotKey};
 use crate::storage;
 
 fn inbox_cache_name(account_id: &str) -> String {
@@ -314,6 +315,16 @@ pub async fn submit_review(
         .await
 }
 
+/// Serves a file from the local snapshot when one exists for this exact ref,
+/// otherwise from the host. Resolution lives here rather than in the webview so
+/// every blob consumer — full-file expansion, image diffs — gets it without
+/// knowing snapshots exist, and so a miss is indistinguishable from today's
+/// behaviour. `ref` is a head SHA in practice; a branch name simply misses and
+/// falls through.
+///
+/// The size cap is applied to local reads too: it exists because the blob is
+/// base64'd into the webview, which is just as true when the bytes came off
+/// local disk.
 #[tauri::command]
 pub async fn get_file_blob(
     app: AppHandle,
@@ -322,8 +333,33 @@ pub async fn get_file_blob(
     path: String,
     r#ref: String,
 ) -> Result<FileBlob, String> {
-    let (_, platform) = accounts::active_platform(&app).await?;
+    let account = accounts::active_account(&app).await?;
+    let key = SnapshotKey {
+        host: account.host.clone(),
+        owner: owner.clone(),
+        repo: repo.clone(),
+        sha: r#ref.clone(),
+    };
+    if let Ok(root) = storage::cache_dir(&app) {
+        if let Some(blob) = local_blob(&root, &key, &path) {
+            return Ok(blob);
+        }
+    }
+    let platform = accounts::platform_for(&account)?;
     platform.file_blob(&owner, &repo, &path, &r#ref).await
+}
+
+/// Reads a blob out of the snapshot in the shape the host path returns, or
+/// `None` for anything the caller should fetch over the network instead.
+fn local_blob(root: &std::path::Path, key: &SnapshotKey, path: &str) -> Option<FileBlob> {
+    if snapshot_store::file_size(root, key, path)? > MAX_BLOB_BYTES as u64 {
+        return None;
+    }
+    let bytes = snapshot_store::read_file(root, key, path)?;
+    Some(FileBlob {
+        base64: STANDARD.encode(&bytes),
+        size: bytes.len() as u64,
+    })
 }
 
 async fn snapshot_key(
