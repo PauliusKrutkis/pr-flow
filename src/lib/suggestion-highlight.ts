@@ -1,3 +1,12 @@
+/**
+ * Live syntax highlighting inside the composer's ```suggestion fences, using
+ * the same per-line highlighter (and cache) as the diff and shipped suggestion
+ * cards — one highlight system, so the block you type reads like the card it
+ * becomes. hljs emits HTML strings; ProseMirror wants ranges, so each line's
+ * output is walked once to recover token offsets as inline decorations, with
+ * the spans memoized per HTML string (decorations rebuild on every doc or
+ * selection change).
+ */
 import { Extension } from "@tiptap/core";
 import type { Node as PmNode } from "@tiptap/pm/model";
 import {
@@ -10,24 +19,22 @@ import {
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { highlightLine, isHighlightable } from "./highlight.ts";
 
-/**
- * Live syntax highlighting inside the composer's ```suggestion fences, using
- * the same per-line highlighter (and cache) as the diff and shipped suggestion
- * cards — one highlight system, so the block you type reads like the card it
- * becomes. hljs emits HTML strings; ProseMirror wants ranges, so each line's
- * output is walked once to recover token offsets as inline decorations.
- */
-
 interface TokenSpan {
   cls: string;
   from: number;
   to: number;
 }
 
+const spanCache = new Map<string, TokenSpan[]>();
+
 /** Recovers `[from, to, class)` token ranges from one line's hljs HTML. */
 function htmlToSpans(html: string): TokenSpan[] {
   if (!html.includes("<")) {
     return [];
+  }
+  const hit = spanCache.get(html);
+  if (hit !== undefined) {
+    return hit;
   }
   const tpl = document.createElement("template");
   tpl.innerHTML = html;
@@ -50,6 +57,10 @@ function htmlToSpans(html: string): TokenSpan[] {
   for (const child of tpl.content.childNodes) {
     walk(child);
   }
+  if (spanCache.size > 10_000) {
+    spanCache.clear();
+  }
+  spanCache.set(html, spans);
   return spans;
 }
 
