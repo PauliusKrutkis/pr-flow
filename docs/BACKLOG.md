@@ -316,9 +316,13 @@ hotkey collapses.
 - [ ] ❓ Open: does expanding lock j/k / scroll into the file, or stay part of
       the continuous scroll? Shipped continuous (fewer modes; matches "review
       pane is one scroll"); revisit after using it.
-- [ ] 🟡 **Full file view broken on GitLab** — `shift+v` full-file expansion
-      doesn't work against GitLab-hosted PRs; needs investigation (blob fetch
-      / API path likely GitHub-only today).
+- [x] 🟡 **Full file view broken on GitLab** — `shift+v` full-file expansion
+      failed on every GitLab PR. Root cause: GitLab's MR diffs API prefixes
+      each file's `diff` with a `--- a/path`/`+++ b/path` header pair before
+      the `@@` hunk (GitHub's `patch` field never has one); the frontend's
+      hunk-only parser misread it as a headerless pseudo-hunk, which failed
+      `expand-file.ts`'s per-hunk header validation and aborted the whole
+      expansion. Fixed by stripping the pair in `file_from_diff` (PR #70).
 
 ---
 
