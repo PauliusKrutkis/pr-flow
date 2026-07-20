@@ -9,12 +9,12 @@ use serde_json::{json, Value};
 
 use crate::http::{
     fbool, fopt_str, fopt_u64, fstr, fu64, get_all_pages, get_json, log, net_err, now_millis, nstr,
-    read_body,
+    read_body, read_capped,
 };
 use crate::model::{
     ChangedFile, CiStatus, FileBlob, GitHubUser, InboxBucket, InboxData, IssueComment, LastComment,
     PullRequest, PullRequestDetail, RepoHit, ReviewComment, ReviewCommentInput, ReviewSummary,
-    MAX_BLOB_BYTES,
+    MAX_ARCHIVE_BYTES, MAX_BLOB_BYTES,
 };
 
 const API: &str = "https://api.github.com";
@@ -297,13 +297,73 @@ fn comment_from(v: &Value) -> ReviewComment {
 /// The GitHub platform implementation.
 pub struct GitHubPlatform {
     client: reqwest::Client,
+    token: String,
 }
 
 impl GitHubPlatform {
     pub fn new(token: &str) -> Result<Self, String> {
         Ok(Self {
             client: build_client(token)?,
+            token: token.to_string(),
         })
+    }
+
+    /// Repository size as GitHub reports it, in KB. Used to skip snapshotting
+    /// repos too large to be worth downloading.
+    pub async fn repo_size_kb(&self, owner: &str, repo: &str) -> Result<u64, String> {
+        let v = get_json(&self.client, &format!("{API}/repos/{owner}/{repo}")).await?;
+        Ok(fu64(&v, "size"))
+    }
+
+    /// Downloads the gzipped tarball of `sha`.
+    ///
+    /// The tarball endpoint answers `302` with a short-lived signed URL on
+    /// `codeload.github.com`. The redirect is followed by hand, with an
+    /// unauthenticated client, so the token cannot reach that host: reqwest
+    /// does strip `Authorization` across origins today, but a silent change in
+    /// that behaviour would leak a credential, and this is not a behaviour to
+    /// inherit implicitly.
+    pub async fn archive(&self, owner: &str, repo: &str, sha: &str) -> Result<Vec<u8>, String> {
+        let redirector = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|e| format!("could not build http client: {e}"))?;
+
+        let resp = redirector
+            .get(format!("{API}/repos/{owner}/{repo}/tarball/{sha}"))
+            .header(reqwest::header::USER_AGENT, "pr-flow")
+            .header(
+                reqwest::header::AUTHORIZATION,
+                format!("Bearer {}", self.token),
+            )
+            .send()
+            .await
+            .map_err(net_err)?;
+
+        let status = resp.status();
+        if status.is_success() {
+            return read_capped(resp, MAX_ARCHIVE_BYTES, "repo archive").await;
+        }
+        if !status.is_redirection() {
+            return Err(format!("repo archive failed ({})", status.as_u16()));
+        }
+        let location = resp
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| "repo archive redirect had no location".to_string())?
+            .to_string();
+
+        let signed = reqwest::Client::builder()
+            .build()
+            .map_err(|e| format!("could not build http client: {e}"))?;
+        let resp = signed
+            .get(location)
+            .header(reqwest::header::USER_AGENT, "pr-flow")
+            .send()
+            .await
+            .map_err(net_err)?;
+        read_capped(resp, MAX_ARCHIVE_BYTES, "repo archive").await
     }
 
     async fn graphql(&self, query: &str) -> Result<Value, String> {

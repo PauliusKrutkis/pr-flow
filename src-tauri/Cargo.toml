@@ -35,3 +35,7 @@ rand = "0.8"
 dotenvy = "0.15"
 # Auto-update. PR Flow is a desktop-only app, so this stays a plain dependency.
 tauri-plugin-updater = "2"
+# Repo snapshots: host archives are gzipped tarballs. flate2 defaults to the
+# pure-Rust miniz_oxide backend, so this adds no C toolchain requirement.
+flate2 = "1"
+tar = "0.4"

@@ -10,6 +10,8 @@ use crate::model::{
     FileBlob, GitHubUser, InboxBucket, InboxData, PullRequestDetail, RepoHit, ReviewComment,
     ReviewCommentInput,
 };
+use crate::snapshot::service as snapshot_service;
+use crate::snapshot::store::SnapshotKey;
 use crate::storage;
 
 fn inbox_cache_name(account_id: &str) -> String {
@@ -322,6 +324,44 @@ pub async fn get_file_blob(
 ) -> Result<FileBlob, String> {
     let (_, platform) = accounts::active_platform(&app).await?;
     platform.file_blob(&owner, &repo, &path, &r#ref).await
+}
+
+async fn snapshot_key(
+    app: &AppHandle,
+    owner: String,
+    repo: String,
+    sha: String,
+) -> Result<SnapshotKey, String> {
+    let account = accounts::active_account(app).await?;
+    Ok(SnapshotKey {
+        host: account.host,
+        owner,
+        repo,
+        sha,
+    })
+}
+
+#[tauri::command]
+pub async fn ensure_repo_snapshot(
+    app: AppHandle,
+    owner: String,
+    repo: String,
+    sha: String,
+) -> Result<snapshot_service::SnapshotStatus, String> {
+    let key = snapshot_key(&app, owner, repo, sha).await?;
+    Ok(snapshot_service::ensure(&app, key))
+}
+
+#[tauri::command]
+pub async fn snapshot_status(
+    app: AppHandle,
+    owner: String,
+    repo: String,
+    sha: String,
+) -> Result<snapshot_service::SnapshotStatus, String> {
+    let key = snapshot_key(&app, owner, repo, sha).await?;
+    let root = storage::cache_dir(&app)?;
+    Ok(snapshot_service::status(&root, &key))
 }
 
 #[tauri::command]

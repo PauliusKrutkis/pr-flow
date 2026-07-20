@@ -15,11 +15,13 @@
 use serde_json::{json, Value};
 
 use crate::http::{
-    fbool, fopt_u64, fstr, fu64, get_all_pages, get_json, log, net_err, now_millis, nstr, read_body,
+    fbool, fopt_u64, fstr, fu64, get_all_pages, get_json, log, net_err, now_millis, nstr,
+    read_body, read_capped,
 };
 use crate::model::{
     ChangedFile, CiStatus, FileBlob, GitHubUser, InboxBucket, InboxData, IssueComment, PullRequest,
-    PullRequestDetail, RepoHit, ReviewComment, ReviewCommentInput, ReviewSummary, MAX_BLOB_BYTES,
+    PullRequestDetail, RepoHit, ReviewComment, ReviewCommentInput, ReviewSummary,
+    MAX_ARCHIVE_BYTES, MAX_BLOB_BYTES,
 };
 
 pub struct GitLabPlatform {
@@ -264,6 +266,40 @@ impl GitLabPlatform {
             client,
             api: format!("{}/api/v4", host.trim_end_matches('/')),
         })
+    }
+
+    /// Repository size in KB. `statistics=true` needs at least Reporter on the
+    /// project, so a refusal degrades to "unknown" (0) and lets the caller
+    /// proceed rather than blocking the snapshot on a permission the user may
+    /// legitimately lack.
+    pub async fn repo_size_kb(&self, owner: &str, repo: &str) -> Result<u64, String> {
+        let url = format!(
+            "{}/projects/{}?statistics=true",
+            self.api,
+            project(owner, repo)
+        );
+        let Ok(v) = get_json(&self.client, &url).await else {
+            return Ok(0);
+        };
+        let bytes = v
+            .get("statistics")
+            .and_then(|s| s.get("repository_size"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        Ok(bytes / 1024)
+    }
+
+    /// Downloads the gzipped archive of `sha`. Unlike GitHub's tarball there is
+    /// no cross-host redirect, so the authenticated client serves it directly.
+    pub async fn archive(&self, owner: &str, repo: &str, sha: &str) -> Result<Vec<u8>, String> {
+        let url = format!(
+            "{}/projects/{}/repository/archive.tar.gz?sha={}",
+            self.api,
+            project(owner, repo),
+            enc(sha)
+        );
+        let resp = self.client.get(url).send().await.map_err(net_err)?;
+        read_capped(resp, MAX_ARCHIVE_BYTES, "repo archive").await
     }
 
     fn mr_url(&self, owner: &str, name: &str, iid: u64) -> String {

@@ -174,6 +174,14 @@ impl AnyPlatform {
         })
     }
 
+    pub async fn repo_size_kb(&self, owner: &str, repo: &str) -> Result<u64, String> {
+        dispatch!(self, p => p.repo_size_kb(owner, repo).await)
+    }
+
+    pub async fn archive(&self, owner: &str, repo: &str, sha: &str) -> Result<Vec<u8>, String> {
+        dispatch!(self, p => p.archive(owner, repo, sha).await)
+    }
+
     pub async fn file_blob(
         &self,
         owner: &str,
