@@ -11,16 +11,17 @@ import { defineConfig } from "@playwright/test";
  * green runs that proved nothing. A port collision now fails loudly
  * (--strictPort) instead of borrowing whatever happens to be listening.
  * Override with E2E_PORT to run suites from several checkouts in parallel.
+ *
+ * Dev-mode budgets (fixtures.ts perfBudget) are loose by necessity: React's
+ * dev runtime + GC noise inflate numbers ~2x over what a built app feels
+ * like. The chromium-perf-prod project below runs the same perf specs
+ * against `vite build` + `vite preview` so budgets reflect real
+ * user-perceived performance.
  */
 
 const port = Number(process.env.E2E_PORT ?? 14_205);
 const prodPort = Number(process.env.E2E_PROD_PORT ?? 14_206);
 const perfSpecs = /(find|open|scroll)-perf\.spec\.ts/;
-
-// Dev-mode budgets (fixtures.ts perfBudget) are loose by necessity: React's
-// dev runtime + GC noise inflate numbers ~2x over what a built app feels
-// like. The -prod project below runs the same specs against `vite build` +
-// `vite preview` so budgets reflect real user-perceived performance.
 const runProdPerf = process.env.CI || process.env.E2E_PROD_PERF;
 
 export default defineConfig({
