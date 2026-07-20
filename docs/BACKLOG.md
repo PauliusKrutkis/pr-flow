@@ -181,14 +181,15 @@ No inbox. Just continue.
 - [x] 🔴 **Resume where you left off** — default app open.
 - [x] 🟡 Auto-advance to next review-requested PR after submit.
 - [x] 🟡 **`Esc` → inbox** — exception, not home.
-- [ ] 🟡 **Inbox forgets last tab across app restarts** — close the app while
-      on a PR, reopen, then `Esc`: lands on the "Requested" inbox tab even
-      when it's empty (switching to "Created" shows reviews, but "Requested"
-      state then disappears). Should restore whichever tab the user was last
-      on instead of always defaulting to "Requested".
-- [ ] 🟢 **Land on first non-empty inbox tab** — on cold start, if "Requested"
-      is empty, land on the first tab that actually has content instead of
-      always defaulting to "Requested".
+- [x] 🟡 **Inbox forgets last tab across app restarts** — `inboxTab` was never
+      persisted (hardcoded default on every store init); `Esc` already left
+      it alone in-memory, so only a full restart lost it. Fixed by mirroring
+      the existing `loadLastRoute`/`saveLastRoute` pattern for `inboxTab`
+      (PR #72).
+- [x] 🟢 **Land on first non-empty inbox tab** — on cold start, if the active
+      tab is empty, a one-shot effect jumps to the first tab with content;
+      gated on the query's real loaded state so it fires once per session and
+      never fights a deliberate visit to an empty tab later (PR #72).
 
 ---
 
