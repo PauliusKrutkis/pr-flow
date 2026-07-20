@@ -1,5 +1,5 @@
 import { Layers, Send } from "lucide-react";
-import { useRef, useState } from "react";
+import { type Ref, useImperativeHandle, useRef, useState } from "react";
 import { cn } from "../../lib/cn.ts";
 import { Kbd } from "../ui/kbd.tsx";
 import {
@@ -7,14 +7,22 @@ import {
   type ComposerEditorHandle,
 } from "./composer-editor.tsx";
 
+export interface AddCommentBoxHandle {
+  focus: () => void;
+}
+
 interface AddCommentBoxProps {
   autoFocus?: boolean;
   initialMarkdown?: string;
   onCancel: () => void;
+  /** Mirrors the editor's empty state to the parent (the drawer's collapsed
+      prompt uses it to advertise a surviving draft). */
+  onEmptyChange?: (empty: boolean) => void;
   onSecondary?: (body: string) => Promise<void> | void;
   onSubmit: (body: string) => Promise<void> | void;
   pending: boolean;
   placeholder?: string;
+  ref?: Ref<AddCommentBoxHandle>;
   secondaryLabel?: string;
   submitLabel?: string;
   suggestionText?: string;
@@ -28,8 +36,10 @@ interface AddCommentBoxProps {
  * Replies and issue comments (no secondary) fall back to a single button.
  */
 export function AddCommentBox({
+  ref,
   onSubmit,
   onCancel,
+  onEmptyChange,
   pending,
   placeholder,
   autoFocus,
@@ -43,6 +53,19 @@ export function AddCommentBox({
   const [empty, setEmpty] = useState(() => !initialMarkdown?.trim());
   const editorRef = useRef<ComposerEditorHandle>(null);
   const canSubmit = !(pending || empty);
+
+  useImperativeHandle(
+    ref,
+    (): AddCommentBoxHandle => ({
+      focus: () => editorRef.current?.focus(),
+    }),
+    []
+  );
+
+  const handleEmptyChange = (isEmpty: boolean) => {
+    setEmpty(isEmpty);
+    onEmptyChange?.(isEmpty);
+  };
 
   const primaryAction = onSecondary && mode === "now" ? onSecondary : onSubmit;
   const primaryLabel =
@@ -86,7 +109,7 @@ export function AddCommentBox({
         autoFocus={autoFocus}
         initialMarkdown={initialMarkdown}
         onCancel={onCancel}
-        onEmptyChange={setEmpty}
+        onEmptyChange={handleEmptyChange}
         onModeFlip={onSecondary ? handleModeFlip : undefined}
         onSubmitRequest={handleSubmitRequest}
         placeholder={placeholder ?? "Leave a comment…  ⌘↵ to save"}
@@ -132,11 +155,7 @@ export function AddCommentBox({
               {secondaryLabel}
             </label>
           </div>
-        ) : (
-          <span className="text-faint text-xs">
-            ⌘↵ to submit · Esc to cancel
-          </span>
-        )}
+        ) : null}
 
         <div className="qa-actions">
           <button

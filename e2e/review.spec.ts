@@ -418,15 +418,35 @@ test("the i button advertises how much conversation the drawer holds", async ({
   await expect(page.locator(".qf-info-count")).toHaveText("3");
 });
 
-test("esc in the drawer composer closes the drawer and releases the keyboard", async ({
+test("the drawer composer expands from the prompt on click, focused", async ({
   page,
 }) => {
   await page.keyboard.press("i");
   const box = page.getByRole("textbox", {
     name: "Comment on this pull request…",
   });
-  await box.click();
-  await box.fill("half-typed thought");
+  await expect(box).toBeHidden();
+  await page
+    .getByRole("button", { name: "Comment on this pull request…" })
+    .click();
+  await expect(box).toBeFocused();
+});
+
+test("esc in the drawer composer collapses it; a second esc closes the drawer", async ({
+  page,
+}) => {
+  await page.keyboard.press("i");
+  await page
+    .getByRole("button", { name: "Comment on this pull request…" })
+    .click();
+  await expect(
+    page.getByRole("textbox", { name: "Comment on this pull request…" })
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".qf-drawer")).toHaveAttribute(
+    "aria-hidden",
+    "false"
+  );
   await page.keyboard.press("Escape");
   await expect(page.locator(".qf-drawer")).toHaveAttribute(
     "aria-hidden",
@@ -437,25 +457,30 @@ test("esc in the drawer composer closes the drawer and releases the keyboard", a
   ).toBeVisible();
   await page.keyboard.press("j");
   await expect(page.locator(".qf-row-active")).toHaveCount(1);
-});
-
-test("after esc-closing from the composer, i reopens the drawer", async ({
-  page,
-}) => {
-  await page.keyboard.press("i");
-  await page
-    .getByRole("textbox", { name: "Comment on this pull request…" })
-    .click();
-  await page.keyboard.press("Escape");
-  await expect(page.locator(".qf-drawer")).toHaveAttribute(
-    "aria-hidden",
-    "true"
-  );
   await page.keyboard.press("i");
   await expect(page.locator(".qf-drawer")).toHaveAttribute(
     "aria-hidden",
     "false"
   );
+});
+
+test("a half-typed drawer comment survives esc — collapsed, not lost", async ({
+  page,
+}) => {
+  await page.keyboard.press("i");
+  await page
+    .getByRole("button", { name: "Comment on this pull request…" })
+    .click();
+  const box = page.getByRole("textbox", {
+    name: "Comment on this pull request…",
+  });
+  await box.fill("half-typed thought");
+  await page.keyboard.press("Escape");
+  const prompt = page.getByRole("button", { name: "Continue your draft…" });
+  await expect(prompt).toBeVisible();
+  await prompt.click();
+  await expect(box).toBeFocused();
+  await expect(box).toHaveText("half-typed thought");
 });
 
 test("clicking a sidebar file blurs it so no focus ring lingers after r/t", async ({
@@ -480,16 +505,20 @@ test("comment posting is optimistic even when the network hangs", async ({
   await setupApp(page, { hangIssueComment: true });
   await expect(page.locator(".qf-fsec-head").first()).toBeVisible();
   await page.keyboard.press("i");
+  await page
+    .getByRole("button", { name: "Comment on this pull request…" })
+    .click();
   const box = page.getByRole("textbox", {
     name: "Comment on this pull request…",
   });
-  await box.click();
   await box.fill("Ship it when green");
   await page.keyboard.press("Control+Enter");
   await expect(
     page.locator(".qf-convo").getByText("Ship it when green")
   ).toBeVisible({ timeout: 1000 });
-  await expect(box).toHaveText("");
+  await expect(
+    page.getByRole("button", { name: "Comment on this pull request…" })
+  ).toBeVisible();
 });
 
 test("shift+v expands the active file in place and collapses back", async ({

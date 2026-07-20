@@ -30,6 +30,10 @@ interface ComposerEditorProps {
   onSubmitRequest: () => void;
   placeholder: string;
   ref?: Ref<ComposerEditorHandle>;
+  /** Commented-line content to prefill suggestions with. The suggestion tool
+      only renders when this is provided — composers without line context
+      (replies, edits, PR-level comments) have nowhere a suggestion could
+      apply. */
   suggestionText?: string;
 }
 
@@ -208,7 +212,8 @@ export function ComposerEditor({
       cancel: onCancel,
       emptyChange: onEmptyChange,
       flip: onModeFlip,
-      insertSuggestion: suggestionText === null ? undefined : insertSuggestion,
+      insertSuggestion:
+        suggestionText === undefined ? undefined : insertSuggestion,
       openLink,
       submit: onSubmitRequest,
     });
@@ -301,7 +306,7 @@ export function ComposerEditor({
           />
         ) : (
           <>
-            {suggestionText !== null && (
+            {suggestionText !== undefined && (
               <button
                 aria-label="Insert suggestion"
                 className="qa-tool qa-tool-suggest q-focus"

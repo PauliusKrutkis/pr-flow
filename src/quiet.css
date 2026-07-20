@@ -2508,6 +2508,8 @@ dialog.q-dialog::backdrop {
   display: flex;
   gap: 8px;
   align-items: center;
+  /* right-aligned even when no segmented control fills the left slot */
+  margin-left: auto;
 }
 
 .qa-tools {
@@ -2807,6 +2809,28 @@ dialog.q-dialog::backdrop {
   font-size: 12.5px;
   color: var(--fg);
   white-space: nowrap;
+}
+
+/* The collapsed drawer composer: a one-line prompt styled like the editor
+   surface it expands into, so opening it reads as the same object growing. */
+.dir-quiet .qf-comment-prompt {
+  width: 100%;
+  padding: 9px 12px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--faint);
+  text-align: left;
+  cursor: text;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
+}
+.dir-quiet .qf-comment-prompt:hover {
+  color: var(--muted);
+  border-color: var(--line-2);
 }
 
 /* PR-level conversation inside the drawer */

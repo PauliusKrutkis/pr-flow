@@ -717,7 +717,11 @@ conflicts with zero-friction product goal).
 - [ ] 🟢 **P19** — Rust line-comment sweep (~25 `//` in
       `src-tauri/src/`).
 - [ ] 🟡 **P20** — Rich text editor design polish
-      (composer + info-drawer form; visual-only).
+      (composer + info-drawer form; visual-only). *Partially shipped with the
+      composer cleanup PR: suggestion tool only renders with line context,
+      footer hint deduped (⌘↵ chip on the button is the single source), drawer
+      composer collapses to a prompt. Remaining: typography/spacing polish of
+      the editor surface itself.*
 - [ ] ⏸ **P21** — Multi-line selection box via drag
       (defer; improve gutter-drag discoverability instead).
 - [ ] 🟢 **P22** — Selection-model audit + refactor (DESIGN.md
@@ -996,7 +1000,12 @@ link interception · Universal Links.
       is highlighted via click; investigate editor-level selection handling for a
       better approach (unsure whether to follow a standard here).
 - [ ] **Check for updates action** — explicit user-triggered update check.
-- [ ] **Info comment section design rework**.
+- [x] **Info comment section design rework** — the drawer composer now
+      collapses to a one-line prompt that expands on intent (Esc backs out of
+      the composer, then the drawer; drafts survive collapse and the prompt
+      advertises them), the PR-level composer no longer offers a Suggestion
+      tool (nothing for it to apply to), and the composer footer lost its
+      redundant ⌘↵/Esc hint line everywhere.
 - [ ] **Theming: CSS file vs Tailwind variables** — is theming really a CSS file
       rather than Tailwind variables? Consider using TW everywhere for better
       optimization.

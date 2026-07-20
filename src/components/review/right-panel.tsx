@@ -25,7 +25,7 @@ import { Markdown } from "../markdown.tsx";
 import { Avatar } from "../ui/avatar.tsx";
 import { TicketTitle } from "../ui/ticket-title.tsx";
 import { Tooltip } from "../ui/tooltip.tsx";
-import { AddCommentBox } from "./add-comment-box.tsx";
+import { AddCommentBox, type AddCommentBoxHandle } from "./add-comment-box.tsx";
 import { CiPill } from "./ci-pill.tsx";
 import { CommentBody, CommentTools } from "./comment-item.tsx";
 
@@ -62,8 +62,9 @@ const REVIEW_STATES: Record<string, { label: string; cls: string }> = {
 /**
  * The info drawer (toggled with `i`, Esc closes): the PR description, the
  * complete conversation (PR-level comments merged with review verdicts), an
- * index of inline code threads, and a composer. Comments post optimistically —
- * the composer never blocks.
+ * index of inline code threads, and a composer that expands from a one-line
+ * prompt (Esc backs out of the composer first, then the drawer). Comments
+ * post optimistically — the composer never blocks.
  */
 export function RightPanel({
   ci,
@@ -121,6 +122,30 @@ export function RightPanel({
     }
   }, [open]);
 
+  /**
+   * The composer starts as a one-line prompt and expands on intent. It stays
+   * mounted (hidden) while collapsed so a half-typed draft survives Esc —
+   * "drafts are never lost" (DESIGN.md); the prompt advertises the draft.
+   */
+  const [composing, setComposing] = useState(false);
+  const [draftEmpty, setDraftEmpty] = useState(true);
+  const composerRef = useRef<AddCommentBoxHandle>(null);
+
+  useEffect(() => {
+    if (composing) {
+      composerRef.current?.focus();
+    }
+  }, [composing]);
+
+  const startComposing = () => {
+    setComposing(true);
+  };
+
+  const collapseComposer = () => {
+    setComposing(false);
+    panelRef.current?.focus({ preventScroll: true });
+  };
+
   const timeline: TimelineEntry[] = [
     ...conversation.map((c) => ({
       at: c.createdAt,
@@ -154,6 +179,7 @@ export function RightPanel({
 
   const handleAddIssueComment = (text: string) => {
     onAddIssueComment(text);
+    collapseComposer();
   };
 
   return (
@@ -347,14 +373,29 @@ export function RightPanel({
           )}
 
           <section className="qf-drawer-section">
-            <AddCommentBox
-              autoFocus={false}
-              onCancel={onClose}
-              onSubmit={handleAddIssueComment}
-              pending={false}
-              placeholder="Comment on this pull request…"
-              submitLabel="Comment"
-            />
+            <div hidden={!composing}>
+              <AddCommentBox
+                autoFocus={false}
+                onCancel={collapseComposer}
+                onEmptyChange={setDraftEmpty}
+                onSubmit={handleAddIssueComment}
+                pending={false}
+                placeholder="Comment on this pull request…"
+                ref={composerRef}
+                submitLabel="Comment"
+              />
+            </div>
+            {!composing && (
+              <button
+                className="qf-comment-prompt qf-focusable"
+                onClick={startComposing}
+                type="button"
+              >
+                {draftEmpty
+                  ? "Comment on this pull request…"
+                  : "Continue your draft…"}
+              </button>
+            )}
           </section>
         </div>
       </aside>
