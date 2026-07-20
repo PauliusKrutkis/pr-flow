@@ -30,10 +30,6 @@ interface ComposerEditorProps {
   onSubmitRequest: () => void;
   placeholder: string;
   ref?: Ref<ComposerEditorHandle>;
-  /** Commented-line content to prefill suggestions with. The suggestion tool
-      only renders when this is provided — composers without line context
-      (replies, edits, PR-level comments) have nowhere a suggestion could
-      apply. */
   suggestionText?: string;
 }
 
@@ -126,7 +122,10 @@ const ComposerKeys = Extension.create({
  * (`**bold**`, `- `, ``` …) autoconvert as you type — nothing is lost for
  * markdown muscle memory, the symbols just resolve instead of sitting there.
  * The hint bar below the surface stays: every entry names its hotkey and is
- * the button, now with a lit state following the selection.
+ * the button, now with a lit state following the selection. The suggestion
+ * tool only renders when suggestionText (the commented line, its prefill) is
+ * provided — composers without line context (replies, edits, PR-level
+ * comments) have nowhere a suggestion could apply.
  */
 export function ComposerEditor({
   ref,

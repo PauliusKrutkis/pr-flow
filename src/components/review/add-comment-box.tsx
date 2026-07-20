@@ -15,8 +15,6 @@ interface AddCommentBoxProps {
   autoFocus?: boolean;
   initialMarkdown?: string;
   onCancel: () => void;
-  /** Mirrors the editor's empty state to the parent (the drawer's collapsed
-      prompt uses it to advertise a surviving draft). */
   onEmptyChange?: (empty: boolean) => void;
   onSecondary?: (body: string) => Promise<void> | void;
   onSubmit: (body: string) => Promise<void> | void;
@@ -34,6 +32,8 @@ interface AddCommentBoxProps {
  * "add to review" vs. "comment now" choice) it shows a segmented control that
  * makes the mode explicit, and the primary button + ⌘↵ follow the chosen mode.
  * Replies and issue comments (no secondary) fall back to a single button.
+ * onEmptyChange mirrors the editor's empty state to the parent — the drawer's
+ * collapsed prompt uses it to advertise a surviving draft.
  */
 export function AddCommentBox({
   ref,

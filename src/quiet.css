@@ -2508,7 +2508,6 @@ dialog.q-dialog::backdrop {
   display: flex;
   gap: 8px;
   align-items: center;
-  /* right-aligned even when no segmented control fills the left slot */
   margin-left: auto;
 }
 
@@ -2811,8 +2810,6 @@ dialog.q-dialog::backdrop {
   white-space: nowrap;
 }
 
-/* The collapsed drawer composer: a one-line prompt styled like the editor
-   surface it expands into, so opening it reads as the same object growing. */
 .dir-quiet .qf-comment-prompt {
   width: 100%;
   padding: 9px 12px;

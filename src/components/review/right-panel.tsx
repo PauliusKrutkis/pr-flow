@@ -2,6 +2,9 @@
  * The PR detail drawer: CI, verdict summary, and the conversation timeline.
  * Your own conversation comments (never verdicts) carry the same quiet
  * Edit/Delete tools as inline threads, with the in-place "Delete?" confirm.
+ * The composer starts as a one-line prompt and expands on intent; it stays
+ * mounted (hidden) while collapsed so a half-typed draft survives Esc —
+ * "drafts are never lost" (DESIGN.md) — and the prompt advertises the draft.
  */
 import {
   CheckCircle2,
@@ -122,11 +125,6 @@ export function RightPanel({
     }
   }, [open]);
 
-  /**
-   * The composer starts as a one-line prompt and expands on intent. It stays
-   * mounted (hidden) while collapsed so a half-typed draft survives Esc —
-   * "drafts are never lost" (DESIGN.md); the prompt advertises the draft.
-   */
   const [composing, setComposing] = useState(false);
   const [draftEmpty, setDraftEmpty] = useState(true);
   const composerRef = useRef<AddCommentBoxHandle>(null);
