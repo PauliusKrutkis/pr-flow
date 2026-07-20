@@ -4,7 +4,6 @@ mod commands;
 mod http;
 mod model;
 mod platform;
-#[allow(dead_code)]
 mod snapshot;
 mod storage;
 mod update;
@@ -105,6 +104,8 @@ pub fn run() {
             commands::update_issue_comment,
             commands::delete_issue_comment,
             commands::submit_review,
+            commands::ensure_repo_snapshot,
+            commands::snapshot_status,
             commands::get_viewed_map,
             commands::set_viewed_map,
             update::check_for_update,

@@ -176,6 +176,14 @@ pub struct InboxData {
 /// better opened on the host than base64-encoded into the UI.
 pub const MAX_BLOB_BYTES: usize = 20 * 1024 * 1024;
 
+/// Hard cap on a downloaded repo archive. Buffered in memory before extraction,
+/// so this bounds peak memory as much as it bounds disk.
+pub const MAX_ARCHIVE_BYTES: usize = 256 * 1024 * 1024;
+
+/// Repos larger than this are left on the on-demand blob path entirely — the
+/// snapshot must degrade, never block or thrash the cache (BACKLOG §9).
+pub const MAX_REPO_SIZE_KB: u64 = 100 * 1024;
+
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct FileBlob {

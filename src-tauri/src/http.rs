@@ -178,6 +178,32 @@ pub(crate) async fn get_json(client: &reqwest::Client, url: &str) -> Result<Valu
     }
 }
 
+/// Reads a response body into memory, aborting as soon as it exceeds `max`.
+/// Used for repo archives, where the host controls the size: `Content-Length`
+/// is advisory (and absent on chunked responses), so the cap is enforced on
+/// what actually arrives rather than on what the header promises.
+pub(crate) async fn read_capped(
+    mut resp: reqwest::Response,
+    max: usize,
+    label: &str,
+) -> Result<Vec<u8>, String> {
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(format!("{label} failed ({})", status.as_u16()));
+    }
+    if resp.content_length().is_some_and(|len| len > max as u64) {
+        return Err(format!("{label} is too large"));
+    }
+    let mut out: Vec<u8> = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(net_err)? {
+        if out.len() + chunk.len() > max {
+            return Err(format!("{label} is too large"));
+        }
+        out.extend_from_slice(&chunk);
+    }
+    Ok(out)
+}
+
 /// Fetches every page of a list endpoint (100/page, capped at 20 pages).
 /// GitHub and GitLab share the `per_page`/`page` convention.
 pub(crate) async fn get_all_pages(

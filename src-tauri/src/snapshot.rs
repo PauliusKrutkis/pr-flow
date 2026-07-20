@@ -6,4 +6,6 @@
 //! every other cache in the app. This module owns only the on-disk half; the
 //! fetch/extract service arrives with the command that drives it.
 
+pub(crate) mod extract;
+pub(crate) mod service;
 pub(crate) mod store;

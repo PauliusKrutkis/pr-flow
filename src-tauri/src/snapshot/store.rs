@@ -106,6 +106,7 @@ pub fn safe_join(base: &Path, relative: &str) -> Option<PathBuf> {
 /// Reads one file out of a finished snapshot. `None` covers every miss the
 /// caller treats identically — no snapshot, not extracted yet, or no such file
 /// at this SHA — so callers fall back to the network without branching.
+#[allow(dead_code)]
 pub fn read_file(root: &Path, key: &SnapshotKey, path: &str) -> Option<Vec<u8>> {
     let base = snapshot_dir(root, key);
     if !base.is_dir() {
