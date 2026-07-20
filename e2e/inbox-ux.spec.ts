@@ -258,3 +258,33 @@ test("cold start skips an empty default tab for the first tab with content", asy
   await expect(page.getByRole("option").first()).toBeVisible();
   await page.screenshot({ path: "evidence/inbox-cold-start-tab.png" });
 });
+
+test("doesn't bounce off Watching while its data is still loading", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("pr-flow:lastInboxTab", "subscribed");
+  });
+  const decoyTabHasContent: InboxFixture = {
+    assigned: { count: 0, prs: [] },
+    created: {
+      count: 1,
+      prs: [makePr(4, "My own PR", "me", "2026-07-01T12:00:00Z")],
+    },
+    involved: { count: 0, prs: [] },
+    reviewRequested: { count: 0, prs: [] },
+  };
+  await setupApp(page, {
+    inbox: decoyTabHasContent,
+    subscribed: SUBSCRIBED,
+    subscribedDelayMs: 400,
+  });
+
+  await expect(page.locator('.qi-tab[data-state="active"]')).toContainText(
+    "Watching"
+  );
+  await expect(page.getByRole("option").first()).toBeVisible();
+  await expect(page.locator('.qi-tab[data-state="active"]')).toContainText(
+    "Watching"
+  );
+});

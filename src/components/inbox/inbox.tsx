@@ -7,6 +7,12 @@
  * hidden. Watching repos is a separate action (the "w" hotkey, command
  * palette, and docked Watch button all open the same dialog), so the
  * Watching tab follows the same visibility rule as every other tab.
+ *
+ * On cold start, if the active tab turns out empty, `autoTabSelected` guards
+ * a one-shot correction to the first tab with content — a module-level flag
+ * rather than a ref, since Inbox unmounts/remounts on every Esc-to-inbox
+ * visit and re-running the correction on each remount would boomerang a
+ * deliberate visit to an empty tab back to whichever tab has content.
  */
 import {
   Archive,
@@ -65,12 +71,6 @@ const EMPTY: InboxData = {
   reviewRequested: { count: 0, prs: [] },
 };
 
-/**
- * Guards the cold-start "land on a non-empty tab" correction below to one
- * shot per app session — Inbox unmounts/remounts on every Esc-to-inbox visit,
- * but re-running this on each remount would boomerang a deliberate visit to
- * an empty tab back to whichever tab has content.
- */
 let autoTabSelected = false;
 
 const keyFor = (pr: PullRequest) =>
@@ -163,7 +163,7 @@ export function Inbox() {
     (t) => !tabsLoaded || visibleCounts[t.key] > 0 || t.key === tab
   );
 
-  const inboxDataLoaded = data !== undefined;
+  const inboxDataLoaded = data !== undefined && subscribedData !== undefined;
   useEffect(() => {
     if (autoTabSelected || !inboxDataLoaded) {
       return;
