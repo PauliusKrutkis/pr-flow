@@ -96,7 +96,7 @@ Or resume where you left off. **No Slack link handling required.**
 
 **Must have before DM'ing five developer friends:**
 
-- [ ] Perf budget met
+- [x] Perf budget met
 - [x] Keyboard workflow + stable review
 - [x] **Resume where you left off**
 - [x] **`mod+k` jump to any PR**
@@ -130,11 +130,15 @@ GitHub links opened this"*, you've saved weeks of integration work.
       e2e budgets (repaint counts + median keystroke / warm-open wall clock /
       stall frames), run on Chromium AND Playwright WebKit (the app ships on
       WebKitGTK; Chromium-only budgets hid engine-shaped lag).
-- [ ] 🟡 **Perf e2e against the production build** — today's budgets run on the
+- [x] 🟡 **Perf e2e against the production build** — today's budgets run on the
       vite dev server, where React's dev runtime + GC noise inflate numbers
       ~2×. Add a Playwright project that runs the perf specs against
       `vite build` + `vite preview` so budgets reflect what users feel, then
       tighten them (~half the current bounds).
+      *Shipped: `chromium-perf-prod` project (CI-gated, `E2E_PROD_PERF` locally)
+      builds + previews the app and reruns `find/open/scroll-perf` specs with
+      halved budgets; all pass with real headroom (open avg 42ms vs 150ms,
+      scroll p95 17ms vs 25ms).*
 
 ### Performance architecture — decisions queued (2026-07-05)
 
