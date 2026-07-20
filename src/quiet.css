@@ -2346,8 +2346,22 @@ dialog.q-dialog::backdrop {
   font-family: var(--font-ui);
 }
 
-/* Rich composer surface — the q-input look on a ProseMirror contenteditable.
-   WYSIWYG in, markdown out (the hosts' wire format). */
+/* Rich composer surface — one bordered instrument: the editing surface with
+   its toolbar strip attached below, lit as a whole while focus is anywhere
+   inside (editor, toolbar, the ⌘K link input). */
+.qa-editor {
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+.qa-editor:focus-within {
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
 .qa-editor-content {
   box-sizing: border-box;
   min-height: 86px;
@@ -2358,16 +2372,6 @@ dialog.q-dialog::backdrop {
   color: var(--fg);
   overflow-wrap: anywhere;
   outline: none;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  transition:
-    border-color 120ms ease,
-    box-shadow 120ms ease;
-}
-.qa-editor-content:focus {
-  border-color: var(--accent-line);
-  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .qa-editor-content p.is-editor-empty:first-child::before {
   float: left;
@@ -2458,8 +2462,9 @@ dialog.q-dialog::backdrop {
   letter-spacing: 0.04em;
   content: "Suggested change";
 }
-/* the ⌘K inline URL input that borrows the hint bar's row */
+/* the ⌘K inline URL input that borrows the toolbar strip's row */
 .qa-link-input {
+  flex: 1;
   padding: 5px 9px;
   font-size: 12px;
   background: var(--bg);
@@ -2516,7 +2521,9 @@ dialog.q-dialog::backdrop {
   flex-wrap: wrap;
   gap: 3px;
   align-items: center;
-  margin-top: 7px;
+  padding: 4px 6px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
 }
 .qa-tool {
   display: inline-flex;

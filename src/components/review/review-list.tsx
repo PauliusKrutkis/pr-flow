@@ -542,6 +542,7 @@ function CommentAddBox({
       placeholder="Add a review comment…"
       secondaryLabel="Comment now"
       submitLabel="Add to review"
+      suggestionFile={filename}
       suggestionText={
         target.side === "RIGHT"
           ? (item.rangeContent ?? item.rowContent ?? undefined)

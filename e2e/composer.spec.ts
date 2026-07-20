@@ -125,3 +125,42 @@ test("tab still flips the batch/now mode from inside the editor", async ({
     page.getByRole("radio", { name: "Add to review" })
   ).toHaveAttribute("aria-checked", "true");
 });
+
+test("tab indents inside a suggestion block instead of flipping the mode", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Insert suggestion" }).click();
+  const sugg = box(page).locator("pre code.language-suggestion");
+  await expect(sugg).toHaveText("export function alpha() {");
+
+  await page.keyboard.press("Tab");
+  await expect
+    .poll(() => sugg.evaluate((el) => el.textContent))
+    .toBe("  export function alpha() {");
+  await expect(
+    page.getByRole("radio", { name: "Add to review" })
+  ).toHaveAttribute("aria-checked", "true");
+
+  await page.keyboard.press("Shift+Tab");
+  await expect
+    .poll(() => sugg.evaluate((el) => el.textContent))
+    .toBe("export function alpha() {");
+  await expect(
+    page.getByRole("radio", { name: "Add to review" })
+  ).toHaveAttribute("aria-checked", "true");
+});
+
+test("suggestion blocks highlight as the commented file's language", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Insert suggestion" }).click();
+  const sugg = box(page).locator("pre code.language-suggestion");
+  await expect(sugg).toHaveText("export function alpha() {");
+
+  // The prefilled line arrives selected (typing replaces it) and selected
+  // text is deliberately undecorated; tokens light once the caret collapses.
+  await expect(sugg.locator(".hljs-keyword")).toHaveCount(0);
+  await page.keyboard.press("End");
+  await expect(sugg.locator(".hljs-keyword").first()).toHaveText("export");
+  await expect(sugg.locator(".hljs-title").first()).toHaveText("alpha");
+});

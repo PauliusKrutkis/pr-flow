@@ -23,6 +23,7 @@ interface AddCommentBoxProps {
   ref?: Ref<AddCommentBoxHandle>;
   secondaryLabel?: string;
   submitLabel?: string;
+  suggestionFile?: string;
   suggestionText?: string;
 }
 
@@ -47,6 +48,7 @@ export function AddCommentBox({
   submitLabel = "Comment",
   onSecondary,
   secondaryLabel = "Comment now",
+  suggestionFile,
   suggestionText,
 }: AddCommentBoxProps) {
   const [mode, setMode] = useState<"batch" | "now">("batch");
@@ -114,6 +116,7 @@ export function AddCommentBox({
         onSubmitRequest={handleSubmitRequest}
         placeholder={placeholder ?? "Leave a comment…  ⌘↵ to save"}
         ref={editorRef}
+        suggestionFile={suggestionFile}
         suggestionText={suggestionText}
       />
 

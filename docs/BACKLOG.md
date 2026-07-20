@@ -759,9 +759,15 @@ conflicts with zero-friction product goal).
       be able to focus a comment thread; focused thread activates the reply box
       and shows reply/resolve hints (same as hover). `f`/`g` must not skip the
       inline comment composer when it is open.
-- [ ] 🟡 **Composer: suggestions** — tab completion inside suggestion blocks,
-      syntax highlighting for suggestion fences; pairs with P04 hotkey and P20
-      polish.
+- [x] 🟡 **Composer: suggestions** — shipped with the composer toolbar PR:
+      Tab indents / Shift-Tab dedents inside code blocks (caret or whole
+      selected lines) instead of flipping the batch/now mode, and
+      ```suggestion fences highlight live as the commented file's language
+      via `suggestion-highlight.ts` — ProseMirror decorations fed by the same
+      `highlightLine` (and cache) as the diff. Token spans under a
+      non-collapsed selection are skipped: Chromium's native replace across
+      decoration spans re-parsed as a bare deletion and ate the first typed
+      character over the prefilled (selected) suggestion line.
 - [ ] 🟡 **Comment-now vs add-to-review UX** — remember last choice between
       "comment now" and "add to review", or replace tabs with two explicit
       buttons if that reads clearer.

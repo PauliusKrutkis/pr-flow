@@ -19,6 +19,7 @@ import {
   useState,
 } from "react";
 import { cn } from "../../lib/cn.ts";
+import { suggestionHighlight } from "../../lib/suggestion-highlight.ts";
 import { Tooltip } from "../ui/tooltip.tsx";
 
 export interface ComposerEditorHandle {
@@ -36,6 +37,7 @@ interface ComposerEditorProps {
   onSubmitRequest: () => void;
   placeholder: string;
   ref?: Ref<ComposerEditorHandle>;
+  suggestionFile?: string;
   suggestionText?: string;
 }
 
@@ -59,6 +61,74 @@ interface ComposerKeyHandlers {
   insertSuggestion: (() => void) | undefined;
   openLink: (ed: Editor) => boolean;
   submit: () => void;
+}
+
+const INDENT = "  ";
+const LEADING_INDENT = /^ {1,2}/;
+
+/**
+ * Parent-relative start offsets of the code-block lines the selection touches.
+ * Code blocks hold one text node with literal newlines, so line geometry is
+ * plain string arithmetic on the parent's textContent.
+ */
+function touchedLineStarts(editor: Editor): number[] | null {
+  const { $from, $to } = editor.state.selection;
+  if (!$from.sameParent($to)) {
+    return null;
+  }
+  const text = $from.parent.textContent;
+  const starts = [0];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "\n") {
+      starts.push(i + 1);
+    }
+  }
+  return starts.filter((start, i) => {
+    const end = (starts[i + 1] ?? text.length + 1) - 1;
+    return start <= $to.parentOffset && end >= $from.parentOffset;
+  });
+}
+
+/** Tab in a code block: indent at the caret, or every selected line. */
+function indentCodeBlock(editor: Editor): boolean {
+  const { from, to, $from } = editor.state.selection;
+  if (from === to) {
+    editor.commands.insertContent(INDENT);
+    return true;
+  }
+  const lines = touchedLineStarts(editor);
+  if (!lines) {
+    return true;
+  }
+  const blockStart = $from.start();
+  editor.commands.command(({ tr }) => {
+    for (const start of [...lines].reverse()) {
+      tr.insertText(INDENT, blockStart + start);
+    }
+    return true;
+  });
+  return true;
+}
+
+/** Shift-Tab in a code block: remove up to one indent from each touched line. */
+function dedentCodeBlock(editor: Editor): boolean {
+  const lines = touchedLineStarts(editor);
+  if (!lines) {
+    return true;
+  }
+  const { $from } = editor.state.selection;
+  const blockStart = $from.start();
+  const text = $from.parent.textContent;
+  editor.commands.command(({ tr }) => {
+    for (const start of [...lines].reverse()) {
+      const spaces = LEADING_INDENT.exec(text.slice(start))?.[0].length ?? 0;
+      if (spaces > 0) {
+        tr.delete(blockStart + start, blockStart + start + spaces);
+      }
+    }
+    return true;
+  });
+  return true;
 }
 
 /**
@@ -102,6 +172,9 @@ const ComposerKeys = Extension.create({
         return true;
       },
       "Shift-Tab": ({ editor }) => {
+        if (editor.isActive("codeBlock")) {
+          return dedentCodeBlock(editor);
+        }
         const flip = HANDLERS.get(editor)?.flip;
         if (!flip || editor.isActive("listItem")) {
           return false;
@@ -110,6 +183,9 @@ const ComposerKeys = Extension.create({
         return true;
       },
       Tab: ({ editor }) => {
+        if (editor.isActive("codeBlock")) {
+          return indentCodeBlock(editor);
+        }
         const flip = HANDLERS.get(editor)?.flip;
         if (!flip || editor.isActive("listItem")) {
           return false;
@@ -133,13 +209,15 @@ const ComposerKeys = Extension.create({
  * the one domain-specific tool with no universal glyph — and only renders
  * when suggestionText (the commented line, its prefill) is provided:
  * composers without line context (replies, edits, PR-level comments) have
- * nowhere a suggestion could apply.
+ * nowhere a suggestion could apply. suggestionFile is that line's file path;
+ * it drives syntax highlighting inside ```suggestion fences.
  */
 export function ComposerEditor({
   ref,
   placeholder,
   autoFocus,
   initialMarkdown,
+  suggestionFile,
   suggestionText,
   onSubmitRequest,
   onCancel,
@@ -185,6 +263,7 @@ export function ComposerEditor({
       Placeholder.configure({ placeholder }),
       Markdown,
       ComposerKeys,
+      suggestionHighlight(suggestionFile),
     ],
     onUpdate: ({ editor: e }) => HANDLERS.get(e)?.emptyChange(e.isEmpty),
   });
