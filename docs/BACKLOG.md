@@ -720,7 +720,10 @@ conflicts with zero-friction product goal).
       (composer + info-drawer form; visual-only). *Partially shipped with the
       composer cleanup PR: suggestion tool only renders with line context,
       footer hint deduped (⌘↵ chip on the button is the single source), drawer
-      composer collapses to a prompt. Remaining: typography/spacing polish of
+      composer collapses to a prompt. The toolbar is now the familiar icon
+      strip (B/I/code/link) with hotkeys in hover tooltips — the app-wide
+      Tooltip + Kbd language — after "our hint-bar reads unfamiliar" feedback;
+      Suggestion keeps its text label. Remaining: typography/spacing polish of
       the editor surface itself.*
 - [ ] ⏸ **P21** — Multi-line selection box via drag
       (defer; improve gutter-drag discoverability instead).
