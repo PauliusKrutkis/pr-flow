@@ -14,6 +14,14 @@ import { defineConfig } from "@playwright/test";
  */
 
 const port = Number(process.env.E2E_PORT ?? 14_205);
+const prodPort = Number(process.env.E2E_PROD_PORT ?? 14_206);
+const perfSpecs = /(find|open|scroll)-perf\.spec\.ts/;
+
+// Dev-mode budgets (fixtures.ts perfBudget) are loose by necessity: React's
+// dev runtime + GC noise inflate numbers ~2x over what a built app feels
+// like. The -prod project below runs the same specs against `vite build` +
+// `vite preview` so budgets reflect real user-perceived performance.
+const runProdPerf = process.env.CI || process.env.E2E_PROD_PERF;
 
 export default defineConfig({
   projects: [
@@ -22,8 +30,20 @@ export default defineConfig({
       ? [
           {
             name: "webkit-perf",
-            testMatch: /(find|open|scroll)-perf\.spec\.ts/,
+            testMatch: perfSpecs,
             use: { browserName: "webkit" as const },
+          },
+        ]
+      : []),
+    ...(runProdPerf
+      ? [
+          {
+            name: "chromium-perf-prod",
+            testMatch: perfSpecs,
+            use: {
+              baseURL: `http://localhost:${prodPort}`,
+              browserName: "chromium" as const,
+            },
           },
         ]
       : []),
@@ -34,10 +54,22 @@ export default defineConfig({
     baseURL: `http://localhost:${port}`,
     viewport: { height: 800, width: 1280 },
   },
-  webServer: {
-    command: `pnpm exec vite --port ${port} --strictPort`,
-    port,
-    reuseExistingServer: false,
-    timeout: 30_000,
-  },
+  webServer: [
+    {
+      command: `pnpm exec vite --port ${port} --strictPort`,
+      port,
+      reuseExistingServer: false,
+      timeout: 30_000,
+    },
+    ...(runProdPerf
+      ? [
+          {
+            command: `pnpm build && pnpm exec vite preview --port ${prodPort} --strictPort`,
+            port: prodPort,
+            reuseExistingServer: false,
+            timeout: 60_000,
+          },
+        ]
+      : []),
+  ],
 });
