@@ -4,7 +4,6 @@ import {
   type ComponentPropsWithoutRef,
   type MouseEvent,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -194,7 +193,7 @@ export function Markdown({
   className?: string;
   baseUrl?: string;
 }) {
-  const Img = useMemo(() => makeImg(baseUrl), [baseUrl]);
+  const Img = makeImg(baseUrl);
   if (!children) {
     return null;
   }
