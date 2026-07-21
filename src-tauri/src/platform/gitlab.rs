@@ -172,8 +172,33 @@ fn diff_stats(diff: &str) -> (u64, u64) {
     (add, del)
 }
 
+/// GitLab's `diff` field leads with a `--- a/path`/`+++ b/path` file-header
+/// pair before the first `@@` hunk (e.g. `"--- a/VERSION\n+++ b/VERSION\n@@
+/// -1 +1 @@\n..."`); GitHub's per-file `patch` field never has one. The
+/// frontend's patch parser (`parsePatch` in `diff.ts`) expects a hunk-only
+/// patch starting at `@@` — untouched, the header pair gets misread as del/add
+/// rows in a headerless pseudo-hunk, which fails full-file expansion's
+/// hunk-header validation outright. Strip the pair when present.
+fn strip_diff_file_header(diff: &str) -> &str {
+    let Some(after_old) = diff.strip_prefix("--- ") else {
+        return diff;
+    };
+    let Some(old_nl) = after_old.find('\n') else {
+        return diff;
+    };
+    let rest = &after_old[old_nl + 1..];
+    let Some(after_new) = rest.strip_prefix("+++ ") else {
+        return diff;
+    };
+    match after_new.find('\n') {
+        Some(new_nl) => &after_new[new_nl + 1..],
+        None => "",
+    }
+}
+
 fn file_from_diff(v: &Value, head_sha: &str) -> ChangedFile {
-    let diff = fstr(v, "diff");
+    let raw_diff = fstr(v, "diff");
+    let diff = strip_diff_file_header(&raw_diff).to_string();
     let (additions, deletions) = diff_stats(&diff);
     let new_file = fbool(v, "new_file");
     let deleted = fbool(v, "deleted_file");

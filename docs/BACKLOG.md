@@ -321,9 +321,20 @@ hotkey collapses.
 - [ ] ❓ Open: does expanding lock j/k / scroll into the file, or stay part of
       the continuous scroll? Shipped continuous (fewer modes; matches "review
       pane is one scroll"); revisit after using it.
-- [ ] 🟡 **Full file view broken on GitLab** — `shift+v` full-file expansion
-      doesn't work against GitLab-hosted PRs; needs investigation (blob fetch
-      / API path likely GitHub-only today).
+- [x] 🟡 **Full file view broken on GitLab** — `shift+v` full-file expansion
+      failed on every GitLab PR. First pass (PR #70) stripped a
+      `--- a/path`/`+++ b/path` header pair GitLab was assumed to always
+      prefix onto each file's `diff`; that wasn't the real bug (confirmed via
+      logging that most files never carry that header) and full-file
+      expansion still failed. Actual root cause: GitLab's diff text puts a
+      stray zero-length line between hunks (and/or a trailing one after the
+      last hunk); `parsePatchUncached` in `src/lib/diff.ts` treated any
+      non-`+`/`-`/`\` line as a context row, so that blank separator became a
+      phantom context row with empty content one line past the hunk's
+      declared range — failing `expand-file.ts`'s row-by-row blob validation.
+      Fixed by skipping zero-length split lines in `parsePatchUncached`; a
+      real blank source line is always a lone space (`" "`), never truly
+      empty, so this is safe for GitHub patches too.
 
 ---
 

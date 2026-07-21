@@ -85,6 +85,32 @@ fn diff_stats_ignores_file_headers() {
 }
 
 #[test]
+fn strip_diff_file_header_drops_leading_pair() {
+    assert_eq!(
+        strip_diff_file_header("--- a/VERSION\n+++ b/VERSION\n@@ -1 +1 @@\n-1.9.7\n+1.9.8\n"),
+        "@@ -1 +1 @@\n-1.9.7\n+1.9.8\n"
+    );
+}
+
+#[test]
+fn strip_diff_file_header_leaves_hunk_only_diff_untouched() {
+    let diff = "@@ -1 +1 @@\n-a\n+b\n";
+    assert_eq!(strip_diff_file_header(diff), diff);
+}
+
+#[test]
+fn file_from_diff_strips_gitlab_file_header_from_patch() {
+    let v = serde_json::json!({
+        "old_path": "VERSION", "new_path": "VERSION",
+        "diff": "--- a/VERSION\n+++ b/VERSION\n@@ -1 +1 @@\n-1.9.7\n+1.9.8\n"
+    });
+    let file = file_from_diff(&v, "sha");
+    assert_eq!(file.patch.as_deref(), Some("@@ -1 +1 @@\n-1.9.7\n+1.9.8\n"));
+    assert_eq!(file.additions, 1);
+    assert_eq!(file.deletions, 1);
+}
+
+#[test]
 fn file_statuses_map() {
     let mk = |extra: Value| {
         let mut v = serde_json::json!({
