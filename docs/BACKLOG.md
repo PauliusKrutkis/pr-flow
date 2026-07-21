@@ -1075,3 +1075,5 @@ link interception · Universal Links.
       file/page, but the cursor position doesn't move with it, so pressing
       `f` afterward scrolls from the previous file's old cursor position
       instead of the new file.
+- [ ] **Merge button in PR view** — add a way to merge the PR directly from
+      the review screen instead of switching to GitHub/GitLab.
