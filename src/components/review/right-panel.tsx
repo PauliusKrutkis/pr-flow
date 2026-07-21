@@ -11,7 +11,10 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "../../lib/cn.ts";
-import { openOnProviderLabel } from "../../lib/provider.ts";
+import {
+  gitlabProjectBaseUrl,
+  openOnProviderLabel,
+} from "../../lib/provider.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
 import { useAppStore } from "../../store/app-store.ts";
 import type {
@@ -82,6 +85,7 @@ export function RightPanel({
   onOpenPr,
 }: RightPanelProps) {
   const body = pr.body.trim();
+  const baseUrl = gitlabProjectBaseUrl(pr.url);
   const trackerBase = useAppStore((s) =>
     s.activeAccountId ? s.issueTrackers[s.activeAccountId] : undefined
   );
@@ -249,7 +253,7 @@ export function RightPanel({
           <section className="qf-drawer-section">
             <h3 className="qf-drawer-h">Description</h3>
             {body ? (
-              <Markdown>{body}</Markdown>
+              <Markdown baseUrl={baseUrl}>{body}</Markdown>
             ) : (
               <p className="text-faint text-sm">No description.</p>
             )}
@@ -273,6 +277,7 @@ export function RightPanel({
                     <ConversationItem
                       at={entry.comment.createdAt}
                       avatarUrl={entry.comment.userAvatarUrl}
+                      baseUrl={baseUrl}
                       body={entry.comment.body}
                       commentId={entry.comment.id}
                       editing={editingId === entry.comment.id}
@@ -290,6 +295,7 @@ export function RightPanel({
                     <ConversationItem
                       at={entry.review.submittedAt}
                       avatarUrl={entry.review.userAvatarUrl}
+                      baseUrl={baseUrl}
                       body={entry.review.body}
                       key={`r-${entry.review.id}`}
                       state={entry.review.state}
@@ -366,6 +372,7 @@ function ConversationItem({
   user,
   avatarUrl,
   at,
+  baseUrl,
   body,
   state,
   commentId,
@@ -379,6 +386,7 @@ function ConversationItem({
   user: string;
   avatarUrl: string;
   at: string;
+  baseUrl?: string;
   body: string;
   state?: string;
   commentId?: number;
@@ -473,7 +481,7 @@ function ConversationItem({
         ) : (
           !!trimmed && (
             <div className="qf-comment-body">
-              <Markdown>{trimmed}</Markdown>
+              <Markdown baseUrl={baseUrl}>{trimmed}</Markdown>
             </div>
           )
         )}

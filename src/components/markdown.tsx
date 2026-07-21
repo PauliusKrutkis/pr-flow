@@ -161,12 +161,38 @@ function Code({ node, className, children, ...rest }: CodeProps) {
   );
 }
 
+type ImgProps = ComponentPropsWithoutRef<"img"> & { node?: unknown };
+
+/** Root-relative image `src` (GitLab's pasted-upload links) resolved against
+ * `baseUrl`; anything else (absolute URLs, data URIs) passes through. */
+function resolveImgSrc(
+  src: string | undefined,
+  baseUrl: string | undefined
+): string | undefined {
+  if (src && baseUrl && src.startsWith("/")) {
+    return `${baseUrl}${src}`;
+  }
+  return src;
+}
+
+function makeImg(baseUrl: string | undefined) {
+  return function Img({ src, alt, node: _node, ...rest }: ImgProps) {
+    return (
+      // biome-ignore lint/correctness/useImageSize: source markdown carries no dimensions
+      <img alt={alt ?? ""} src={resolveImgSrc(src, baseUrl)} {...rest} />
+    );
+  };
+}
+
 export function Markdown({
   children,
   className,
+  baseUrl,
 }: {
   children: string;
   className?: string;
+  /** Base URL to resolve root-relative image paths against (see `makeImg`). */
+  baseUrl?: string;
 }) {
   if (!children) {
     return null;
@@ -174,7 +200,7 @@ export function Markdown({
   return (
     <div className={cn("md", className)}>
       <ReactMarkdown
-        components={{ a: Anchor, code: Code, pre: Pre }}
+        components={{ a: Anchor, code: Code, img: makeImg(baseUrl), pre: Pre }}
         rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
         remarkPlugins={[remarkGfm, remarkBreaks]}
       >
