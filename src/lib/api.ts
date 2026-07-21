@@ -74,14 +74,19 @@ export const api = {
   getFileBlob: (owner: string, repo: string, path: string, ref: string) =>
     invoke<FileBlob>("get_file_blob", { owner, path, ref, repo }),
 
-  getImageBlob: (url: string) => invoke<FileBlob>("get_image_blob", { url }),
-
   getPullRequestDetail: (owner: string, repo: string, number: number) =>
     invoke<PullRequestDetail>("get_pull_request_detail", {
       number,
       owner,
       repo,
     }),
+
+  getUploadBlob: (
+    owner: string,
+    repo: string,
+    secret: string,
+    filename: string
+  ) => invoke<FileBlob>("get_upload_blob", { filename, owner, repo, secret }),
 
   listReleases: () => invoke<ReleaseInfo[] | null>("list_releases"),
 

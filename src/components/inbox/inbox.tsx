@@ -31,7 +31,6 @@ import { prefetchPullRequest } from "../../hooks/use-pull-request-detail.ts";
 import { useSubscribed } from "../../hooks/use-subscribed.ts";
 import { useHotkeys } from "../../keyboard/use-hotkeys.ts";
 import { cn } from "../../lib/cn.ts";
-import { gitlabProjectBaseUrl } from "../../lib/provider.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
 import { useAppStore } from "../../store/app-store.ts";
 import type { InboxData, InboxTabKey, PullRequest } from "../../types.ts";
@@ -945,7 +944,6 @@ function InboxDetail({
   showArchived: boolean;
 }) {
   const body = pr.body.trim();
-  const baseUrl = gitlabProjectBaseUrl(pr.url);
   const trackerBase = useAppStore((s) =>
     s.activeAccountId ? s.issueTrackers[s.activeAccountId] : undefined
   );
@@ -1007,7 +1005,9 @@ function InboxDetail({
         {body ? (
           <>
             <div className="qi-detail-kicker">Description</div>
-            <Markdown baseUrl={baseUrl}>{body}</Markdown>
+            <Markdown owner={pr.owner} repo={pr.name}>
+              {body}
+            </Markdown>
           </>
         ) : (
           <p className="qi-detail-none">No description provided.</p>

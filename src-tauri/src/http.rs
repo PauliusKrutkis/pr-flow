@@ -182,41 +182,22 @@ pub(crate) async fn get_json(client: &reqwest::Client, url: &str) -> Result<Valu
 
 /// Fetches an already-resolved URL through an authenticated platform client
 /// and returns it as a base64 blob, capped at `MAX_BLOB_BYTES`. Used to load
-/// markdown-embedded images (e.g. GitLab's `/uploads/...` links) that need
-/// the same bearer-token auth as the rest of the API — callers must verify
-/// the URL targets the account's own host before calling this, since the
-/// client attaches its auth header to any destination.
+/// markdown-embedded uploads (e.g. resolved via GitLab's Uploads API) that
+/// need the same auth as the rest of the API.
 pub(crate) async fn fetch_blob(client: &reqwest::Client, url: &str) -> Result<FileBlob, String> {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
-    log(&format!("fetch_blob: GET {url}"));
     let resp = client.get(url).send().await.map_err(net_err)?;
     let status = resp.status();
-    let final_url = resp.url().to_string();
-    let content_type = resp
-        .headers()
-        .get(reqwest::header::CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .to_string();
     if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();
         log(&format!(
-            "fetch_blob: {url} -> {} final_url={final_url} content-type={content_type} ({} bytes body)",
+            "fetch_blob: {url} -> {} ({} bytes body)",
             status.as_u16(),
             text.len()
         ));
         return Err(format!("image fetch error ({}): {}", status.as_u16(), text));
     }
     let bytes = resp.bytes().await.map_err(net_err)?;
-    log(&format!(
-        "fetch_blob: {url} -> {} final_url={final_url} content-type={content_type} ({} bytes)",
-        status.as_u16(),
-        bytes.len()
-    ));
-    if content_type.starts_with("text/html") {
-        let snippet = String::from_utf8_lossy(&bytes[..bytes.len().min(300)]);
-        log(&format!("fetch_blob: unexpected html body: {snippet}"));
-    }
     if bytes.len() > MAX_BLOB_BYTES {
         return Err(format!(
             "Image is too large to preview ({} MB).",

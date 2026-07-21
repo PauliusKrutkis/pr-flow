@@ -154,22 +154,3 @@ fn enc_percent_encodes_path_separators() {
     assert_eq!(enc("group/sub proj"), "group%2Fsub%20proj");
     assert_eq!(enc("a-b_c.d~e"), "a-b_c.d~e");
 }
-
-#[test]
-fn is_own_host_url_allows_the_account_host() {
-    let api = "https://lab.cyberbutis.io/api/v4";
-    assert!(is_own_host_url(
-        api,
-        "https://lab.cyberbutis.io/decodo/applications/frontend/decodo-dashboard/uploads/abc/x.png"
-    ));
-}
-
-#[test]
-fn is_own_host_url_rejects_other_hosts() {
-    let api = "https://lab.cyberbutis.io/api/v4";
-    assert!(!is_own_host_url(api, "https://evil.example.com/collect"));
-    assert!(!is_own_host_url(
-        api,
-        "https://lab.cyberbutis.io.evil.example.com/uploads/x.png"
-    ));
-}

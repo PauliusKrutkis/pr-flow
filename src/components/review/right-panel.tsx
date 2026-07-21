@@ -11,10 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "../../lib/cn.ts";
-import {
-  gitlabProjectBaseUrl,
-  openOnProviderLabel,
-} from "../../lib/provider.ts";
+import { openOnProviderLabel } from "../../lib/provider.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
 import { useAppStore } from "../../store/app-store.ts";
 import type {
@@ -85,7 +82,6 @@ export function RightPanel({
   onOpenPr,
 }: RightPanelProps) {
   const body = pr.body.trim();
-  const baseUrl = gitlabProjectBaseUrl(pr.url);
   const trackerBase = useAppStore((s) =>
     s.activeAccountId ? s.issueTrackers[s.activeAccountId] : undefined
   );
@@ -253,7 +249,9 @@ export function RightPanel({
           <section className="qf-drawer-section">
             <h3 className="qf-drawer-h">Description</h3>
             {body ? (
-              <Markdown baseUrl={baseUrl}>{body}</Markdown>
+              <Markdown owner={pr.owner} repo={pr.name}>
+                {body}
+              </Markdown>
             ) : (
               <p className="text-faint text-sm">No description.</p>
             )}
@@ -277,7 +275,6 @@ export function RightPanel({
                     <ConversationItem
                       at={entry.comment.createdAt}
                       avatarUrl={entry.comment.userAvatarUrl}
-                      baseUrl={baseUrl}
                       body={entry.comment.body}
                       commentId={entry.comment.id}
                       editing={editingId === entry.comment.id}
@@ -289,15 +286,18 @@ export function RightPanel({
                       own={
                         entry.comment.id > 0 && entry.comment.user === ownLogin
                       }
+                      owner={pr.owner}
+                      repo={pr.name}
                       user={entry.comment.user}
                     />
                   ) : (
                     <ConversationItem
                       at={entry.review.submittedAt}
                       avatarUrl={entry.review.userAvatarUrl}
-                      baseUrl={baseUrl}
                       body={entry.review.body}
                       key={`r-${entry.review.id}`}
+                      owner={pr.owner}
+                      repo={pr.name}
                       state={entry.review.state}
                       user={entry.review.user}
                     />
@@ -372,7 +372,6 @@ function ConversationItem({
   user,
   avatarUrl,
   at,
-  baseUrl,
   body,
   state,
   commentId,
@@ -382,11 +381,12 @@ function ConversationItem({
   onCancelEdit,
   onSubmitEdit,
   onDelete,
+  owner,
+  repo,
 }: {
   user: string;
   avatarUrl: string;
   at: string;
-  baseUrl?: string;
   body: string;
   state?: string;
   commentId?: number;
@@ -396,6 +396,8 @@ function ConversationItem({
   onCancelEdit?: () => void;
   onSubmitEdit?: (commentId: number, body: string) => void;
   onDelete?: (a: { commentId: number }) => Promise<void>;
+  owner: string;
+  repo: string;
 }) {
   const chip = state ? (REVIEW_STATES[state] ?? REVIEW_STATES.COMMENTED) : null;
   const trimmed = body.trim();
@@ -481,7 +483,9 @@ function ConversationItem({
         ) : (
           !!trimmed && (
             <div className="qf-comment-body">
-              <Markdown baseUrl={baseUrl}>{trimmed}</Markdown>
+              <Markdown owner={owner} repo={repo}>
+                {trimmed}
+              </Markdown>
             </div>
           )
         )}

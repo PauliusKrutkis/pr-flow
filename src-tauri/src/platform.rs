@@ -184,16 +184,23 @@ impl AnyPlatform {
         dispatch!(self, p => p.file_blob(owner, repo, path, r#ref).await)
     }
 
-    /// Fetches a markdown-embedded image through the authenticated client.
-    /// GitLab embeds pasted images as relative `/uploads/...` links that need
-    /// auth to resolve; GitHub always emits absolute, publicly-loadable URLs,
-    /// so there's nothing for this platform to do.
-    pub async fn image_blob(&self, url: &str) -> Result<FileBlob, String> {
+    /// Fetches a markdown-embedded upload (pasted image or video) through
+    /// GitLab's Uploads API. GitLab embeds these as relative `/uploads/...`
+    /// links whose plain web route only accepts a browser session; GitHub
+    /// always emits absolute, publicly-loadable URLs, so there's nothing
+    /// for this platform to do.
+    pub async fn upload_blob(
+        &self,
+        owner: &str,
+        repo: &str,
+        secret: &str,
+        filename: &str,
+    ) -> Result<FileBlob, String> {
         match self {
             AnyPlatform::GitHub(_) => {
-                Err("image_blob is not supported for GitHub".to_string())
+                Err("upload_blob is not supported for GitHub".to_string())
             }
-            AnyPlatform::GitLab(p) => p.image_blob(url).await,
+            AnyPlatform::GitLab(p) => p.upload_blob(owner, repo, secret, filename).await,
         }
     }
 }

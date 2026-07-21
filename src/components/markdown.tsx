@@ -16,6 +16,7 @@ import remarkGfm from "remark-gfm";
 import { api } from "../lib/api.ts";
 import { cn } from "../lib/cn.ts";
 import { imageMimeFor } from "../lib/mime.ts";
+import { parseGitlabUploadPath } from "../lib/provider.ts";
 import { Spinner } from "./ui/spinner.tsx";
 
 /**
@@ -168,20 +169,6 @@ function Code({ node, className, children, ...rest }: CodeProps) {
 type ImgProps = ComponentPropsWithoutRef<"img"> & { node?: unknown };
 type RawImgProps = ComponentPropsWithoutRef<"img">;
 
-/** Root-relative image `src` (GitLab's pasted-upload links) resolved against
- * `baseUrl`, or undefined for anything that isn't (absolute URLs, data
- * URIs). A resolved src points at the account's own GitLab host and needs
- * the same bearer-token auth as the rest of the API — see `AuthenticatedImg`. */
-function resolveAuthedImgSrc(
-  src: string | undefined,
-  baseUrl: string | undefined
-): string | undefined {
-  if (src && baseUrl && src.startsWith("/") && !src.startsWith("//")) {
-    return `${baseUrl}${src}`;
-  }
-  return undefined;
-}
-
 function RawImg({ alt, ...rest }: RawImgProps) {
   return (
     // biome-ignore lint/correctness/useImageSize: source markdown carries no dimensions
@@ -189,12 +176,23 @@ function RawImg({ alt, ...rest }: RawImgProps) {
   );
 }
 
-/** Fetches a GitLab-hosted image through the authenticated backend — the
+/** Fetches a GitLab upload through the authenticated Uploads API — the
  * bearer token never reaches the webview — and renders it as a data URL. */
-function AuthenticatedImg({ src, ...rest }: RawImgProps & { src: string }) {
+function AuthenticatedImg({
+  owner,
+  repo,
+  secret,
+  filename,
+  ...rest
+}: RawImgProps & {
+  owner: string;
+  repo: string;
+  secret: string;
+  filename: string;
+}) {
   const { data, error, isError, isLoading } = useQuery({
-    queryFn: () => api.getImageBlob(src),
-    queryKey: ["imageBlob", src],
+    queryFn: () => api.getUploadBlob(owner, repo, secret, filename),
+    queryKey: ["uploadBlob", owner, repo, secret, filename],
     retry: 1,
     staleTime: Number.POSITIVE_INFINITY,
   });
@@ -202,23 +200,29 @@ function AuthenticatedImg({ src, ...rest }: RawImgProps & { src: string }) {
     return <Spinner label="Loading image…" />;
   }
   if (isError || !data) {
-    console.error("[markdown] image blob fetch failed", src, error);
     return (
       <span className="text-faint text-sm">
         Couldn't load this image. {String(error)}
       </span>
     );
   }
-  const mime = imageMimeFor(src) ?? "application/octet-stream";
+  const mime = imageMimeFor(filename) ?? "application/octet-stream";
   return <RawImg src={`data:${mime};base64,${data.base64}`} {...rest} />;
 }
 
-function makeImg(baseUrl: string | undefined) {
+function makeImg(owner: string | undefined, repo: string | undefined) {
   return function Img({ src, node: _node, ...rest }: ImgProps) {
-    const authedSrc = resolveAuthedImgSrc(src, baseUrl);
-    console.debug("[markdown] img src", { authedSrc, baseUrl, src });
-    if (authedSrc) {
-      return <AuthenticatedImg src={authedSrc} {...rest} />;
+    const upload = parseGitlabUploadPath(src);
+    if (upload && owner && repo) {
+      return (
+        <AuthenticatedImg
+          filename={upload.filename}
+          owner={owner}
+          repo={repo}
+          secret={upload.secret}
+          {...rest}
+        />
+      );
     }
     return <RawImg src={src} {...rest} />;
   };
@@ -227,13 +231,15 @@ function makeImg(baseUrl: string | undefined) {
 export function Markdown({
   children,
   className,
-  baseUrl,
+  owner,
+  repo,
 }: {
   children: string;
   className?: string;
-  baseUrl?: string;
+  owner?: string;
+  repo?: string;
 }) {
-  const Img = makeImg(baseUrl);
+  const Img = makeImg(owner, repo);
   if (!children) {
     return null;
   }

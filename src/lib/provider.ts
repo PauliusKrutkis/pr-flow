@@ -8,14 +8,17 @@ export function openOnProviderLabel(url: string): string {
   return isGitlabPrUrl(url) ? "Open on GitLab" : "Open on GitHub";
 }
 
+const UPLOAD_PATH_RE = /^\/uploads\/([^/]+)\/(.+)$/;
+
 /**
- * GitLab embeds pasted-image links as paths relative to the project root
- * (e.g. `/uploads/<hash>/name.png`), so rendering them verbatim resolves
- * against the app's own origin instead of the GitLab instance. Given the
- * MR's web URL, returns the project's base URL to resolve those paths
- * against, or undefined for GitHub (whose upload URLs are already absolute).
+ * GitLab's pasted-upload links are project-relative, e.g.
+ * `/uploads/<secret>/<filename>`. The plain web route behind that path is
+ * session-cookie-gated (no token auth), so a matching src is resolved
+ * through the Uploads API instead of rendered as a bare `<img src>`.
  */
-export function gitlabProjectBaseUrl(url: string): string | undefined {
-  const i = url.indexOf(GITLAB_MR_MARKER);
-  return i === -1 ? undefined : url.slice(0, i);
+export function parseGitlabUploadPath(
+  src: string | undefined
+): { secret: string; filename: string } | undefined {
+  const match = src ? UPLOAD_PATH_RE.exec(src) : null;
+  return match ? { filename: match[2], secret: match[1] } : undefined;
 }

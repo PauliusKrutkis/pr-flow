@@ -60,19 +60,6 @@ fn project(owner: &str, name: &str) -> String {
     enc(&format!("{owner}/{name}"))
 }
 
-/// Whether `url` targets this account's own GitLab host — pure so the
-/// `image_blob` allowlist check can be unit-tested without a network.
-/// Compares parsed scheme/host/port rather than a string prefix, since a
-/// prefix check accepts attacker hosts like `lab.example.io.evil.com`.
-fn is_own_host_url(api: &str, url: &str) -> bool {
-    let (Ok(api_url), Ok(target)) = (url::Url::parse(api), url::Url::parse(url)) else {
-        return false;
-    };
-    target.scheme() == api_url.scheme()
-        && target.host_str() == api_url.host_str()
-        && target.port_or_known_default() == api_url.port_or_known_default()
-}
-
 /// GitLab MR states: opened | closed | locked | merged → our open/closed.
 fn map_state(state: &str) -> (String, bool) {
     match state {
@@ -874,16 +861,26 @@ impl GitLabPlatform {
         })
     }
 
-    /// Fetches a markdown-embedded image (e.g. a resolved `/uploads/...`
-    /// link) through the authenticated client. Rejects anything off this
-    /// account's own host — the client's bearer token must never be sent
-    /// to a URL an MR/issue body could otherwise smuggle in.
-    pub async fn image_blob(&self, url: &str) -> Result<FileBlob, String> {
-        if !is_own_host_url(&self.api, url) {
-            log(&format!("image_blob: rejected untrusted host for {url}"));
-            return Err("refusing to fetch an image from an untrusted host".to_string());
-        }
-        crate::http::fetch_blob(&self.client, url).await
+    /// Fetches a markdown-embedded upload (a pasted image or video) through
+    /// the Uploads API. GitLab's plain `/uploads/...` web route only accepts
+    /// a browser session — it redirects an unauthenticated (or token-only)
+    /// request to the sign-in page — so this hits the API route instead,
+    /// which authenticates the same way as the rest of the client.
+    pub async fn upload_blob(
+        &self,
+        owner: &str,
+        repo: &str,
+        secret: &str,
+        filename: &str,
+    ) -> Result<FileBlob, String> {
+        let url = format!(
+            "{}/projects/{}/uploads/{}/{}",
+            self.api,
+            project(owner, repo),
+            enc(secret),
+            enc(filename)
+        );
+        crate::http::fetch_blob(&self.client, &url).await
     }
 }
 
