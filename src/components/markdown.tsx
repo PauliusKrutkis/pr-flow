@@ -4,6 +4,7 @@ import {
   type ComponentPropsWithoutRef,
   type MouseEvent,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -169,7 +170,7 @@ function resolveImgSrc(
   src: string | undefined,
   baseUrl: string | undefined
 ): string | undefined {
-  if (src && baseUrl && src.startsWith("/")) {
+  if (src && baseUrl && src.startsWith("/") && !src.startsWith("//")) {
     return `${baseUrl}${src}`;
   }
   return src;
@@ -191,16 +192,16 @@ export function Markdown({
 }: {
   children: string;
   className?: string;
-  /** Base URL to resolve root-relative image paths against (see `makeImg`). */
   baseUrl?: string;
 }) {
+  const Img = useMemo(() => makeImg(baseUrl), [baseUrl]);
   if (!children) {
     return null;
   }
   return (
     <div className={cn("md", className)}>
       <ReactMarkdown
-        components={{ a: Anchor, code: Code, img: makeImg(baseUrl), pre: Pre }}
+        components={{ a: Anchor, code: Code, img: Img, pre: Pre }}
         rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
         remarkPlugins={[remarkGfm, remarkBreaks]}
       >
