@@ -16,7 +16,10 @@ import remarkGfm from "remark-gfm";
 import { api } from "../lib/api.ts";
 import { cn } from "../lib/cn.ts";
 import { imageMimeFor } from "../lib/mime.ts";
-import { parseGitlabUploadPath } from "../lib/provider.ts";
+import {
+  parseGitlabUploadPath,
+  stripImageAttributeLists,
+} from "../lib/provider.ts";
 import { Spinner } from "./ui/spinner.tsx";
 
 /**
@@ -250,7 +253,7 @@ export function Markdown({
         rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
         remarkPlugins={[remarkGfm, remarkBreaks]}
       >
-        {children}
+        {stripImageAttributeLists(children)}
       </ReactMarkdown>
     </div>
   );
