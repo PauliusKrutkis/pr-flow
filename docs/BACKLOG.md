@@ -96,11 +96,11 @@ Or resume where you left off. **No Slack link handling required.**
 
 **Must have before DM'ing five developer friends:**
 
-- [ ] Perf budget met
+- [x] Perf budget met
 - [x] Keyboard workflow + stable review
 - [x] **Resume where you left off**
 - [x] **`mod+k` jump to any PR**
-- [ ] **Auto-updates**
+- [x] **Auto-updates**
 - [x] Inbox zero-state
 
 **Can wait until users complain:**
@@ -130,11 +130,15 @@ GitHub links opened this"*, you've saved weeks of integration work.
       e2e budgets (repaint counts + median keystroke / warm-open wall clock /
       stall frames), run on Chromium AND Playwright WebKit (the app ships on
       WebKitGTK; Chromium-only budgets hid engine-shaped lag).
-- [ ] 🟡 **Perf e2e against the production build** — today's budgets run on the
+- [x] 🟡 **Perf e2e against the production build** — today's budgets run on the
       vite dev server, where React's dev runtime + GC noise inflate numbers
       ~2×. Add a Playwright project that runs the perf specs against
       `vite build` + `vite preview` so budgets reflect what users feel, then
       tighten them (~half the current bounds).
+      *Shipped: `chromium-perf-prod` project (CI-gated, `E2E_PROD_PERF` locally)
+      builds + previews the app and reruns `find/open/scroll-perf` specs with
+      halved budgets; all pass with real headroom (open avg 42ms vs 150ms,
+      scroll p95 17ms vs 25ms).*
 
 ### Performance architecture — decisions queued (2026-07-05)
 
@@ -181,14 +185,15 @@ No inbox. Just continue.
 - [x] 🔴 **Resume where you left off** — default app open.
 - [x] 🟡 Auto-advance to next review-requested PR after submit.
 - [x] 🟡 **`Esc` → inbox** — exception, not home.
-- [ ] 🟡 **Inbox forgets last tab across app restarts** — close the app while
-      on a PR, reopen, then `Esc`: lands on the "Requested" inbox tab even
-      when it's empty (switching to "Created" shows reviews, but "Requested"
-      state then disappears). Should restore whichever tab the user was last
-      on instead of always defaulting to "Requested".
-- [ ] 🟢 **Land on first non-empty inbox tab** — on cold start, if "Requested"
-      is empty, land on the first tab that actually has content instead of
-      always defaulting to "Requested".
+- [x] 🟡 **Inbox forgets last tab across app restarts** — `inboxTab` was never
+      persisted (hardcoded default on every store init); `Esc` already left
+      it alone in-memory, so only a full restart lost it. Fixed by mirroring
+      the existing `loadLastRoute`/`saveLastRoute` pattern for `inboxTab`
+      (PR #72).
+- [x] 🟢 **Land on first non-empty inbox tab** — on cold start, if the active
+      tab is empty, a one-shot effect jumps to the first tab with content;
+      gated on the query's real loaded state so it fires once per session and
+      never fights a deliberate visit to an empty tab later (PR #72).
 
 ---
 
@@ -575,8 +580,10 @@ worth it after validation.
 
 ### 11b. Auto-updates
 
-- [~] 🔴 Before external users — `tauri-plugin-updater` + CI releases.
-      *Plugin + in-app prompt scaffolded; real signing key, feed & CI signing remain (see README "Auto-updates").*
+- [x] 🔴 Before external users — `tauri-plugin-updater` + CI releases.
+      *Shipped: signed feed live since v0.2.0/v0.3.0 releases (minisign, pubkey
+      baked into `tauri.conf.json`, `latest.json` + `.sig` on every platform
+      asset). See README "Auto-updates".*
 - [ ] 🟡 **Don't offer an install CTA on `.deb`/`.rpm`** — Tauri's updater can
       only self-update the Linux AppImage; it replaces a bundled `.tar.gz`, and
       there's no in-place update path for system packages. On `.deb`/`.rpm`
@@ -1057,3 +1064,27 @@ link interception · Universal Links.
       boundaries) — same spirit as the pre-existing heuristic. Full-file
       expansion's synthesized context rows aren't covered (same limitation
       `guideByRow`/`intraByRow` already have for those rows).
+
+## Inbox (2026-07-21)
+
+- [ ] **Info comment box loses focus, can't type** — the info/comment textbox
+      intermittently becomes unfocusable (typing does nothing); seems random.
+      On Linux, switching workspaces and back has been observed to clear it.
+- [ ] **Pipelines sometimes not visible after GitLab MR update** — CI/pipeline
+      status occasionally fails to show up once a GitLab MR receives a new
+      update.
+- [ ] **Clicking a not-fully-visible next occurrence doesn't scroll to it** —
+      unlike keyboard occurrence stepping, clicking directly on the next
+      occurrence when it's only partially in view fails to scroll it into
+      frame.
+- [ ] **`f`/`g` scroll offset and line-clipping** — scrolling via `f`/`g`
+      should leave ~4 lines of context above the fold instead of landing
+      exactly at the bottom edge of the screen; also the scroll doesn't fully
+      capture the bottom line (it lands mid-line, cut in half) — it should
+      scroll enough that the destination line is always fully visible.
+- [ ] **Cursor doesn't follow after `e`** — pressing `e` advances to the next
+      file/page, but the cursor position doesn't move with it, so pressing
+      `f` afterward scrolls from the previous file's old cursor position
+      instead of the new file.
+- [ ] **Merge button in PR view** — add a way to merge the PR directly from
+      the review screen instead of switching to GitHub/GitLab.

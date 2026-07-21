@@ -885,6 +885,28 @@ impl GitLabPlatform {
             size: bytes.len() as u64,
         })
     }
+
+    /// Fetches a markdown-embedded upload (a pasted image or video) through
+    /// the Uploads API. GitLab's plain `/uploads/...` web route only accepts
+    /// a browser session — it redirects an unauthenticated (or token-only)
+    /// request to the sign-in page — so this hits the API route instead,
+    /// which authenticates the same way as the rest of the client.
+    pub async fn upload_blob(
+        &self,
+        owner: &str,
+        repo: &str,
+        secret: &str,
+        filename: &str,
+    ) -> Result<FileBlob, String> {
+        let url = format!(
+            "{}/projects/{}/uploads/{}/{}",
+            self.api,
+            project(owner, repo),
+            enc(secret),
+            enc(filename)
+        );
+        crate::http::fetch_blob(&self.client, &url).await
+    }
 }
 
 #[cfg(test)]
