@@ -188,10 +188,16 @@ pub(crate) async fn get_json(client: &reqwest::Client, url: &str) -> Result<Valu
 /// client attaches its auth header to any destination.
 pub(crate) async fn fetch_blob(client: &reqwest::Client, url: &str) -> Result<FileBlob, String> {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
+    log(&format!("fetch_blob: GET {url}"));
     let resp = client.get(url).send().await.map_err(net_err)?;
     let status = resp.status();
     if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();
+        log(&format!(
+            "fetch_blob: {url} -> {} ({} bytes body)",
+            status.as_u16(),
+            text.len()
+        ));
         return Err(format!("image fetch error ({}): {}", status.as_u16(), text));
     }
     let bytes = resp.bytes().await.map_err(net_err)?;
@@ -201,6 +207,11 @@ pub(crate) async fn fetch_blob(client: &reqwest::Client, url: &str) -> Result<Fi
             bytes.len() / (1024 * 1024)
         ));
     }
+    log(&format!(
+        "fetch_blob: {url} -> {} ({} bytes)",
+        status.as_u16(),
+        bytes.len()
+    ));
     Ok(FileBlob {
         base64: STANDARD.encode(&bytes),
         size: bytes.len() as u64,

@@ -192,7 +192,7 @@ function RawImg({ alt, ...rest }: RawImgProps) {
 /** Fetches a GitLab-hosted image through the authenticated backend — the
  * bearer token never reaches the webview — and renders it as a data URL. */
 function AuthenticatedImg({ src, ...rest }: RawImgProps & { src: string }) {
-  const { data, isError, isLoading } = useQuery({
+  const { data, error, isError, isLoading } = useQuery({
     queryFn: () => api.getImageBlob(src),
     queryKey: ["imageBlob", src],
     retry: 1,
@@ -202,8 +202,11 @@ function AuthenticatedImg({ src, ...rest }: RawImgProps & { src: string }) {
     return <Spinner label="Loading image…" />;
   }
   if (isError || !data) {
+    console.error("[markdown] image blob fetch failed", src, error);
     return (
-      <span className="text-faint text-sm">Couldn't load this image.</span>
+      <span className="text-faint text-sm">
+        Couldn't load this image. {String(error)}
+      </span>
     );
   }
   const mime = imageMimeFor(src) ?? "application/octet-stream";
@@ -213,6 +216,7 @@ function AuthenticatedImg({ src, ...rest }: RawImgProps & { src: string }) {
 function makeImg(baseUrl: string | undefined) {
   return function Img({ src, node: _node, ...rest }: ImgProps) {
     const authedSrc = resolveAuthedImgSrc(src, baseUrl);
+    console.debug("[markdown] img src", { authedSrc, baseUrl, src });
     if (authedSrc) {
       return <AuthenticatedImg src={authedSrc} {...rest} />;
     }

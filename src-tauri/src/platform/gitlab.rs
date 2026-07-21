@@ -880,6 +880,7 @@ impl GitLabPlatform {
     /// to a URL an MR/issue body could otherwise smuggle in.
     pub async fn image_blob(&self, url: &str) -> Result<FileBlob, String> {
         if !is_own_host_url(&self.api, url) {
+            log(&format!("image_blob: rejected untrusted host for {url}"));
             return Err("refusing to fetch an image from an untrusted host".to_string());
         }
         crate::http::fetch_blob(&self.client, url).await
