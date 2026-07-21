@@ -10,7 +10,21 @@ const IMAGE_MIME: Record<string, string> = {
   webp: "image/webp",
 };
 
+const VIDEO_MIME: Record<string, string> = {
+  mov: "video/quicktime",
+  mp4: "video/mp4",
+  ogv: "video/ogg",
+  webm: "video/webm",
+};
+
+function extOf(path: string): string {
+  return path.toLowerCase().split(".").pop() ?? "";
+}
+
 export function imageMimeFor(path: string): string | null {
-  const ext = path.toLowerCase().split(".").pop() ?? "";
-  return IMAGE_MIME[ext] ?? null;
+  return IMAGE_MIME[extOf(path)] ?? null;
+}
+
+export function videoMimeFor(path: string): string | null {
+  return VIDEO_MIME[extOf(path)] ?? null;
 }

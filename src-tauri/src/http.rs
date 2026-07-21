@@ -200,7 +200,7 @@ pub(crate) async fn fetch_blob(client: &reqwest::Client, url: &str) -> Result<Fi
     let bytes = resp.bytes().await.map_err(net_err)?;
     if bytes.len() > MAX_BLOB_BYTES {
         return Err(format!(
-            "Image is too large to preview ({} MB).",
+            "File is too large to preview ({} MB).",
             bytes.len() / (1024 * 1024)
         ));
     }

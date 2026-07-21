@@ -15,7 +15,7 @@ import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import { api } from "../lib/api.ts";
 import { cn } from "../lib/cn.ts";
-import { imageMimeFor } from "../lib/mime.ts";
+import { imageMimeFor, videoMimeFor } from "../lib/mime.ts";
 import {
   parseGitlabUploadPath,
   stripImageAttributeLists,
@@ -179,13 +179,17 @@ function RawImg({ alt, ...rest }: RawImgProps) {
   );
 }
 
-/** Fetches a GitLab upload through the authenticated Uploads API — the
- * bearer token never reaches the webview — and renders it as a data URL. */
-function AuthenticatedImg({
+/** Fetches a GitLab upload (a pasted image or, e.g., a screen-recording
+ * video) through the authenticated Uploads API — the bearer token never
+ * reaches the webview — and renders it as a data URL, picking `<video>`
+ * over `<img>` when the filename's extension is a video format. */
+function AuthenticatedUpload({
   owner,
   repo,
   secret,
   filename,
+  alt,
+  title,
   ...rest
 }: RawImgProps & {
   owner: string;
@@ -200,17 +204,37 @@ function AuthenticatedImg({
     staleTime: Number.POSITIVE_INFINITY,
   });
   if (isLoading) {
-    return <Spinner label="Loading image…" />;
+    return <Spinner label="Loading…" />;
   }
   if (isError || !data) {
     return (
       <span className="text-faint text-sm">
-        Couldn't load this image. {String(error)}
+        Couldn't load {filename}. {String(error)}
       </span>
     );
   }
+  const videoMime = videoMimeFor(filename);
+  if (videoMime) {
+    return (
+      <video
+        controls
+        preload="metadata"
+        src={`data:${videoMime};base64,${data.base64}`}
+        title={title}
+      >
+        <track kind="captions" />
+      </video>
+    );
+  }
   const mime = imageMimeFor(filename) ?? "application/octet-stream";
-  return <RawImg src={`data:${mime};base64,${data.base64}`} {...rest} />;
+  return (
+    <RawImg
+      alt={alt}
+      src={`data:${mime};base64,${data.base64}`}
+      title={title}
+      {...rest}
+    />
+  );
 }
 
 function makeImg(owner: string | undefined, repo: string | undefined) {
@@ -218,7 +242,7 @@ function makeImg(owner: string | undefined, repo: string | undefined) {
     const upload = parseGitlabUploadPath(src);
     if (upload && owner && repo) {
       return (
-        <AuthenticatedImg
+        <AuthenticatedUpload
           filename={upload.filename}
           owner={owner}
           repo={repo}
