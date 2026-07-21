@@ -191,27 +191,38 @@ pub(crate) async fn fetch_blob(client: &reqwest::Client, url: &str) -> Result<Fi
     log(&format!("fetch_blob: GET {url}"));
     let resp = client.get(url).send().await.map_err(net_err)?;
     let status = resp.status();
+    let final_url = resp.url().to_string();
+    let content_type = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
     if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();
         log(&format!(
-            "fetch_blob: {url} -> {} ({} bytes body)",
+            "fetch_blob: {url} -> {} final_url={final_url} content-type={content_type} ({} bytes body)",
             status.as_u16(),
             text.len()
         ));
         return Err(format!("image fetch error ({}): {}", status.as_u16(), text));
     }
     let bytes = resp.bytes().await.map_err(net_err)?;
+    log(&format!(
+        "fetch_blob: {url} -> {} final_url={final_url} content-type={content_type} ({} bytes)",
+        status.as_u16(),
+        bytes.len()
+    ));
+    if content_type.starts_with("text/html") {
+        let snippet = String::from_utf8_lossy(&bytes[..bytes.len().min(300)]);
+        log(&format!("fetch_blob: unexpected html body: {snippet}"));
+    }
     if bytes.len() > MAX_BLOB_BYTES {
         return Err(format!(
             "Image is too large to preview ({} MB).",
             bytes.len() / (1024 * 1024)
         ));
     }
-    log(&format!(
-        "fetch_blob: {url} -> {} ({} bytes)",
-        status.as_u16(),
-        bytes.len()
-    ));
     Ok(FileBlob {
         base64: STANDARD.encode(&bytes),
         size: bytes.len() as u64,
