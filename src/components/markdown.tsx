@@ -3,6 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { Check, Copy } from "lucide-react";
 import {
   type ComponentPropsWithoutRef,
+  type CSSProperties,
   type MouseEvent,
   useEffect,
   useRef,
@@ -179,6 +180,18 @@ function RawImg({ alt, ...rest }: RawImgProps) {
   );
 }
 
+/** The subset of an `<img>`/`<video>` node's extra attributes that apply to
+ * either element — deliberately narrower than `ComponentPropsWithoutRef`,
+ * whose per-element event-handler types (e.g. `onCopy`) aren't shared
+ * between `HTMLImageElement` and `HTMLVideoElement`. */
+interface CommonMediaProps {
+  className?: string;
+  id?: string;
+  style?: CSSProperties;
+  width?: number | string;
+  height?: number | string;
+}
+
 /** Fetches a GitLab upload (a pasted image or, e.g., a screen-recording
  * video) through the authenticated Uploads API — the bearer token never
  * reaches the webview — and renders it as a data URL, picking `<video>`
@@ -190,12 +203,18 @@ function AuthenticatedUpload({
   filename,
   alt,
   title,
-  ...rest
-}: RawImgProps & {
+  className,
+  id,
+  style,
+  width,
+  height,
+}: CommonMediaProps & {
   owner: string;
   repo: string;
   secret: string;
   filename: string;
+  alt?: string;
+  title?: string;
 }) {
   const { data, error, isError, isLoading } = useQuery({
     queryFn: () => api.getUploadBlob(owner, repo, secret, filename),
@@ -213,6 +232,7 @@ function AuthenticatedUpload({
       </span>
     );
   }
+  const common: CommonMediaProps = { className, height, id, style, width };
   const videoMime = videoMimeFor(filename);
   if (videoMime) {
     return (
@@ -221,6 +241,7 @@ function AuthenticatedUpload({
         preload="metadata"
         src={`data:${videoMime};base64,${data.base64}`}
         title={title}
+        {...common}
       >
         <track kind="captions" />
       </video>
@@ -232,7 +253,7 @@ function AuthenticatedUpload({
       alt={alt}
       src={`data:${mime};base64,${data.base64}`}
       title={title}
-      {...rest}
+      {...common}
     />
   );
 }

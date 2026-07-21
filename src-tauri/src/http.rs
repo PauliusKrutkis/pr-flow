@@ -195,7 +195,7 @@ pub(crate) async fn fetch_blob(client: &reqwest::Client, url: &str) -> Result<Fi
             status.as_u16(),
             text.len()
         ));
-        return Err(format!("image fetch error ({}): {}", status.as_u16(), text));
+        return Err(format!("file fetch error ({}): {}", status.as_u16(), text));
     }
     let bytes = resp.bytes().await.map_err(net_err)?;
     if bytes.len() > MAX_BLOB_BYTES {
