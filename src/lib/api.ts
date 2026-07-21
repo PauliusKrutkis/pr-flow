@@ -81,6 +81,13 @@ export const api = {
       repo,
     }),
 
+  getUploadBlob: (
+    owner: string,
+    repo: string,
+    secret: string,
+    filename: string
+  ) => invoke<FileBlob>("get_upload_blob", { filename, owner, repo, secret }),
+
   listReleases: () => invoke<ReleaseInfo[] | null>("list_releases"),
 
   getViewedMap: () => invoke<unknown>("get_viewed_map"),

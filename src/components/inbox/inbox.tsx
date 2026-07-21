@@ -1005,7 +1005,9 @@ function InboxDetail({
         {body ? (
           <>
             <div className="qi-detail-kicker">Description</div>
-            <Markdown>{body}</Markdown>
+            <Markdown owner={pr.owner} repo={pr.name}>
+              {body}
+            </Markdown>
           </>
         ) : (
           <p className="qi-detail-none">No description provided.</p>

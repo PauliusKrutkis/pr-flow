@@ -7,6 +7,8 @@ use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::model::{FileBlob, MAX_BLOB_BYTES};
+
 pub(crate) fn fstr(v: &Value, key: &str) -> String {
     v.get(key)
         .and_then(Value::as_str)
@@ -176,6 +178,36 @@ pub(crate) async fn get_json(client: &reqwest::Client, url: &str) -> Result<Valu
             Ok(body)
         }
     }
+}
+
+/// Fetches an already-resolved URL through an authenticated platform client
+/// and returns it as a base64 blob, capped at `MAX_BLOB_BYTES`. Used to load
+/// markdown-embedded uploads (e.g. resolved via GitLab's Uploads API) that
+/// need the same auth as the rest of the API.
+pub(crate) async fn fetch_blob(client: &reqwest::Client, url: &str) -> Result<FileBlob, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    let resp = client.get(url).send().await.map_err(net_err)?;
+    let status = resp.status();
+    if !status.is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        log(&format!(
+            "fetch_blob: {url} -> {} ({} bytes body)",
+            status.as_u16(),
+            text.len()
+        ));
+        return Err(format!("file fetch error ({}): {}", status.as_u16(), text));
+    }
+    let bytes = resp.bytes().await.map_err(net_err)?;
+    if bytes.len() > MAX_BLOB_BYTES {
+        return Err(format!(
+            "File is too large to preview ({} MB).",
+            bytes.len() / (1024 * 1024)
+        ));
+    }
+    Ok(FileBlob {
+        base64: STANDARD.encode(&bytes),
+        size: bytes.len() as u64,
+    })
 }
 
 /// Fetches every page of a list endpoint (100/page, capped at 20 pages).
