@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Check, Copy } from "lucide-react";
 import {
@@ -12,7 +13,10 @@ import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
+import { api } from "../lib/api.ts";
 import { cn } from "../lib/cn.ts";
+import { imageMimeFor } from "../lib/mime.ts";
+import { Spinner } from "./ui/spinner.tsx";
 
 /**
  * GitHub PR/issue bodies routinely contain raw HTML (Dependabot's <details>
@@ -162,25 +166,57 @@ function Code({ node, className, children, ...rest }: CodeProps) {
 }
 
 type ImgProps = ComponentPropsWithoutRef<"img"> & { node?: unknown };
+type RawImgProps = ComponentPropsWithoutRef<"img">;
 
 /** Root-relative image `src` (GitLab's pasted-upload links) resolved against
- * `baseUrl`; anything else (absolute URLs, data URIs) passes through. */
-function resolveImgSrc(
+ * `baseUrl`, or undefined for anything that isn't (absolute URLs, data
+ * URIs). A resolved src points at the account's own GitLab host and needs
+ * the same bearer-token auth as the rest of the API — see `AuthenticatedImg`. */
+function resolveAuthedImgSrc(
   src: string | undefined,
   baseUrl: string | undefined
 ): string | undefined {
   if (src && baseUrl && src.startsWith("/") && !src.startsWith("//")) {
     return `${baseUrl}${src}`;
   }
-  return src;
+  return undefined;
+}
+
+function RawImg({ alt, ...rest }: RawImgProps) {
+  return (
+    // biome-ignore lint/correctness/useImageSize: source markdown carries no dimensions
+    <img alt={alt ?? ""} {...rest} />
+  );
+}
+
+/** Fetches a GitLab-hosted image through the authenticated backend — the
+ * bearer token never reaches the webview — and renders it as a data URL. */
+function AuthenticatedImg({ src, ...rest }: RawImgProps & { src: string }) {
+  const { data, isError, isLoading } = useQuery({
+    queryFn: () => api.getImageBlob(src),
+    queryKey: ["imageBlob", src],
+    retry: 1,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  if (isLoading) {
+    return <Spinner label="Loading image…" />;
+  }
+  if (isError || !data) {
+    return (
+      <span className="text-faint text-sm">Couldn't load this image.</span>
+    );
+  }
+  const mime = imageMimeFor(src) ?? "application/octet-stream";
+  return <RawImg src={`data:${mime};base64,${data.base64}`} {...rest} />;
 }
 
 function makeImg(baseUrl: string | undefined) {
-  return function Img({ src, alt, node: _node, ...rest }: ImgProps) {
-    return (
-      // biome-ignore lint/correctness/useImageSize: source markdown carries no dimensions
-      <img alt={alt ?? ""} src={resolveImgSrc(src, baseUrl)} {...rest} />
-    );
+  return function Img({ src, node: _node, ...rest }: ImgProps) {
+    const authedSrc = resolveAuthedImgSrc(src, baseUrl);
+    if (authedSrc) {
+      return <AuthenticatedImg src={authedSrc} {...rest} />;
+    }
+    return <RawImg src={src} {...rest} />;
   };
 }
 

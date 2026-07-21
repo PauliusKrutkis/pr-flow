@@ -325,6 +325,12 @@ pub async fn get_file_blob(
 }
 
 #[tauri::command]
+pub async fn get_image_blob(app: AppHandle, url: String) -> Result<FileBlob, String> {
+    let (_, platform) = accounts::active_platform(&app).await?;
+    platform.image_blob(&url).await
+}
+
+#[tauri::command]
 pub async fn get_viewed_map(app: AppHandle) -> Result<Value, String> {
     let account = accounts::active_account(&app).await?;
     if let Some(v) = storage::read_json::<Value>(&app, &viewed_name(&account.id))? {
