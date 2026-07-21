@@ -1088,3 +1088,11 @@ link interception · Universal Links.
       instead of the new file.
 - [ ] **Merge button in PR view** — add a way to merge the PR directly from
       the review screen instead of switching to GitHub/GitLab.
+- [ ] **Multi-line comment highlighting still broken in full-file view** —
+      the flowing block-comment fix above (`markBlockCommentRows`) only
+      covers `DiffRow`s built from the patch; full-file expansion's
+      synthesized context rows (`expand-file.ts`) aren't run through that
+      pass, so a block comment spanning into head-blob context still greys
+      out only its first line there. Known limitation called out when the
+      original fix shipped — needs `markBlockCommentRows` (or equivalent)
+      wired into the full-file row synthesis path too.
