@@ -1053,3 +1053,25 @@ link interception · Universal Links.
       boundaries) — same spirit as the pre-existing heuristic. Full-file
       expansion's synthesized context rows aren't covered (same limitation
       `guideByRow`/`intraByRow` already have for those rows).
+
+## Inbox (2026-07-21)
+
+- [ ] **Info comment box loses focus, can't type** — the info/comment textbox
+      intermittently becomes unfocusable (typing does nothing); seems random.
+      On Linux, switching workspaces and back has been observed to clear it.
+- [ ] **Pipelines sometimes not visible after GitLab MR update** — CI/pipeline
+      status occasionally fails to show up once a GitLab MR receives a new
+      update.
+- [ ] **Clicking a not-fully-visible next occurrence doesn't scroll to it** —
+      unlike keyboard occurrence stepping, clicking directly on the next
+      occurrence when it's only partially in view fails to scroll it into
+      frame.
+- [ ] **`f`/`g` scroll offset and line-clipping** — scrolling via `f`/`g`
+      should leave ~4 lines of context above the fold instead of landing
+      exactly at the bottom edge of the screen; also the scroll doesn't fully
+      capture the bottom line (it lands mid-line, cut in half) — it should
+      scroll enough that the destination line is always fully visible.
+- [ ] **Cursor doesn't follow after `e`** — pressing `e` advances to the next
+      file/page, but the cursor position doesn't move with it, so pressing
+      `f` afterward scrolls from the previous file's old cursor position
+      instead of the new file.
