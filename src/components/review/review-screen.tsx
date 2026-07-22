@@ -615,6 +615,19 @@ function handleOccPointerClick(
     return;
   }
   const target = e.target instanceof Element ? e.target : null;
+  /* A click into an editable surface must not disturb its caret (composers
+     render inside rows, so they'd otherwise hit the removeAllRanges paths),
+     and the click that ends a drag-select must not wipe the selection it just
+     made — selectionchange owns occurrence state for real selections. */
+  if (
+    target?.closest('input, textarea, [contenteditable="true"], .qa-editor')
+  ) {
+    return;
+  }
+  const domSel = window.getSelection();
+  if (domSel && !domSel.isCollapsed) {
+    return;
+  }
   const row = target?.closest(".qf-row:not(.qf-row-hunk)");
   const code = codeAtPoint(e.clientX, e.clientY);
   if (!(row || code)) {

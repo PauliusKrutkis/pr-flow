@@ -233,6 +233,61 @@ test("stepping to an already-visible occurrence does not scroll", async ({
   expect(after).toBe(before);
 });
 
+test("a drag-selection over code survives the click that ends it", async ({
+  page,
+}) => {
+  // Integer coordinates: headless Chromium won't start a selection drag from
+  // some sub-pixel positions (reproducible on a plain static page).
+  const from = await tokenCenter(page, 0, "alpha");
+  const to = await tokenCenter(page, 0, "return");
+  await page.mouse.move(Math.round(from.x), Math.round(from.y));
+  await page.mouse.down();
+  await page.mouse.move(Math.round(to.x), Math.round(to.y), { steps: 5 });
+  await page.mouse.up();
+
+  const selected = await page.evaluate(
+    () => window.getSelection()?.toString() ?? ""
+  );
+  expect(selected.length).toBeGreaterThan(1);
+
+  // outlive the selectionchange debounce and the occurrence re-render
+  await page.waitForTimeout(300);
+  const after = await page.evaluate(
+    () => window.getSelection()?.toString() ?? ""
+  );
+  expect(after).toBe(selected);
+});
+
+test("clicking into a composer while marks are lit keeps its caret", async ({
+  page,
+}) => {
+  await dblclickToken(page, 1, "gamma");
+  await expect(occMarks(page)).toHaveCount(2);
+
+  await page.keyboard.press("j");
+  await page.keyboard.press("c");
+  const composer = page.getByRole("textbox", {
+    name: "Add a review comment…",
+  });
+  await expect(composer).toBeFocused();
+
+  await composer.click();
+  // the DOM caret itself must survive the document-level click handler —
+  // Chromium's ProseMirror can recover a nuked selection, Linux WebKit can't
+  const caret = await page.evaluate(() => {
+    const sel = window.getSelection();
+    return {
+      inEditor: Boolean(
+        sel?.anchorNode?.parentElement?.closest(".qa-editor-content")
+      ),
+      ranges: sel?.rangeCount ?? 0,
+    };
+  });
+  expect(caret).toEqual({ inEditor: true, ranges: 1 });
+  await page.keyboard.type("still typing");
+  await expect(composer).toContainText("still typing");
+});
+
 test("Esc goes straight to the inbox — occurrence marks don't consume it", async ({
   page,
 }) => {
