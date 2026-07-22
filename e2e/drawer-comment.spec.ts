@@ -93,3 +93,24 @@ test("review verdicts never grow edit/delete tools", async ({ page }) => {
     verdict.getByRole("button", { name: "Delete comment" })
   ).toHaveCount(0);
 });
+
+test("shift+c opens the composer focused, from the diff or the open drawer", async ({
+  page,
+}) => {
+  await page.keyboard.press("Shift+c");
+  const editor = page.getByRole("textbox", {
+    name: "Comment on this pull request…",
+  });
+  await expect(editor).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("button", { name: "Comment on this pull request…" })
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("aside.qf-drawer-open")).toHaveCount(0);
+
+  await page.keyboard.press("Shift+c");
+  await expect(page.locator("aside.qf-drawer-open")).toHaveCount(1);
+  await expect(editor).toBeFocused();
+});

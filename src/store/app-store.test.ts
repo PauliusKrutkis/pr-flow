@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { useAppStore } from "./app-store.ts";
+import { loadLastTab, useAppStore } from "./app-store.ts";
 
 const KEY = "pr#1";
 
@@ -7,6 +7,7 @@ beforeEach(() => {
   localStorage.clear();
   useAppStore.setState({
     dismissed: {},
+    inboxTab: "reviewRequested",
     lastDismissedKey: null,
     lastSeen: {},
     pendingComments: {},
@@ -110,5 +111,24 @@ describe("pending review comments", () => {
       localStorage.getItem("pr-flow:pendingComments") ?? "{}"
     );
     expect(stored[KEY]).toHaveLength(1);
+  });
+});
+
+describe("inbox tab persistence", () => {
+  it("setInboxTab persists to localStorage", () => {
+    useAppStore.getState().setInboxTab("created");
+    expect(localStorage.getItem("pr-flow:lastInboxTab")).toBe("created");
+    expect(useAppStore.getState().inboxTab).toBe("created");
+  });
+
+  it("loadLastTab returns a previously saved valid tab", () => {
+    localStorage.setItem("pr-flow:lastInboxTab", "subscribed");
+    expect(loadLastTab()).toBe("subscribed");
+  });
+
+  it("loadLastTab ignores unknown or missing values", () => {
+    expect(loadLastTab()).toBeNull();
+    localStorage.setItem("pr-flow:lastInboxTab", "bogus");
+    expect(loadLastTab()).toBeNull();
   });
 });

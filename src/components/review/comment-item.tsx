@@ -87,6 +87,8 @@ interface CommentBodyProps {
   editing: boolean;
   onCancelEdit: () => void;
   onSubmitEdit: (body: string) => void;
+  owner?: string;
+  repo?: string;
 }
 
 /** Markdown body, or the composer prefilled with it while editing. */
@@ -95,6 +97,8 @@ export function CommentBody({
   editing,
   onCancelEdit,
   onSubmitEdit,
+  owner,
+  repo,
 }: CommentBodyProps) {
   if (editing) {
     return (
@@ -115,7 +119,9 @@ export function CommentBody({
   }
   return (
     <div className="qf-comment-body">
-      <Markdown>{trimmed}</Markdown>
+      <Markdown owner={owner} repo={repo}>
+        {trimmed}
+      </Markdown>
     </div>
   );
 }

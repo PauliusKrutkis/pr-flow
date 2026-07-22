@@ -3,7 +3,13 @@ import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "@tiptap/markdown";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { Diff } from "lucide-react";
+import {
+  Bold as BoldIcon,
+  Code as CodeIcon,
+  Diff,
+  Italic as ItalicIcon,
+  Link as LinkIcon,
+} from "lucide-react";
 import {
   type ChangeEvent,
   type KeyboardEvent,
@@ -13,7 +19,8 @@ import {
   useState,
 } from "react";
 import { cn } from "../../lib/cn.ts";
-import { Kbd } from "../ui/kbd.tsx";
+import { suggestionHighlight } from "../../lib/suggestion-highlight.ts";
+import { Tooltip } from "../ui/tooltip.tsx";
 
 export interface ComposerEditorHandle {
   clear: () => void;
@@ -30,6 +37,7 @@ interface ComposerEditorProps {
   onSubmitRequest: () => void;
   placeholder: string;
   ref?: Ref<ComposerEditorHandle>;
+  suggestionFile?: string;
   suggestionText?: string;
 }
 
@@ -53,6 +61,74 @@ interface ComposerKeyHandlers {
   insertSuggestion: (() => void) | undefined;
   openLink: (ed: Editor) => boolean;
   submit: () => void;
+}
+
+const INDENT = "  ";
+const LEADING_INDENT = /^ {1,2}/;
+
+/**
+ * Parent-relative start offsets of the code-block lines the selection touches.
+ * Code blocks hold one text node with literal newlines, so line geometry is
+ * plain string arithmetic on the parent's textContent.
+ */
+function touchedLineStarts(editor: Editor): number[] | null {
+  const { $from, $to } = editor.state.selection;
+  if (!$from.sameParent($to)) {
+    return null;
+  }
+  const text = $from.parent.textContent;
+  const starts = [0];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "\n") {
+      starts.push(i + 1);
+    }
+  }
+  return starts.filter((start, i) => {
+    const end = (starts[i + 1] ?? text.length + 1) - 1;
+    return start <= $to.parentOffset && end >= $from.parentOffset;
+  });
+}
+
+/** Tab in a code block: indent at the caret, or every selected line. */
+function indentCodeBlock(editor: Editor): boolean {
+  const { from, to, $from } = editor.state.selection;
+  if (from === to) {
+    editor.commands.insertContent(INDENT);
+    return true;
+  }
+  const lines = touchedLineStarts(editor);
+  if (!lines) {
+    return true;
+  }
+  const blockStart = $from.start();
+  editor.commands.command(({ tr }) => {
+    for (const start of [...lines].reverse()) {
+      tr.insertText(INDENT, blockStart + start);
+    }
+    return true;
+  });
+  return true;
+}
+
+/** Shift-Tab in a code block: remove up to one indent from each touched line. */
+function dedentCodeBlock(editor: Editor): boolean {
+  const lines = touchedLineStarts(editor);
+  if (!lines) {
+    return true;
+  }
+  const { $from } = editor.state.selection;
+  const blockStart = $from.start();
+  const text = $from.parent.textContent;
+  editor.commands.command(({ tr }) => {
+    for (const start of [...lines].reverse()) {
+      const spaces = LEADING_INDENT.exec(text.slice(start))?.[0].length ?? 0;
+      if (spaces > 0) {
+        tr.delete(blockStart + start, blockStart + start + spaces);
+      }
+    }
+    return true;
+  });
+  return true;
 }
 
 /**
@@ -96,6 +172,9 @@ const ComposerKeys = Extension.create({
         return true;
       },
       "Shift-Tab": ({ editor }) => {
+        if (editor.isActive("codeBlock")) {
+          return dedentCodeBlock(editor);
+        }
         const flip = HANDLERS.get(editor)?.flip;
         if (!flip || editor.isActive("listItem")) {
           return false;
@@ -104,6 +183,9 @@ const ComposerKeys = Extension.create({
         return true;
       },
       Tab: ({ editor }) => {
+        if (editor.isActive("codeBlock")) {
+          return indentCodeBlock(editor);
+        }
         const flip = HANDLERS.get(editor)?.flip;
         if (!flip || editor.isActive("listItem")) {
           return false;
@@ -121,17 +203,21 @@ const ComposerKeys = Extension.create({
  * formatting, ⌘K links the selection, and markdown typing shortcuts
  * (`**bold**`, `- `, ``` …) autoconvert as you type — nothing is lost for
  * markdown muscle memory, the symbols just resolve instead of sitting there.
- * The hint bar below the surface stays: every entry names its hotkey and is
- * the button, now with a lit state following the selection. The suggestion
- * tool only renders when suggestionText (the commented line, its prefill) is
- * provided — composers without line context (replies, edits, PR-level
- * comments) have nowhere a suggestion could apply.
+ * The toolbar below the surface is the familiar icon strip; each button's
+ * hotkey lives in its hover tooltip (the app-wide Tooltip + Kbd language),
+ * with a lit state following the selection. Suggestion keeps its text label —
+ * the one domain-specific tool with no universal glyph — and only renders
+ * when suggestionText (the commented line, its prefill) is provided:
+ * composers without line context (replies, edits, PR-level comments) have
+ * nowhere a suggestion could apply. suggestionFile is that line's file path;
+ * it drives syntax highlighting inside ```suggestion fences.
  */
 export function ComposerEditor({
   ref,
   placeholder,
   autoFocus,
   initialMarkdown,
+  suggestionFile,
   suggestionText,
   onSubmitRequest,
   onCancel,
@@ -177,14 +263,15 @@ export function ComposerEditor({
       Placeholder.configure({ placeholder }),
       Markdown,
       ComposerKeys,
+      suggestionHighlight(suggestionFile),
     ],
     onUpdate: ({ editor: e }) => HANDLERS.get(e)?.emptyChange(e.isEmpty),
   });
 
   /**
    * A real block, rendered like the shipped suggestion card and serialized to
-   * the ```suggestion fence both hosts apply natively. The prefilled line is
-   * left selected so typing replaces it in place.
+   * the ```suggestion fence both hosts apply natively. The caret lands at the
+   * end of the prefilled line — nothing pre-selected, it edits like code.
    */
   const insertSuggestion = () => {
     const line = suggestionText ?? "";
@@ -197,13 +284,6 @@ export function ComposerEditor({
         type: "codeBlock",
       })
       .run();
-    if (line) {
-      const { to: selectionEnd } = editor.state.selection;
-      editor.commands.setTextSelection({
-        from: selectionEnd - line.length,
-        to: selectionEnd,
-      });
-    }
   };
 
   useInsertionEffect(() => {
@@ -306,67 +386,70 @@ export function ComposerEditor({
         ) : (
           <>
             {suggestionText !== undefined && (
+              <Tooltip
+                combo="mod+shift+g"
+                label="Insert a code suggestion for this line"
+              >
+                <button
+                  aria-label="Insert suggestion"
+                  className="qa-tool qa-tool-suggest q-focus"
+                  onClick={insertSuggestion}
+                  onMouseDown={keepEditorFocus}
+                  type="button"
+                >
+                  <Diff aria-hidden size={12} />
+                  Suggestion
+                </button>
+              </Tooltip>
+            )}
+            <Tooltip combo="mod+b" label="Bold">
               <button
-                aria-label="Insert suggestion"
-                className="qa-tool qa-tool-suggest q-focus"
-                onClick={insertSuggestion}
+                aria-label="Bold"
+                aria-pressed={active.bold}
+                className={cn("qa-tool q-focus", active.bold && "qa-tool-on")}
+                onClick={handleToggleBold}
                 onMouseDown={keepEditorFocus}
-                title="Insert a code suggestion prefilled with this line"
                 type="button"
               >
-                <Diff aria-hidden size={12} />
-                <Kbd combo="mod+shift+g" />
-                Suggestion
+                <BoldIcon aria-hidden size={13} />
               </button>
-            )}
-            <button
-              aria-label="Bold"
-              aria-pressed={active.bold}
-              className={cn("qa-tool q-focus", active.bold && "qa-tool-on")}
-              onClick={handleToggleBold}
-              onMouseDown={keepEditorFocus}
-              title="Bold"
-              type="button"
-            >
-              <Kbd combo="mod+b" />
-              bold
-            </button>
-            <button
-              aria-label="Italic"
-              aria-pressed={active.italic}
-              className={cn("qa-tool q-focus", active.italic && "qa-tool-on")}
-              onClick={handleToggleItalic}
-              onMouseDown={keepEditorFocus}
-              title="Italic"
-              type="button"
-            >
-              <Kbd combo="mod+i" />
-              italic
-            </button>
-            <button
-              aria-label="Code"
-              aria-pressed={active.code}
-              className={cn("qa-tool q-focus", active.code && "qa-tool-on")}
-              onClick={handleToggleCode}
-              onMouseDown={keepEditorFocus}
-              title="Inline code"
-              type="button"
-            >
-              <Kbd combo="mod+e" />
-              code
-            </button>
-            <button
-              aria-label="Link"
-              aria-pressed={active.link}
-              className={cn("qa-tool q-focus", active.link && "qa-tool-on")}
-              onClick={handleToggleLink}
-              onMouseDown={keepEditorFocus}
-              title="Link the selection"
-              type="button"
-            >
-              <Kbd combo="mod+k" />
-              link
-            </button>
+            </Tooltip>
+            <Tooltip combo="mod+i" label="Italic">
+              <button
+                aria-label="Italic"
+                aria-pressed={active.italic}
+                className={cn("qa-tool q-focus", active.italic && "qa-tool-on")}
+                onClick={handleToggleItalic}
+                onMouseDown={keepEditorFocus}
+                type="button"
+              >
+                <ItalicIcon aria-hidden size={13} />
+              </button>
+            </Tooltip>
+            <Tooltip combo="mod+e" label="Inline code">
+              <button
+                aria-label="Code"
+                aria-pressed={active.code}
+                className={cn("qa-tool q-focus", active.code && "qa-tool-on")}
+                onClick={handleToggleCode}
+                onMouseDown={keepEditorFocus}
+                type="button"
+              >
+                <CodeIcon aria-hidden size={13} />
+              </button>
+            </Tooltip>
+            <Tooltip combo="mod+k" label="Link the selection">
+              <button
+                aria-label="Link"
+                aria-pressed={active.link}
+                className={cn("qa-tool q-focus", active.link && "qa-tool-on")}
+                onClick={handleToggleLink}
+                onMouseDown={keepEditorFocus}
+                type="button"
+              >
+                <LinkIcon aria-hidden size={13} />
+              </button>
+            </Tooltip>
           </>
         )}
       </div>

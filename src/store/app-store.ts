@@ -61,6 +61,35 @@ export function loadLastRoute(): ResumableRoute | null {
   return null;
 }
 
+/** Which inbox tab you were last on, so a restart doesn't reset it. */
+const LAST_TAB_KEY = "pr-flow:lastInboxTab";
+const TAB_KEYS: readonly InboxTabKey[] = [
+  "reviewRequested",
+  "assigned",
+  "created",
+  "involved",
+  "subscribed",
+];
+
+function saveLastTab(tab: InboxTabKey) {
+  try {
+    localStorage.setItem(LAST_TAB_KEY, tab);
+  } catch {
+    /* ignore quota / private-mode errors */
+  }
+}
+
+export function loadLastTab(): InboxTabKey | null {
+  try {
+    const v = localStorage.getItem(LAST_TAB_KEY);
+    return (TAB_KEYS as readonly string[]).includes(v ?? "")
+      ? (v as InboxTabKey)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingViewed: ViewedMap | null = null;
 function schedulePersistViewed(map: ViewedMap) {
@@ -290,7 +319,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   helpOpen: false,
   inboxPaneVisible: false,
   inboxSelectedKey: null,
-  inboxTab: "reviewRequested",
+  inboxTab: loadLastTab() ?? "reviewRequested",
   isDismissed: (prKey, updatedAt) => {
     const at = get().dismissed[prKey];
     if (!at) {
@@ -368,7 +397,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setHelpOpen: (open) => set({ helpOpen: open }),
   setInboxPaneVisible: (inboxPaneVisible) => set({ inboxPaneVisible }),
   setInboxSelectedKey: (key) => set({ inboxSelectedKey: key }),
-  setInboxTab: (tab) => set({ inboxTab: tab }),
+  setInboxTab: (tab) => {
+    saveLastTab(tab);
+    set({ inboxTab: tab });
+  },
   setIssueTracker: (accountId, url) => {
     const map = { ...get().issueTrackers };
     const cleaned = url?.trim();

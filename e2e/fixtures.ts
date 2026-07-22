@@ -453,14 +453,19 @@ export function makeBigDetail(
 }
 
 /**
- * Wall-clock budget scaled for the running engine: the webkit-perf project
- * exists to catch WebKitGTK-shaped regressions Chromium hides, but its
- * JavaScriptCore dev-mode numbers run slower across the board — ×3 until CI
- * trend logs justify tightening. Structural assertions (repaint counts) are
- * engine-independent and never scale.
+ * Wall-clock budget scaled for the running engine and build mode:
+ * - webkit-perf exists to catch WebKitGTK-shaped regressions Chromium hides,
+ *   but its JavaScriptCore dev-mode numbers run slower across the board —
+ *   ×3 until CI trend logs justify tightening.
+ * - *-prod projects run against `vite build` + `vite preview` instead of the
+ *   dev server, where React's dev runtime + GC noise inflate numbers ~2x —
+ *   so the same budget is halved to reflect what users actually feel.
+ * Structural assertions (repaint counts) are engine/build-independent and
+ * never scale.
  */
 export function perfBudget(ms: number, projectName: string): number {
-  return projectName.startsWith("webkit") ? ms * 3 : ms;
+  const base = projectName.startsWith("webkit") ? ms * 3 : ms;
+  return projectName.endsWith("-prod") ? base / 2 : base;
 }
 
 export const ACCOUNT = {

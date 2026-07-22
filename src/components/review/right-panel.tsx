@@ -5,6 +5,8 @@
  * The composer starts as a one-line prompt and expands on intent; it stays
  * mounted (hidden) while collapsed so a half-typed draft survives Esc —
  * "drafts are never lost" (DESIGN.md) — and the prompt advertises the draft.
+ * It docks as the drawer's footer: always reachable without scrolling, and
+ * the expanded editor (with its submit row) is on-screen by construction.
  */
 import {
   CheckCircle2,
@@ -12,7 +14,13 @@ import {
   PanelRightClose,
   PanelRightOpen,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import {
+  type Ref,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { cn } from "../../lib/cn.ts";
 import { openOnProviderLabel } from "../../lib/provider.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
@@ -26,11 +34,16 @@ import type {
 } from "../../types.ts";
 import { Markdown } from "../markdown.tsx";
 import { Avatar } from "../ui/avatar.tsx";
+import { Kbd } from "../ui/kbd.tsx";
 import { TicketTitle } from "../ui/ticket-title.tsx";
 import { Tooltip } from "../ui/tooltip.tsx";
 import { AddCommentBox, type AddCommentBoxHandle } from "./add-comment-box.tsx";
 import { CiPill } from "./ci-pill.tsx";
 import { CommentBody, CommentTools } from "./comment-item.tsx";
+
+export interface RightPanelHandle {
+  openComposer: () => void;
+}
 
 interface RightPanelProps {
   ci: CiStatus | undefined;
@@ -46,6 +59,7 @@ interface RightPanelProps {
   onToggleWide: () => void;
   open: boolean;
   pr: PullRequest;
+  ref?: Ref<RightPanelHandle>;
   reviews: ReviewSummary[];
   wide: boolean;
 }
@@ -70,6 +84,7 @@ const REVIEW_STATES: Record<string, { label: string; cls: string }> = {
  * post optimistically — the composer never blocks.
  */
 export function RightPanel({
+  ref,
   ci,
   pr,
   fileCount,
@@ -129,6 +144,34 @@ export function RightPanel({
   const [draftEmpty, setDraftEmpty] = useState(true);
   const composerRef = useRef<AddCommentBoxHandle>(null);
 
+  /**
+   * The foot's divider only asserts itself once the body actually scrolls —
+   * short drawers keep the seamless in-flow look. Content height is DOM-only
+   * knowledge (markdown, images), so re-measure after every render and on
+   * box resizes that happen without one (window/drawer resize).
+   */
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [bodyScrolls, setBodyScrolls] = useState(false);
+
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (el) {
+      setBodyScrolls(el.scrollHeight > el.clientHeight + 1);
+    }
+  });
+
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) {
+      return;
+    }
+    const ro = new ResizeObserver(() => {
+      setBodyScrolls(el.scrollHeight > el.clientHeight + 1);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   useEffect(() => {
     if (composing) {
       composerRef.current?.focus();
@@ -138,6 +181,19 @@ export function RightPanel({
   const startComposing = () => {
     setComposing(true);
   };
+
+  /** shift+c lands here: expand if collapsed (the composing effect focuses),
+      or refocus the already-open editor. */
+  useImperativeHandle(
+    ref,
+    (): RightPanelHandle => ({
+      openComposer: () => {
+        setComposing(true);
+        composerRef.current?.focus();
+      },
+    }),
+    []
+  );
 
   const collapseComposer = () => {
     setComposing(false);
@@ -233,7 +289,7 @@ export function RightPanel({
           </div>
         </div>
 
-        <div className="qf-drawer-body">
+        <div className="qf-drawer-body" ref={bodyRef}>
           <section className="qf-drawer-section">
             <div className="qf-drawer-pr">
               <span className="qf-pr-num">#{pr.number}</span>
@@ -274,7 +330,9 @@ export function RightPanel({
           <section className="qf-drawer-section">
             <h3 className="qf-drawer-h">Description</h3>
             {body ? (
-              <Markdown>{body}</Markdown>
+              <Markdown owner={pr.owner} repo={pr.name}>
+                {body}
+              </Markdown>
             ) : (
               <p className="text-faint text-sm">No description.</p>
             )}
@@ -309,6 +367,8 @@ export function RightPanel({
                       own={
                         entry.comment.id > 0 && entry.comment.user === ownLogin
                       }
+                      owner={pr.owner}
+                      repo={pr.name}
                       user={entry.comment.user}
                     />
                   ) : (
@@ -317,6 +377,8 @@ export function RightPanel({
                       avatarUrl={entry.review.userAvatarUrl}
                       body={entry.review.body}
                       key={`r-${entry.review.id}`}
+                      owner={pr.owner}
+                      repo={pr.name}
                       state={entry.review.state}
                       user={entry.review.user}
                     />
@@ -369,32 +431,42 @@ export function RightPanel({
               </div>
             </section>
           )}
+        </div>
 
-          <section className="qf-drawer-section">
-            <div hidden={!composing}>
-              <AddCommentBox
-                autoFocus={false}
-                onCancel={collapseComposer}
-                onEmptyChange={setDraftEmpty}
-                onSubmit={handleAddIssueComment}
-                pending={false}
-                placeholder="Comment on this pull request…"
-                ref={composerRef}
-                submitLabel="Comment"
-              />
-            </div>
-            {!composing && (
-              <button
-                className="qf-comment-prompt qf-focusable"
-                onClick={startComposing}
-                type="button"
-              >
+        <div
+          className={cn(
+            "qf-drawer-foot",
+            bodyScrolls && "qf-drawer-foot-divided"
+          )}
+        >
+          <div hidden={!composing}>
+            <AddCommentBox
+              autoFocus={false}
+              onCancel={collapseComposer}
+              onEmptyChange={setDraftEmpty}
+              onSubmit={handleAddIssueComment}
+              pending={false}
+              placeholder="Comment on this pull request…"
+              ref={composerRef}
+              submitLabel="Comment"
+            />
+          </div>
+          {!composing && (
+            <button
+              className="qf-comment-prompt qf-focusable"
+              onClick={startComposing}
+              type="button"
+            >
+              <span>
                 {draftEmpty
                   ? "Comment on this pull request…"
                   : "Continue your draft…"}
-              </button>
-            )}
-          </section>
+              </span>
+              <span aria-hidden className="qf-comment-prompt-key">
+                <Kbd combo="shift+c" />
+              </span>
+            </button>
+          )}
         </div>
       </aside>
     </>
@@ -415,6 +487,8 @@ function ConversationItem({
   onCancelEdit,
   onSubmitEdit,
   onDelete,
+  owner,
+  repo,
 }: {
   user: string;
   avatarUrl: string;
@@ -428,6 +502,8 @@ function ConversationItem({
   onCancelEdit?: () => void;
   onSubmitEdit?: (commentId: number, body: string) => void;
   onDelete?: (a: { commentId: number }) => Promise<void>;
+  owner: string;
+  repo: string;
 }) {
   const chip = state ? (REVIEW_STATES[state] ?? REVIEW_STATES.COMMENTED) : null;
 
@@ -468,6 +544,8 @@ function ConversationItem({
           editing={editing}
           onCancelEdit={onCancelEdit ?? noop}
           onSubmitEdit={handleSubmitEdit}
+          owner={owner}
+          repo={repo}
         />
       </div>
     </div>

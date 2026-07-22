@@ -1,7 +1,9 @@
+import { useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Check, Copy } from "lucide-react";
 import {
   type ComponentPropsWithoutRef,
+  type CSSProperties,
   type MouseEvent,
   useEffect,
   useRef,
@@ -12,7 +14,14 @@ import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
+import { api } from "../lib/api.ts";
 import { cn } from "../lib/cn.ts";
+import { imageMimeFor, videoMimeFor } from "../lib/mime.ts";
+import {
+  parseGitlabUploadPath,
+  stripImageAttributeLists,
+} from "../lib/provider.ts";
+import { Spinner } from "./ui/spinner.tsx";
 
 /**
  * GitHub PR/issue bodies routinely contain raw HTML (Dependabot's <details>
@@ -161,24 +170,135 @@ function Code({ node, className, children, ...rest }: CodeProps) {
   );
 }
 
+type ImgProps = ComponentPropsWithoutRef<"img"> & { node?: unknown };
+type RawImgProps = ComponentPropsWithoutRef<"img">;
+
+function RawImg({ alt, ...rest }: RawImgProps) {
+  return (
+    // biome-ignore lint/correctness/useImageSize: source markdown carries no dimensions
+    <img alt={alt ?? ""} {...rest} />
+  );
+}
+
+/** The subset of an `<img>`/`<video>` node's extra attributes that apply to
+ * either element — deliberately narrower than `ComponentPropsWithoutRef`,
+ * whose per-element event-handler types (e.g. `onCopy`) aren't shared
+ * between `HTMLImageElement` and `HTMLVideoElement`. */
+interface CommonMediaProps {
+  className?: string;
+  id?: string;
+  style?: CSSProperties;
+  width?: number | string;
+  height?: number | string;
+}
+
+/** Fetches a GitLab upload (a pasted image or, e.g., a screen-recording
+ * video) through the authenticated Uploads API — the bearer token never
+ * reaches the webview — and renders it as a data URL, picking `<video>`
+ * over `<img>` when the filename's extension is a video format. */
+function AuthenticatedUpload({
+  owner,
+  repo,
+  secret,
+  filename,
+  alt,
+  title,
+  className,
+  id,
+  style,
+  width,
+  height,
+}: CommonMediaProps & {
+  owner: string;
+  repo: string;
+  secret: string;
+  filename: string;
+  alt?: string;
+  title?: string;
+}) {
+  const { data, error, isError, isLoading } = useQuery({
+    queryFn: () => api.getUploadBlob(owner, repo, secret, filename),
+    queryKey: ["uploadBlob", owner, repo, secret, filename],
+    retry: 1,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  if (isLoading) {
+    return <Spinner label="Loading…" />;
+  }
+  if (isError || !data) {
+    return (
+      <span className="text-faint text-sm">
+        Couldn't load {filename}. {String(error)}
+      </span>
+    );
+  }
+  const common: CommonMediaProps = { className, height, id, style, width };
+  const videoMime = videoMimeFor(filename);
+  if (videoMime) {
+    return (
+      <video
+        controls
+        preload="metadata"
+        src={`data:${videoMime};base64,${data.base64}`}
+        title={title}
+        {...common}
+      >
+        <track kind="captions" />
+      </video>
+    );
+  }
+  const mime = imageMimeFor(filename) ?? "application/octet-stream";
+  return (
+    <RawImg
+      alt={alt}
+      src={`data:${mime};base64,${data.base64}`}
+      title={title}
+      {...common}
+    />
+  );
+}
+
+function makeImg(owner: string | undefined, repo: string | undefined) {
+  return function Img({ src, node: _node, ...rest }: ImgProps) {
+    const upload = parseGitlabUploadPath(src);
+    if (upload && owner && repo) {
+      return (
+        <AuthenticatedUpload
+          filename={upload.filename}
+          owner={owner}
+          repo={repo}
+          secret={upload.secret}
+          {...rest}
+        />
+      );
+    }
+    return <RawImg src={src} {...rest} />;
+  };
+}
+
 export function Markdown({
   children,
   className,
+  owner,
+  repo,
 }: {
   children: string;
   className?: string;
+  owner?: string;
+  repo?: string;
 }) {
+  const Img = makeImg(owner, repo);
   if (!children) {
     return null;
   }
   return (
     <div className={cn("md", className)}>
       <ReactMarkdown
-        components={{ a: Anchor, code: Code, pre: Pre }}
+        components={{ a: Anchor, code: Code, img: Img, pre: Pre }}
         rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
         remarkPlugins={[remarkGfm, remarkBreaks]}
       >
-        {children}
+        {stripImageAttributeLists(children)}
       </ReactMarkdown>
     </div>
   );
