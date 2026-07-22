@@ -25,7 +25,7 @@ The `v*` tag triggers `.github/workflows/release.yml`, which:
 3. Publishes a GitHub Release with all assets **plus `latest.json`** — the
    manifest the in-app updater polls
    (`https://github.com/PauliusKrutkis/pr-flow/releases/latest/download/latest.json`).
-4. Bumps the Homebrew tap (only when the `TAP_REPO_TOKEN` secret exists —
+4. Bumps the Homebrew tap (only when the `TAP_DEPLOY_KEY` secret exists —
    skipped quietly otherwise).
 
 Installed apps poll that manifest, show the "Update available" prompt, and
@@ -42,6 +42,39 @@ install + relaunch in one click.
 | OAuth in released builds | ✅ Baked in at compile time (`option_env!` in auth.rs): secrets `PRFLOW_GH_CLIENT_ID` / `PRFLOW_GH_CLIENT_SECRET` are set; the repo **variable** `NOD_GITLAB_CLIENT_ID` activates GitLab sign-in once the gitlab.com app is registered (`gh variable set NOD_GITLAB_CLIENT_ID`). Runtime `.env` still overrides in dev. Note: a client secret inside a desktop binary is extractable — a known, accepted trade-off for GitHub OAuth apps (GitHub CLI does the same); GitLab uses PKCE and has no secret at all. |
 | Apple notarization | ⬜ **Required before paid launch (Phase 1)** — Apple Developer cert ($99/yr). Until then macOS users clear quarantine after install (`xattr -dr com.apple.quarantine /Applications/Nod.app`) or right-click → Open. (Homebrew 6 removed `--no-quarantine`.) An app that needs an `xattr` incantation to open is not shippable to paying customers — notarization is a Phase 1 gate, not a nice-to-have. |
 | Commercial launch (Phase 0 + 1) | ⬜ See [Commercial launch](#commercial-launch) below. |
+
+## Goal: a true one-line `brew install`
+
+The landing page (`apps/web`) shows the install command as a single line —
+`brew install pauliuskrutkis/tap/nod` — matching every other keyboard-first
+dev tool's install story. That's not actually true yet: today it takes four
+commands (see [README.md](../README.md#install--auto-updates)):
+
+```bash
+brew tap pauliuskrutkis/tap
+brew trust --tap pauliuskrutkis/tap
+brew install --cask nod
+xattr -dr com.apple.quarantine /Applications/Nod.app
+```
+
+Rather than expand the landing page into a multi-line block, the plan is to
+close the gap so the one-liner becomes literally correct:
+
+1. **`xattr` step** — caused by the missing Gatekeeper signature. Resolved by
+   Apple notarization, already tracked as the Phase 1 gate above. Once
+   notarized, this step disappears entirely.
+2. **`brew tap` step** — `brew install <user>/<tap>/<formula>` auto-taps an
+   untapped repo, so this should already be foldable into the install line;
+   verify once notarization removes the quarantine variable from testing.
+3. **`brew trust --tap` step** — re-test whether this is still required after
+   notarization. If Homebrew's trust prompt is itself a proxy for "this
+   binary isn't signed/notarized," it may also disappear at that point; if
+   it's an independent tap-verification step, it needs its own investigation.
+
+Until all three collapse, the landing page CTA is aspirational — track this
+as a pre-launch checklist item alongside notarization, and re-verify the
+literal `brew install pauliuskrutkis/tap/nod` command on a clean machine
+before removing this note.
 
 ## Repo visibility vs auto-updates
 
@@ -150,6 +183,35 @@ Gotchas learned the hard way:
   builders (first full build on those runners).
 
 ---
+
+## Web (landing page)
+
+The marketing site lives in `apps/web` — an Astro + Tailwind v4 static build
+(package `@nod/web`). It ships ~zero JS and reuses the app's "Quiet" design
+tokens so the site reads as an extension of the product.
+
+```bash
+pnpm --filter @nod/web dev      # local dev server
+pnpm --filter @nod/web build    # static output → apps/web/dist
+pnpm --filter @nod/web check    # astro check (types + templates)
+```
+
+### Deploy — Cloudflare Pages (git integration)
+
+Hosting is **Cloudflare Pages**, connected to this repo through Cloudflare's
+GitHub App (works with the private repo). It's a one-time dashboard step; after
+that every push builds and every PR gets a preview URL. No CI workflow to
+maintain.
+
+| Setting          | Value        |
+| ---------------- | ------------ |
+| Root directory   | `apps/web`   |
+| Build command    | `pnpm build` |
+| Output directory | `dist`       |
+
+Until a domain is bought the site ships on `*.pages.dev`. Future
+`/activated` / `/restore` pages and the license webhook will live alongside it
+as Pages Functions (see [Commercial launch](#commercial-launch)).
 
 ## Commercial launch
 

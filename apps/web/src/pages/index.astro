@@ -1,0 +1,140 @@
+---
+import Base from "../layouts/Base.astro";
+import DiffReplay from "../components/DiffReplay.astro";
+
+const brew = "brew install pauliuskrutkis/tap/nod";
+const releases = "https://github.com/PauliusKrutkis/pr-flow/releases/latest";
+const repo = "https://github.com/PauliusKrutkis/pr-flow";
+
+const features = [
+  {
+    key: "jk",
+    title: "Keyboard-first",
+    body: "Move through PRs, files, hunks, and comment threads without ever reaching for the mouse.",
+  },
+  {
+    key: "⚡",
+    title: "Cache-first",
+    body: "Everything you've seen paints instantly from a local cache. The network refreshes quietly in the background.",
+  },
+  {
+    key: "⏯",
+    title: "Resume instantly",
+    body: "Launch straight back into the last PR — the same file and scroll position you left it on.",
+  },
+];
+---
+
+<Base
+  title="Nod — keyboard-first PR review"
+  description="A keyboard-first, cache-first desktop app for reviewing GitHub pull requests. Closer to triaging an inbox than navigating a website."
+>
+  <header class="nav">
+    <div class="wrap nav__inner">
+      <a class="brand" href="/">
+        <span class="brand__mark">nod</span>
+        <span class="brand__dim">— pr review</span>
+      </a>
+      <a class="nav__link" href="#get">Download</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="wrap hero">
+      <p class="eyebrow">Keyboard-first PR review</p>
+      <h1 class="hero__title">Review pull requests at the <em>speed of thought</em>.</h1>
+      <p class="hero__sub">
+        A focused desktop app for the thing you do every day: open a review request,
+        read the diff, leave a comment, move on.
+      </p>
+      <p class="hero__thesis">
+        keyboard-first + cache-first — <b>closer to an inbox than a website</b>.
+      </p>
+
+      <DiffReplay />
+
+      <div class="get" id="get">
+        <div class="cmd">
+          <span class="mono"><span class="cmd__prompt">$</span> {brew}</span>
+          <button
+            type="button"
+            class="cmd__copy"
+            data-copy={brew}
+            aria-label="Copy install command"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+              ></path>
+            </svg>
+          </button>
+        </div>
+        <a class="btn btn--primary" href={releases}>Download for macOS</a>
+        <p class="get__note">
+          Also on <a href={releases}>Linux &amp; Windows</a>. Free while it's an
+          experiment.
+        </p>
+      </div>
+    </section>
+
+    <section class="wrap">
+      <div class="features">
+        {
+          features.map((f) => (
+            <article class="feature">
+              <span class="feature__key mono">{f.key}</span>
+              <h3 class="feature__title">{f.title}</h3>
+              <p class="feature__body">{f.body}</p>
+            </article>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="wrap demo" aria-label="Product demo">
+      <div class="demo__frame">
+        <span class="demo__label">▶ demo — coming soon</span>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot__inner">
+      <span class="foot__creed">No AI. No cloud. Your token stays on your machine.</span>
+      <span class="foot__links">
+        <a href={repo}>GitHub</a>
+        <a href={releases}>Releases</a>
+      </span>
+    </div>
+  </footer>
+
+  <script>
+    // Progressive enhancement: the command is selectable text without JS; this
+    // just adds one-click copy with a brief confirmation.
+    for (const btn of document.querySelectorAll<HTMLButtonElement>(".cmd__copy")) {
+      btn.addEventListener("click", async () => {
+        const text = btn.dataset.copy;
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text);
+          btn.dataset.copied = "true";
+          setTimeout(() => {
+            btn.removeAttribute("data-copied");
+          }, 1400);
+        } catch {
+          // Clipboard blocked (e.g. insecure context) — leave the text to select.
+        }
+      });
+    }
+  </script>
+</Base>

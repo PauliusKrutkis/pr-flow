@@ -1,0 +1,60 @@
+---
+// The signature element: a keyboard review that plays itself. All motion lives
+// in global.css so the markup stays a plain, readable diff — and screen readers
+// get the figure caption instead of the animation.
+---
+
+<figure
+  class="dr"
+  aria-label="A keyboard-driven review: step down the diff with j, open a comment with c, and mark the file viewed with e."
+>
+  <div class="dr__head">
+    <span class="mono dr__file">src/review.ts</span>
+    <span class="dr__spacer"></span>
+    <span class="dr__badge dr__badge--changed">2 changed</span>
+    <span class="dr__badge dr__badge--viewed">✓ viewed</span>
+  </div>
+
+  <div class="dr__code" aria-hidden="true">
+    <div class="dr__cursor"></div>
+
+    <div class="dr__line">
+      <span class="dr__ln">11</span><span class="dr__sign"></span><span
+        ><span class="dr__tok--key">const</span> id = route.params.id</span
+      >
+    </div>
+    <div class="dr__line">
+      <span class="dr__ln">12</span><span class="dr__sign"></span><span
+        ><span class="dr__tok--key">const</span> pr = <span
+          class="dr__tok--key">await</span
+        > cache.<span class="dr__tok--fn">get</span>(id)</span
+      >
+    </div>
+    <div class="dr__line">
+      <span class="dr__ln">13</span><span class="dr__sign"></span><span
+        ><span class="dr__tok--fn">render</span>(pr)</span
+      >
+    </div>
+    <div class="dr__line dr__line--add">
+      <span class="dr__ln">14</span><span class="dr__sign">+</span><span
+        class="dr__code-text"
+        ><span class="dr__tok--key">if</span> (!pr) <span class="dr__tok--key"
+          >return</span
+        > &lt;Empty /&gt;</span
+      >
+    </div>
+
+    <div class="dr__composer">
+      <div class="dr__composer-inner">
+        <span class="dr__avatar">pk</span>
+        <span><span class="dr__caret">›</span> nice — matches the cache-first path</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="dr__keys">
+    <span><kbd class="dr__key" data-k="j">j</kbd> next line</span>
+    <span><kbd class="dr__key" data-k="c">c</kbd> comment</span>
+    <span><kbd class="dr__key" data-k="e">e</kbd> mark viewed</span>
+  </div>
+</figure>
