@@ -97,7 +97,7 @@ test("single-clicking a token marks its occurrences within that file", async ({
 }) => {
   const { x, y } = await tokenCenter(page, 0, "return");
   await page.mouse.move(x, y);
-  await page.waitForTimeout(100); // settle the hover-driven row re-render
+  await page.waitForTimeout(100);
   await page.mouse.click(x, y);
   await expect(occMarks(page)).toHaveCount(2);
   expect(await occMarks(page).allTextContents()).toEqual(["return", "return"]);
@@ -113,7 +113,9 @@ test("single-clicking a token marks its occurrences within that file", async ({
     .locator('.qf-row[data-file-index="0"]:not(.qf-row-hunk) .qf-code')
     .first()
     .boundingBox();
-  expect(row).not.toBeNull();
+  if (!row) {
+    throw new Error("row not found");
+  }
   await page.mouse.click(row.x + row.width - 8, row.y + row.height / 2);
   await expect(occMarks(page)).toHaveCount(0);
 });
@@ -134,7 +136,9 @@ test("clicking blank space right of a line ending in a word clears, not highligh
     .filter({ hasText: "export default search" })
     .first();
   const box = await line.boundingBox();
-  expect(box).not.toBeNull();
+  if (!box) {
+    throw new Error("box not found");
+  }
   await page.mouse.click(box.x + box.width - 8, box.y + box.height / 2);
   await expect(occMarks(page)).toHaveCount(0);
 });
@@ -168,13 +172,13 @@ test("whitespace or single-character selections mark nothing", async ({
   await dblclickToken(page, 1, "gamma");
   await expect(occMarks(page)).toHaveCount(2);
 
-  await selectInCode(page, 1, "q"); // 1 char — below the minimum
+  await selectInCode(page, 1, "q");
   await expect(occMarks(page)).toHaveCount(0);
 
   await dblclickToken(page, 1, "gamma");
   await expect(occMarks(page)).toHaveCount(2);
 
-  await selectInCode(page, 1, "  "); // whitespace only
+  await selectInCode(page, 1, "  ");
   await expect(occMarks(page)).toHaveCount(0);
 });
 
@@ -236,8 +240,6 @@ test("stepping to an already-visible occurrence does not scroll", async ({
 test("a drag-selection over code survives the click that ends it", async ({
   page,
 }) => {
-  // Integer coordinates: headless Chromium won't start a selection drag from
-  // some sub-pixel positions (reproducible on a plain static page).
   const from = await tokenCenter(page, 0, "alpha");
   const to = await tokenCenter(page, 0, "return");
   await page.mouse.move(Math.round(from.x), Math.round(from.y));
@@ -250,7 +252,6 @@ test("a drag-selection over code survives the click that ends it", async ({
   );
   expect(selected.length).toBeGreaterThan(1);
 
-  // outlive the selectionchange debounce and the occurrence re-render
   await page.waitForTimeout(300);
   const after = await page.evaluate(
     () => window.getSelection()?.toString() ?? ""
@@ -272,8 +273,6 @@ test("clicking into a composer while marks are lit keeps its caret", async ({
   await expect(composer).toBeFocused();
 
   await composer.click();
-  // the DOM caret itself must survive the document-level click handler —
-  // Chromium's ProseMirror can recover a nuked selection, Linux WebKit can't
   const caret = await page.evaluate(() => {
     const sel = window.getSelection();
     return {
