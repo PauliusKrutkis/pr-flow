@@ -107,7 +107,7 @@ import {
   type ReviewListHandle,
 } from "./review-list.tsx";
 import { ReviewVerdicts } from "./review-verdicts.tsx";
-import { RightPanel } from "./right-panel.tsx";
+import { RightPanel, type RightPanelHandle } from "./right-panel.tsx";
 import { SubmitReviewModal } from "./submit-review-modal.tsx";
 
 const RE_WORD = /\w/;
@@ -1437,6 +1437,7 @@ function ReviewScreenPending({
 function useReviewHotkeys(config: {
   closeFind: () => void;
   commentAtCursor: () => void;
+  commentOnPr: () => void;
   copyFilePath: () => void;
   copyLink: () => void;
   cursorMoverRefs: Parameters<typeof buildCursorMover>[0];
@@ -1513,6 +1514,13 @@ function useReviewHotkeys(config: {
       icon: MessageSquarePlus,
       keys: "c",
       run: config.commentAtCursor,
+    },
+    {
+      description: "Comment on the pull request",
+      group: "Comments",
+      icon: MessageSquarePlus,
+      keys: "shift+c",
+      run: config.commentOnPr,
     },
     {
       description: "Reply to comment / next file",
@@ -2424,6 +2432,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
   const [activeIndex, setActiveIndex] = useState(initialMem?.fileIndex ?? 0);
   const [rightOpen, setRightOpen] = useState(false);
   const rightOpenRef = useLatest(rightOpen);
+  const rightPanelRef = useRef<RightPanelHandle>(null);
   const sidebarCompact = useSyncExternalStore(
     subscribeSidebarCompact,
     getSidebarCompactSnapshot,
@@ -3051,6 +3060,11 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
     await addIssueComment.mutateAsync({ body });
   };
 
+  const onCommentOnPr = () => {
+    setRightOpen(true);
+    rightPanelRef.current?.openComposer();
+  };
+
   const onEditIssueComment = async (a: { commentId: number; body: string }) => {
     await updateIssueComment.mutateAsync(a);
   };
@@ -3070,6 +3084,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
   useReviewHotkeys({
     closeFind,
     commentAtCursor,
+    commentOnPr: onCommentOnPr,
     copyFilePath,
     copyLink,
     cursorMoverRefs,
@@ -3336,6 +3351,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
         onToggleWide={onToggleDrawerWide}
         open={rightOpen}
         pr={pr}
+        ref={rightPanelRef}
         reviews={reviews}
         wide={drawerWide}
       />

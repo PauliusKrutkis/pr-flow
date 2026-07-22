@@ -14,7 +14,13 @@ import {
   PanelRightClose,
   PanelRightOpen,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import {
+  type Ref,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { cn } from "../../lib/cn.ts";
 import { openOnProviderLabel } from "../../lib/provider.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
@@ -34,6 +40,10 @@ import { AddCommentBox, type AddCommentBoxHandle } from "./add-comment-box.tsx";
 import { CiPill } from "./ci-pill.tsx";
 import { CommentBody, CommentTools } from "./comment-item.tsx";
 
+export interface RightPanelHandle {
+  openComposer: () => void;
+}
+
 interface RightPanelProps {
   ci: CiStatus | undefined;
   conversation: IssueComment[];
@@ -48,6 +58,7 @@ interface RightPanelProps {
   onToggleWide: () => void;
   open: boolean;
   pr: PullRequest;
+  ref?: Ref<RightPanelHandle>;
   reviews: ReviewSummary[];
   wide: boolean;
 }
@@ -72,6 +83,7 @@ const REVIEW_STATES: Record<string, { label: string; cls: string }> = {
  * post optimistically — the composer never blocks.
  */
 export function RightPanel({
+  ref,
   ci,
   pr,
   fileCount,
@@ -168,6 +180,19 @@ export function RightPanel({
   const startComposing = () => {
     setComposing(true);
   };
+
+  /** shift+c lands here: expand if collapsed (the composing effect focuses),
+      or refocus the already-open editor. */
+  useImperativeHandle(
+    ref,
+    (): RightPanelHandle => ({
+      openComposer: () => {
+        setComposing(true);
+        composerRef.current?.focus();
+      },
+    }),
+    []
+  );
 
   const collapseComposer = () => {
     setComposing(false);
