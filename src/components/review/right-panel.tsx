@@ -5,6 +5,8 @@
  * The composer starts as a one-line prompt and expands on intent; it stays
  * mounted (hidden) while collapsed so a half-typed draft survives Esc —
  * "drafts are never lost" (DESIGN.md) — and the prompt advertises the draft.
+ * It docks as the drawer's footer: always reachable without scrolling, and
+ * the expanded editor (with its submit row) is on-screen by construction.
  */
 import {
   CheckCircle2,
@@ -129,6 +131,34 @@ export function RightPanel({
   const [draftEmpty, setDraftEmpty] = useState(true);
   const composerRef = useRef<AddCommentBoxHandle>(null);
 
+  /**
+   * The foot's divider only asserts itself once the body actually scrolls —
+   * short drawers keep the seamless in-flow look. Content height is DOM-only
+   * knowledge (markdown, images), so re-measure after every render and on
+   * box resizes that happen without one (window/drawer resize).
+   */
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [bodyScrolls, setBodyScrolls] = useState(false);
+
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (el) {
+      setBodyScrolls(el.scrollHeight > el.clientHeight + 1);
+    }
+  });
+
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) {
+      return;
+    }
+    const ro = new ResizeObserver(() => {
+      setBodyScrolls(el.scrollHeight > el.clientHeight + 1);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   useEffect(() => {
     if (composing) {
       composerRef.current?.focus();
@@ -233,7 +263,7 @@ export function RightPanel({
           </div>
         </div>
 
-        <div className="qf-drawer-body">
+        <div className="qf-drawer-body" ref={bodyRef}>
           <section className="qf-drawer-section">
             <div className="qf-drawer-pr">
               <span className="qf-pr-num">#{pr.number}</span>
@@ -369,32 +399,37 @@ export function RightPanel({
               </div>
             </section>
           )}
+        </div>
 
-          <section className="qf-drawer-section">
-            <div hidden={!composing}>
-              <AddCommentBox
-                autoFocus={false}
-                onCancel={collapseComposer}
-                onEmptyChange={setDraftEmpty}
-                onSubmit={handleAddIssueComment}
-                pending={false}
-                placeholder="Comment on this pull request…"
-                ref={composerRef}
-                submitLabel="Comment"
-              />
-            </div>
-            {!composing && (
-              <button
-                className="qf-comment-prompt qf-focusable"
-                onClick={startComposing}
-                type="button"
-              >
-                {draftEmpty
-                  ? "Comment on this pull request…"
-                  : "Continue your draft…"}
-              </button>
-            )}
-          </section>
+        <div
+          className={cn(
+            "qf-drawer-foot",
+            bodyScrolls && "qf-drawer-foot-divided"
+          )}
+        >
+          <div hidden={!composing}>
+            <AddCommentBox
+              autoFocus={false}
+              onCancel={collapseComposer}
+              onEmptyChange={setDraftEmpty}
+              onSubmit={handleAddIssueComment}
+              pending={false}
+              placeholder="Comment on this pull request…"
+              ref={composerRef}
+              submitLabel="Comment"
+            />
+          </div>
+          {!composing && (
+            <button
+              className="qf-comment-prompt qf-focusable"
+              onClick={startComposing}
+              type="button"
+            >
+              {draftEmpty
+                ? "Comment on this pull request…"
+                : "Continue your draft…"}
+            </button>
+          )}
         </div>
       </aside>
     </>

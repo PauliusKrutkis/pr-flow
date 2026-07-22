@@ -2680,6 +2680,21 @@ dialog.q-dialog::backdrop {
 .dir-quiet .qf-drawer-body .md {
   overflow-wrap: anywhere;
 }
+.dir-quiet .qf-drawer-body > .qf-drawer-section:last-child {
+  margin-bottom: 0;
+}
+/* The composer docks at the drawer's bottom edge: the prompt is always one
+   click away and the expanded editor (submit row included) lands on-screen
+   by construction. The divider only asserts itself once the body scrolls —
+   short drawers keep the seamless in-flow look. */
+.dir-quiet .qf-drawer-foot {
+  padding: 10px 18px 16px;
+  border-top: 1px solid transparent;
+  transition: border-color 120ms ease;
+}
+.dir-quiet .qf-drawer-foot-divided {
+  border-top-color: var(--line);
+}
 .dir-quiet .qf-drawer-section {
   margin-bottom: 24px;
 }
