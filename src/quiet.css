@@ -1835,7 +1835,8 @@ dialog.q-dialog::backdrop {
 /* A single "+" affordance, driven by the last input modality: keyboard shows it
    on the cursor row (active file only), mouse shows it on the hovered row —
    never both at once. */
-.dir-quiet .qf-fsec-active
+.dir-quiet
+  .qf-fsec-active
   .qf-diff:not([data-mode="mouse"])
   .qf-row-active
   .qf-add-btn {
