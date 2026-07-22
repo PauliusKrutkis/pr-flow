@@ -992,16 +992,24 @@ link interception · Universal Links.
 - [ ] **React Doctor full-codebase score not 100/100** — run react-doctor
   across the whole codebase and address remaining findings beyond the known
   `no-giant-component` ignore above.
-- [ ] **E2E composer submit is macOS-red (`Control+Enter` vs `Mod`)** — the
-  Tiptap composer binds submit to `Mod-Enter` (`composer-editor.tsx`), which
+- [ ] **E2E hardcodes `Control+…` — macOS-red for every editor shortcut** — the
+  Tiptap composer binds `Mod-…` shortcuts (`composer-editor.tsx`), which
   ProseMirror resolves to **Cmd on macOS, Ctrl on Linux/Windows**. The e2e
-  specs hardcode `page.keyboard.press("Control+Enter")`, so they pass on Linux
-  CI but silently no-op on macOS (composer stays open, `e2e:lastReview` never
-  written) — `multiline.spec.ts:45/59/63/173`, `composer.spec.ts:70/85`,
-  `review.spec.ts:488`. Fix: replace those with the platform-agnostic
-  `ControlOrMeta+Enter` (precedent: `release-history.spec.ts:25` already uses
-  `ControlOrMeta+k`). Test-only; verified via probes (button click + `Meta+Enter`
-  submit; `Control+Enter` doesn't). Pre-existing, reproduces on clean `main`.
+  specs hardcode `page.keyboard.press("Control+…")`, so they pass on Linux
+  CI but silently no-op on macOS — not just submit (`Control+Enter` in
+  `multiline.spec.ts`, `composer.spec.ts`, `review.spec.ts`) but the whole
+  class: `Control+a/b/i/e/k`, `Control+Shift+g`. Fix: sweep every editor-bound
+  `Control+…` press to the platform-agnostic `ControlOrMeta+…` (precedent:
+  `release-history.spec.ts:25` already uses `ControlOrMeta+k`). Test-only;
+  verified via probes (`Meta+…` works on macOS, `Control+…` doesn't).
+  Pre-existing, reproduces on clean `main`. Companion convention, learned on
+  PR #76: specs must not use **native caret keys** (`Home`/`End`/`Shift+End`)
+  inside the ProseMirror surface — the native caret move races PM's async
+  selection sync, so the next keystroke acts on the stale position (CI showed
+  `Tab` indenting at the old caret and the decoration skip eating the first
+  typed character). Route selection through PM's own keymap (`Mod+a`, typed
+  edits at the landed caret) instead; `Home`/`End` also don't move the caret
+  on macOS at all, so avoiding them serves both goals.
 
 ## Inbox (2026-07-15)
 
