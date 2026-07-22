@@ -548,7 +548,18 @@ test("toggling parks the cursor row at a stable reading line", async ({
   const readReadingLine = async () => {
     await expect(page.locator(".qf-scrollhost")).not.toHaveClass(QF_SWAP_MASK);
     await expect(cursorRow).toBeVisible();
-    return (await cursorRow.boundingBox())?.y ?? Number.NaN;
+    // On loaded runners a straggling re-measure can land after the mask
+    // lifts; read the position only once it holds still across frames.
+    let last = Number.NaN;
+    await expect
+      .poll(async () => {
+        const y = (await cursorRow.boundingBox())?.y ?? Number.NaN;
+        const settled = Math.abs(y - last) < 0.5;
+        last = y;
+        return settled;
+      })
+      .toBe(true);
+    return last;
   };
   await page.keyboard.press("Shift+v");
   await expect(page.locator(".qf-row-xctx").first()).toBeVisible();
