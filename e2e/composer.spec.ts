@@ -133,7 +133,6 @@ test("tab indents inside a suggestion block instead of flipping the mode", async
   const sugg = box(page).locator("pre code.language-suggestion");
   await expect(sugg).toHaveText("export function alpha() {");
 
-  // a fresh second line: Tab/Shift-Tab act on the caret's line
   await page.keyboard.press("Enter");
   await page.keyboard.press("Tab");
   await page.keyboard.type("done");
@@ -162,7 +161,6 @@ test("suggestion tokens light as the file's language; a selection lifts them whi
   await expect(sugg.locator(".hljs-keyword").first()).toHaveText("export");
   await expect(sugg.locator(".hljs-title").first()).toHaveText("alpha");
 
-  // Mod+a runs through ProseMirror's own keymap — no native-caret race
   await page.keyboard.press("Control+a");
   await expect(sugg.locator(".hljs-keyword")).toHaveCount(0);
 

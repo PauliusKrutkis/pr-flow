@@ -143,13 +143,6 @@ export function RightPanel({
   const [composing, setComposing] = useState(false);
   const [draftEmpty, setDraftEmpty] = useState(true);
   const composerRef = useRef<AddCommentBoxHandle>(null);
-
-  /**
-   * The foot's divider only asserts itself once the body actually scrolls —
-   * short drawers keep the seamless in-flow look. Content height is DOM-only
-   * knowledge (markdown, images), so re-measure after every render and on
-   * box resizes that happen without one (window/drawer resize).
-   */
   const bodyRef = useRef<HTMLDivElement>(null);
   const [bodyScrolls, setBodyScrolls] = useState(false);
 
@@ -182,8 +175,6 @@ export function RightPanel({
     setComposing(true);
   };
 
-  /** shift+c lands here: expand if collapsed (the composing effect focuses),
-      or refocus the already-open editor. */
   useImperativeHandle(
     ref,
     (): RightPanelHandle => ({
