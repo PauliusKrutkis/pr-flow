@@ -2348,9 +2348,6 @@ dialog.q-dialog::backdrop {
   font-family: var(--font-ui);
 }
 
-/* Rich composer surface — one bordered instrument: the editing surface with
-   its toolbar strip attached below, lit as a whole while focus is anywhere
-   inside (editor, toolbar, the ⌘K link input). */
 .qa-editor {
   overflow: hidden;
   background: var(--bg);
@@ -2464,7 +2461,6 @@ dialog.q-dialog::backdrop {
   letter-spacing: 0.04em;
   content: "Suggested change";
 }
-/* the ⌘K inline URL input that borrows the toolbar strip's row */
 .qa-link-input {
   flex: 1;
   padding: 5px 9px;
@@ -2684,10 +2680,6 @@ dialog.q-dialog::backdrop {
 .dir-quiet .qf-drawer-body > .qf-drawer-section:last-child {
   margin-bottom: 0;
 }
-/* The composer docks at the drawer's bottom edge: the prompt is always one
-   click away and the expanded editor (submit row included) lands on-screen
-   by construction. The divider only asserts itself once the body scrolls —
-   short drawers keep the seamless in-flow look. */
 .dir-quiet .qf-drawer-foot {
   padding: 10px 18px 16px;
   border-top: 1px solid transparent;
@@ -2852,7 +2844,6 @@ dialog.q-dialog::backdrop {
   color: var(--muted);
   border-color: var(--line-2);
 }
-/* the shift+c chip: the search-field shortcut idiom, quiet until hovered */
 .dir-quiet .qf-comment-prompt-key {
   flex-shrink: 0;
   opacity: 0.6;

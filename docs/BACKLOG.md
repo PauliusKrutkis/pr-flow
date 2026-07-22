@@ -1122,3 +1122,30 @@ link interception · Universal Links.
       out only its first line there. Known limitation called out when the
       original fix shipped — needs `markBlockCommentRows` (or equivalent)
       wired into the full-file row synthesis path too.
+
+## Inbox (2026-07-22)
+
+- [ ] 🟡 **Stale-base diff pollution — flag already-merged code in PR
+      diffs** — when a PR's target branch is behind main (typical in PR
+      chains after merging main into the head branch), GitHub computes the
+      diff from an old merge-base, so already-reviewed, already-merged code
+      renders as new — and reviewers re-review prod code without realizing.
+      Fixable without local git via the compare API (the app today only
+      calls `/pulls/{n}/files`, never `/compare` — `base_ref`/`head_sha`
+      are already on `PullRequest`, `model.rs`):
+      - **Tier 1 — detect + banner (ship first):** fetch
+        `compare/{base_ref}...{head_sha}` and
+        `compare/{default_branch}...{head_sha}`; if the PR diff carries
+        substantially more commits than the head-vs-main delta, banner:
+        *"This diff includes changes already merged to main — the target
+        branch is behind; ask the author to update it."*
+      - **Tier 2 — dim already-merged files:** set-difference the two
+        compare file lists. File in `base...head` but absent from
+        `main...head` → pure main backwash, collapse/dim with an "already
+        on main" label. Identical `patch` in both → fully new. Differing →
+        mixed, show badged. Content-based, so robust to squash merges
+        (commit-ancestry checks are not). Hunk-level precision inside mixed
+        files: not worth it.
+      Caveat: compare API caps the file list at 300 — fall back to
+      banner-only on monster diffs. Orthogonal to §9 repo snapshot (file
+      trees at one SHA; no diffs/merge-bases) — no dependency either way.

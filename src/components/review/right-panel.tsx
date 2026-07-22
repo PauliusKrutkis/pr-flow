@@ -7,6 +7,9 @@
  * "drafts are never lost" (DESIGN.md) — and the prompt advertises the draft.
  * It docks as the drawer's footer: always reachable without scrolling, and
  * the expanded editor (with its submit row) is on-screen by construction.
+ * The footer's divider only appears once the body scrolls, which is measured
+ * by observing the body *and its sections* — the body's own box is pinned by
+ * the drawer, so growing conversation only ever resizes a section.
  */
 import {
   CheckCircle2,
@@ -39,7 +42,7 @@ import { TicketTitle } from "../ui/ticket-title.tsx";
 import { Tooltip } from "../ui/tooltip.tsx";
 import { AddCommentBox, type AddCommentBoxHandle } from "./add-comment-box.tsx";
 import { CiPill } from "./ci-pill.tsx";
-import { CommentBody, CommentTools } from "./comment-item.tsx";
+import { CommentBody, CommentTools, firstLine } from "./comment-item.tsx";
 
 export interface RightPanelHandle {
   openComposer: () => void;
@@ -148,20 +151,18 @@ export function RightPanel({
 
   useEffect(() => {
     const el = bodyRef.current;
-    if (el) {
-      setBodyScrolls(el.scrollHeight > el.clientHeight + 1);
-    }
-  });
-
-  useEffect(() => {
-    const el = bodyRef.current;
     if (!el) {
       return;
     }
-    const ro = new ResizeObserver(() => {
+    const measure = () => {
       setBodyScrolls(el.scrollHeight > el.clientHeight + 1);
-    });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
+    for (const section of el.children) {
+      ro.observe(section);
+    }
     return () => ro.disconnect();
   }, []);
 
@@ -223,7 +224,7 @@ export function RightPanel({
   };
 
   const handleAddIssueComment = (text: string) => {
-    onAddIssueComment(text);
+    onAddIssueComment(text).catch(() => undefined);
     collapseComposer();
   };
 
@@ -464,6 +465,23 @@ export function RightPanel({
   );
 }
 
+interface ConversationItemProps {
+  at: string;
+  avatarUrl: string;
+  body: string;
+  commentId?: number;
+  editing?: boolean;
+  onCancelEdit?: () => void;
+  onDelete?: (a: { commentId: number }) => Promise<void>;
+  onStartEdit?: (commentId: number) => void;
+  onSubmitEdit?: (commentId: number, body: string) => void;
+  own?: boolean;
+  owner: string;
+  repo: string;
+  state?: string;
+  user: string;
+}
+
 /** A single conversation row — a comment, or a review verdict with its chip. */
 function ConversationItem({
   user,
@@ -480,22 +498,7 @@ function ConversationItem({
   onDelete,
   owner,
   repo,
-}: {
-  user: string;
-  avatarUrl: string;
-  at: string;
-  body: string;
-  state?: string;
-  commentId?: number;
-  own?: boolean;
-  editing?: boolean;
-  onStartEdit?: (commentId: number) => void;
-  onCancelEdit?: () => void;
-  onSubmitEdit?: (commentId: number, body: string) => void;
-  onDelete?: (a: { commentId: number }) => Promise<void>;
-  owner: string;
-  repo: string;
-}) {
+}: ConversationItemProps) {
   const chip = state ? (REVIEW_STATES[state] ?? REVIEW_STATES.COMMENTED) : null;
 
   const handleSubmitEdit = (text: string) => {
@@ -541,8 +544,4 @@ function ConversationItem({
       </div>
     </div>
   );
-}
-
-function firstLine(body: string): string {
-  return body.trim().split("\n")[0] ?? "";
 }
