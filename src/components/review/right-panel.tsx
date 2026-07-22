@@ -330,7 +330,9 @@ export function RightPanel({
           <section className="qf-drawer-section">
             <h3 className="qf-drawer-h">Description</h3>
             {body ? (
-              <Markdown>{body}</Markdown>
+              <Markdown owner={pr.owner} repo={pr.name}>
+                {body}
+              </Markdown>
             ) : (
               <p className="text-faint text-sm">No description.</p>
             )}
@@ -365,6 +367,8 @@ export function RightPanel({
                       own={
                         entry.comment.id > 0 && entry.comment.user === ownLogin
                       }
+                      owner={pr.owner}
+                      repo={pr.name}
                       user={entry.comment.user}
                     />
                   ) : (
@@ -373,6 +377,8 @@ export function RightPanel({
                       avatarUrl={entry.review.userAvatarUrl}
                       body={entry.review.body}
                       key={`r-${entry.review.id}`}
+                      owner={pr.owner}
+                      repo={pr.name}
                       state={entry.review.state}
                       user={entry.review.user}
                     />
@@ -481,6 +487,8 @@ function ConversationItem({
   onCancelEdit,
   onSubmitEdit,
   onDelete,
+  owner,
+  repo,
 }: {
   user: string;
   avatarUrl: string;
@@ -494,6 +502,8 @@ function ConversationItem({
   onCancelEdit?: () => void;
   onSubmitEdit?: (commentId: number, body: string) => void;
   onDelete?: (a: { commentId: number }) => Promise<void>;
+  owner: string;
+  repo: string;
 }) {
   const chip = state ? (REVIEW_STATES[state] ?? REVIEW_STATES.COMMENTED) : null;
 
@@ -534,6 +544,8 @@ function ConversationItem({
           editing={editing}
           onCancelEdit={onCancelEdit ?? noop}
           onSubmitEdit={handleSubmitEdit}
+          owner={owner}
+          repo={repo}
         />
       </div>
     </div>

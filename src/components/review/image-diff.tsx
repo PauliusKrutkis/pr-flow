@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { api } from "../../lib/api.ts";
+import { imageMimeFor } from "../../lib/mime.ts";
 import type { ChangedFile } from "../../types.ts";
 import { Spinner } from "../ui/spinner.tsx";
 
@@ -9,23 +10,6 @@ import { Spinner } from "../ui/spinner.tsx";
  * Bytes come through the backend (the token never reaches the webview) as
  * base64 and render as data: URLs.
  */
-
-const IMAGE_MIME: Record<string, string> = {
-  avif: "image/avif",
-  bmp: "image/bmp",
-  gif: "image/gif",
-  ico: "image/x-icon",
-  jpeg: "image/jpeg",
-  jpg: "image/jpeg",
-  png: "image/png",
-  svg: "image/svg+xml",
-  webp: "image/webp",
-};
-
-function mimeFor(path: string): string | null {
-  const ext = path.toLowerCase().split(".").pop() ?? "";
-  return IMAGE_MIME[ext] ?? null;
-}
 
 function formatBytes(n: number): string {
   if (n < 1024) {
@@ -62,7 +46,7 @@ function ImagePane({
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
-  const mime = mimeFor(path) ?? "application/octet-stream";
+  const mime = imageMimeFor(path) ?? "application/octet-stream";
   const blobKey = data?.base64 ?? "";
 
   const bindImgRef = (img: HTMLImageElement | null) => {
