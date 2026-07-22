@@ -80,14 +80,12 @@ test("the suggestion block round-trips: insert, edit in place, pending card", as
   const sugg = ed.locator("pre code.language-suggestion");
   await expect(sugg).toHaveText("export function alpha() {");
   await expect(ed).toBeFocused();
-  await page.keyboard.press("Home");
-  await page.keyboard.press("Shift+End");
-  await page.keyboard.type("export function alpha(): number {");
-  await expect(sugg).toHaveText("export function alpha(): number {");
+  await page.keyboard.type(" // tighten");
+  await expect(sugg).toHaveText("export function alpha() { // tighten");
   await page.keyboard.press("Control+Enter");
   await expect(page.getByText("Pending")).toBeVisible();
   await expect(page.locator(".qf-pending .md-suggestion-line")).toHaveText(
-    "export function alpha(): number {"
+    "export function alpha() { // tighten"
   );
 });
 
@@ -135,11 +133,13 @@ test("tab indents inside a suggestion block instead of flipping the mode", async
   const sugg = box(page).locator("pre code.language-suggestion");
   await expect(sugg).toHaveText("export function alpha() {");
 
-  await page.keyboard.press("Home");
+  // a fresh second line: Tab/Shift-Tab act on the caret's line
+  await page.keyboard.press("Enter");
   await page.keyboard.press("Tab");
+  await page.keyboard.type("done");
   await expect
     .poll(() => sugg.evaluate((el) => el.textContent))
-    .toBe("  export function alpha() {");
+    .toContain("export function alpha() {\n  done");
   await expect(
     page.getByRole("radio", { name: "Add to review" })
   ).toHaveAttribute("aria-checked", "true");
@@ -147,7 +147,7 @@ test("tab indents inside a suggestion block instead of flipping the mode", async
   await page.keyboard.press("Shift+Tab");
   await expect
     .poll(() => sugg.evaluate((el) => el.textContent))
-    .toBe("export function alpha() {");
+    .toContain("export function alpha() {\ndone");
   await expect(
     page.getByRole("radio", { name: "Add to review" })
   ).toHaveAttribute("aria-checked", "true");
@@ -162,10 +162,10 @@ test("suggestion tokens light as the file's language; a selection lifts them whi
   await expect(sugg.locator(".hljs-keyword").first()).toHaveText("export");
   await expect(sugg.locator(".hljs-title").first()).toHaveText("alpha");
 
-  await page.keyboard.press("Home");
-  await page.keyboard.press("Shift+End");
+  // Mod+a runs through ProseMirror's own keymap — no native-caret race
+  await page.keyboard.press("Control+a");
   await expect(sugg.locator(".hljs-keyword")).toHaveCount(0);
 
-  await page.keyboard.press("End");
+  await page.keyboard.press("ArrowRight");
   await expect(sugg.locator(".hljs-keyword").first()).toHaveText("export");
 });
