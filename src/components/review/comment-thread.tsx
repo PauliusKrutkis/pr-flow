@@ -7,7 +7,7 @@ import type { ReviewComment } from "../../types.ts";
 import { Avatar } from "../ui/avatar.tsx";
 import { Kbd } from "../ui/kbd.tsx";
 import { AddCommentBox } from "./add-comment-box.tsx";
-import { CommentBody, CommentTools } from "./comment-item.tsx";
+import { CommentBody, CommentTools, firstLine } from "./comment-item.tsx";
 
 export interface ReplyRequest {
   nonce: number;
@@ -325,8 +325,4 @@ export function CommentThread({
       )}
     </div>
   );
-}
-
-function firstLine(body: string): string {
-  return body.trim().split("\n")[0] ?? "";
 }

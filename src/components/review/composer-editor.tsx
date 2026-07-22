@@ -308,7 +308,7 @@ export function ComposerEditor({
     [editor]
   );
 
-  const active = useEditorState({
+  const activeMarks = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
       bold: e.isActive("bold"),
@@ -405,8 +405,11 @@ export function ComposerEditor({
             <Tooltip combo="mod+b" label="Bold">
               <button
                 aria-label="Bold"
-                aria-pressed={active.bold}
-                className={cn("qa-tool q-focus", active.bold && "qa-tool-on")}
+                aria-pressed={activeMarks.bold}
+                className={cn(
+                  "qa-tool q-focus",
+                  activeMarks.bold && "qa-tool-on"
+                )}
                 onClick={handleToggleBold}
                 onMouseDown={keepEditorFocus}
                 type="button"
@@ -417,8 +420,11 @@ export function ComposerEditor({
             <Tooltip combo="mod+i" label="Italic">
               <button
                 aria-label="Italic"
-                aria-pressed={active.italic}
-                className={cn("qa-tool q-focus", active.italic && "qa-tool-on")}
+                aria-pressed={activeMarks.italic}
+                className={cn(
+                  "qa-tool q-focus",
+                  activeMarks.italic && "qa-tool-on"
+                )}
                 onClick={handleToggleItalic}
                 onMouseDown={keepEditorFocus}
                 type="button"
@@ -429,8 +435,11 @@ export function ComposerEditor({
             <Tooltip combo="mod+e" label="Inline code">
               <button
                 aria-label="Code"
-                aria-pressed={active.code}
-                className={cn("qa-tool q-focus", active.code && "qa-tool-on")}
+                aria-pressed={activeMarks.code}
+                className={cn(
+                  "qa-tool q-focus",
+                  activeMarks.code && "qa-tool-on"
+                )}
                 onClick={handleToggleCode}
                 onMouseDown={keepEditorFocus}
                 type="button"
@@ -441,8 +450,11 @@ export function ComposerEditor({
             <Tooltip combo="mod+k" label="Link the selection">
               <button
                 aria-label="Link"
-                aria-pressed={active.link}
-                className={cn("qa-tool q-focus", active.link && "qa-tool-on")}
+                aria-pressed={activeMarks.link}
+                className={cn(
+                  "qa-tool q-focus",
+                  activeMarks.link && "qa-tool-on"
+                )}
                 onClick={handleToggleLink}
                 onMouseDown={keepEditorFocus}
                 type="button"
