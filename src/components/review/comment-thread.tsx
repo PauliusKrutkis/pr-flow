@@ -32,8 +32,10 @@ interface CommentThreadProps {
   onHoverChange?: (hovering: boolean) => void;
   onReply: (a: { inReplyTo: number; body: string }) => Promise<void>;
   onResolve?: (a: { threadId: string; resolved: boolean }) => void;
+  owner: string;
   replyPending: boolean;
   replyRequest?: ReplyRequest | null;
+  repo: string;
   toggleRequest?: ToggleRequest | null;
 }
 
@@ -62,6 +64,8 @@ export function CommentThread({
   replyRequest,
   toggleRequest,
   editRequest,
+  owner,
+  repo,
 }: CommentThreadProps) {
   const [root] = comments;
   const rootId = root?.id;
@@ -277,6 +281,8 @@ export function CommentThread({
             editing={editingId === c.id}
             onCancelEdit={handleCancelEdit}
             onSubmitEdit={submitEdit}
+            owner={owner}
+            repo={repo}
           />
         </div>
       ))}

@@ -97,14 +97,12 @@ test("review verdicts never grow edit/delete tools", async ({ page }) => {
 test("shift+c opens the composer focused, from the diff or the open drawer", async ({
   page,
 }) => {
-  // drawer is open (beforeEach); shift+c expands the prompt into the editor
   await page.keyboard.press("Shift+c");
   const editor = page.getByRole("textbox", {
     name: "Comment on this pull request…",
   });
   await expect(editor).toBeFocused();
 
-  // esc collapses back to the prompt, then closes the drawer
   await page.keyboard.press("Escape");
   await expect(
     page.getByRole("button", { name: "Comment on this pull request…" })
@@ -112,7 +110,6 @@ test("shift+c opens the composer focused, from the diff or the open drawer", asy
   await page.keyboard.press("Escape");
   await expect(page.locator("aside.qf-drawer-open")).toHaveCount(0);
 
-  // from the diff with the drawer closed, one press does it all
   await page.keyboard.press("Shift+c");
   await expect(page.locator("aside.qf-drawer-open")).toHaveCount(1);
   await expect(editor).toBeFocused();

@@ -601,6 +601,12 @@ function jumpFromOccMark(
   return true;
 }
 
+/**
+ * A click into an editable surface must not disturb its caret (composers
+ * render inside rows, so they'd otherwise hit the removeAllRanges paths
+ * below), and the click that ends a drag-select must not wipe the selection
+ * it just made — selectionchange owns occurrence state for real selections.
+ */
 function handleOccPointerClick(
   e: MouseEvent,
   occSpecRef: React.RefObject<OccState | null>,
@@ -615,10 +621,6 @@ function handleOccPointerClick(
     return;
   }
   const target = e.target instanceof Element ? e.target : null;
-  /* A click into an editable surface must not disturb its caret (composers
-     render inside rows, so they'd otherwise hit the removeAllRanges paths),
-     and the click that ends a drag-select must not wipe the selection it just
-     made — selectionchange owns occurrence state for real selections. */
   if (
     target?.closest('input, textarea, [contenteditable="true"], .qa-editor')
   ) {
