@@ -68,7 +68,7 @@ function htmlToSpans(html: string): TokenSpan[] {
  * Token spans intersecting a non-collapsed selection are skipped: the browser
  * natively replaces selected text on the next keystroke, and Chromium's edit
  * across decoration spans re-parses as a bare deletion — the typed character
- * vanished (first keystroke over the prefilled, selected suggestion line).
+ * vanished (first keystroke after selecting a suggestion line to retype it).
  * Undecorated selected text is a plain text node, which replaces cleanly;
  * tokens return on the rebuild after the selection collapses.
  */

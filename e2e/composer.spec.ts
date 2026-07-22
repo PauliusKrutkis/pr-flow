@@ -80,6 +80,8 @@ test("the suggestion block round-trips: insert, edit in place, pending card", as
   const sugg = ed.locator("pre code.language-suggestion");
   await expect(sugg).toHaveText("export function alpha() {");
   await expect(ed).toBeFocused();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Shift+End");
   await page.keyboard.type("export function alpha(): number {");
   await expect(sugg).toHaveText("export function alpha(): number {");
   await page.keyboard.press("Control+Enter");
@@ -89,7 +91,7 @@ test("the suggestion block round-trips: insert, edit in place, pending card", as
   );
 });
 
-test("mod+shift+g inserts the suggestion block from the keyboard", async ({
+test("mod+shift+g inserts the block with the caret at the end — nothing pre-selected", async ({
   page,
 }) => {
   const ed = box(page);
@@ -97,8 +99,8 @@ test("mod+shift+g inserts the suggestion block from the keyboard", async ({
   const sugg = ed.locator("pre code.language-suggestion");
   await expect(sugg).toHaveText("export function alpha() {");
   await expect(ed).toBeFocused();
-  await page.keyboard.type("export function alpha(): number {");
-  await expect(sugg).toHaveText("export function alpha(): number {");
+  await page.keyboard.type(" // note");
+  await expect(sugg).toHaveText("export function alpha() { // note");
 });
 
 test("esc backs out of the composer without leaving the review", async ({
@@ -133,6 +135,7 @@ test("tab indents inside a suggestion block instead of flipping the mode", async
   const sugg = box(page).locator("pre code.language-suggestion");
   await expect(sugg).toHaveText("export function alpha() {");
 
+  await page.keyboard.press("Home");
   await page.keyboard.press("Tab");
   await expect
     .poll(() => sugg.evaluate((el) => el.textContent))
@@ -150,14 +153,19 @@ test("tab indents inside a suggestion block instead of flipping the mode", async
   ).toHaveAttribute("aria-checked", "true");
 });
 
-test("suggestion tokens stay off the selected prefill, then light as the file's language", async ({
+test("suggestion tokens light as the file's language; a selection lifts them while it stands", async ({
   page,
 }) => {
   await page.getByRole("button", { name: "Insert suggestion" }).click();
   const sugg = box(page).locator("pre code.language-suggestion");
   await expect(sugg).toHaveText("export function alpha() {");
-  await expect(sugg.locator(".hljs-keyword")).toHaveCount(0);
-  await page.keyboard.press("End");
   await expect(sugg.locator(".hljs-keyword").first()).toHaveText("export");
   await expect(sugg.locator(".hljs-title").first()).toHaveText("alpha");
+
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Shift+End");
+  await expect(sugg.locator(".hljs-keyword")).toHaveCount(0);
+
+  await page.keyboard.press("End");
+  await expect(sugg.locator(".hljs-keyword").first()).toHaveText("export");
 });

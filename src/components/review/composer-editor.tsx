@@ -270,8 +270,8 @@ export function ComposerEditor({
 
   /**
    * A real block, rendered like the shipped suggestion card and serialized to
-   * the ```suggestion fence both hosts apply natively. The prefilled line is
-   * left selected so typing replaces it in place.
+   * the ```suggestion fence both hosts apply natively. The caret lands at the
+   * end of the prefilled line — nothing pre-selected, it edits like code.
    */
   const insertSuggestion = () => {
     const line = suggestionText ?? "";
@@ -284,13 +284,6 @@ export function ComposerEditor({
         type: "codeBlock",
       })
       .run();
-    if (line) {
-      const { to: selectionEnd } = editor.state.selection;
-      editor.commands.setTextSelection({
-        from: selectionEnd - line.length,
-        to: selectionEnd,
-      });
-    }
   };
 
   useInsertionEffect(() => {
