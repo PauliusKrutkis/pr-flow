@@ -34,6 +34,7 @@ import type {
 } from "../../types.ts";
 import { Markdown } from "../markdown.tsx";
 import { Avatar } from "../ui/avatar.tsx";
+import { Kbd } from "../ui/kbd.tsx";
 import { TicketTitle } from "../ui/ticket-title.tsx";
 import { Tooltip } from "../ui/tooltip.tsx";
 import { AddCommentBox, type AddCommentBoxHandle } from "./add-comment-box.tsx";
@@ -450,9 +451,14 @@ export function RightPanel({
               onClick={startComposing}
               type="button"
             >
-              {draftEmpty
-                ? "Comment on this pull request…"
-                : "Continue your draft…"}
+              <span>
+                {draftEmpty
+                  ? "Comment on this pull request…"
+                  : "Continue your draft…"}
+              </span>
+              <span aria-hidden className="qf-comment-prompt-key">
+                <Kbd combo="shift+c" />
+              </span>
             </button>
           )}
         </div>

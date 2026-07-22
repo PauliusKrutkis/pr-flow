@@ -2829,8 +2829,12 @@ dialog.q-dialog::backdrop {
 }
 
 .dir-quiet .qf-comment-prompt {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
   width: 100%;
-  padding: 9px 12px;
+  padding: 7px 8px 7px 12px;
   font-family: var(--font-ui);
   font-size: 13px;
   color: var(--faint);
@@ -2846,6 +2850,15 @@ dialog.q-dialog::backdrop {
 .dir-quiet .qf-comment-prompt:hover {
   color: var(--muted);
   border-color: var(--line-2);
+}
+/* the shift+c chip: the search-field shortcut idiom, quiet until hovered */
+.dir-quiet .qf-comment-prompt-key {
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: opacity 120ms ease;
+}
+.dir-quiet .qf-comment-prompt:hover .qf-comment-prompt-key {
+  opacity: 1;
 }
 
 /* PR-level conversation inside the drawer */
