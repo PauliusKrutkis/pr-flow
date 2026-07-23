@@ -442,6 +442,7 @@ export function useExpansionScrollRestore(
       }
       frameId = requestAnimationFrame(hold);
     };
+    // react-doctor-disable-next-line effect-raf-loop-needs-cancel -- cancelled via cancelAnimationFrame(frameId) in cancel(), invoked from the mount-only cleanup effect below through activeRef (this effect has no deps and must re-check pendingRestoreRef every render, so its own cleanup can't own the cancellation)
     frameId = requestAnimationFrame(hold);
   });
 
