@@ -386,8 +386,12 @@ export function useExpansionScrollRestore(
 
     let cancelled = false;
     let revealed = false;
+    let frameId: number | null = null;
     const cancel = () => {
       cancelled = true;
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
       if (activeRef.current === self) {
         activeRef.current = null;
       }
@@ -436,9 +440,9 @@ export function useExpansionScrollRestore(
         reveal();
         return;
       }
-      requestAnimationFrame(hold);
+      frameId = requestAnimationFrame(hold);
     };
-    requestAnimationFrame(hold);
+    frameId = requestAnimationFrame(hold);
   });
 
   useEffect(() => {

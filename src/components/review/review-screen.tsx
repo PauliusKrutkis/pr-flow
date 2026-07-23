@@ -3138,7 +3138,6 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
   const stateClass = resolvePrStateClass(pr);
   const stateLabel = resolvePrStateLabel(pr);
 
-  const viewedNow = viewedSet.size;
   const isOwnPr = !!activeLogin && pr.author === activeLogin;
   const reviews = detail.reviews ?? [];
 
@@ -3235,9 +3234,6 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
 
           <div className="qf-header-actions flex shrink-0 items-center gap-4">
             <ReviewVerdicts reviews={reviews} />
-            <span className="qf-header-meta qf-muted text-xs">
-              {viewedNow}/{fileCount} viewed
-            </span>
             <Tooltip combo="i" label={infoTitle}>
               <button
                 aria-pressed={rightOpen}

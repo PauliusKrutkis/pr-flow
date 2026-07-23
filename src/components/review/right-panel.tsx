@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import {
   type Ref,
-  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -175,15 +174,16 @@ export function RightPanel({
     }
   }, [composing]);
 
-  const startComposing = useCallback(() => {
+  const startComposing = () => {
     setComposing(true);
-  }, []);
+  };
 
   useImperativeHandle(
     ref,
     (): RightPanelHandle => ({
       openComposer: startComposing,
     }),
+    // biome-ignore lint/correctness/useExhaustiveDependencies: React Compiler (vite.config.ts) stabilizes startComposing; a manual useCallback would be dead weight
     [startComposing]
   );
 

@@ -1047,15 +1047,6 @@ dialog.q-dialog::backdrop {
 .dir-quiet .qf-header-actions {
   min-width: 0;
 }
-/* Safety net for very tight headers (small windows, high webview zoom): the
-   viewed-count meta collapses first, keeping identity + info + Review visible.
-   With CI / churn / the Open button now living in the info drawer, this rarely
-   triggers — it's a floor, not the everyday layout. */
-@container qf-header (width < 520px) {
-  .dir-quiet .qf-header .qf-header-meta {
-    display: none;
-  }
-}
 /* Tighter still: drop the review-verdict pills and shrink the action gap. */
 @container qf-header (width < 440px) {
   .dir-quiet .qf-header .qf-header-actions {
