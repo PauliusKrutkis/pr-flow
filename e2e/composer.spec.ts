@@ -67,7 +67,7 @@ test("rich text serializes to markdown on submit — bold survives the wire", as
   await page.keyboard.type("ship it");
   await page.keyboard.press("Control+a");
   await page.keyboard.press("Control+b");
-  await page.keyboard.press("Control+Enter"); // batch: "Add to review"
+  await page.keyboard.press("Control+Enter");
   await expect(page.getByText("Pending")).toBeVisible();
   await expect(page.locator(".qf-pending strong")).toHaveText("ship it");
 });

@@ -19,12 +19,14 @@ import {
 } from "lucide-react";
 import {
   type Ref,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
   useState,
 } from "react";
 import { cn } from "../../lib/cn.ts";
+import { firstLine } from "../../lib/comment-format.ts";
 import { openOnProviderLabel } from "../../lib/provider.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
 import { useAppStore } from "../../store/app-store.ts";
@@ -42,7 +44,7 @@ import { TicketTitle } from "../ui/ticket-title.tsx";
 import { Tooltip } from "../ui/tooltip.tsx";
 import { AddCommentBox, type AddCommentBoxHandle } from "./add-comment-box.tsx";
 import { CiPill } from "./ci-pill.tsx";
-import { CommentBody, CommentTools, firstLine } from "./comment-item.tsx";
+import { CommentBody, CommentTools } from "./comment-item.tsx";
 
 export interface RightPanelHandle {
   openComposer: () => void;
@@ -149,6 +151,7 @@ export function RightPanel({
   const bodyRef = useRef<HTMLDivElement>(null);
   const [bodyScrolls, setBodyScrolls] = useState(false);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-scans el.children, which gains the "Code discussion" section once inlineComments goes non-empty
   useEffect(() => {
     const el = bodyRef.current;
     if (!el) {
@@ -164,7 +167,7 @@ export function RightPanel({
       ro.observe(section);
     }
     return () => ro.disconnect();
-  }, []);
+  }, [inlineComments.length > 0]);
 
   useEffect(() => {
     if (composing) {
@@ -172,19 +175,16 @@ export function RightPanel({
     }
   }, [composing]);
 
-  const startComposing = () => {
+  const startComposing = useCallback(() => {
     setComposing(true);
-  };
+  }, []);
 
   useImperativeHandle(
     ref,
     (): RightPanelHandle => ({
-      openComposer: () => {
-        setComposing(true);
-        composerRef.current?.focus();
-      },
+      openComposer: startComposing,
     }),
-    []
+    [startComposing]
   );
 
   const collapseComposer = () => {

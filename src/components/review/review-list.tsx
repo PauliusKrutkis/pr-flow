@@ -370,6 +370,7 @@ function DiffLine({
             aria-label="Add comment"
             className="qf-add-btn"
             onClick={handleAddClick}
+            onPointerCancel={onPlusDragEnd}
             onPointerDown={handleAddPointerDown}
             onPointerMove={handleAddPointerMove}
             onPointerUp={onPlusDragEnd}

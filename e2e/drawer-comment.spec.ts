@@ -60,6 +60,22 @@ test("editing a conversation comment prefills the markdown and saves", async ({
   expect(sent.body).toContain("Then production.");
 });
 
+test("the first click arms the confirm; leaving the button disarms it", async ({
+  page,
+}) => {
+  const mine = page
+    .locator(".qf-convo-item")
+    .filter({ hasText: "Deploying to staging first." });
+  const del = mine.getByRole("button", { name: "Delete comment" });
+
+  await del.click();
+  await expect(del).toHaveText("Delete?");
+
+  await mine.getByText("Deploying to staging first.").hover();
+  await expect(del).toHaveText("Delete");
+  await expect(page.getByText("Deploying to staging first.")).toBeVisible();
+});
+
 test("deleting a conversation comment takes the two-step confirm", async ({
   page,
 }) => {

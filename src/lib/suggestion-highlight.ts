@@ -25,6 +25,7 @@ interface TokenSpan {
   to: number;
 }
 
+const SPAN_CACHE_LIMIT = 10_000;
 const spanCache = new Map<string, TokenSpan[]>();
 
 /** Recovers `[from, to, class)` token ranges from one line's hljs HTML. */
@@ -57,7 +58,7 @@ function htmlToSpans(html: string): TokenSpan[] {
   for (const child of tpl.content.childNodes) {
     walk(child);
   }
-  if (spanCache.size > 10_000) {
+  if (spanCache.size > SPAN_CACHE_LIMIT) {
     spanCache.clear();
   }
   spanCache.set(html, spans);

@@ -440,6 +440,10 @@ export function useExpansionScrollRestore(
     };
     requestAnimationFrame(hold);
   });
+
+  useEffect(() => {
+    return () => activeRef.current?.cancel();
+  }, []);
 }
 
 function restoreItemIndex(

@@ -601,6 +601,9 @@ function jumpFromOccMark(
   return true;
 }
 
+const EDITABLE_SURFACE_SELECTOR =
+  'input, textarea, [contenteditable="true"], .qa-editor';
+
 /**
  * A click into an editable surface must not disturb its caret (composers
  * render inside rows, so they'd otherwise hit the removeAllRanges paths
@@ -621,9 +624,7 @@ function handleOccPointerClick(
     return;
   }
   const target = e.target instanceof Element ? e.target : null;
-  if (
-    target?.closest('input, textarea, [contenteditable="true"], .qa-editor')
-  ) {
+  if (target?.closest(EDITABLE_SURFACE_SELECTOR)) {
     return;
   }
   const domSel = window.getSelection();
@@ -3043,11 +3044,9 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
       setRightOpen(true);
       return;
     }
-    setDrawerWide((wide) => {
-      const next = !wide;
-      persistDrawerWide(next);
-      return next;
-    });
+    const next = !drawerWide;
+    setDrawerWide(next);
+    persistDrawerWide(next);
   };
 
   const onCloseSubmitModal = () => {
