@@ -370,6 +370,7 @@ function DiffLine({
             aria-label="Add comment"
             className="qf-add-btn"
             onClick={handleAddClick}
+            onPointerCancel={onPlusDragEnd}
             onPointerDown={handleAddPointerDown}
             onPointerMove={handleAddPointerMove}
             onPointerUp={onPlusDragEnd}
@@ -416,6 +417,8 @@ function MappedCommentThread({
   toggleRequest,
   editRequest,
   callbacks,
+  owner,
+  repo,
 }: {
   thread: ReviewCommentsItem["threads"][number];
   filename: string;
@@ -424,6 +427,8 @@ function MappedCommentThread({
   toggleRequest: ToggleRequest | null;
   editRequest: EditRequest | null;
   callbacks: ReviewListCallbacks;
+  owner: string;
+  repo: string;
 }) {
   const rootId = thread[0].id;
   const handleHoverChange = (hovering: boolean) => {
@@ -439,8 +444,10 @@ function MappedCommentThread({
       onHoverChange={handleHoverChange}
       onReply={callbacks.onReply}
       onResolve={callbacks.onResolveThread}
+      owner={owner}
       replyPending={addPending}
       replyRequest={replyRequest}
+      repo={repo}
       toggleRequest={toggleRequest}
     />
   );
@@ -542,6 +549,7 @@ function CommentAddBox({
       placeholder="Add a review comment…"
       secondaryLabel="Comment now"
       submitLabel="Add to review"
+      suggestionFile={filename}
       suggestionText={
         target.side === "RIGHT"
           ? (item.rangeContent ?? item.rowContent ?? undefined)
@@ -559,6 +567,8 @@ function CommentsBlock({
   toggleRequest,
   editRequest,
   callbacks,
+  owner,
+  repo,
 }: {
   item: ReviewCommentsItem;
   filename: string;
@@ -567,6 +577,8 @@ function CommentsBlock({
   toggleRequest: ToggleRequest | null;
   editRequest: EditRequest | null;
   callbacks: ReviewListCallbacks;
+  owner: string;
+  repo: string;
 }) {
   const activeAccount = useAppStore((s) =>
     s.accounts.find((a) => a.id === s.activeAccountId)
@@ -585,7 +597,9 @@ function CommentsBlock({
           editRequest={editRequest}
           filename={filename}
           key={thread[0].id}
+          owner={owner}
           replyRequest={replyRequest}
+          repo={repo}
           thread={thread}
           toggleRequest={toggleRequest}
         />
@@ -808,11 +822,13 @@ function renderCommentsItem(
       }
       filename={file.filename}
       item={item}
+      owner={p.owner}
       replyRequest={
         p.replyRequest && p.replyRequest.path === file.filename
           ? p.replyRequest
           : null
       }
+      repo={p.repo}
       toggleRequest={
         p.toggleRequest && p.toggleRequest.path === file.filename
           ? p.toggleRequest

@@ -386,8 +386,12 @@ export function useExpansionScrollRestore(
 
     let cancelled = false;
     let revealed = false;
+    let frameId: number | null = null;
     const cancel = () => {
       cancelled = true;
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
       if (activeRef.current === self) {
         activeRef.current = null;
       }
@@ -436,10 +440,15 @@ export function useExpansionScrollRestore(
         reveal();
         return;
       }
-      requestAnimationFrame(hold);
+      frameId = requestAnimationFrame(hold);
     };
-    requestAnimationFrame(hold);
+    // react-doctor-disable-next-line effect-raf-loop-needs-cancel -- cancelled via cancelAnimationFrame(frameId) in cancel(), invoked from the mount-only cleanup effect below through activeRef (this effect has no deps and must re-check pendingRestoreRef every render, so its own cleanup can't own the cancellation)
+    frameId = requestAnimationFrame(hold);
   });
+
+  useEffect(() => {
+    return () => activeRef.current?.cancel();
+  }, []);
 }
 
 function restoreItemIndex(

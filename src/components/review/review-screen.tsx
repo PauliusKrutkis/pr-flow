@@ -107,7 +107,7 @@ import {
   type ReviewListHandle,
 } from "./review-list.tsx";
 import { ReviewVerdicts } from "./review-verdicts.tsx";
-import { RightPanel } from "./right-panel.tsx";
+import { RightPanel, type RightPanelHandle } from "./right-panel.tsx";
 import { SubmitReviewModal } from "./submit-review-modal.tsx";
 
 const RE_WORD = /\w/;
@@ -601,6 +601,15 @@ function jumpFromOccMark(
   return true;
 }
 
+const EDITABLE_SURFACE_SELECTOR =
+  'input, textarea, [contenteditable="true"], .qa-editor';
+
+/**
+ * A click into an editable surface must not disturb its caret (composers
+ * render inside rows, so they'd otherwise hit the removeAllRanges paths
+ * below), and the click that ends a drag-select must not wipe the selection
+ * it just made — selectionchange owns occurrence state for real selections.
+ */
 function handleOccPointerClick(
   e: MouseEvent,
   occSpecRef: React.RefObject<OccState | null>,
@@ -615,6 +624,13 @@ function handleOccPointerClick(
     return;
   }
   const target = e.target instanceof Element ? e.target : null;
+  if (target?.closest(EDITABLE_SURFACE_SELECTOR)) {
+    return;
+  }
+  const domSel = window.getSelection();
+  if (domSel && !domSel.isCollapsed) {
+    return;
+  }
   const row = target?.closest(".qf-row:not(.qf-row-hunk)");
   const code = codeAtPoint(e.clientX, e.clientY);
   if (!(row || code)) {
@@ -1424,6 +1440,7 @@ function ReviewScreenPending({
 function useReviewHotkeys(config: {
   closeFind: () => void;
   commentAtCursor: () => void;
+  commentOnPr: () => void;
   copyFilePath: () => void;
   copyLink: () => void;
   cursorMoverRefs: Parameters<typeof buildCursorMover>[0];
@@ -1500,6 +1517,13 @@ function useReviewHotkeys(config: {
       icon: MessageSquarePlus,
       keys: "c",
       run: config.commentAtCursor,
+    },
+    {
+      description: "Comment on the pull request",
+      group: "Comments",
+      icon: MessageSquarePlus,
+      keys: "shift+c",
+      run: config.commentOnPr,
     },
     {
       description: "Reply to comment / next file",
@@ -2411,6 +2435,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
   const [activeIndex, setActiveIndex] = useState(initialMem?.fileIndex ?? 0);
   const [rightOpen, setRightOpen] = useState(false);
   const rightOpenRef = useLatest(rightOpen);
+  const rightPanelRef = useRef<RightPanelHandle>(null);
   const sidebarCompact = useSyncExternalStore(
     subscribeSidebarCompact,
     getSidebarCompactSnapshot,
@@ -3019,11 +3044,9 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
       setRightOpen(true);
       return;
     }
-    setDrawerWide((wide) => {
-      const next = !wide;
-      persistDrawerWide(next);
-      return next;
-    });
+    const next = !drawerWide;
+    setDrawerWide(next);
+    persistDrawerWide(next);
   };
 
   const onCloseSubmitModal = () => {
@@ -3036,6 +3059,11 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
 
   const onAddIssueComment = async (body: string) => {
     await addIssueComment.mutateAsync({ body });
+  };
+
+  const onCommentOnPr = () => {
+    setRightOpen(true);
+    rightPanelRef.current?.openComposer();
   };
 
   const onEditIssueComment = async (a: { commentId: number; body: string }) => {
@@ -3057,6 +3085,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
   useReviewHotkeys({
     closeFind,
     commentAtCursor,
+    commentOnPr: onCommentOnPr,
     copyFilePath,
     copyLink,
     cursorMoverRefs,
@@ -3109,7 +3138,6 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
   const stateClass = resolvePrStateClass(pr);
   const stateLabel = resolvePrStateLabel(pr);
 
-  const viewedNow = viewedSet.size;
   const isOwnPr = !!activeLogin && pr.author === activeLogin;
   const reviews = detail.reviews ?? [];
 
@@ -3206,9 +3234,6 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
 
           <div className="qf-header-actions flex shrink-0 items-center gap-4">
             <ReviewVerdicts reviews={reviews} />
-            <span className="qf-header-meta qf-muted text-xs">
-              {viewedNow}/{fileCount} viewed
-            </span>
             <Tooltip combo="i" label={infoTitle}>
               <button
                 aria-pressed={rightOpen}
@@ -3323,6 +3348,7 @@ function ReviewScreenInner({ routeKey }: { routeKey: string }) {
         onToggleWide={onToggleDrawerWide}
         open={rightOpen}
         pr={pr}
+        ref={rightPanelRef}
         reviews={reviews}
         wide={drawerWide}
       />

@@ -236,6 +236,6 @@ test("insert suggestion prefills the block with the commented line", async ({
   const sugg = box.locator("pre code.language-suggestion");
   await expect(sugg).toHaveText("export function alpha() {");
   await expect(box).toBeFocused();
-  await page.keyboard.type("export function alpha(): number {");
-  await expect(sugg).toHaveText("export function alpha(): number {");
+  await page.keyboard.type(" // note");
+  await expect(sugg).toHaveText("export function alpha() { // note");
 });
