@@ -69,6 +69,20 @@ describe("parsePatch", () => {
     );
     expect(rows.map((r) => r.content)).toEqual(["a", "b"]);
   });
+
+  it("ignores stray zero-length lines between hunks (GitLab diffs)", () => {
+    const hunks = parsePatch("@@ -1 +1 @@\n-a\n+b\n\n@@ -10 +10 @@\n-c\n+d");
+    expect(hunks).toHaveLength(2);
+    expect(hunks[0].rows.filter((r) => r.type !== "hunk")).toHaveLength(2);
+    expect(hunks[1].rows.filter((r) => r.type !== "hunk")).toHaveLength(2);
+  });
+
+  it("ignores a trailing zero-length line from a patch ending in a newline", () => {
+    const rows = parsePatch("@@ -1 +1 @@\n-a\n+b\n")[0].rows.filter(
+      (r) => r.type !== "hunk"
+    );
+    expect(rows).toHaveLength(2);
+  });
 });
 
 describe("changedRowCount", () => {

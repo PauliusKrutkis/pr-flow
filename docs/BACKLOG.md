@@ -96,7 +96,7 @@ Or resume where you left off. **No Slack link handling required.**
 
 **Must have before DM'ing five developer friends:**
 
-- [ ] Perf budget met
+- [x] Perf budget met
 - [x] Keyboard workflow + stable review
 - [x] **Resume where you left off**
 - [x] **`mod+k` jump to any PR**
@@ -130,11 +130,15 @@ GitHub links opened this"*, you've saved weeks of integration work.
       e2e budgets (repaint counts + median keystroke / warm-open wall clock /
       stall frames), run on Chromium AND Playwright WebKit (the app ships on
       WebKitGTK; Chromium-only budgets hid engine-shaped lag).
-- [ ] 🟡 **Perf e2e against the production build** — today's budgets run on the
+- [x] 🟡 **Perf e2e against the production build** — today's budgets run on the
       vite dev server, where React's dev runtime + GC noise inflate numbers
       ~2×. Add a Playwright project that runs the perf specs against
       `vite build` + `vite preview` so budgets reflect what users feel, then
       tighten them (~half the current bounds).
+      *Shipped: `chromium-perf-prod` project (CI-gated, `E2E_PROD_PERF` locally)
+      builds + previews the app and reruns `find/open/scroll-perf` specs with
+      halved budgets; all pass with real headroom (open avg 42ms vs 150ms,
+      scroll p95 17ms vs 25ms).*
 
 ### Performance architecture — decisions queued (2026-07-05)
 
@@ -181,14 +185,15 @@ No inbox. Just continue.
 - [x] 🔴 **Resume where you left off** — default app open.
 - [x] 🟡 Auto-advance to next review-requested PR after submit.
 - [x] 🟡 **`Esc` → inbox** — exception, not home.
-- [ ] 🟡 **Inbox forgets last tab across app restarts** — close the app while
-      on a PR, reopen, then `Esc`: lands on the "Requested" inbox tab even
-      when it's empty (switching to "Created" shows reviews, but "Requested"
-      state then disappears). Should restore whichever tab the user was last
-      on instead of always defaulting to "Requested".
-- [ ] 🟢 **Land on first non-empty inbox tab** — on cold start, if "Requested"
-      is empty, land on the first tab that actually has content instead of
-      always defaulting to "Requested".
+- [x] 🟡 **Inbox forgets last tab across app restarts** — `inboxTab` was never
+      persisted (hardcoded default on every store init); `Esc` already left
+      it alone in-memory, so only a full restart lost it. Fixed by mirroring
+      the existing `loadLastRoute`/`saveLastRoute` pattern for `inboxTab`
+      (PR #72).
+- [x] 🟢 **Land on first non-empty inbox tab** — on cold start, if the active
+      tab is empty, a one-shot effect jumps to the first tab with content;
+      gated on the query's real loaded state so it fires once per session and
+      never fights a deliberate visit to an empty tab later (PR #72).
 
 ---
 
@@ -316,9 +321,20 @@ hotkey collapses.
 - [ ] ❓ Open: does expanding lock j/k / scroll into the file, or stay part of
       the continuous scroll? Shipped continuous (fewer modes; matches "review
       pane is one scroll"); revisit after using it.
-- [ ] 🟡 **Full file view broken on GitLab** — `shift+v` full-file expansion
-      doesn't work against GitLab-hosted PRs; needs investigation (blob fetch
-      / API path likely GitHub-only today).
+- [x] 🟡 **Full file view broken on GitLab** — `shift+v` full-file expansion
+      failed on every GitLab PR. First pass (PR #70) stripped a
+      `--- a/path`/`+++ b/path` header pair GitLab was assumed to always
+      prefix onto each file's `diff`; that wasn't the real bug (confirmed via
+      logging that most files never carry that header) and full-file
+      expansion still failed. Actual root cause: GitLab's diff text puts a
+      stray zero-length line between hunks (and/or a trailing one after the
+      last hunk); `parsePatchUncached` in `src/lib/diff.ts` treated any
+      non-`+`/`-`/`\` line as a context row, so that blank separator became a
+      phantom context row with empty content one line past the hunk's
+      declared range — failing `expand-file.ts`'s row-by-row blob validation.
+      Fixed by skipping zero-length split lines in `parsePatchUncached`; a
+      real blank source line is always a lone space (`" "`), never truly
+      empty, so this is safe for GitHub patches too.
 
 ---
 
@@ -717,7 +733,14 @@ conflicts with zero-friction product goal).
 - [ ] 🟢 **P19** — Rust line-comment sweep (~25 `//` in
       `src-tauri/src/`).
 - [ ] 🟡 **P20** — Rich text editor design polish
-      (composer + info-drawer form; visual-only).
+      (composer + info-drawer form; visual-only). *Partially shipped with the
+      composer cleanup PR: suggestion tool only renders with line context,
+      footer hint deduped (⌘↵ chip on the button is the single source), drawer
+      composer collapses to a prompt. The toolbar is now the familiar icon
+      strip (B/I/code/link) with hotkeys in hover tooltips — the app-wide
+      Tooltip + Kbd language — after "our hint-bar reads unfamiliar" feedback;
+      Suggestion keeps its text label. Remaining: typography/spacing polish of
+      the editor surface itself.*
 - [ ] ⏸ **P21** — Multi-line selection box via drag
       (defer; improve gutter-drag discoverability instead).
 - [ ] 🟢 **P22** — Selection-model audit + refactor (DESIGN.md
@@ -752,9 +775,15 @@ conflicts with zero-friction product goal).
       be able to focus a comment thread; focused thread activates the reply box
       and shows reply/resolve hints (same as hover). `f`/`g` must not skip the
       inline comment composer when it is open.
-- [ ] 🟡 **Composer: suggestions** — tab completion inside suggestion blocks,
-      syntax highlighting for suggestion fences; pairs with P04 hotkey and P20
-      polish.
+- [x] 🟡 **Composer: suggestions** — shipped with the composer toolbar PR:
+      Tab indents / Shift-Tab dedents inside code blocks (caret or whole
+      selected lines) instead of flipping the batch/now mode, and
+      ```suggestion fences highlight live as the commented file's language
+      via `suggestion-highlight.ts` — ProseMirror decorations fed by the same
+      `highlightLine` (and cache) as the diff. Token spans under a
+      non-collapsed selection are skipped: Chromium's native replace across
+      decoration spans re-parsed as a bare deletion and ate the first typed
+      character over the prefilled (selected) suggestion line.
 - [ ] 🟡 **Comment-now vs add-to-review UX** — remember last choice between
       "comment now" and "add to review", or replace tabs with two explicit
       buttons if that reads clearer.
@@ -979,16 +1008,24 @@ link interception · Universal Links.
 - [ ] **React Doctor full-codebase score not 100/100** — run react-doctor
   across the whole codebase and address remaining findings beyond the known
   `no-giant-component` ignore above.
-- [ ] **E2E composer submit is macOS-red (`Control+Enter` vs `Mod`)** — the
-  Tiptap composer binds submit to `Mod-Enter` (`composer-editor.tsx`), which
+- [ ] **E2E hardcodes `Control+…` — macOS-red for every editor shortcut** — the
+  Tiptap composer binds `Mod-…` shortcuts (`composer-editor.tsx`), which
   ProseMirror resolves to **Cmd on macOS, Ctrl on Linux/Windows**. The e2e
-  specs hardcode `page.keyboard.press("Control+Enter")`, so they pass on Linux
-  CI but silently no-op on macOS (composer stays open, `e2e:lastReview` never
-  written) — `multiline.spec.ts:45/59/63/173`, `composer.spec.ts:70/85`,
-  `review.spec.ts:488`. Fix: replace those with the platform-agnostic
-  `ControlOrMeta+Enter` (precedent: `release-history.spec.ts:25` already uses
-  `ControlOrMeta+k`). Test-only; verified via probes (button click + `Meta+Enter`
-  submit; `Control+Enter` doesn't). Pre-existing, reproduces on clean `main`.
+  specs hardcode `page.keyboard.press("Control+…")`, so they pass on Linux
+  CI but silently no-op on macOS — not just submit (`Control+Enter` in
+  `multiline.spec.ts`, `composer.spec.ts`, `review.spec.ts`) but the whole
+  class: `Control+a/b/i/e/k`, `Control+Shift+g`. Fix: sweep every editor-bound
+  `Control+…` press to the platform-agnostic `ControlOrMeta+…` (precedent:
+  `release-history.spec.ts:25` already uses `ControlOrMeta+k`). Test-only;
+  verified via probes (`Meta+…` works on macOS, `Control+…` doesn't).
+  Pre-existing, reproduces on clean `main`. Companion convention, learned on
+  PR #76: specs must not use **native caret keys** (`Home`/`End`/`Shift+End`)
+  inside the ProseMirror surface — the native caret move races PM's async
+  selection sync, so the next keystroke acts on the stale position (CI showed
+  `Tab` indenting at the old caret and the decoration skip eating the first
+  typed character). Route selection through PM's own keymap (`Mod+a`, typed
+  edits at the landed caret) instead; `Home`/`End` also don't move the caret
+  on macOS at all, so avoiding them serves both goals.
 
 ## Inbox (2026-07-15)
 
@@ -996,7 +1033,12 @@ link interception · Universal Links.
       is highlighted via click; investigate editor-level selection handling for a
       better approach (unsure whether to follow a standard here).
 - [ ] **Check for updates action** — explicit user-triggered update check.
-- [ ] **Info comment section design rework**.
+- [x] **Info comment section design rework** — the drawer composer now
+      collapses to a one-line prompt that expands on intent (Esc backs out of
+      the composer, then the drawer; drafts survive collapse and the prompt
+      advertises them), the PR-level composer no longer offers a Suggestion
+      tool (nothing for it to apply to), and the composer footer lost its
+      redundant ⌘↵/Esc hint line everywhere.
 - [ ] **Theming: CSS file vs Tailwind variables** — is theming really a CSS file
       rather than Tailwind variables? Consider using TW everywhere for better
       optimization.
@@ -1048,3 +1090,62 @@ link interception · Universal Links.
       boundaries) — same spirit as the pre-existing heuristic. Full-file
       expansion's synthesized context rows aren't covered (same limitation
       `guideByRow`/`intraByRow` already have for those rows).
+
+## Inbox (2026-07-21)
+
+- [ ] **Info comment box loses focus, can't type** — the info/comment textbox
+      intermittently becomes unfocusable (typing does nothing); seems random.
+      On Linux, switching workspaces and back has been observed to clear it.
+- [ ] **Pipelines sometimes not visible after GitLab MR update** — CI/pipeline
+      status occasionally fails to show up once a GitLab MR receives a new
+      update.
+- [ ] **Clicking a not-fully-visible next occurrence doesn't scroll to it** —
+      unlike keyboard occurrence stepping, clicking directly on the next
+      occurrence when it's only partially in view fails to scroll it into
+      frame.
+- [ ] **`f`/`g` scroll offset and line-clipping** — scrolling via `f`/`g`
+      should leave ~4 lines of context above the fold instead of landing
+      exactly at the bottom edge of the screen; also the scroll doesn't fully
+      capture the bottom line (it lands mid-line, cut in half) — it should
+      scroll enough that the destination line is always fully visible.
+- [ ] **Cursor doesn't follow after `e`** — pressing `e` advances to the next
+      file/page, but the cursor position doesn't move with it, so pressing
+      `f` afterward scrolls from the previous file's old cursor position
+      instead of the new file.
+- [ ] **Merge button in PR view** — add a way to merge the PR directly from
+      the review screen instead of switching to GitHub/GitLab.
+- [ ] **Multi-line comment highlighting still broken in full-file view** —
+      the flowing block-comment fix above (`markBlockCommentRows`) only
+      covers `DiffRow`s built from the patch; full-file expansion's
+      synthesized context rows (`expand-file.ts`) aren't run through that
+      pass, so a block comment spanning into head-blob context still greys
+      out only its first line there. Known limitation called out when the
+      original fix shipped — needs `markBlockCommentRows` (or equivalent)
+      wired into the full-file row synthesis path too.
+
+## Inbox (2026-07-22)
+
+- [ ] 🟡 **Stale-base diff pollution — flag already-merged code in PR
+      diffs** — when a PR's target branch is behind main (typical in PR
+      chains after merging main into the head branch), GitHub computes the
+      diff from an old merge-base, so already-reviewed, already-merged code
+      renders as new — and reviewers re-review prod code without realizing.
+      Fixable without local git via the compare API (the app today only
+      calls `/pulls/{n}/files`, never `/compare` — `base_ref`/`head_sha`
+      are already on `PullRequest`, `model.rs`):
+      - **Tier 1 — detect + banner (ship first):** fetch
+        `compare/{base_ref}...{head_sha}` and
+        `compare/{default_branch}...{head_sha}`; if the PR diff carries
+        substantially more commits than the head-vs-main delta, banner:
+        *"This diff includes changes already merged to main — the target
+        branch is behind; ask the author to update it."*
+      - **Tier 2 — dim already-merged files:** set-difference the two
+        compare file lists. File in `base...head` but absent from
+        `main...head` → pure main backwash, collapse/dim with an "already
+        on main" label. Identical `patch` in both → fully new. Differing →
+        mixed, show badged. Content-based, so robust to squash merges
+        (commit-ancestry checks are not). Hunk-level precision inside mixed
+        files: not worth it.
+      Caveat: compare API caps the file list at 300 — fall back to
+      banner-only on monster diffs. Orthogonal to §9 repo snapshot (file
+      trees at one SHA; no diffs/merge-bases) — no dependency either way.

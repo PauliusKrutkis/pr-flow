@@ -1,2 +1,5 @@
 allowBuilds:
   esbuild: set this to true or false
+
+minimumReleaseAge: 10080
+trustPolicy: no-downgrade

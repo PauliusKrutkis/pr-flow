@@ -24,6 +24,7 @@ export interface AppOptions {
   inboxByCall?: unknown[];
   repoHits?: { fullName: string; description: string }[];
   subscribed?: BucketFixture;
+  subscribedDelayMs?: number;
   watchedRepos?: string[];
 }
 
@@ -43,6 +44,7 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
     inboxByCall: opts.inboxByCall ?? null,
     repoHits: opts.repoHits ?? [],
     subscribed: opts.subscribed ?? { count: 0, prs: [] },
+    subscribedDelayMs: opts.subscribedDelayMs ?? 0,
     watchedRepos: opts.watchedRepos ?? [],
   };
 
@@ -139,7 +141,12 @@ export async function setupApp(page: Page, opts: AppOptions = {}) {
           return result;
         },
         list_releases: () => cfg.releases,
-        list_subscribed: () => cfg.subscribed,
+        list_subscribed: () =>
+          cfg.subscribedDelayMs > 0
+            ? new Promise((resolve) =>
+                setTimeout(() => resolve(cfg.subscribed), cfg.subscribedDelayMs)
+              )
+            : cfg.subscribed,
         "plugin:opener|open": () => null,
         "plugin:opener|open_url": () => null,
         resolve_thread: (args) => {

@@ -1,6 +1,7 @@
 import { CheckCircle2, MessageSquare } from "lucide-react";
 import { useState } from "react";
 import { cn } from "../../lib/cn.ts";
+import { firstLine } from "../../lib/comment-format.ts";
 import { formatAbsolute, formatRelativeTime } from "../../lib/time.ts";
 import { useAppStore } from "../../store/app-store.ts";
 import type { ReviewComment } from "../../types.ts";
@@ -32,8 +33,10 @@ interface CommentThreadProps {
   onHoverChange?: (hovering: boolean) => void;
   onReply: (a: { inReplyTo: number; body: string }) => Promise<void>;
   onResolve?: (a: { threadId: string; resolved: boolean }) => void;
+  owner: string;
   replyPending: boolean;
   replyRequest?: ReplyRequest | null;
+  repo: string;
   toggleRequest?: ToggleRequest | null;
 }
 
@@ -62,6 +65,8 @@ export function CommentThread({
   replyRequest,
   toggleRequest,
   editRequest,
+  owner,
+  repo,
 }: CommentThreadProps) {
   const [root] = comments;
   const rootId = root?.id;
@@ -277,6 +282,8 @@ export function CommentThread({
             editing={editingId === c.id}
             onCancelEdit={handleCancelEdit}
             onSubmitEdit={submitEdit}
+            owner={owner}
+            repo={repo}
           />
         </div>
       ))}
@@ -319,8 +326,4 @@ export function CommentThread({
       )}
     </div>
   );
-}
-
-function firstLine(body: string): string {
-  return body.trim().split("\n")[0] ?? "";
 }

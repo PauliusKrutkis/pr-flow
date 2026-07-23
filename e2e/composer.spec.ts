@@ -67,7 +67,7 @@ test("rich text serializes to markdown on submit — bold survives the wire", as
   await page.keyboard.type("ship it");
   await page.keyboard.press("Control+a");
   await page.keyboard.press("Control+b");
-  await page.keyboard.press("Control+Enter"); // batch: "Add to review"
+  await page.keyboard.press("Control+Enter");
   await expect(page.getByText("Pending")).toBeVisible();
   await expect(page.locator(".qf-pending strong")).toHaveText("ship it");
 });
@@ -80,16 +80,16 @@ test("the suggestion block round-trips: insert, edit in place, pending card", as
   const sugg = ed.locator("pre code.language-suggestion");
   await expect(sugg).toHaveText("export function alpha() {");
   await expect(ed).toBeFocused();
-  await page.keyboard.type("export function alpha(): number {");
-  await expect(sugg).toHaveText("export function alpha(): number {");
+  await page.keyboard.type(" // tighten");
+  await expect(sugg).toHaveText("export function alpha() { // tighten");
   await page.keyboard.press("Control+Enter");
   await expect(page.getByText("Pending")).toBeVisible();
   await expect(page.locator(".qf-pending .md-suggestion-line")).toHaveText(
-    "export function alpha(): number {"
+    "export function alpha() { // tighten"
   );
 });
 
-test("mod+shift+g inserts the suggestion block from the keyboard", async ({
+test("mod+shift+g inserts the block with the caret at the end — nothing pre-selected", async ({
   page,
 }) => {
   const ed = box(page);
@@ -97,8 +97,8 @@ test("mod+shift+g inserts the suggestion block from the keyboard", async ({
   const sugg = ed.locator("pre code.language-suggestion");
   await expect(sugg).toHaveText("export function alpha() {");
   await expect(ed).toBeFocused();
-  await page.keyboard.type("export function alpha(): number {");
-  await expect(sugg).toHaveText("export function alpha(): number {");
+  await page.keyboard.type(" // note");
+  await expect(sugg).toHaveText("export function alpha() { // note");
 });
 
 test("esc backs out of the composer without leaving the review", async ({
@@ -124,4 +124,46 @@ test("tab still flips the batch/now mode from inside the editor", async ({
   await expect(
     page.getByRole("radio", { name: "Add to review" })
   ).toHaveAttribute("aria-checked", "true");
+});
+
+test("tab indents inside a suggestion block instead of flipping the mode", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Insert suggestion" }).click();
+  const sugg = box(page).locator("pre code.language-suggestion");
+  await expect(sugg).toHaveText("export function alpha() {");
+
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Tab");
+  await page.keyboard.type("done");
+  await expect
+    .poll(() => sugg.evaluate((el) => el.textContent))
+    .toContain("export function alpha() {\n  done");
+  await expect(
+    page.getByRole("radio", { name: "Add to review" })
+  ).toHaveAttribute("aria-checked", "true");
+
+  await page.keyboard.press("Shift+Tab");
+  await expect
+    .poll(() => sugg.evaluate((el) => el.textContent))
+    .toContain("export function alpha() {\ndone");
+  await expect(
+    page.getByRole("radio", { name: "Add to review" })
+  ).toHaveAttribute("aria-checked", "true");
+});
+
+test("suggestion tokens light as the file's language; a selection lifts them while it stands", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Insert suggestion" }).click();
+  const sugg = box(page).locator("pre code.language-suggestion");
+  await expect(sugg).toHaveText("export function alpha() {");
+  await expect(sugg.locator(".hljs-keyword").first()).toHaveText("export");
+  await expect(sugg.locator(".hljs-title").first()).toHaveText("alpha");
+
+  await page.keyboard.press("Control+a");
+  await expect(sugg.locator(".hljs-keyword")).toHaveCount(0);
+
+  await page.keyboard.press("ArrowRight");
+  await expect(sugg.locator(".hljs-keyword").first()).toHaveText("export");
 });
